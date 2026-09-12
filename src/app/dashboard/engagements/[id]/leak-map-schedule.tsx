@@ -3,25 +3,23 @@
 // src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Search, 
-  CalendarClock, 
-  AlertTriangle, 
-  Loader2, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  CalendarClock,
+  AlertTriangle,
+  Loader2,
   CalendarX2,
   RefreshCw,
   CalendarDays,
   Clock,
   ArrowUpRight,
-  Zap,
-  Calendar
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
 import { StatusPill, toneFromSeverity } from "@/app/dashboard/runs/[id]/_shared/status-pill";
-import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { auditRunTypeLabel } from "@/lib/copy";
 import { LeakMapView } from "@/app/dashboard/runs/[id]/views/leak-map-view";
 import type { LeakMapDetail } from "@/app/dashboard/runs/[id]/_shared/types";
@@ -254,58 +252,52 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">{error}</div>
       )}
 
-      {/* STACKED LAYOUT — timeline on top, diagnostic underneath */}
-      <div className="space-y-3">
-        {/* Timeline column — full width */}
-        <div className="space-y-3">
-          {/* Next Scheduled Audits */}
-          {!loading && scheduled.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {scheduled.map((s) => (
-                <div
-                  key={s.auditType}
-                  className="flex items-center gap-2.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-3"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-bold shrink-0">
-                    <CalendarClock size={16} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
-                      Next {s.auditType} audit
-                    </span>
-                    <span className="text-xs font-bold text-zinc-900 dark:text-white block truncate">
-                      {new Date(s.nextRunAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <span className="text-[10px] text-zinc-400 font-mono block">({s.timezone})</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Next Scheduled Audits — one compact line, not two hero tiles for
+          metadata you check once and move on from. */}
+      {!loading && scheduled.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {scheduled.map((s) => (
+            <span key={s.auditType} className="flex items-center gap-1.5">
+              <CalendarClock size={12} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
+              Next {s.auditType}:{" "}
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                {new Date(s.nextRunAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-600">({s.timezone})</span>
+            </span>
+          ))}
+        </div>
+      )}
 
-          {/* Active Alerts */}
-          {!loading && alerts.length > 0 && (
-            <div className="rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/20 p-3.5 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
-                <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
-                <span>{alerts.length} active funnel alert{alerts.length === 1 ? "" : "s"}</span>
+      {/* Active Alerts — rare and urgent, stays full-width and prominent */}
+      {!loading && alerts.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/20 p-3.5 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
+            <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
+            <span>{alerts.length} active funnel alert{alerts.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="space-y-1">
+            {alerts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between text-xs text-rose-950 dark:text-rose-200">
+                <span className="font-bold">{a.metricName}</span>
+                <span className="font-mono text-[11px]">
+                  {a.comparison} {a.threshold}
+                </span>
               </div>
-              <div className="space-y-1">
-                {alerts.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between text-xs text-rose-950 dark:text-rose-200">
-                    <span className="font-bold">{a.metricName}</span>
-                    <span className="font-mono text-[11px]">
-                      {a.comparison} {a.threshold}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      )}
 
-          {/* Monthly Timeline Feed — full width */}
-          <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
+      {/* MASTER-DETAIL — a narrow timeline rail (left) + the selected
+          audit's full detail (right), side by side on wide screens
+          instead of one long column where the actual diagnostic content
+          is always below the fold. Stacks on mobile since there's no
+          room for two columns. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 items-start">
+        {/* LEFT: Timeline list */}
+        <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-transparent">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white">
@@ -361,7 +353,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 </span>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 max-h-[360px] overflow-y-auto">
+              <div className="flex-1 min-h-0 divide-y divide-zinc-200/80 dark:divide-zinc-800/60 overflow-y-auto">
                 {monthWeeksGrouped.map(({ weekNum, audits }) => (
                   <div key={weekNum} className="space-y-0">
                     <div className="sticky top-0 z-10 flex items-center justify-between bg-transparent px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
@@ -384,50 +376,34 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                               handleUpdateSelectedDate(new Date(item.createdAt));
                             }}
                             className={cn(
-                              "hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors cursor-pointer border-0 bg-transparent",
+                              "hover-lift press-settle flex w-full flex-col gap-1 px-4 py-2.5 text-left transition-colors cursor-pointer border-0 bg-transparent",
                               isSelected ? "text-zinc-900 dark:text-white" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                             )}
                           >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 rounded shrink-0">
-                                <Clock size={9} />
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
                                 {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
                               </span>
-
-                              <div className="min-w-0 space-y-0.5">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
-                                    {auditRunTypeLabel(item.runType)}
-                                  </span>
-                                  {isManual ? (
-                                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-semibold shrink-0">
-                                      <Zap size={8} /> Manual
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 font-semibold shrink-0">
-                                      <Calendar size={8} /> Automated
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-zinc-500 font-mono block truncate">
-                                  {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
                               <StatusPill
                                 tone={toneFromSeverity(item.overallSeverity)}
                                 className={cn(
-                                  "shrink-0 capitalize",
+                                  "shrink-0 capitalize text-[10px]",
                                   item.overallSeverity === "none" &&
                                     "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
                                 )}
                               >
-                                {item.overallSeverity === "none" ? "Clean" : `${item.overallSeverity} severity`}
+                                {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
                               </StatusPill>
-                              <SquishySkillBadge skill="leak-map" size={18} enabled={true} />
                             </div>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                {auditRunTypeLabel(item.runType)}
+                              </span>
+                              {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
+                            </div>
+                            <span className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono truncate">
+                              {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
+                            </span>
                           </button>
                         );
                       })}
@@ -439,89 +415,49 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           </div>
         </div>
 
-        {/* Diagnostic panel — full width, underneath timeline */}
+        {/* RIGHT: Diagnostic detail — just enough context to place it (which
+            audit, when), then the embedded LeakMapView owns the actual
+            verdict/issues/report. The severity pill and the Issues/
+            Alerts/Gaps 3-tile grid that used to live here duplicated
+            exactly what that view already shows, just less completely. */}
         <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-4">
           {selected ? (
             <>
-              <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
-                    Funnel Audit Diagnostic
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <StatusPill
-                      tone={toneFromSeverity(selected.overallSeverity)}
-                      className={cn(
-                        "capitalize",
-                        selected.overallSeverity === "none" &&
-                          "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
-                      )}
-                    >
-                      {selected.overallSeverity === "none" ? "Clean" : `${selected.overallSeverity} severity`}
-                    </StatusPill>
-                    <a
-                      href={`/dashboard/runs/${selected.runId}`}
-                      className="inline-flex items-center gap-1 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium"
-                    >
-                      <span>Open full page</span>
-                      <ArrowUpRight size={12} />
-                    </a>
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+                <div className="min-w-0">
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white truncate">
+                    {auditRunTypeLabel(selected.runType)}
+                  </h4>
+                  <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    <Clock size={11} className="shrink-0" />
+                    <span>{new Date(selected.createdAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                 </div>
-
-                <h4 className="text-base font-bold text-zinc-900 dark:text-white">
-                  {auditRunTypeLabel(selected.runType)}
-                </h4>
-
-                <div className="flex items-center gap-2 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                  <Clock size={12} className="text-zinc-500 shrink-0" />
-                  <span>{new Date(selected.createdAt).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
+                <a
+                  href={`/dashboard/runs/${selected.runId}`}
+                  className="inline-flex items-center gap-1 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium shrink-0"
+                >
+                  <span>Open full page</span>
+                  <ArrowUpRight size={12} />
+                </a>
               </div>
 
-              {/* Metric Breakdown Cards */}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Issues</span>
-                  <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.topIssueCount}</span>
-                </div>
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Alerts</span>
-                  <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.alertsFiredCount}</span>
-                </div>
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-2 space-y-0.5">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase block font-bold">Gaps</span>
-                  <span className="text-base font-bold text-zinc-900 dark:text-white font-mono">{selected.gapsCount}</span>
-                </div>
-              </div>
-
-              {/* Embedded Report — full width, no more max-h squeeze */}
               {selected.runId && (
-                <div className="space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
-                    Audit Diagnostic Report
-                  </span>
-
-                  <div className="relative">
-                    {detailLoading && (
-                      <div className="flex items-center justify-center py-8 text-zinc-500">
-                        <Loader2 size={16} className="animate-spin" />
-                      </div>
-                    )}
-                    {detailError && (
-                      <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>
-                    )}
-                    {!detailLoading && !detailError && detail && "audit" in detail && (
-                      <LeakMapView detail={detail} embedded />
-                    )}
-                  </div>
+                <div className="relative">
+                  {detailLoading && (
+                    <div className="flex items-center justify-center py-8 text-zinc-500">
+                      <Loader2 size={16} className="animate-spin" />
+                    </div>
+                  )}
+                  {detailError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>}
+                  {!detailLoading && !detailError && detail && "audit" in detail && <LeakMapView detail={detail} embedded />}
                 </div>
               )}
             </>
           ) : (
             <div className="py-12 text-center text-zinc-500 space-y-2">
               <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-              <p className="text-xs">Select an audit from the timeline above to inspect report details.</p>
+              <p className="text-xs">Select an audit from the timeline to inspect report details.</p>
             </div>
           )}
         </div>

@@ -10,6 +10,7 @@ import {
   Search,
   Copy,
   Check,
+  ChevronDown,
 } from "lucide-react";
 import type { CorrelationFlag } from "@/lib/report-correlation";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,19 @@ export function LeakMapView({
     return audit.gaps.filter((g) => g.toLowerCase().includes(q));
   }, [audit?.gaps, filterText]);
 
+  // Split so a real problem never has to compete for attention with 3
+  // "insufficient data" tiles styled exactly the same way — the previous
+  // layout gave every metric equal visual weight regardless of whether
+  // there was anything to actually act on.
+  const needsAttention = useMemo(
+    () => filteredIssues.filter((i) => !i.insufficientData && (i.severity === "high" || i.severity === "medium")),
+    [filteredIssues]
+  );
+  const otherIssues = useMemo(
+    () => filteredIssues.filter((i) => i.insufficientData || i.severity === "low" || i.severity === "none"),
+    [filteredIssues]
+  );
+
   const overallSeverity = issues[0]?.severity ?? "none";
   // Distinguishes "every metric came back none/low because things are
   // actually fine" from "every metric came back none because none of
@@ -140,21 +154,23 @@ export function LeakMapView({
         <>
           {/* CALENDAR / OVERVIEW VIEW */}
           {mode === "calendar" && (
-            <div key="calendar" className="run-view-content-enter">
-              {/* Status Strip */}
+            <div key="calendar" className="run-view-content-enter space-y-4">
+              {/* Verdict — the one thing this view leads with. Bigger dot,
+                  bigger text, more room than a thin status strip, since
+                  this is the answer to "is anything wrong," not a footnote. */}
               <div
                 className={cn(
-                  "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border bg-transparent px-3.5 py-2.5 transition-all",
-                  overallSeverity === "high" && "border-rose-500/40",
-                  overallSeverity === "medium" && "border-orange-500/40",
-                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/40",
+                  "flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border bg-transparent px-4 py-4 transition-all",
+                  overallSeverity === "high" && "border-rose-500/50",
+                  overallSeverity === "medium" && "border-orange-500/50",
+                  overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "border-amber-500/50",
                   overallSeverity !== "high" && overallSeverity !== "medium" && hasAnyUsableData && "border-zinc-200/60 dark:border-zinc-800/60"
                 )}
               >
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <span
                     className={cn(
-                      "h-2 w-2 rounded-full shrink-0",
+                      "h-3 w-3 rounded-full shrink-0",
                       overallSeverity === "high" && "bg-rose-500",
                       overallSeverity === "medium" && "bg-orange-500",
                       overallSeverity !== "high" && overallSeverity !== "medium" && !hasAnyUsableData && "bg-amber-500",
@@ -162,7 +178,7 @@ export function LeakMapView({
                     )}
                     aria-hidden
                   />
-                  <p className="text-sm font-bold text-zinc-900 dark:text-white whitespace-nowrap">
+                  <p className="text-base font-bold text-zinc-900 dark:text-white whitespace-nowrap">
                     Funnel health:{" "}
                     {overallSeverity === "none"
                       ? hasAnyUsableData
@@ -201,76 +217,106 @@ export function LeakMapView({
                 </div>
               )}
 
-              {/* Issues + Data Gaps */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3 items-start">
-                <div className="flex flex-col gap-3 min-w-0">
-                  {filteredIssues.length > 0 ? (
-                    <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
-                      {filteredIssues.map((issue) => (
-                        <IssueCard key={issue.name} issue={issue} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="p-3.5 text-xs italic text-zinc-500 dark:text-zinc-500">
-                      No funnel metrics match your search filter.
-                    </p>
-                  )}
+              {filteredIssues.length === 0 && (
+                <p className="text-xs italic text-zinc-500 dark:text-zinc-500">No funnel metrics match your search filter.</p>
+              )}
 
-                  {/* Executive Report Reader */}
-                  <div>
-                    <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                      <div className="flex items-center gap-2">
-                        <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
-                        <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
-                          Executive Audit Report
-                        </h3>
-                      </div>
-                      {audit.reportMarkdown && (
-                        <button
-                          type="button"
-                          onClick={handleCopyReport}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
-                        >
-                          {copiedReport ? (
-                            <Check size={12} className="text-emerald-400" />
-                          ) : (
-                            <Copy size={12} />
-                          )}
-                          <span>{copiedReport ? "Copied" : "Copy Report"}</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {audit.reportMarkdown ? (
-                      <SimpleMarkdown
-                        text={audit.reportMarkdown}
-                        className="pt-2 text-xs text-zinc-700 dark:text-zinc-300 max-h-80 overflow-y-auto"
-                      />
-                    ) : (
-                      <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
-                        No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
-                      </p>
-                    )}
+              {/* Needs attention — real findings only, full weight. */}
+              {needsAttention.length > 0 && (
+                <div className="space-y-1.5">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
+                    Needs attention ({needsAttention.length})
+                  </h3>
+                  <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+                    {needsAttention.map((issue) => (
+                      <IssueRow key={issue.name} issue={issue} />
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Data Gaps sidebar */}
-                {filteredGaps.length > 0 && (
-                  <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3 lg:sticky lg:top-3">
-                    <div className="mb-1.5 flex items-center gap-1.5">
-                      <HelpCircle size={13} className="text-amber-700 dark:text-amber-400" />
-                      <h3 className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
-                        Data Gaps ({filteredGaps.length})
-                      </h3>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {filteredGaps.map((g, i) => (
-                        <li key={i} className="text-[11px] leading-snug text-zinc-700 dark:text-zinc-400">
-                          {humanizeGap(g)}
-                        </li>
+              {/* Everything else — healthy or not enough data yet, same
+                  visual weight as each other but muted relative to a real
+                  finding, and collapsed out of the way whenever there's
+                  something above that actually needs looking at. */}
+              {otherIssues.length > 0 &&
+                (needsAttention.length > 0 ? (
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+                      <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                      {otherIssues.length} other metric{otherIssues.length === 1 ? "" : "s"} — healthy or not enough data
+                    </summary>
+                    <div className="mt-1.5 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60 opacity-70">
+                      {otherIssues.map((issue) => (
+                        <IssueRow key={issue.name} issue={issue} />
                       ))}
-                    </ul>
+                    </div>
+                  </details>
+                ) : (
+                  <div className="space-y-1.5">
+                    <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
+                      {issues.length} metric{issues.length === 1 ? "" : "s"} evaluated
+                    </h3>
+                    <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+                      {otherIssues.map((issue) => (
+                        <IssueRow key={issue.name} issue={issue} />
+                      ))}
+                    </div>
                   </div>
+                ))}
+
+              {/* Data Gaps — folded in as a disclosure next to the metrics
+                  it explains, not a permanent sidebar competing with the
+                  report for attention. */}
+              {filteredGaps.length > 0 && (
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400 [&::-webkit-details-marker]:hidden">
+                    <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                    <HelpCircle size={12} />
+                    Data gaps ({filteredGaps.length})
+                  </summary>
+                  <ul className="mt-1.5 space-y-1.5 pl-5">
+                    {filteredGaps.map((g, i) => (
+                      <li key={i} className="text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+                        {humanizeGap(g)}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              {/* Executive Report Reader — flows in the page's own scroll
+                  now, no forced inner scrollbox hiding most of it. */}
+              <div>
+                <div className="mb-2 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText size={13} className="text-zinc-600 dark:text-zinc-400" />
+                    <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+                      Executive Audit Report
+                    </h3>
+                  </div>
+                  {audit.reportMarkdown && (
+                    <button
+                      type="button"
+                      onClick={handleCopyReport}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+                    >
+                      {copiedReport ? (
+                        <Check size={12} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                      <span>{copiedReport ? "Copied" : "Copy Report"}</span>
+                    </button>
+                  )}
+                </div>
+
+                {audit.reportMarkdown ? (
+                  <SimpleMarkdown text={audit.reportMarkdown} className="pt-2 text-xs text-zinc-700 dark:text-zinc-300" />
+                ) : (
+                  <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
+                    No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
+                  </p>
                 )}
               </div>
             </div>
@@ -353,50 +399,38 @@ export function LeakMapView({
   );
 }
 
-function IssueCard({ issue }: { issue: IssueType }) {
+function IssueRow({ issue }: { issue: IssueType }) {
   const improved = issue.delta > 0;
   const tone = toneFromSeverity(issue.severity);
+  const current = Math.round(issue.current * 100) / 100;
+  const prior = Math.round(issue.prior * 100) / 100;
+  const delta = Math.round(issue.delta * 100) / 100;
   return (
     <div className="p-3">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-          {issue.name}
-        </p>
+        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{issue.name}</p>
         <StatusPill tone={tone}>{issue.insufficientData ? "insufficient data" : issue.severity}</StatusPill>
       </div>
 
-      {/* Numbers row */}
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <div>
-          <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Current</span>
-          <p className="text-sm font-bold text-zinc-900 dark:text-white font-mono">
-            {Math.round(issue.current * 100) / 100}
-          </p>
-        </div>
-        <div>
-          <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prior</span>
-          <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 font-mono">
-            {Math.round(issue.prior * 100) / 100}
-          </p>
-        </div>
-        <div>
-          <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Shift</span>
-          <p
-            className={cn(
-              "text-sm font-bold font-mono flex items-center gap-0.5",
-              improved ? "text-emerald-400" : "text-rose-400"
-            )}
-          >
-            {improved ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {issue.delta > 0 ? "+" : ""}
-            {Math.round(issue.delta * 100) / 100}
-          </p>
-        </div>
-      </div>
+      {/* One compact stats line instead of a 3-column number grid — same
+          information, a fraction of the vertical space. */}
+      <p className="mt-1 text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5 flex-wrap">
+        <span>
+          Current <span className="font-bold text-zinc-900 dark:text-white">{current}</span>
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-700">·</span>
+        <span>Prior {prior}</span>
+        <span className="text-zinc-300 dark:text-zinc-700">·</span>
+        <span className={cn("font-semibold flex items-center gap-0.5", improved ? "text-emerald-500" : "text-rose-500")}>
+          {improved ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+          {issue.delta > 0 ? "+" : ""}
+          {delta}
+        </span>
+      </p>
 
       {/* Assessment */}
-      <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-2">
+      <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
         {issue.insufficientData
           ? "Not enough data yet to call a trend for this metric — the sample is below the reliability floor, so this isn't confirmation of healthy performance, just an unknown."
           : issue.severity === "high"
