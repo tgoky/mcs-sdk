@@ -93,7 +93,7 @@ export function FloatingPanel({
               <div
                 ref={panelRef}
                 role="dialog"
-                className="rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 max-h-[80vh] overflow-y-auto font-sans antialiased"
+                className="rounded-lg surface-glass-3 text-zinc-900 dark:text-zinc-100 max-h-[80vh] overflow-y-auto font-sans antialiased"
               >
                 {typeof children === "function" ? children(close) : children}
               </div>
