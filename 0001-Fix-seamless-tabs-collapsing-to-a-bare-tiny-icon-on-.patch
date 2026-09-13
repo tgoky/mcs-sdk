@@ -1,0 +1,54 @@
+From ca86d54eb1d156860976322e7a9d694d399b71f9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 11:51:05 +0000
+Subject: [PATCH] Fix seamless tabs collapsing to a bare tiny icon on mobile
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+variant="seamless" buttons hid their label text entirely below the sm
+breakpoint (hidden sm:inline), leaving just a 13px icon with no text on
+mobile — exactly the "small icons" complaint. Labels on seamless tabs
+now always render, and the icon/text are bumped (13px→16px,
+text-xs→text-sm) so the tab row reads clearly at any width. The pill
+variant (win-back, pile-on, pre-call-read) is untouched — those buttons
+already work as icon-only mobile targets.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ src/app/dashboard/runs/[id]/_shared/view-switcher.tsx | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+index 872f589..ccd71e2 100644
+--- a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+@@ -68,7 +68,7 @@ export function ViewSwitcher({
+             className={
+               seamless
+                 ? cn(
+-                    "flex items-center gap-1.5 text-xs transition-colors cursor-pointer",
++                    "flex items-center gap-1.5 text-sm transition-colors cursor-pointer",
+                     active ? "font-bold text-zinc-900 dark:text-white" : "font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                   )
+                 : cn(
+@@ -77,8 +77,13 @@ export function ViewSwitcher({
+                   )
+             }
+           >
+-            <Icon size={13} />
+-            <span className="hidden sm:inline">{label}</span>
++            <Icon size={seamless ? 16 : 13} />
++            {/* Seamless tabs always show their label — hiding it below
++                `sm` left nothing but a bare 13px icon on mobile, which is
++                exactly what read as "too small" there. The pill variant
++                keeps the icon-only mobile collapse; those buttons are
++                already boxed/sized to work as icon-only targets. */}
++            <span className={seamless ? "inline" : "hidden sm:inline"}>{label}</span>
+           </button>
+         );
+       })}
+-- 
+2.43.0
+

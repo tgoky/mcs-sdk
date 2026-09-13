@@ -68,7 +68,7 @@ export function ViewSwitcher({
             className={
               seamless
                 ? cn(
-                    "flex items-center gap-1.5 text-xs transition-colors cursor-pointer",
+                    "flex items-center gap-1.5 text-sm transition-colors cursor-pointer",
                     active ? "font-bold text-zinc-900 dark:text-white" : "font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                   )
                 : cn(
@@ -77,8 +77,13 @@ export function ViewSwitcher({
                   )
             }
           >
-            <Icon size={13} />
-            <span className="hidden sm:inline">{label}</span>
+            <Icon size={seamless ? 16 : 13} />
+            {/* Seamless tabs always show their label — hiding it below
+                `sm` left nothing but a bare 13px icon on mobile, which is
+                exactly what read as "too small" there. The pill variant
+                keeps the icon-only mobile collapse; those buttons are
+                already boxed/sized to work as icon-only targets. */}
+            <span className={seamless ? "inline" : "hidden sm:inline"}>{label}</span>
           </button>
         );
       })}
