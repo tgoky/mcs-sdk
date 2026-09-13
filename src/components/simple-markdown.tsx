@@ -109,15 +109,17 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
       // are sub-items within a section, not section boundaries.
       const cls =
         level === 1
-          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-8 mb-3 pt-5 border-t border-zinc-200/70 dark:border-zinc-800/70 first:mt-0 first:pt-0 first:border-t-0"
+          ? "flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100 mt-14 mb-4 pt-8 border-t border-zinc-300 dark:border-zinc-700 first:mt-0 first:pt-0 first:border-t-0"
           : level === 2
-          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-2 first:mt-0"
+          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-8 mb-2 first:mt-0"
           : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-4 mb-1.5 first:mt-0";
       const HeadingIcon = iconForHeading(heading[2]);
       const headingKey = key++;
       const headingContent = (
         <>
-          {HeadingIcon && <HeadingIcon size={level === 3 ? 12 : 14} className="shrink-0 text-zinc-500 dark:text-zinc-400" />}
+          {HeadingIcon && (
+            <HeadingIcon size={level === 1 ? 17 : level === 3 ? 12 : 14} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
+          )}
           {content}
         </>
       );
