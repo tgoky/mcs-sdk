@@ -1,6 +1,6 @@
 // src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx
 import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
+import { engagements, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
@@ -11,6 +11,7 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { skillName } from "@/lib/copy";
 import { PileOnPipeline } from "../../pile-on-pipeline";
 import { PileOnAdCreativeBriefs } from "../../pile-on-ad-creative-briefs";
+import { PileOnConfigureButton } from "../../pile-on-configure-button";
 
 export const revalidate = 0;
 
@@ -31,6 +32,7 @@ export default async function PileOnSkillPage({
       engagementId: engagements.engagementId,
       buyer: engagements.buyer,
       adCreativeBriefs: engagements.adCreativeBriefs,
+      stack: engagements.stack,
     })
     .from(engagements)
     .where(
@@ -50,6 +52,7 @@ export default async function PileOnSkillPage({
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
   const displayName = skillName("pile-on");
+  const stack = engagement.stack as EngagementStack | null;
 
   return (
     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
@@ -60,24 +63,33 @@ export default async function PileOnSkillPage({
         <SetBreadcrumbLabel label={`${engagement.buyer} · ${displayName}`} />
 
         {/* Circular Back Button & Title in the same horizontal row */}
-        <div className="flex items-center gap-3">
-          <Link
-            href={backHref}
-            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-            aria-label={backLabel}
-            title={backLabel}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Link>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              href={backHref}
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+              aria-label={backLabel}
+              title={backLabel}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Link>
 
-          <div>
-            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-              {displayName} — {engagement.buyer}
-            </h1>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Every speed-to-lead sequence this engagement has ever run, not just today&apos;s calendar.
-            </p>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+                {displayName} — {engagement.buyer}
+              </h1>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Every speed-to-lead sequence this engagement has ever run, not just today&apos;s calendar.
+              </p>
+            </div>
           </div>
+
+          <PileOnConfigureButton
+            engagementId={id}
+            buyerName={engagement.buyer}
+            initialSmsPlatform={stack?.sms_platform ?? "none"}
+            initialAdDataPlatform={stack?.ad_data_platform ?? "none"}
+          />
         </div>
 
         <PileOnPipeline engagementId={id} />

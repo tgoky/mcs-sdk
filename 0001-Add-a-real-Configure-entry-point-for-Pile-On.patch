@@ -1,0 +1,353 @@
+From 614af52fb07d826d0a902a41359d0a04877a8c39 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 12:52:29 +0000
+Subject: [PATCH] Add a real Configure entry point for Pile-On
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pile-On has no "hinges panel" so it never got a Configure button on its
+own page — its only settings UI was EnablePileOnModal, and that was
+enable-only with no way to reopen it afterward. Reused it instead of
+building a second form:
+
+- enable-worker-modal.tsx: EnablePileOnModal takes a new configureMode
+  flag plus initialSmsPlatform/initialAdDataPlatform. In configure mode
+  the title, copy, submit label ("Save changes"), and the Ask Teammates
+  seed message all reflect editing existing settings, and "Skip for
+  now" (meaningless once already configured) becomes "Cancel".
+- enable-pile-on.ts: the stack write only fired for a non-"none" value,
+  which was right for the initial Enable flow's untouched dropdowns but
+  silently dropped a deliberate "turn this back off" selection in
+  Configure. Now writes whenever a field is explicitly passed,
+  including "none".
+- pile-on-configure-button.tsx (new): the same small icon-only trigger
+  every other skill's Configure button uses, wired to the modal in
+  configureMode with the engagement's current stack values.
+- skills/pile-on/page.tsx: selects stack, renders the new button next
+  to the title like every other skill page already does.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../[id]/pile-on-configure-button.tsx         | 61 ++++++++++++++++++
+ .../engagements/[id]/skills/pile-on/page.tsx  | 46 +++++++++-----
+ .../library/enable-worker-modal.tsx           | 62 ++++++++++++++-----
+ src/lib/enable-pile-on.ts                     | 16 +++--
+ 4 files changed, 146 insertions(+), 39 deletions(-)
+ create mode 100644 src/app/dashboard/engagements/[id]/pile-on-configure-button.tsx
+
+diff --git a/src/app/dashboard/engagements/[id]/pile-on-configure-button.tsx b/src/app/dashboard/engagements/[id]/pile-on-configure-button.tsx
+new file mode 100644
+index 0000000..261278a
+--- /dev/null
++++ b/src/app/dashboard/engagements/[id]/pile-on-configure-button.tsx
+@@ -0,0 +1,61 @@
++"use client";
++
++// src/app/dashboard/engagements/[id]/pile-on-configure-button.tsx
++//
++// Pile-On has no "hinges panel" (worker.hasHingesPanel is false — see
++// skill-manifest.ts) so it never got the SkillConfigureMenu/FloatingPanel
++// treatment every other skill's own page has. Its only settings UI was
++// EnablePileOnModal, which is enable-only: no way to reopen it once
++// Pile-On was already on. This reuses that same modal (now with a
++// configureMode) and the same enable-with-config endpoint (already safe
++// to call again — it merges into the existing stack, and re-enabling an
++// already-enabled worker is a no-op) instead of building a second form.
++
++import { useState } from "react";
++import { Settings } from "lucide-react";
++import { useRouter } from "next/navigation";
++import { EnablePileOnModal } from "@/components/library/enable-worker-modal";
++
++export function PileOnConfigureButton({
++  engagementId,
++  buyerName,
++  initialSmsPlatform,
++  initialAdDataPlatform,
++}: {
++  engagementId: string;
++  buyerName?: string | null;
++  initialSmsPlatform: string;
++  initialAdDataPlatform: string;
++}) {
++  const router = useRouter();
++  const [open, setOpen] = useState(false);
++
++  return (
++    <>
++      <button
++        type="button"
++        onClick={() => setOpen(true)}
++        aria-label="Configure"
++        title="Configure"
++        className="hover-lift press-settle flex items-center justify-center rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 w-8 h-8 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
++      >
++        <Settings size={17} />
++      </button>
++
++      {open && (
++        <EnablePileOnModal
++          engagementId={engagementId}
++          buyerName={buyerName ?? undefined}
++          configureMode
++          initialSmsPlatform={initialSmsPlatform}
++          initialAdDataPlatform={initialAdDataPlatform}
++          onClose={() => setOpen(false)}
++          onEnabled={() => {
++            setOpen(false);
++            router.refresh();
++          }}
++        />
++      )}
++    </>
++  );
++}
+diff --git a/src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx b/src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx
+index 29387b4..e3375ca 100644
+--- a/src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx
+@@ -1,6 +1,6 @@
+ // src/app/dashboard/engagements/[id]/skills/pile-on/page.tsx
+ import { db } from "@/lib/db";
+-import { engagements } from "@/models/schema";
++import { engagements, type EngagementStack } from "@/models/schema";
+ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import { and, eq } from "drizzle-orm";
+@@ -11,6 +11,7 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
+ import { skillName } from "@/lib/copy";
+ import { PileOnPipeline } from "../../pile-on-pipeline";
+ import { PileOnAdCreativeBriefs } from "../../pile-on-ad-creative-briefs";
++import { PileOnConfigureButton } from "../../pile-on-configure-button";
+ 
+ export const revalidate = 0;
+ 
+@@ -31,6 +32,7 @@ export default async function PileOnSkillPage({
+       engagementId: engagements.engagementId,
+       buyer: engagements.buyer,
+       adCreativeBriefs: engagements.adCreativeBriefs,
++      stack: engagements.stack,
+     })
+     .from(engagements)
+     .where(
+@@ -50,6 +52,7 @@ export default async function PileOnSkillPage({
+   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+ 
+   const displayName = skillName("pile-on");
++  const stack = engagement.stack as EngagementStack | null;
+ 
+   return (
+     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
+@@ -60,24 +63,33 @@ export default async function PileOnSkillPage({
+         <SetBreadcrumbLabel label={`${engagement.buyer} · ${displayName}`} />
+ 
+         {/* Circular Back Button & Title in the same horizontal row */}
+-        <div className="flex items-center gap-3">
+-          <Link
+-            href={backHref}
+-            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+-            aria-label={backLabel}
+-            title={backLabel}
+-          >
+-            <ChevronLeft className="w-4 h-4" />
+-          </Link>
++        <div className="flex items-center justify-between gap-3">
++          <div className="flex items-center gap-3 min-w-0">
++            <Link
++              href={backHref}
++              className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++              aria-label={backLabel}
++              title={backLabel}
++            >
++              <ChevronLeft className="w-4 h-4" />
++            </Link>
+ 
+-          <div>
+-            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+-              {displayName} — {engagement.buyer}
+-            </h1>
+-            <p className="text-xs text-zinc-500 mt-0.5">
+-              Every speed-to-lead sequence this engagement has ever run, not just today&apos;s calendar.
+-            </p>
++            <div className="min-w-0">
++              <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
++                {displayName} — {engagement.buyer}
++              </h1>
++              <p className="text-xs text-zinc-500 mt-0.5">
++                Every speed-to-lead sequence this engagement has ever run, not just today&apos;s calendar.
++              </p>
++            </div>
+           </div>
++
++          <PileOnConfigureButton
++            engagementId={id}
++            buyerName={engagement.buyer}
++            initialSmsPlatform={stack?.sms_platform ?? "none"}
++            initialAdDataPlatform={stack?.ad_data_platform ?? "none"}
++          />
+         </div>
+ 
+         <PileOnPipeline engagementId={id} />
+diff --git a/src/components/library/enable-worker-modal.tsx b/src/components/library/enable-worker-modal.tsx
+index f6ed6c4..0210cc3 100644
+--- a/src/components/library/enable-worker-modal.tsx
++++ b/src/components/library/enable-worker-modal.tsx
+@@ -75,19 +75,33 @@ export function EnablePileOnModal({
+   buyerName,
+   onClose,
+   onEnabled,
++  configureMode = false,
++  initialSmsPlatform = "none",
++  initialAdDataPlatform = "none",
+ }: {
+   engagementId: string;
+   buyerName?: string;
+   onClose: () => void;
+   onEnabled: () => void;
++  /** True when this is re-opening settings for an already-enabled Pile-On
++   * (skills/pile-on/page.tsx's own Configure button) rather than the
++   * first-time Library enable flow. Same form, same endpoint (both are
++   * "write these two fields, and make sure the worker is on" — enabling
++   * an already-enabled worker is a no-op) — just different copy, initial
++   * values seeded from the current stack instead of defaulting to "none",
++   * and no "Skip for now" (there's nothing to skip when editing existing
++   * settings). */
++  configureMode?: boolean;
++  initialSmsPlatform?: string;
++  initialAdDataPlatform?: string;
+ }) {
+   // Lazy initializer, not an effect + setState — safe here because this
+   // component only ever mounts client-side, after a click flips
+   // showEnableModal true in WorkerCard (never during SSR), so there's no
+   // hydration value to match against.
+   const [mode, setMode] = useState<"form" | "chat">(() => readStoredMode());
+-  const [smsPlatform, setSmsPlatform] = useState("none");
+-  const [adDataPlatform, setAdDataPlatform] = useState("none");
++  const [smsPlatform, setSmsPlatform] = useState(initialSmsPlatform);
++  const [adDataPlatform, setAdDataPlatform] = useState(initialAdDataPlatform);
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+@@ -106,7 +120,7 @@ export function EnablePileOnModal({
+         body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
+       });
+       const body = await res.json().catch(() => ({}));
+-      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
++      if (!res.ok) throw new Error(body?.error ?? (configureMode ? "Could not save changes." : "Could not enable Pile-On."));
+       writeStoredMode("form");
+       onEnabled();
+     } catch (e) {
+@@ -117,7 +131,7 @@ export function EnablePileOnModal({
+   }
+ 
+   return (
+-    <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
++    <Modal title={configureMode ? "Configure Pile-On" : "Enable Pile-On"} onClose={onClose} maxWidthClass="max-w-xl">
+       <div className="space-y-4 font-sans">
+         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
+           <button
+@@ -143,8 +157,9 @@ export function EnablePileOnModal({
+         {mode === "form" ? (
+           <div className="space-y-4">
+             <p className="text-xs text-zinc-500 dark:text-zinc-400">
+-              Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account
+-              details) continues from Edit Stack Settings after enabling.
++              {configureMode
++                ? "Change either setting and save — selecting \"none\" turns that channel back off. Finer setup (SMS compliance registration, ad-cohort account details) is in Edit Stack Settings."
++                : "Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account details) continues from Edit Stack Settings after enabling."}
+             </p>
+ 
+             <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
+@@ -176,14 +191,25 @@ export function EnablePileOnModal({
+             )}
+ 
+             <div className="flex items-center justify-end gap-2 pt-1">
+-              <button
+-                type="button"
+-                onClick={() => submitForm(true)}
+-                disabled={pending}
+-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
+-              >
+-                Skip for now
+-              </button>
++              {configureMode ? (
++                <button
++                  type="button"
++                  onClick={onClose}
++                  disabled={pending}
++                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
++                >
++                  Cancel
++                </button>
++              ) : (
++                <button
++                  type="button"
++                  onClick={() => submitForm(true)}
++                  disabled={pending}
++                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
++                >
++                  Skip for now
++                </button>
++              )}
+               <button
+                 type="button"
+                 onClick={() => submitForm(false)}
+@@ -191,7 +217,7 @@ export function EnablePileOnModal({
+                 className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+               >
+                 {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+-                Enable Pile-On
++                {configureMode ? "Save changes" : "Enable Pile-On"}
+               </button>
+             </div>
+           </div>
+@@ -200,7 +226,11 @@ export function EnablePileOnModal({
+             <TeammatesChat
+               size="compact"
+               initialThreadId={null}
+-              initialPendingMessage={`Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`}
++              initialPendingMessage={
++                configureMode
++                  ? `Update Pile-On settings for ${buyerName ?? "this client"} (engagementId: ${engagementId})`
++                  : `Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`
++              }
+               onThreadEvent={() => {
+                 writeStoredMode("chat");
+               }}
+diff --git a/src/lib/enable-pile-on.ts b/src/lib/enable-pile-on.ts
+index b95754c..d36fac4 100644
+--- a/src/lib/enable-pile-on.ts
++++ b/src/lib/enable-pile-on.ts
+@@ -53,17 +53,21 @@ export async function enablePileOnForEngagement(
+   if ("error" in installResult) return { ok: false, error: installResult.error };
+ 
+   const currentStack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
+-  if (
+-    (opts?.smsPlatform && opts.smsPlatform !== "none") ||
+-    (opts?.adDataPlatform && opts.adDataPlatform !== "none")
+-  ) {
++  // Write whenever a field was actually passed — including an explicit
++  // "none" — rather than only non-"none" values. The original enable-only
++  // guard treated "none" the same as "field wasn't answered," which is
++  // right for the initial Enable flow's untouched dropdowns but wrong for
++  // Configure re-opening this same function: someone deliberately turning
++  // SMS follow-ups back off by selecting "none" needs that write to
++  // actually happen, not get silently dropped.
++  if (opts?.smsPlatform !== undefined || opts?.adDataPlatform !== undefined) {
+     await db
+       .update(engagements)
+       .set({
+         stack: {
+           ...currentStack,
+-          ...(opts?.smsPlatform && opts.smsPlatform !== "none" ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
+-          ...(opts?.adDataPlatform && opts.adDataPlatform !== "none" ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
++          ...(opts?.smsPlatform !== undefined ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
++          ...(opts?.adDataPlatform !== undefined ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
+         },
+         updatedAt: new Date(),
+       })
+-- 
+2.43.0
+

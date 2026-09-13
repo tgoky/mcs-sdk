@@ -53,17 +53,21 @@ export async function enablePileOnForEngagement(
   if ("error" in installResult) return { ok: false, error: installResult.error };
 
   const currentStack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
-  if (
-    (opts?.smsPlatform && opts.smsPlatform !== "none") ||
-    (opts?.adDataPlatform && opts.adDataPlatform !== "none")
-  ) {
+  // Write whenever a field was actually passed — including an explicit
+  // "none" — rather than only non-"none" values. The original enable-only
+  // guard treated "none" the same as "field wasn't answered," which is
+  // right for the initial Enable flow's untouched dropdowns but wrong for
+  // Configure re-opening this same function: someone deliberately turning
+  // SMS follow-ups back off by selecting "none" needs that write to
+  // actually happen, not get silently dropped.
+  if (opts?.smsPlatform !== undefined || opts?.adDataPlatform !== undefined) {
     await db
       .update(engagements)
       .set({
         stack: {
           ...currentStack,
-          ...(opts?.smsPlatform && opts.smsPlatform !== "none" ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
-          ...(opts?.adDataPlatform && opts.adDataPlatform !== "none" ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
+          ...(opts?.smsPlatform !== undefined ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
+          ...(opts?.adDataPlatform !== undefined ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
         },
         updatedAt: new Date(),
       })

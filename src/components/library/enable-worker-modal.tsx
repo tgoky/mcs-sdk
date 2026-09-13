@@ -75,19 +75,33 @@ export function EnablePileOnModal({
   buyerName,
   onClose,
   onEnabled,
+  configureMode = false,
+  initialSmsPlatform = "none",
+  initialAdDataPlatform = "none",
 }: {
   engagementId: string;
   buyerName?: string;
   onClose: () => void;
   onEnabled: () => void;
+  /** True when this is re-opening settings for an already-enabled Pile-On
+   * (skills/pile-on/page.tsx's own Configure button) rather than the
+   * first-time Library enable flow. Same form, same endpoint (both are
+   * "write these two fields, and make sure the worker is on" — enabling
+   * an already-enabled worker is a no-op) — just different copy, initial
+   * values seeded from the current stack instead of defaulting to "none",
+   * and no "Skip for now" (there's nothing to skip when editing existing
+   * settings). */
+  configureMode?: boolean;
+  initialSmsPlatform?: string;
+  initialAdDataPlatform?: string;
 }) {
   // Lazy initializer, not an effect + setState — safe here because this
   // component only ever mounts client-side, after a click flips
   // showEnableModal true in WorkerCard (never during SSR), so there's no
   // hydration value to match against.
   const [mode, setMode] = useState<"form" | "chat">(() => readStoredMode());
-  const [smsPlatform, setSmsPlatform] = useState("none");
-  const [adDataPlatform, setAdDataPlatform] = useState("none");
+  const [smsPlatform, setSmsPlatform] = useState(initialSmsPlatform);
+  const [adDataPlatform, setAdDataPlatform] = useState(initialAdDataPlatform);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,7 +120,7 @@ export function EnablePileOnModal({
         body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
+      if (!res.ok) throw new Error(body?.error ?? (configureMode ? "Could not save changes." : "Could not enable Pile-On."));
       writeStoredMode("form");
       onEnabled();
     } catch (e) {
@@ -117,7 +131,7 @@ export function EnablePileOnModal({
   }
 
   return (
-    <Modal title="Enable Pile-On" onClose={onClose} maxWidthClass="max-w-xl">
+    <Modal title={configureMode ? "Configure Pile-On" : "Enable Pile-On"} onClose={onClose} maxWidthClass="max-w-xl">
       <div className="space-y-4 font-sans">
         <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs w-fit">
           <button
@@ -143,8 +157,9 @@ export function EnablePileOnModal({
         {mode === "form" ? (
           <div className="space-y-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account
-              details) continues from Edit Stack Settings after enabling.
+              {configureMode
+                ? "Change either setting and save — selecting \"none\" turns that channel back off. Finer setup (SMS compliance registration, ad-cohort account details) is in Edit Stack Settings."
+                : "Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account details) continues from Edit Stack Settings after enabling."}
             </p>
 
             <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2">
@@ -176,14 +191,25 @@ export function EnablePileOnModal({
             )}
 
             <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => submitForm(true)}
-                disabled={pending}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
-              >
-                Skip for now
-              </button>
+              {configureMode ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={pending}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => submitForm(true)}
+                  disabled={pending}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
+                >
+                  Skip for now
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => submitForm(false)}
@@ -191,7 +217,7 @@ export function EnablePileOnModal({
                 className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
               >
                 {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-                Enable Pile-On
+                {configureMode ? "Save changes" : "Enable Pile-On"}
               </button>
             </div>
           </div>
@@ -200,7 +226,11 @@ export function EnablePileOnModal({
             <TeammatesChat
               size="compact"
               initialThreadId={null}
-              initialPendingMessage={`Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`}
+              initialPendingMessage={
+                configureMode
+                  ? `Update Pile-On settings for ${buyerName ?? "this client"} (engagementId: ${engagementId})`
+                  : `Enable Pile-On for ${buyerName ?? "this client"} (engagementId: ${engagementId})`
+              }
               onThreadEvent={() => {
                 writeStoredMode("chat");
               }}
