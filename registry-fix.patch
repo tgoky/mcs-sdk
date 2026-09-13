@@ -1,0 +1,18 @@
+diff --git a/src/lib/whop-agent-skill-registry.ts b/src/lib/whop-agent-skill-registry.ts
+index 733e46e..6ca0f30 100644
+--- a/src/lib/whop-agent-skill-registry.ts
++++ b/src/lib/whop-agent-skill-registry.ts
+@@ -82,6 +82,13 @@ const OWN_ROUTE_SKILLS = new Set<WhopAgentSkillId>([
+   // Own scheduled cron dispatch (src/inngest/whop-agent.ts) rather than
+   // the generic skillRunExecute path.
+   "whop-drift-monitor",
++  // Own scheduled cron dispatch too (whopVelocityReconciliationCron /
++  // whopVelocityReconciliationSingleCron in src/inngest/whop-agent.ts,
++  // calling reconcileRefundDisputeVelocity directly) — same shape as
++  // whop-drift-monitor above. Missing from this set was a real bug: the
++  // module-load invariant check below threw at import time, which crashed
++  // /api/inngest's entire route bundle at build/deploy.
++  "whop-refund-dispute-velocity",
+   // Notification-only, not a tracked skillRuns execution at all.
+   "whop-daily-change-digest",
+   // Needs real batch input (codes, discounts) a generic dispatch has no
