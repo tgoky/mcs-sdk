@@ -215,9 +215,13 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
     }
   }, [selectedDayKey, selectedDayItems, selectedId]);
 
+  // Same fix as Pile-On's own pipeline: items load once for the whole
+  // engagement (no per-month refetch), so a plain filtered.find(selectedId)
+  // keeps matching a prior month's selection indefinitely. Only trust
+  // selectedId when it's actually within the currently selected day.
   const selected = useMemo(
-    () => filtered.find((i) => i.id === selectedId) ?? selectedDayItems[0] ?? null,
-    [filtered, selectedId, selectedDayItems]
+    () => (selectedId ? selectedDayItems.find((i) => i.id === selectedId) : null) ?? selectedDayItems[0] ?? null,
+    [selectedId, selectedDayItems]
   );
 
   const monthName = currentDate.toLocaleString("default", { month: "long" });
@@ -226,10 +230,10 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-2 font-sans">
         <div className="flex flex-wrap items-center gap-2">
           {/* Universal Month Navigation */}
-          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-md border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
@@ -262,7 +266,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
         </div>
@@ -279,7 +283,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -287,7 +291,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           <button
             type="button"
             onClick={() => setShowManualEnroll(true)}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
             title="Manually enroll a prospect who cancelled outside a connected webhook"
           >
             <UserPlus size={13} />
@@ -297,14 +301,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* SMART SPLIT-PANE RECOVERY FEED */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
         {/* LEFT 7 COLUMNS: CHRONOLOGICAL RECOVERY FEED */}
-        <div className="lg:col-span-7 overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl font-sans flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+        <div className="lg:col-span-7 overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg font-sans flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 font-sans">
             <div className="flex items-center gap-1.5">
               <CalendarDays size={14} className="text-zinc-500" />
               <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
@@ -466,7 +470,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
         </div>
 
         {/* RIGHT 5 COLUMNS: PERSISTENT RECOVERY INSPECTOR PANEL */}
-        <div className="lg:col-span-5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-4 font-sans">
+        <div className="lg:col-span-5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-4 space-y-4 font-sans">
           {selected ? (
             <>
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -497,7 +501,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2 text-xs font-sans">
+              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
                 <div className="flex items-center justify-between font-sans">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
@@ -527,7 +531,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               </div>
 
               {selected.freshRescheduleLink && (
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2 text-xs font-sans">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
                   <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
                     <Link2 size={12} /> Single-use Reschedule Link
                   </span>
@@ -551,7 +555,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
               {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
               {selected.runId && (
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}

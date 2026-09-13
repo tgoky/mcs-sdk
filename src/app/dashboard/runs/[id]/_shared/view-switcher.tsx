@@ -1,15 +1,16 @@
 "use client";
 
-import { Calendar, List, Kanban, FileText, type LucideIcon } from "lucide-react";
+import { Calendar, List, Kanban, FileText, Activity, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type RunViewMode = "calendar" | "list" | "board" | "report";
+export type RunViewMode = "calendar" | "list" | "board" | "report" | "health";
 
 const MODES: { key: RunViewMode; label: string; icon: typeof Calendar }[] = [
   { key: "calendar", label: "Calendar", icon: Calendar },
   { key: "list", label: "List", icon: List },
   { key: "board", label: "Board", icon: Kanban },
   { key: "report", label: "Report", icon: FileText },
+  { key: "health", label: "Health", icon: Activity },
 ];
 
 export function ViewSwitcher({

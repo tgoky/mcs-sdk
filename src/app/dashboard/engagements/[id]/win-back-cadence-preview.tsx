@@ -56,7 +56,7 @@ export function WinBackCadencePreview({
 
   if (!assetMap) {
     return (
-      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 font-sans">
+      <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-5 font-sans">
         <div className="flex items-start gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
@@ -90,7 +90,7 @@ export function WinBackCadencePreview({
   ].sort((a, b) => a.offsetDays - b.offsetDays);
 
   return (
-    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden font-sans">
+    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg overflow-hidden font-sans">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
@@ -133,7 +133,7 @@ export function WinBackCadencePreview({
               </button>
               {expanded && (
                 <div className="px-5 pb-4 pl-[3.25rem]">
-                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3">
+                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3">
                     {t.body}
                   </p>
                 </div>

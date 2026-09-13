@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   LayoutDashboard,
+  Activity,
 } from "lucide-react";
 import type { CorrelationFlag } from "@/lib/report-correlation";
 import { cn } from "@/lib/utils";
@@ -140,11 +141,12 @@ export function LeakMapView({
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      {/* TOOLBAR — Overview / Metrics Table / Trend / Report as one flat
-          row of seamless, borderless tabs (no pill/background chrome) —
-          all four are peer destinations now, not a content group plus a
-          separate view-mode toggle. Trend only appears when there's
-          history to chart. */}
+      {/* TOOLBAR — Overview / Funnel Health / Metrics Table / Trend / Report
+          as one flat row of seamless, borderless tabs (no pill/background
+          chrome). Overview is the "see everything at once" destination —
+          Funnel Health, Metrics Table and Report each also exist as their
+          own focused tab for jumping straight to one thing. Trend only
+          appears when there's history to chart. */}
       <div className="flex flex-wrap items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-2">
         {!embedded && (
           <div className="relative w-64">
@@ -161,9 +163,13 @@ export function LeakMapView({
         <ViewSwitcher
           value={mode}
           onChange={setMode}
-          modes={history !== undefined ? ["calendar", "list", "board", "report"] : ["calendar", "list", "report"]}
-          labels={{ calendar: "Overview", list: "Metrics Table", board: "Trend" }}
-          icons={{ calendar: LayoutDashboard, board: TrendingUp }}
+          modes={
+            history !== undefined
+              ? ["calendar", "health", "list", "board", "report"]
+              : ["calendar", "health", "list", "report"]
+          }
+          labels={{ calendar: "Overview", health: "Funnel Health", list: "Metrics Table", board: "Trend" }}
+          icons={{ calendar: LayoutDashboard, health: Activity, board: TrendingUp }}
           variant="seamless"
         />
       </div>
@@ -184,16 +190,15 @@ export function LeakMapView({
           description="This run either failed before the audit could be computed, or it ran before per-run correlation was added — check the Steps panel for detailed execution logs."
         />
       ) : (
-        <>
-          {/* OVERVIEW VIEW — mode key stays "calendar" (shared RunViewMode
-              type across every skill view), only the label/icon shown here
-              are overridden; this is the verdict/diagnostic screen, not an
-              actual calendar grid. The Executive Report used to live at
-              the bottom of this same view — split into its own "report"
-              tab below since it's a distinct destination, not a
-              continuation of the metrics list. */}
-          {mode === "calendar" && (
-            <div key="calendar" className="run-view-content-enter space-y-4">
+        (() => {
+          // Three reusable sections, computed once per render: Funnel
+          // Health (the verdict + diagnostic content), Metrics Table, and
+          // the Executive Report. "Overview" composes all three into one
+          // scrollable page; Funnel Health/Metrics Table/Report each also
+          // exist as their own focused tab showing just one of these —
+          // same content either way, never duplicated logic.
+          const healthSection = (
+            <>
               {/* Verdict — the one thing this view leads with. Bigger dot,
                   bigger text, more room than a thin status strip, since
                   this is the answer to "is anything wrong," not a footnote. */}
@@ -306,12 +311,15 @@ export function LeakMapView({
                   </ul>
                 </details>
               )}
-            </div>
-          )}
+            </>
+          );
 
-          {/* LIST VIEW */}
-          {mode === "list" && (
-            <div key="list" className="run-view-content-enter">
+          const metricsTableSection = (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <SquishySkillBadge skill="leak-map" size={24} />
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Metrics Table</h2>
+              </div>
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0
@@ -378,14 +386,11 @@ export function LeakMapView({
                   </tbody>
                 </table>
               )}
-            </div>
-          )}
+            </>
+          );
 
-          {/* REPORT VIEW — the Executive Audit Report on its own, split
-              out of Overview so it's a real destination rather than a
-              scroll-past continuation of the metrics list. */}
-          {mode === "report" && (
-            <div key="report" className="run-view-content-enter rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
+          const reportSection = (
+            <>
               <div className="mb-3 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
                 <div className="flex items-center gap-2">
                   <SquishySkillBadge skill="leak-map" size={24} />
@@ -414,9 +419,48 @@ export function LeakMapView({
                   No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
                 </p>
               )}
-            </div>
-          )}
-        </>
+            </>
+          );
+
+          // Section-break divider between combined sections in Overview —
+          // same top-divider + real vertical room pattern SimpleMarkdown's
+          // level-1 headings use for report sections, so "one section
+          // ends, the next begins" is unambiguous here too instead of
+          // three blocks jammed together with nothing to tell them apart.
+          const sectionDivider = <div className="border-t border-zinc-300 dark:border-zinc-700 pt-8 mt-14" />;
+
+          return (
+            <>
+              {mode === "calendar" && (
+                <div key="calendar" className="run-view-content-enter space-y-4">
+                  {healthSection}
+                  {sectionDivider}
+                  {metricsTableSection}
+                  {sectionDivider}
+                  <div className="rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">{reportSection}</div>
+                </div>
+              )}
+
+              {mode === "health" && (
+                <div key="health" className="run-view-content-enter space-y-4">
+                  {healthSection}
+                </div>
+              )}
+
+              {mode === "list" && (
+                <div key="list" className="run-view-content-enter">
+                  {metricsTableSection}
+                </div>
+              )}
+
+              {mode === "report" && (
+                <div key="report" className="run-view-content-enter rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
+                  {reportSection}
+                </div>
+              )}
+            </>
+          );
+        })()
       ))}
     </div>
   );
