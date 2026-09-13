@@ -1,0 +1,392 @@
+From 0edda0acc5c7ab8c883ba617ef0173686d134ed5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 08:13:26 +0000
+Subject: [PATCH] Remove filled Reputation Manager cards; fix cramped section
+ spacing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Reputation Manager (rep-findings-panel.tsx) still had the old filled
+"no-ambient-glow surface-glass-1" card treatment on every panel — the
+toolbar, the run-a-check bar, the timeline feed, and the detail panel —
+plus its page had no bg-dot-grid wrapper at all, unlike every other
+skill page. All four now match the established transparent+border
+system, and the page shows the dot grid through.
+
+Funnel Audit's Executive Report (simple-markdown.tsx) read as one
+undifferentiated wall of text — a metric's last bullet and the next
+major section's heading ("Recommendation Cards", "Data Gaps") sat only
+16px apart with nothing to mark the boundary. Level-1 headings now get
+a top divider and real vertical room so a section change is
+unambiguous; list items and paragraphs got a bit more breathing room
+too.
+
+deliverables-panel.tsx ("Show Rate Setup"): bumped the main container's
+padding and the tightest space-y-1 groupings (hooks, script beats,
+recording checklists, page-audit lists) up a notch — same fix pattern.
+
+Also: Leak Map's view-switcher toggle was labeled "Calendar" for what
+is actually its verdict/report overview, not a calendar grid — added a
+label/icon override to ViewSwitcher (view-switcher.tsx) so this mode
+reads as "Overview" here while every view that's a real calendar keeps
+the default.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../engagements/[id]/deliverables-panel.tsx   | 22 ++++----
+ .../engagements/[id]/rep-findings-panel.tsx   | 12 ++---
+ .../[id]/skills/reputation-manager/page.tsx   | 51 ++++++++++---------
+ .../runs/[id]/_shared/view-switcher.tsx       | 16 +++++-
+ .../runs/[id]/views/leak-map-view.tsx         | 15 +++++-
+ src/components/simple-markdown.tsx            | 17 +++++--
+ 6 files changed, 84 insertions(+), 49 deletions(-)
+
+diff --git a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+index aa55ef8..7a8d7b3 100644
+--- a/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/deliverables-panel.tsx
+@@ -354,7 +354,7 @@ export function DeliverablesPanel({
+ 
+       {/* MAIN DELIVERABLES CONTAINER — transparent so the page's bg-dot-grid
+           shows through instead of the opaque glass fill hiding it. */}
+-      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
++      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-3 sm:p-5 divide-y divide-zinc-200 dark:divide-zinc-800/60">
+         
+         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
+         <DeliverableRow
+@@ -586,14 +586,14 @@ export function DeliverablesPanel({
+               subtitle={`Hook: "${b.hook}"`}
+             >
+               <div className="space-y-4 text-xs font-sans pt-1">
+-                <div className="space-y-1">
++                <div className="space-y-1.5">
+                   <SquareLabel color="bg-amber-400">Scroll-Stopper Hook (First 3 Seconds)</SquareLabel>
+                   <div className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
+                     &ldquo;{b.hook}&rdquo;
+                   </div>
+                 </div>
+ 
+-                <div className="space-y-1">
++                <div className="space-y-1.5">
+                   <SquareLabel color="bg-sky-400">Strategic Angle &amp; Framing</SquareLabel>
+                   <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">{b.angle}</p>
+                 </div>
+@@ -672,7 +672,7 @@ export function DeliverablesPanel({
+                   </div>
+                   <div className="space-y-2">
+                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
+-                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1">
++                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
+                         <div className="flex items-center gap-2">
+                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
+                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
+@@ -722,7 +722,7 @@ export function DeliverablesPanel({
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Wrench size={13} className="text-zinc-500" /> Equipment
+                       </span>
+-                      <ul className="space-y-1">
++                      <ul className="space-y-1.5">
+                         {pinDownScriptPack.recordingChecklist.equipment.map((it, i) => (
+                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                         ))}
+@@ -733,7 +733,7 @@ export function DeliverablesPanel({
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Camera size={13} className="text-zinc-500" /> Environment
+                       </span>
+-                      <ul className="space-y-1">
++                      <ul className="space-y-1.5">
+                         {pinDownScriptPack.recordingChecklist.environment.map((it, i) => (
+                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                         ))}
+@@ -744,7 +744,7 @@ export function DeliverablesPanel({
+                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
+                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
+                       </span>
+-                      <ul className="space-y-1">
++                      <ul className="space-y-1.5">
+                         {pinDownScriptPack.recordingChecklist.wardrobeAndFraming.map((it, i) => (
+                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                         ))}
+@@ -773,7 +773,7 @@ export function DeliverablesPanel({
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
+                 </span>
+-                <ul className="space-y-1">
++                <ul className="space-y-1.5">
+                   {pinDownPageAudit.existingPageStrengths.map((s, i) => (
+                     <li key={i} className="text-zinc-700 dark:text-zinc-300">✓ {s}</li>
+                   ))}
+@@ -784,7 +784,7 @@ export function DeliverablesPanel({
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
+                 </span>
+-                <ul className="space-y-1">
++                <ul className="space-y-1.5">
+                   {pinDownPageAudit.existingPageWeaknesses.map((w, i) => (
+                     <li key={i} className="text-zinc-700 dark:text-zinc-300">✗ {w}</li>
+                   ))}
+@@ -795,7 +795,7 @@ export function DeliverablesPanel({
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   v1 Improvements
+                 </span>
+-                <ul className="space-y-1">
++                <ul className="space-y-1.5">
+                   {pinDownPageAudit.v1Improvements.map((imp, i) => (
+                     <li key={i} className="text-zinc-700 dark:text-zinc-300">→ {imp}</li>
+                   ))}
+@@ -808,7 +808,7 @@ export function DeliverablesPanel({
+                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                   Vs. {pinDownPageAudit.competitorComparison.url}
+                 </span>
+-                <ul className="space-y-1">
++                <ul className="space-y-1.5">
+                   {pinDownPageAudit.competitorComparison.notes.map((n, i) => (
+                     <li key={i} className="text-zinc-700 dark:text-zinc-300">⇄ {n}</li>
+                   ))}
+diff --git a/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+index 5edc957..ba2a8c9 100644
+--- a/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/rep-findings-panel.tsx
+@@ -251,7 +251,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
+   const [crisisSource, setCrisisSource] = useState("trustpilot");
+ 
+   return (
+-    <div className="flex flex-col gap-2 no-ambient-glow surface-glass-1 rounded-xl p-3">
++    <div className="flex flex-col gap-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3.5">
+       {source === "engine" && (
+         <div className="flex flex-wrap items-end gap-2">
+           <div className="space-y-1">
+@@ -424,7 +424,7 @@ export function RepFindingsPanel({
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* Toolbar & Controls — same shell as leak-map-schedule.tsx */}
+-      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2">
++      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2">
+         <div className="flex flex-wrap items-center gap-2">
+           <div className="relative w-56">
+             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
+@@ -479,12 +479,12 @@ export function RepFindingsPanel({
+       {/* Run a check — only for the source actually being looked at */}
+       {sourceFilter !== "all" && <SourceCheckBar engagementId={engagementId} source={sourceFilter} />}
+ 
+-      <div className="space-y-3">
++      <div className="space-y-5">
+         {/* Timeline feed — full width, flat and newest-first (a continuous
+             multi-source feed, not a handful of scheduled runs, so no
+             calendar-style day buckets — just a timestamp per row) */}
+-        <div className="overflow-hidden no-ambient-glow surface-glass-1 rounded-2xl flex flex-col">
+-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
++        <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
++          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
+             <span className="text-xs font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
+             <span className="text-[10.5px] font-mono text-zinc-500">{filtered.length} shown</span>
+           </div>
+@@ -535,7 +535,7 @@ export function RepFindingsPanel({
+         </div>
+ 
+         {/* Diagnostic panel — full detail for whatever's selected */}
+-        <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4 space-y-3">
++        <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-3">
+           {selected ? (
+             (() => {
+               const meta = SOURCE_META[selected.kind];
+diff --git a/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+index faf0812..2676176 100644
+--- a/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
++++ b/src/app/dashboard/engagements/[id]/skills/reputation-manager/page.tsx
+@@ -55,33 +55,38 @@ export default async function ReputationManagerFindingsPage({
+   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+ 
+   return (
+-    <div className="space-y-4 font-sans antialiased">
+-      <SetBreadcrumbLabel label={`${engagement.buyer} · Reputation Manager`} />
++    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
++      {/* Dot Grid Background — same as the main engagement page */}
++      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
+ 
+-      <div className="flex items-center gap-3">
+-        <Link
+-          href={backHref}
+-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+-          aria-label={backLabel}
+-          title={backLabel}
+-        >
+-          <ChevronLeft className="w-4 h-4" />
+-        </Link>
++      <div className="relative z-10 space-y-4 font-sans antialiased">
++        <SetBreadcrumbLabel label={`${engagement.buyer} · Reputation Manager`} />
+ 
+-        <div>
+-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+-            Reputation Manager — {engagement.buyer}
+-          </h1>
+-          <p className="text-xs text-zinc-500 mt-0.5">
+-            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
+-            <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
+-              Manage declared incidents →
+-            </Link>
+-          </p>
++        <div className="flex items-center gap-3">
++          <Link
++            href={backHref}
++            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
++            aria-label={backLabel}
++            title={backLabel}
++          >
++            <ChevronLeft className="w-4 h-4" />
++          </Link>
++
++          <div>
++            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
++              Reputation Manager — {engagement.buyer}
++            </h1>
++            <p className="text-xs text-zinc-500 mt-0.5">
++              Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
++              <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
++                Manage declared incidents →
++              </Link>
++            </p>
++          </div>
+         </div>
+-      </div>
+ 
+-      <RepFindingsPanel engagementId={id} initialSource={initialSource} />
++        <RepFindingsPanel engagementId={id} initialSource={initialSource} />
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+index 553700b..7cbb13e 100644
+--- a/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
++++ b/src/app/dashboard/runs/[id]/_shared/view-switcher.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { Calendar, List, Kanban } from "lucide-react";
++import { Calendar, List, Kanban, type LucideIcon } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ 
+ export type RunViewMode = "calendar" | "list" | "board";
+@@ -16,6 +16,7 @@ export function ViewSwitcher({
+   onChange,
+   className,
+   modes,
++  labels,
+ }: {
+   value: RunViewMode;
+   onChange: (mode: RunViewMode) => void;
+@@ -24,11 +25,22 @@ export function ViewSwitcher({
+    * drop "board" entirely rather than ship a broken/redundant third view.
+    * Defaults to all three for every other call site. */
+   modes?: RunViewMode[];
++  /** Override a mode's displayed label without renaming the mode key
++   * itself — e.g. Leak Map's "calendar" mode is really its overview/report
++   * screen, not an actual calendar grid, so it shows "Overview" here while
++   * every other view that really is a calendar keeps the default label. */
++  labels?: Partial<Record<RunViewMode, string>>;
++  /** Same idea as `labels`, for the icon — a relabeled mode usually needs
++   * a different glyph too (an actual calendar icon next to "Overview"
++   * reads just as wrong as the word "Calendar" did). */
++  icons?: Partial<Record<RunViewMode, LucideIcon>>;
+ }) {
+   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
+   return (
+     <div className={cn("inline-flex items-center gap-0.5 p-0.5", className)}>
+-      {visibleModes.map(({ key, label, icon: Icon }) => {
++      {visibleModes.map(({ key, label: defaultLabel, icon: DefaultIcon }) => {
++        const label = labels?.[key] ?? defaultLabel;
++        const Icon = icons?.[key] ?? DefaultIcon;
+         const active = value === key;
+         return (
+           <button
+diff --git a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+index 2181d46..500af23 100644
+--- a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+@@ -10,6 +10,7 @@ import {
+   Copy,
+   Check,
+   ChevronDown,
++  LayoutDashboard,
+ } from "lucide-react";
+ import type { CorrelationFlag } from "@/lib/report-correlation";
+ import { cn } from "@/lib/utils";
+@@ -141,7 +142,14 @@ export function LeakMapView({
+           </div>
+         )}
+ 
+-        <ViewSwitcher value={mode} onChange={setMode} modes={["calendar", "list"]} className={embedded ? undefined : "ml-auto"} />
++        <ViewSwitcher
++          value={mode}
++          onChange={setMode}
++          modes={["calendar", "list"]}
++          labels={{ calendar: "Overview" }}
++          icons={{ calendar: LayoutDashboard }}
++          className={embedded ? undefined : "ml-auto"}
++        />
+       </div>
+ 
+       {!audit ? (
+@@ -152,7 +160,10 @@ export function LeakMapView({
+         />
+       ) : (
+         <>
+-          {/* CALENDAR / OVERVIEW VIEW */}
++          {/* OVERVIEW VIEW — mode key stays "calendar" (shared RunViewMode
++              type across every skill view), only the label/icon shown here
++              are overridden; this is the verdict + report screen, not an
++              actual calendar grid. */}
+           {mode === "calendar" && (
+             <div key="calendar" className="run-view-content-enter space-y-4">
+               {/* Verdict — the one thing this view leads with. Bigger dot,
+diff --git a/src/components/simple-markdown.tsx b/src/components/simple-markdown.tsx
+index ec03bf8..1180313 100644
+--- a/src/components/simple-markdown.tsx
++++ b/src/components/simple-markdown.tsx
+@@ -69,7 +69,7 @@ export function SimpleMarkdown({ text, className }: { text: string; className?:
+     const items = listBuffer;
+     listBuffer = [];
+     blocks.push(
+-      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1 my-2">
++      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1.5 my-2.5">
+         {items.map((item, idx) => (
+           <li key={idx} className="leading-relaxed">
+             {renderInline(item, `li-${key}-${idx}`)}
+@@ -100,12 +100,19 @@ export function SimpleMarkdown({ text, className }: { text: string; className?:
+       flushList();
+       const level = heading[1].length;
+       const content = renderInline(heading[2], `h-${key}`);
++      // Level-1 headings mark a whole new major section of the report
++      // (e.g. "Metric-by-Metric Review" vs. "Recommendation Cards" vs.
++      // "Data Gaps") — these need a real, unambiguous break, not just a
++      // little extra margin, or one section's last line reads as if it
++      // could belong to the next section's heading. A top divider + much
++      // more vertical room does that; level 2/3 stay lighter since those
++      // are sub-items within a section, not section boundaries.
+       const cls =
+         level === 1
+-          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
++          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-8 mb-3 pt-5 border-t border-zinc-200/70 dark:border-zinc-800/70 first:mt-0 first:pt-0 first:border-t-0"
+           : level === 2
+-          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
+-          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
++          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-2 first:mt-0"
++          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-4 mb-1.5 first:mt-0";
+       const HeadingIcon = iconForHeading(heading[2]);
+       const headingKey = key++;
+       const headingContent = (
+@@ -222,7 +229,7 @@ export function SimpleMarkdown({ text, className }: { text: string; className?:
+ 
+     const paraKey = key++;
+     blocks.push(
+-      <p key={paraKey} className="leading-relaxed my-1.5">
++      <p key={paraKey} className="leading-relaxed my-2">
+         {renderInline(paraLines.join(" "), `p-${paraKey}`)}
+       </p>
+     );
+-- 
+2.43.0
+

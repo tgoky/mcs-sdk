@@ -251,7 +251,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
   const [crisisSource, setCrisisSource] = useState("trustpilot");
 
   return (
-    <div className="flex flex-col gap-2 no-ambient-glow surface-glass-1 rounded-xl p-3">
+    <div className="flex flex-col gap-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3.5">
       {source === "engine" && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
@@ -424,7 +424,7 @@ export function RepFindingsPanel({
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Toolbar & Controls — same shell as leak-map-schedule.tsx */}
-      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-56">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
@@ -479,12 +479,12 @@ export function RepFindingsPanel({
       {/* Run a check — only for the source actually being looked at */}
       {sourceFilter !== "all" && <SourceCheckBar engagementId={engagementId} source={sourceFilter} />}
 
-      <div className="space-y-3">
+      <div className="space-y-5">
         {/* Timeline feed — full width, flat and newest-first (a continuous
             multi-source feed, not a handful of scheduled runs, so no
             calendar-style day buckets — just a timestamp per row) */}
-        <div className="overflow-hidden no-ambient-glow surface-glass-1 rounded-2xl flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60">
+        <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
             <span className="text-xs font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
             <span className="text-[10.5px] font-mono text-zinc-500">{filtered.length} shown</span>
           </div>
@@ -535,7 +535,7 @@ export function RepFindingsPanel({
         </div>
 
         {/* Diagnostic panel — full detail for whatever's selected */}
-        <div className="no-ambient-glow surface-glass-1 rounded-2xl p-4 space-y-3">
+        <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-3">
           {selected ? (
             (() => {
               const meta = SOURCE_META[selected.kind];

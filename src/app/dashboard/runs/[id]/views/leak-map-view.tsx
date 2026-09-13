@@ -10,6 +10,7 @@ import {
   Copy,
   Check,
   ChevronDown,
+  LayoutDashboard,
 } from "lucide-react";
 import type { CorrelationFlag } from "@/lib/report-correlation";
 import { cn } from "@/lib/utils";
@@ -141,7 +142,14 @@ export function LeakMapView({
           </div>
         )}
 
-        <ViewSwitcher value={mode} onChange={setMode} modes={["calendar", "list"]} className={embedded ? undefined : "ml-auto"} />
+        <ViewSwitcher
+          value={mode}
+          onChange={setMode}
+          modes={["calendar", "list"]}
+          labels={{ calendar: "Overview" }}
+          icons={{ calendar: LayoutDashboard }}
+          className={embedded ? undefined : "ml-auto"}
+        />
       </div>
 
       {!audit ? (
@@ -152,7 +160,10 @@ export function LeakMapView({
         />
       ) : (
         <>
-          {/* CALENDAR / OVERVIEW VIEW */}
+          {/* OVERVIEW VIEW — mode key stays "calendar" (shared RunViewMode
+              type across every skill view), only the label/icon shown here
+              are overridden; this is the verdict + report screen, not an
+              actual calendar grid. */}
           {mode === "calendar" && (
             <div key="calendar" className="run-view-content-enter space-y-4">
               {/* Verdict — the one thing this view leads with. Bigger dot,

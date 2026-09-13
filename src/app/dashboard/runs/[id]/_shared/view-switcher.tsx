@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, List, Kanban } from "lucide-react";
+import { Calendar, List, Kanban, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type RunViewMode = "calendar" | "list" | "board";
@@ -16,6 +16,7 @@ export function ViewSwitcher({
   onChange,
   className,
   modes,
+  labels,
 }: {
   value: RunViewMode;
   onChange: (mode: RunViewMode) => void;
@@ -24,11 +25,22 @@ export function ViewSwitcher({
    * drop "board" entirely rather than ship a broken/redundant third view.
    * Defaults to all three for every other call site. */
   modes?: RunViewMode[];
+  /** Override a mode's displayed label without renaming the mode key
+   * itself — e.g. Leak Map's "calendar" mode is really its overview/report
+   * screen, not an actual calendar grid, so it shows "Overview" here while
+   * every other view that really is a calendar keeps the default label. */
+  labels?: Partial<Record<RunViewMode, string>>;
+  /** Same idea as `labels`, for the icon — a relabeled mode usually needs
+   * a different glyph too (an actual calendar icon next to "Overview"
+   * reads just as wrong as the word "Calendar" did). */
+  icons?: Partial<Record<RunViewMode, LucideIcon>>;
 }) {
   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
   return (
     <div className={cn("inline-flex items-center gap-0.5 p-0.5", className)}>
-      {visibleModes.map(({ key, label, icon: Icon }) => {
+      {visibleModes.map(({ key, label: defaultLabel, icon: DefaultIcon }) => {
+        const label = labels?.[key] ?? defaultLabel;
+        const Icon = icons?.[key] ?? DefaultIcon;
         const active = value === key;
         return (
           <button

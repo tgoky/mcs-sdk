@@ -55,33 +55,38 @@ export default async function ReputationManagerFindingsPage({
   const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
 
   return (
-    <div className="space-y-4 font-sans antialiased">
-      <SetBreadcrumbLabel label={`${engagement.buyer} · Reputation Manager`} />
+    <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
+      {/* Dot Grid Background — same as the main engagement page */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
 
-      <div className="flex items-center gap-3">
-        <Link
-          href={backHref}
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-          aria-label={backLabel}
-          title={backLabel}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Link>
+      <div className="relative z-10 space-y-4 font-sans antialiased">
+        <SetBreadcrumbLabel label={`${engagement.buyer} · Reputation Manager`} />
 
-        <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
-            Reputation Manager — {engagement.buyer}
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
-            <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
-              Manage declared incidents →
-            </Link>
-          </p>
+        <div className="flex items-center gap-3">
+          <Link
+            href={backHref}
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
+            aria-label={backLabel}
+            title={backLabel}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Link>
+
+          <div>
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+              Reputation Manager — {engagement.buyer}
+            </h1>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
+              <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
+                Manage declared incidents →
+              </Link>
+            </p>
+          </div>
         </div>
-      </div>
 
-      <RepFindingsPanel engagementId={id} initialSource={initialSource} />
+        <RepFindingsPanel engagementId={id} initialSource={initialSource} />
+      </div>
     </div>
   );
 }

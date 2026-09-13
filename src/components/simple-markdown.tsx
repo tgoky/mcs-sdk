@@ -69,7 +69,7 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
     const items = listBuffer;
     listBuffer = [];
     blocks.push(
-      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1 my-2">
+      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1.5 my-2.5">
         {items.map((item, idx) => (
           <li key={idx} className="leading-relaxed">
             {renderInline(item, `li-${key}-${idx}`)}
@@ -100,12 +100,19 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
       flushList();
       const level = heading[1].length;
       const content = renderInline(heading[2], `h-${key}`);
+      // Level-1 headings mark a whole new major section of the report
+      // (e.g. "Metric-by-Metric Review" vs. "Recommendation Cards" vs.
+      // "Data Gaps") — these need a real, unambiguous break, not just a
+      // little extra margin, or one section's last line reads as if it
+      // could belong to the next section's heading. A top divider + much
+      // more vertical room does that; level 2/3 stay lighter since those
+      // are sub-items within a section, not section boundaries.
       const cls =
         level === 1
-          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
+          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-8 mb-3 pt-5 border-t border-zinc-200/70 dark:border-zinc-800/70 first:mt-0 first:pt-0 first:border-t-0"
           : level === 2
-          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
-          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
+          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-2 first:mt-0"
+          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-4 mb-1.5 first:mt-0";
       const HeadingIcon = iconForHeading(heading[2]);
       const headingKey = key++;
       const headingContent = (
@@ -222,7 +229,7 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
 
     const paraKey = key++;
     blocks.push(
-      <p key={paraKey} className="leading-relaxed my-1.5">
+      <p key={paraKey} className="leading-relaxed my-2">
         {renderInline(paraLines.join(" "), `p-${paraKey}`)}
       </p>
     );

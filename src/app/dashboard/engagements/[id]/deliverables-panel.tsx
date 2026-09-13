@@ -354,7 +354,7 @@ export function DeliverablesPanel({
 
       {/* MAIN DELIVERABLES CONTAINER — transparent so the page's bg-dot-grid
           shows through instead of the opaque glass fill hiding it. */}
-      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-2 sm:p-4 divide-y divide-zinc-200 dark:divide-zinc-800/60">
+      <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-3 sm:p-5 divide-y divide-zinc-200 dark:divide-zinc-800/60">
         
         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
         <DeliverableRow
@@ -586,14 +586,14 @@ export function DeliverablesPanel({
               subtitle={`Hook: "${b.hook}"`}
             >
               <div className="space-y-4 text-xs font-sans pt-1">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <SquareLabel color="bg-amber-400">Scroll-Stopper Hook (First 3 Seconds)</SquareLabel>
                   <div className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
                     &ldquo;{b.hook}&rdquo;
                   </div>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <SquareLabel color="bg-sky-400">Strategic Angle &amp; Framing</SquareLabel>
                   <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">{b.angle}</p>
                 </div>
@@ -672,7 +672,7 @@ export function DeliverablesPanel({
                   </div>
                   <div className="space-y-2">
                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
-                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1">
+                      <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
@@ -722,7 +722,7 @@ export function DeliverablesPanel({
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Wrench size={13} className="text-zinc-500" /> Equipment
                       </span>
-                      <ul className="space-y-1">
+                      <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.equipment.map((it, i) => (
                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
                         ))}
@@ -733,7 +733,7 @@ export function DeliverablesPanel({
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Camera size={13} className="text-zinc-500" /> Environment
                       </span>
-                      <ul className="space-y-1">
+                      <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.environment.map((it, i) => (
                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
                         ))}
@@ -744,7 +744,7 @@ export function DeliverablesPanel({
                       <span className="text-zinc-900 dark:text-zinc-100 font-semibold flex items-center gap-1.5">
                         <Shirt size={13} className="text-zinc-500" /> Wardrobe &amp; Framing
                       </span>
-                      <ul className="space-y-1">
+                      <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.wardrobeAndFraming.map((it, i) => (
                           <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
                         ))}
@@ -773,7 +773,7 @@ export function DeliverablesPanel({
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {pinDownPageAudit.existingPageStrengths.map((s, i) => (
                     <li key={i} className="text-zinc-700 dark:text-zinc-300">✓ {s}</li>
                   ))}
@@ -784,7 +784,7 @@ export function DeliverablesPanel({
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {pinDownPageAudit.existingPageWeaknesses.map((w, i) => (
                     <li key={i} className="text-zinc-700 dark:text-zinc-300">✗ {w}</li>
                   ))}
@@ -795,7 +795,7 @@ export function DeliverablesPanel({
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   v1 Improvements
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {pinDownPageAudit.v1Improvements.map((imp, i) => (
                     <li key={i} className="text-zinc-700 dark:text-zinc-300">→ {imp}</li>
                   ))}
@@ -808,7 +808,7 @@ export function DeliverablesPanel({
                 <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
                   Vs. {pinDownPageAudit.competitorComparison.url}
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {pinDownPageAudit.competitorComparison.notes.map((n, i) => (
                     <li key={i} className="text-zinc-700 dark:text-zinc-300">⇄ {n}</li>
                   ))}
