@@ -17,6 +17,9 @@ import {
   ChevronDown,
   Radio,
   ExternalLink,
+  Pencil,
+  Loader2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "../_shared/status-pill";
@@ -29,6 +32,10 @@ type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 interface Touchpoint {
   key: string;
+  /** The raw id inside winBackSequenceAssetMap.emails/.sms — what the
+   * save endpoint matches against, separate from `key` (which is prefixed
+   * to stay unique across both arrays combined). */
+  id: string;
   type: "email" | "sms";
   offsetDays: number;
   subject?: string;
@@ -58,7 +65,11 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const [filterText, setFilterText] = useState("");
   const [manualExited, setManualExited] = useState<boolean>(false);
 
-  const assetMap = run.winBackSequenceAssetMap;
+  // Local override so a saved edit shows immediately without needing the
+  // parent run-detail fetch to re-run — starts as whatever the run
+  // actually loaded, replaced wholesale once a save round-trips.
+  const [assetMapOverride, setAssetMapOverride] = useState<typeof run.winBackSequenceAssetMap>(null);
+  const assetMap = assetMapOverride ?? run.winBackSequenceAssetMap;
 
   // Delivery status — this run's `stack` already carries everything needed
   // to answer "where does this cadence actually go" (no separate fetch):
@@ -105,6 +116,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
     if (!assetMap) return [];
     const fromEmails: Touchpoint[] = (assetMap.emails ?? []).map((e) => ({
       key: `email-${e.id}`,
+      id: e.id,
       type: "email" as const,
       offsetDays: e.offsetDays,
       subject: e.subject,
@@ -113,6 +125,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
     }));
     const fromSms: Touchpoint[] = (assetMap.sms ?? []).map((s) => ({
       key: `sms-${s.id}`,
+      id: s.id,
       type: "sms" as const,
       offsetDays: s.offsetDays,
       body: s.body,
@@ -162,6 +175,43 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       setManualExited(true);
     }
   };
+
+  // Real editability — winBackSequenceAssetMap is read fresh at send time
+  // for SMTP (processWinBackEmailSmtpSequence), so a save here changes
+  // exactly what future scheduled touchpoints send. For an ESP platform
+  // (Klaviyo/HubSpot/ActiveCampaign/GHL), day-N content lives in that
+  // platform's own workflow, built by the buyer — this only updates the
+  // reference copy shown here and in the export bundle, not what their
+  // workflow sends. Said plainly in the edit form itself (editNote below).
+  async function handleSaveTouchpoint(type: "email" | "sms", id: string, subject: string | undefined, body: string): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/engagements/${run.engagementId}/win-back/edit-cadence`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, id, subject, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error ?? "Couldn't save.";
+
+      setAssetMapOverride((prev) => {
+        const current = prev ?? assetMap;
+        if (!current) return prev;
+        if (type === "email") {
+          return { ...current, emails: current.emails.map((e) => (e.id === id ? { ...e, subject, body } : e)) };
+        }
+        return { ...current, sms: current.sms.map((s) => (s.id === id ? { ...s, body } : s)) };
+      });
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Couldn't save.";
+    }
+  }
+
+  const editNote = isSmtp
+    ? "Saving updates what actually sends — this app reads this content fresh at send time."
+    : platform
+      ? `Saving updates your reference copy only — ${emailPlatformLabel(platform)}'s own workflow sends whatever you built there, not this text.`
+      : "Saving updates your reference copy for this cadence.";
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -368,6 +418,8 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               ? "The first message is confirmed sent directly. Later messages are queued in this app's own scheduler and sent directly (SMTP/Resend) — the dates above are when they're scheduled to send."
               : `The first message is confirmed sent directly. Later messages are queued in ${emailPlatformLabel(platform)}'s own automation to go out automatically — the dates above are when they're scheduled to send.`
         }
+        editNote={editNote}
+        onSaveTouchpoint={handleSaveTouchpoint}
       />
     </div>
   );
@@ -390,6 +442,8 @@ function CadenceTimeline({
   sendLog,
   exitedOffsetDays,
   deliveryNote,
+  editNote,
+  onSaveTouchpoint,
 }: {
   enrolledAt: Date;
   windowDays: number;
@@ -401,10 +455,48 @@ function CadenceTimeline({
   sendLog: WinBackDetail["sendLog"];
   exitedOffsetDays: number | null;
   deliveryNote: string;
+  editNote: string;
+  onSaveTouchpoint: (type: "email" | "sms", id: string, subject: string | undefined, body: string) => Promise<string | null>;
 }) {
   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const dayZeroLog = sendLog[0];
+
+  // Inline edit state — one touchpoint editable at a time, same "expand
+  // in place, no drawer" philosophy the rest of this view already uses.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [draftSubject, setDraftSubject] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  function startEditing(tp: Touchpoint) {
+    setEditingKey(tp.key);
+    setDraftSubject(tp.subject ?? "");
+    setDraftBody(tp.body);
+    setSaveError(null);
+  }
+
+  function cancelEditing() {
+    setEditingKey(null);
+    setSaveError(null);
+  }
+
+  async function saveEditing(tp: Touchpoint) {
+    if (!draftBody.trim()) {
+      setSaveError("Message body can't be empty.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    const error = await onSaveTouchpoint(tp.type, tp.id, tp.type === "email" ? draftSubject.trim() : undefined, draftBody.trim());
+    setSaving(false);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
+    setEditingKey(null);
+  }
 
   function handleCopy(tp: Touchpoint) {
     const textToCopy = tp.subject ? `Subject: ${tp.subject}\n\n${tp.body}` : tp.body;
@@ -493,17 +585,72 @@ function CadenceTimeline({
                           <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                             {tp.offsetDays === 0 ? "Standard Message" : "Message Content"}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(tp)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
-                          >
-                            {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
-                            {copied ? "Copied" : "Copy"}
-                          </button>
+                          {editingKey !== tp.key && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => startEditing(tp)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
+                              >
+                                <Pencil size={11} />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(tp)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
+                              >
+                                {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                                {copied ? "Copied" : "Copy"}
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        {tp.subject && <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {tp.subject}</p>}
-                        <div className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">{tp.body}</div>
+
+                        {editingKey === tp.key ? (
+                          <div className="space-y-2">
+                            {tp.type === "email" && (
+                              <input
+                                value={draftSubject}
+                                onChange={(e) => setDraftSubject(e.target.value)}
+                                placeholder="Subject"
+                                className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans"
+                              />
+                            )}
+                            <textarea
+                              value={draftBody}
+                              onChange={(e) => setDraftBody(e.target.value)}
+                              rows={6}
+                              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans resize-y"
+                            />
+                            <p className="text-[10.5px] text-zinc-500 dark:text-zinc-500 font-sans">{editNote}</p>
+                            {saveError && <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 font-sans">⚠ {saveError}</p>}
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={cancelEditing}
+                                disabled={saving}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-[10.5px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
+                              >
+                                <X size={11} /> Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => saveEditing(tp)}
+                                disabled={saving}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 text-[10.5px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
+                              >
+                                {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {tp.subject && <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {tp.subject}</p>}
+                            <div className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">{tp.body}</div>
+                          </>
+                        )}
                       </div>
 
                       {skipped && (
