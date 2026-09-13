@@ -9,6 +9,24 @@
 // literally showing up on screen.
 
 import React from "react";
+import { AlertTriangle, HelpCircle, ArrowRight, Target } from "lucide-react";
+
+// Section headings the audit-engine prompt reliably produces (severity
+// verdict, data-gap callouts, next-step guidance) get a small icon so they
+// read as labeled signals to act on, not just another bold sentence in the
+// flow. Keyword-matched rather than exact-string, since the LLM's own
+// wording for these varies run to run; anything that doesn't match renders
+// exactly as before.
+const HEADING_ICONS: { pattern: RegExp; Icon: React.ElementType }[] = [
+  { pattern: /severity/i, Icon: AlertTriangle },
+  { pattern: /data gaps?/i, Icon: HelpCircle },
+  { pattern: /(what happens next|next steps)/i, Icon: ArrowRight },
+  { pattern: /(recommend|action items?)/i, Icon: Target },
+];
+
+function iconForHeading(text: string): React.ElementType | null {
+  return HEADING_ICONS.find((h) => h.pattern.test(text))?.Icon ?? null;
+}
 
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
@@ -84,14 +102,21 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
       const content = renderInline(heading[2], `h-${key}`);
       const cls =
         level === 1
-          ? "text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
+          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
           : level === 2
-          ? "text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
-          : "text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
+          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
+          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
+      const HeadingIcon = iconForHeading(heading[2]);
       const headingKey = key++;
-      if (level === 1) blocks.push(<h3 key={headingKey} className={cls}>{content}</h3>);
-      else if (level === 2) blocks.push(<h4 key={headingKey} className={cls}>{content}</h4>);
-      else blocks.push(<h5 key={headingKey} className={cls}>{content}</h5>);
+      const headingContent = (
+        <>
+          {HeadingIcon && <HeadingIcon size={level === 3 ? 12 : 14} className="shrink-0 text-zinc-500 dark:text-zinc-400" />}
+          {content}
+        </>
+      );
+      if (level === 1) blocks.push(<h3 key={headingKey} className={cls}>{headingContent}</h3>);
+      else if (level === 2) blocks.push(<h4 key={headingKey} className={cls}>{headingContent}</h4>);
+      else blocks.push(<h5 key={headingKey} className={cls}>{headingContent}</h5>);
       i++;
       continue;
     }

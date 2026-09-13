@@ -16,7 +16,9 @@ import {
   CalendarDays,
   Clock,
   ArrowUpRight,
-  Zap
+  Zap,
+  AlertCircle,
+  Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
@@ -336,12 +338,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                     {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
                                   </span>
                                   <StatusPill
-                                    tone={toneFromSeverity(item.overallSeverity)}
-                                    className={cn(
-                                      "shrink-0 capitalize text-[10px]",
-                                      item.overallSeverity === "none" &&
-                                        "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
-                                    )}
+                                    tone={item.overallSeverity === "none" ? "success" : toneFromSeverity(item.overallSeverity)}
+                                    className="shrink-0 capitalize text-[10px]"
                                   >
                                     {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
                                   </StatusPill>
@@ -352,8 +350,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                   </span>
                                   {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
                                 </div>
-                                <span className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono truncate">
-                                  {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
+                                <span className="flex items-center gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 font-mono">
+                                  <span className="inline-flex items-center gap-1">
+                                    <AlertCircle size={10} className="shrink-0" />
+                                    {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <Bell size={10} className="shrink-0" />
+                                    {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
+                                  </span>
                                 </span>
                               </button>
                             );

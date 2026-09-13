@@ -1,0 +1,137 @@
+From 17ec2c6837936238480ec9aa3eb44e49ac2322a2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 00:04:33 +0000
+Subject: [PATCH] Icon-tag report headings and dropdown stat counts; drop boxed
+ Clean pill
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+SimpleMarkdown: headings matching known operational sections (severity,
+data gaps, next-steps, recommended actions) get a small icon prefix so
+they read as signals to act on instead of blending into the surrounding
+prose — keyword-matched against the LLM's own heading text since its
+exact wording varies per run; anything else renders unchanged.
+
+Leak Map audit picker: the "Clean" status pill had a one-off
+bg/border override that put it back in the boxed-pill shape
+status-pill.tsx explicitly moved away from everywhere else — now uses
+the same plain-colored-text "success" tone as every other status.
+The issue/alert counts on each row get small icons too, so they don't
+read as a bare number wall.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../engagements/[id]/leak-map-schedule.tsx    | 23 +++++++-----
+ src/components/simple-markdown.tsx            | 37 ++++++++++++++++---
+ 2 files changed, 45 insertions(+), 15 deletions(-)
+
+diff --git a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+index e6c8efa..b97af03 100644
+--- a/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
++++ b/src/app/dashboard/engagements/[id]/leak-map-schedule.tsx
+@@ -16,7 +16,9 @@ import {
+   CalendarDays,
+   Clock,
+   ArrowUpRight,
+-  Zap
++  Zap,
++  AlertCircle,
++  Bell
+ } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ import { dateKey } from "@/app/dashboard/runs/[id]/_shared/calendar-grid";
+@@ -336,12 +338,8 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+                                     {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
+                                   </span>
+                                   <StatusPill
+-                                    tone={toneFromSeverity(item.overallSeverity)}
+-                                    className={cn(
+-                                      "shrink-0 capitalize text-[10px]",
+-                                      item.overallSeverity === "none" &&
+-                                        "bg-transparent text-amber-700 border border-amber-400 dark:bg-zinc-800 dark:text-amber-400 dark:border-amber-500/40"
+-                                    )}
++                                    tone={item.overallSeverity === "none" ? "success" : toneFromSeverity(item.overallSeverity)}
++                                    className="shrink-0 capitalize text-[10px]"
+                                   >
+                                     {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
+                                   </StatusPill>
+@@ -352,8 +350,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
+                                   </span>
+                                   {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
+                                 </div>
+-                                <span className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono truncate">
+-                                  {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"} · {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
++                                <span className="flex items-center gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 font-mono">
++                                  <span className="inline-flex items-center gap-1">
++                                    <AlertCircle size={10} className="shrink-0" />
++                                    {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"}
++                                  </span>
++                                  <span className="inline-flex items-center gap-1">
++                                    <Bell size={10} className="shrink-0" />
++                                    {item.alertsFiredCount} alert{item.alertsFiredCount === 1 ? "" : "s"}
++                                  </span>
+                                 </span>
+                               </button>
+                             );
+diff --git a/src/components/simple-markdown.tsx b/src/components/simple-markdown.tsx
+index 2a80f3e..ec03bf8 100644
+--- a/src/components/simple-markdown.tsx
++++ b/src/components/simple-markdown.tsx
+@@ -9,6 +9,24 @@
+ // literally showing up on screen.
+ 
+ import React from "react";
++import { AlertTriangle, HelpCircle, ArrowRight, Target } from "lucide-react";
++
++// Section headings the audit-engine prompt reliably produces (severity
++// verdict, data-gap callouts, next-step guidance) get a small icon so they
++// read as labeled signals to act on, not just another bold sentence in the
++// flow. Keyword-matched rather than exact-string, since the LLM's own
++// wording for these varies run to run; anything that doesn't match renders
++// exactly as before.
++const HEADING_ICONS: { pattern: RegExp; Icon: React.ElementType }[] = [
++  { pattern: /severity/i, Icon: AlertTriangle },
++  { pattern: /data gaps?/i, Icon: HelpCircle },
++  { pattern: /(what happens next|next steps)/i, Icon: ArrowRight },
++  { pattern: /(recommend|action items?)/i, Icon: Target },
++];
++
++function iconForHeading(text: string): React.ElementType | null {
++  return HEADING_ICONS.find((h) => h.pattern.test(text))?.Icon ?? null;
++}
+ 
+ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+   const nodes: React.ReactNode[] = [];
+@@ -84,14 +102,21 @@ export function SimpleMarkdown({ text, className }: { text: string; className?:
+       const content = renderInline(heading[2], `h-${key}`);
+       const cls =
+         level === 1
+-          ? "text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
++          ? "flex items-center gap-1.5 text-base font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0"
+           : level === 2
+-          ? "text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
+-          : "text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
++          ? "flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-4 mb-1.5 first:mt-0"
++          : "flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 mt-3 mb-1 first:mt-0";
++      const HeadingIcon = iconForHeading(heading[2]);
+       const headingKey = key++;
+-      if (level === 1) blocks.push(<h3 key={headingKey} className={cls}>{content}</h3>);
+-      else if (level === 2) blocks.push(<h4 key={headingKey} className={cls}>{content}</h4>);
+-      else blocks.push(<h5 key={headingKey} className={cls}>{content}</h5>);
++      const headingContent = (
++        <>
++          {HeadingIcon && <HeadingIcon size={level === 3 ? 12 : 14} className="shrink-0 text-zinc-500 dark:text-zinc-400" />}
++          {content}
++        </>
++      );
++      if (level === 1) blocks.push(<h3 key={headingKey} className={cls}>{headingContent}</h3>);
++      else if (level === 2) blocks.push(<h4 key={headingKey} className={cls}>{headingContent}</h4>);
++      else blocks.push(<h5 key={headingKey} className={cls}>{headingContent}</h5>);
+       i++;
+       continue;
+     }
+-- 
+2.43.0
+
