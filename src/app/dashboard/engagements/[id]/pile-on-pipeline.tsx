@@ -271,9 +271,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
     }
   }, [selectedDayKey, selectedDayItems, selectedId]);
 
+  // Trust selectedId only when it's actually within the currently
+  // selected day's items — items load once for the whole engagement
+  // (no per-month refetch here), so a plain filtered.find(selectedId)
+  // keeps matching last month's selection forever once the reset
+  // effect above hasn't fired yet, which is exactly what made the
+  // right-side detail panel look like it never moved on with a month
+  // switch while the day list on the left correctly emptied out.
   const selected = useMemo(
-    () => filtered.find((i) => i.id === selectedId) ?? selectedDayItems[0] ?? null,
-    [filtered, selectedId, selectedDayItems]
+    () => (selectedId ? selectedDayItems.find((i) => i.id === selectedId) : null) ?? selectedDayItems[0] ?? null,
+    [selectedId, selectedDayItems]
   );
 
   useEffect(() => {
@@ -300,7 +307,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
         const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
         const tone = delta > 0 ? "text-emerald-600 dark:text-emerald-400" : delta < 0 ? "text-rose-600 dark:text-rose-400" : "text-zinc-500";
         return (
-          <div className="flex items-center gap-2 no-ambient-glow surface-glass-1 rounded-xl px-3 py-2 font-sans">
+          <div className="flex items-center gap-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md px-3 py-2 font-sans">
             <Icon size={13} className={tone} />
             <span className="text-xs text-zinc-700 dark:text-zinc-300 font-sans">
               <span className="font-mono font-bold text-zinc-900 dark:text-white">{thisWeek}</span> booked this week
@@ -311,9 +318,9 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       })()}
 
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-2 font-sans">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-md border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
@@ -346,7 +353,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -354,7 +361,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -362,7 +369,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           <button
             type="button"
             onClick={() => setShowManualEnroll(true)}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
             title="Manually enroll a prospect who booked outside a connected webhook"
           >
             <UserPlus size={13} />
@@ -376,7 +383,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           )}
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
           {([
             ["month", CalendarIcon, "Month"],
             ["day", Clock, "Day View"],
@@ -401,19 +408,19 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* 1. MONTH VIEW */}
       {mode === "month" && !loading && (
-        <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
-          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+        <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg font-sans">
+          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 auto-rows-fr bg-[#f8f7fa] dark:bg-zinc-950 font-sans">
+          <div className="grid grid-cols-7 auto-rows-fr bg-transparent font-sans">
             {gridDays.map(({ date, isCurrentMonth }, idx) => {
               const k = dateKey(date);
               const metric = dayMetrics[k];
@@ -491,8 +498,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 2. DAY VIEW (HOURLY TIMELINE + PERSISTENT INSPECTOR PANEL) */}
       {mode === "day" && !loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl flex flex-col font-sans">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
+          <div className="lg:col-span-7 overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg flex flex-col font-sans">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronLeft size={15} />
@@ -538,7 +545,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                             type="button"
                             onClick={() => setSelectedId(item.id)}
                             className={cn(
-                              "hover-lift press-settle w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
+                              "hover-lift press-settle w-full rounded-md p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
                                 ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white ring-1 ring-zinc-400 dark:ring-zinc-600"
                                 : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700/80"
@@ -582,7 +589,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           </div>
 
           <div className="lg:col-span-5 space-y-3 font-sans">
-            <div className="no-ambient-glow surface-glass-1 rounded-2xl p-3 space-y-2 font-sans">
+            <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-3 space-y-2 font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -607,7 +614,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               </div>
             </div>
 
-            <div className="no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+            <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-4 space-y-4 font-sans">
               {selected ? (
                 <>
                   <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -640,7 +647,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     </div>
                   </div>
 
-                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
                     <div className="flex items-center justify-between font-sans">
                       <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                       <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -667,7 +674,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   {selected.sendError && (() => {
                     const diagnosis = classifyRunError(selected.sendError);
                     return (
-                      <div className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
+                      <div className="rounded-md border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
                         <span className="block text-[10.5px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
                         {diagnosis ? (
                           <>
@@ -684,7 +691,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   })()}
 
                   {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                    <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
+                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
                       <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
                         <Sparkles size={11} /> AI-personalized intro
                       </span>
@@ -693,7 +700,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   )}
 
                   {selected.runId && (
-                    <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
+                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-xs font-sans">
                       <button
                         type="button"
                         onClick={() => setShowRunActivity((p) => !p)}
@@ -745,8 +752,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       {/* 3. SMART LIST VIEW (DEFAULTS TO CURRENT WEEK ANCHORED ON TODAY) */}
       {mode === "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
-          <div className="lg:col-span-7 overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+          <div className="lg:col-span-7 overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg font-sans flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
@@ -1007,7 +1014,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             )}
           </div>
 
-          <div className="lg:col-span-5 no-ambient-glow surface-glass-2 rounded-2xl p-4 space-y-4 font-sans">
+          <div className="lg:col-span-5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-4 space-y-4 font-sans">
             {selected ? (
               <>
                 <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -1040,7 +1047,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   </div>
                 </div>
 
-                <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-2 text-xs font-sans">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
                   <div className="flex items-center justify-between font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                     <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -1067,7 +1074,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 {selected.sendError && (() => {
                   const diagnosis = classifyRunError(selected.sendError);
                   return (
-                    <div className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
+                    <div className="rounded-md border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
                       <span className="block text-[10.5px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
                       {diagnosis ? (
                         <>
@@ -1084,7 +1091,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 })()}
 
                 {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                  <div className="no-ambient-glow surface-glass-1 rounded-xl p-3 space-y-1.5 text-xs font-sans">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
                     <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
                       <Sparkles size={11} /> AI-personalized intro
                     </span>
@@ -1093,7 +1100,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 )}
 
                 {selected.runId && (
-                  <div className="no-ambient-glow surface-glass-1 rounded-xl overflow-hidden text-xs font-sans">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-xs font-sans">
                     <button
                       type="button"
                       onClick={() => setShowRunActivity((p) => !p)}

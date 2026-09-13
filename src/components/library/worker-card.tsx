@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Settings, BarChart3, X, AlertTriangle } from "lucide-react";
 import type { WorkerDefinition } from "@/lib/worker-registry";
+import { workerPrimaryHref } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -98,9 +99,14 @@ export function WorkerCard({
   // a form" pattern WorkersPanel's own Configure button already uses.
   const canConfigureInline = worker.hasHingesPanel && Boolean(engagementId) && Boolean(onToggleConfigure);
   // A worker with no dedicated hinges panel has nothing to expand inline
-  // — same fallback the old configureHref used, unaffected by the above:
-  // Configure just lands on the client's own page.
-  const plainConfigureHref = !worker.hasHingesPanel && engagementId ? `/dashboard/engagements/${engagementId}` : null;
+  // — this used to land on the bare engagement page (`/dashboard/
+  // engagements/${engagementId}`), which has no obvious way back to this
+  // specific worker's own settings (e.g. Pile-On has no Configure entry
+  // point on its own dedicated page either — that's a separate, real gap,
+  // not something this href can paper over). Route to the worker's own
+  // primary page instead, same as every other "go manage this skill"
+  // link in the app already does.
+  const plainConfigureHref = !worker.hasHingesPanel && engagementId ? workerPrimaryHref(worker.id, engagementId) : null;
   // Phase 8 — one destination shape for every worker's analytics,
   // regardless of product, instead of the old per-product lookup table
   // that routed Showtime and Reputation Manager workers to two
