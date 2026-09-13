@@ -13,11 +13,11 @@ import {
   Copy,
   AlertCircle,
   SquareX,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "../_shared/status-pill";
 import { formatDiaryDate } from "@/lib/format-datetime";
-import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { WinBackDetail } from "../_shared/types";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -46,7 +46,10 @@ function dayLabel(offsetDays: number) {
 
 export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const { run, enrollment, sendLog } = detail;
-  const [selected, setSelected] = useState<Touchpoint | null>(null);
+  // Which touchpoint's message body is expanded inline, if any — no more
+  // slide-over drawer for this; a preview like this doesn't need its own
+  // navigable surface, just to be readable in place.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [manualExited, setManualExited] = useState<boolean>(false);
 
@@ -135,7 +138,18 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 <UserCheck size={16} />
               </div>
               <div>
-                <p className="text-sm font-bold text-zinc-900 dark:text-white font-sans">{enrollment.prospectName ?? enrollment.prospectEmail}</p>
+                {/* Both name and email, not just whichever one happened to
+                    be set — this banner exists to answer "who is this,"
+                    and an email-only fallback silently hid the name when
+                    both were on file. */}
+                <p className="flex items-center gap-1.5 flex-wrap font-sans">
+                  <span className="text-base font-bold text-zinc-900 dark:text-white">
+                    {enrollment.prospectName ?? "Unnamed prospect"}
+                  </span>
+                  {enrollment.prospectEmail && (
+                    <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500">{enrollment.prospectEmail}</span>
+                  )}
+                </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
                   Enrolled {formatDiaryDate(enrollment.enrolledAt)} · {recoveryWindowDays}-day window ends {formatDiaryDate(windowEnd)}
                 </p>
@@ -238,16 +252,9 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         windowDays={recoveryWindowDays}
         touchpoints={filteredTouchpoints}
         statusFor={statusFor}
-        onSelect={setSelected}
+        expandedKey={expandedKey}
+        onToggle={(key) => setExpandedKey((prev) => (prev === key ? null : key))}
         hasEnrollment={!!enrollment}
-      />
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 4. SLIDE-OVER TOUCHPOINT DETAIL DRAWER                            */}
-      {/* ----------------------------------------------------------------- */}
-      <TouchpointDrawer
-        touchpoint={selected}
-        onClose={() => setSelected(null)}
         sendLog={sendLog}
         exitedOffsetDays={exitedOffsetDays}
       />
@@ -256,24 +263,42 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// CHRONOLOGICAL CADENCE TIMELINE — replaces the old month-grid calendar
+// CHRONOLOGICAL CADENCE TIMELINE — replaces the old month-grid calendar.
+// Each row expands its message body inline below itself instead of
+// opening a slide-over drawer — a preview like this doesn't need its own
+// navigable surface, and a drawer was overkill for reading one message.
 // ---------------------------------------------------------------------------
 function CadenceTimeline({
   enrolledAt,
   windowDays,
   touchpoints,
   statusFor,
-  onSelect,
+  expandedKey,
+  onToggle,
   hasEnrollment,
+  sendLog,
+  exitedOffsetDays,
 }: {
   enrolledAt: Date;
   windowDays: number;
   touchpoints: Touchpoint[];
   statusFor: (tp: Touchpoint) => { label: string; tone: Tone };
-  onSelect: (tp: Touchpoint) => void;
+  expandedKey: string | null;
+  onToggle: (key: string) => void;
   hasEnrollment: boolean;
+  sendLog: WinBackDetail["sendLog"];
+  exitedOffsetDays: number | null;
 }) {
   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const dayZeroLog = sendLog[0];
+
+  function handleCopy(tp: Touchpoint) {
+    const textToCopy = tp.subject ? `Subject: ${tp.subject}\n\n${tp.body}` : tp.body;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedKey(tp.key);
+    setTimeout(() => setCopiedKey((k) => (k === tp.key ? null : k)), 2000);
+  }
 
   return (
     <div className="font-sans">
@@ -295,13 +320,11 @@ function CadenceTimeline({
           {touchpoints.map((tp, i) => {
             const status = statusFor(tp);
             const isLast = i === touchpoints.length - 1;
+            const expanded = expandedKey === tp.key;
+            const copied = copiedKey === tp.key;
+            const skipped = exitedOffsetDays != null && tp.offsetDays > exitedOffsetDays;
             return (
-              <button
-                key={tp.key}
-                type="button"
-                onClick={() => onSelect(tp)}
-                className="group flex items-stretch gap-3 text-left cursor-pointer hover-lift press-settle"
-              >
+              <div key={tp.key} className="flex items-stretch gap-3">
                 <div className="flex w-2.5 shrink-0 flex-col items-center">
                   <div
                     className={cn(
@@ -312,26 +335,74 @@ function CadenceTimeline({
                         ? "bg-rose-500"
                         : status.tone === "neutral"
                         ? "bg-zinc-300 dark:bg-zinc-700"
-                        : "bg-zinc-300 dark:bg-zinc-600 group-hover:bg-amber-500"
+                        : "bg-zinc-300 dark:bg-zinc-600"
                     )}
                   />
                   {!isLast && <div className="w-px flex-1 bg-zinc-100 dark:bg-zinc-800" />}
                 </div>
-                <div className="mb-2 flex flex-1 items-center justify-between gap-2 px-3 py-2 transition-colors">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    {tp.type === "email" ? (
-                      <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
-                    ) : (
-                      <MessageSquare size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
-                    )}
-                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</span>
-                    <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500 shrink-0">{formatDiaryDate(tp.date)}</span>
-                  </div>
-                  <StatusPill tone={status.tone} className="shrink-0">
-                    {status.label}
-                  </StatusPill>
+                <div className="mb-2 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(tp.key)}
+                    aria-expanded={expanded}
+                    className="group flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors cursor-pointer hover-lift press-settle"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {tp.type === "email" ? (
+                        <Mail size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
+                      ) : (
+                        <MessageSquare size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
+                      )}
+                      <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</span>
+                      <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500 shrink-0">{formatDiaryDate(tp.date)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <StatusPill tone={status.tone}>{status.label}</StatusPill>
+                      <ChevronDown size={13} className={cn("text-zinc-400 transition-transform", expanded && "rotate-180")} />
+                    </div>
+                  </button>
+
+                  {expanded && (
+                    <div className="px-3 pb-3 pl-[1.9rem] space-y-3 font-sans">
+                      {tp.offsetDays === 0 && dayZeroLog?.personalizedOpening && (
+                        <div className="space-y-1.5 font-sans">
+                          <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                            <Sparkles size={11} /> AI-personalized opening actually delivered
+                          </span>
+                          <div className="rounded-lg border border-amber-300 dark:border-amber-900/40 bg-transparent p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
+                            {dayZeroLog.personalizedOpening}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                            {tp.offsetDays === 0 ? "Standard Message" : "Message Content"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(tp)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
+                          >
+                            {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                        {tp.subject && <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {tp.subject}</p>}
+                        <div className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">{tp.body}</div>
+                      </div>
+
+                      {skipped && (
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                          <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
+                          This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays! + 1}.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -341,109 +412,5 @@ function CadenceTimeline({
         The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
       </p>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// TOUCHPOINT DRAWER (EXPLICIT FONT PERSISTENCE ON PORTAL ROOT)
-// ---------------------------------------------------------------------------
-function TouchpointDrawer({
-  touchpoint,
-  onClose,
-  sendLog,
-  exitedOffsetDays,
-}: {
-  touchpoint: Touchpoint | null;
-  onClose: () => void;
-  sendLog: WinBackDetail["sendLog"];
-  exitedOffsetDays: number | null;
-}) {
-  const [prevTpKey, setPrevTpKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // Normalize undefined to null so (null !== null) is false when drawer is closed
-  const currentTpKey = touchpoint?.key ?? null;
-  if (currentTpKey !== prevTpKey) {
-    setPrevTpKey(currentTpKey);
-    setCopied(false);
-  }
-
-  const handleCopyText = () => {
-    if (!touchpoint) return;
-    const textToCopy = touchpoint.subject
-      ? `Subject: ${touchpoint.subject}\n\n${touchpoint.body}`
-      : touchpoint.body;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const dayZeroLog = sendLog[0];
-
-  return (
-    <Sheet open={!!touchpoint} onOpenChange={(open) => !open && onClose()}>
-      {/* Explicit font-sans antialiased text-zinc-900 dark:text-zinc-100 on the portal root prevents font mismatch */}
-      <SheetContent widthClassName="w-full sm:max-w-lg font-sans antialiased text-zinc-900 dark:text-zinc-100">
-        {touchpoint && (
-          <div className="flex flex-col h-full font-sans antialiased">
-            <SheetHeader className="font-sans">
-              <div className="flex items-center justify-between font-sans">
-                <div className="flex items-center gap-2 text-amber-400 font-sans">
-                  {touchpoint.type === "email" ? <Mail size={15} /> : <MessageSquare size={15} />}
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 font-mono">
-                    {touchpoint.type === "email" ? "Recovery Email" : "Recovery Text Message"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyText}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
-                >
-                  {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  <span className="font-sans">{copied ? "Copied" : "Copy"}</span>
-                </button>
-              </div>
-
-              <SheetTitle className="mt-1.5 text-base font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(touchpoint.offsetDays)}</SheetTitle>
-              <SheetDescription className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-                Scheduled to send {formatDiaryDate(touchpoint.date)}
-              </SheetDescription>
-            </SheetHeader>
-
-            <SheetBody className="space-y-4 font-sans pt-2">
-              {touchpoint.offsetDays === 0 && dayZeroLog?.personalizedOpening && (
-                <div className="space-y-1.5 font-sans">
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-400">
-                    <Sparkles size={11} /> AI-personalized opening actually delivered
-                  </span>
-                  <div className="rounded-xl border border-amber-900/40 bg-amber-950/10 p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
-                    {dayZeroLog.personalizedOpening}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 font-sans">
-                <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                  {touchpoint.offsetDays === 0 ? "Standard Message" : "Message Content"}
-                </span>
-                {touchpoint.subject && (
-                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {touchpoint.subject}</p>
-                )}
-                <div className="whitespace-pre-wrap p-3.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">
-                  {touchpoint.body}
-                </div>
-              </div>
-
-              {exitedOffsetDays != null && touchpoint.offsetDays > exitedOffsetDays && (
-                <div className="p-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 flex items-center gap-2 font-sans">
-                  <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
-                  <span className="font-sans">This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays + 1}.</span>
-                </div>
-              )}
-            </SheetBody>
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
   );
 }

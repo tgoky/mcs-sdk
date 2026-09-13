@@ -412,7 +412,7 @@ export default async function EngagementDetailPage({
             <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Server className="w-3.5 h-3.5" /> Runtime Ownership
             </h2>
-            <div className="no-ambient-glow surface-glass-1 rounded-xl p-4 space-y-2">
+            <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-4 space-y-2">
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-mono">
                 What runs on our infrastructure vs. what would move to {engagement.buyer}&apos;s own systems under an export.
               </p>

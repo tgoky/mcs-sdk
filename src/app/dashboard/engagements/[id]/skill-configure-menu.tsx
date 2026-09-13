@@ -19,16 +19,29 @@ import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-con
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
+import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
 
-export type ConfigurableSkillId = "pin-down" | "win-back" | "pre-call-read" | "leak-map";
+export type ConfigurableSkillId = "pin-down" | "win-back" | "pre-call-read" | "leak-map" | "pile-on";
 
-export function SkillConfigureMenu({ skillId, engagementId }: { skillId: ConfigurableSkillId; engagementId: string }) {
+export function SkillConfigureMenu({
+  skillId,
+  engagementId,
+  pileOnInitial,
+}: {
+  skillId: ConfigurableSkillId;
+  engagementId: string;
+  /** Only pile-on needs this — its two config fields live on the
+   * engagement's stack, already fetched by whatever server page renders
+   * this menu, rather than behind a GET this form would otherwise have to
+   * fetch itself the way the other four skills' forms do. */
+  pileOnInitial?: { smsPlatform: string; adDataPlatform: string };
+}) {
   const router = useRouter();
 
   return (
     <FloatingPanel
       align="end"
-      panelWidth={560}
+      panelWidth={skillId === "pile-on" ? 340 : 560}
       trigger={({ toggle, open }) => (
         <button
           type="button"
@@ -55,6 +68,15 @@ export function SkillConfigureMenu({ skillId, engagementId }: { skillId: Configu
             {skillId === "win-back" && <WinBackConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
             {skillId === "pre-call-read" && <PreCallReadConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
             {skillId === "leak-map" && <LeakMapConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
+            {skillId === "pile-on" && (
+              <PileOnConfigForm
+                engagementId={engagementId}
+                initialSmsPlatform={pileOnInitial?.smsPlatform ?? "none"}
+                initialAdDataPlatform={pileOnInitial?.adDataPlatform ?? "none"}
+                onCancel={close}
+                onSaved={closeAndRefresh}
+              />
+            )}
           </div>
         );
       }}

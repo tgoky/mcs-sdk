@@ -11,7 +11,7 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { skillName } from "@/lib/copy";
 import { PileOnPipeline } from "../../pile-on-pipeline";
 import { PileOnAdCreativeBriefs } from "../../pile-on-ad-creative-briefs";
-import { PileOnConfigureButton } from "../../pile-on-configure-button";
+import { SkillConfigureMenu } from "../../skill-configure-menu";
 
 export const revalidate = 0;
 
@@ -84,11 +84,10 @@ export default async function PileOnSkillPage({
             </div>
           </div>
 
-          <PileOnConfigureButton
+          <SkillConfigureMenu
+            skillId="pile-on"
             engagementId={id}
-            buyerName={engagement.buyer}
-            initialSmsPlatform={stack?.sms_platform ?? "none"}
-            initialAdDataPlatform={stack?.ad_data_platform ?? "none"}
+            pileOnInitial={{ smsPlatform: stack?.sms_platform ?? "none", adDataPlatform: stack?.ad_data_platform ?? "none" }}
           />
         </div>
 
