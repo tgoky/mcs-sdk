@@ -10,10 +10,11 @@
 // production caller (pile-on/enrollment-service.ts), not a wrapper
 // around the whole webhook handler — that handler also does things with
 // no equivalent for a manual chat request: extracts a fresh reschedule
-// link from the cancellation webhook's own payload (there is none here),
-// and for SMTP accounts, kicks off a durable Inngest send sequence (not
-// replicated here — see the SMTP branch below for exactly what that
-// means for chat right now).
+// link from the cancellation webhook's own payload (there is none here).
+// SMTP accounts DO enroll from here now — same durable Inngest sequence
+// (winBackEmailSmtpSequenceStart) the real cancellation-webhook path
+// dispatches, behind a real skillRuns row (startRun/finishRun) rather
+// than the null runId a plain enrollment row would otherwise carry.
 //
 // Meta field mapping (recovery_list_id, location_id, recovery_workflow_id,
 // activecampaign_base_url) copied exactly from enrollment-service.ts's own
@@ -24,22 +25,14 @@ import { engagements, winBackEnrollments } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { enrollInWinBackSequence } from "@/lib/platforms/email";
+import { startRun, finishRun, emptySummary } from "@/lib/run-log";
+import { inngest, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
+import { missingWinBackMetaFor } from "@/lib/win-back-platform-readiness";
 import type { EngagementStack } from "@/models/schema";
 import crypto from "crypto";
 
 type EnrollResult = { ok: true; enrollmentId: string } | { ok: false; error: string };
 type PreviewResult = { ok: true; actions: string[] } | { ok: false; error: string };
-
-function missingMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
-  if (platform === "klaviyo" && !stack.recovery_list_id) return "recovery_list_id isn't configured for Klaviyo yet — set that up on the client's page first.";
-  if (platform === "activecampaign" && (!stack.recovery_list_id || !stack.activecampaign_base_url)) {
-    return "ActiveCampaign win-back needs recovery_list_id and activecampaign_base_url configured on the client's page first.";
-  }
-  if (platform === "ghl" && (!stack.booking_platform_meta?.location_id || !stack.recovery_workflow_id)) {
-    return "GoHighLevel win-back needs a location id and recovery_workflow_id configured on the client's page first.";
-  }
-  return null;
-}
 
 /**
  * Read-only mirror of enrollProspectInWinBack's own validation chain —
@@ -59,7 +52,7 @@ export async function previewManualWinBackEnrollment(opts: {
   prospectEmail: string;
 }): Promise<PreviewResult> {
   const [engagement] = await db
-    .select({ stack: engagements.stack })
+    .select({ stack: engagements.stack, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
     .from(engagements)
     .where(and(eq(engagements.engagementId, opts.engagementId), eq(engagements.workspaceId, opts.workspaceId)))
     .limit(1);
@@ -71,15 +64,16 @@ export async function previewManualWinBackEnrollment(opts: {
   }
 
   if (stack.email_platform === "smtp") {
-    return {
-      ok: false,
-      error:
-        "Direct-send (SMTP) win-back runs as a durable background sequence that isn't wired up for manual enrollment yet — only Klaviyo/HubSpot/ActiveCampaign/GoHighLevel can be triggered this way right now.",
-    };
+    // Direct-send has no ESP-side list/workflow to enroll into — the check
+    // that matters here is real generated content to actually send, same
+    // shape missingWinBackMetaFor checks for the other 4 platforms' meta fields.
+    if (!engagement.winBackSequenceAssetMap?.emails?.length) {
+      return { ok: false, error: "No win-back email sequence content has been generated for this engagement yet." };
+    }
+  } else {
+    const metaError = missingWinBackMetaFor(stack.email_platform, stack);
+    if (metaError) return { ok: false, error: metaError };
   }
-
-  const metaError = missingMetaFor(stack.email_platform, stack);
-  if (metaError) return { ok: false, error: metaError };
 
   const [existingActive] = await db
     .select({ id: winBackEnrollments.id })
@@ -104,7 +98,7 @@ export async function enrollProspectInWinBack(opts: {
   prospectName?: string;
 }): Promise<EnrollResult> {
   const [engagement] = await db
-    .select({ stack: engagements.stack })
+    .select({ stack: engagements.stack, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
     .from(engagements)
     .where(and(eq(engagements.engagementId, opts.engagementId), eq(engagements.workspaceId, opts.workspaceId)))
     .limit(1);
@@ -115,16 +109,15 @@ export async function enrollProspectInWinBack(opts: {
     return { ok: false, error: "No email platform connected for this client yet — connect one before trying a win-back." };
   }
 
-  if (stack.email_platform === "smtp") {
-    return {
-      ok: false,
-      error:
-        "Direct-send (SMTP) win-back runs as a durable background sequence that isn't wired up for manual chat enrollment yet — only Klaviyo/HubSpot/ActiveCampaign/GoHighLevel can be triggered this way right now.",
-    };
+  const isSmtp = stack.email_platform === "smtp";
+  if (isSmtp) {
+    if (!engagement.winBackSequenceAssetMap?.emails?.length) {
+      return { ok: false, error: "No win-back email sequence content has been generated for this engagement yet." };
+    }
+  } else {
+    const metaError = missingWinBackMetaFor(stack.email_platform, stack);
+    if (metaError) return { ok: false, error: metaError };
   }
-
-  const metaError = missingMetaFor(stack.email_platform, stack);
-  if (metaError) return { ok: false, error: metaError };
 
   const [existingActive] = await db
     .select({ id: winBackEnrollments.id })
@@ -139,8 +132,56 @@ export async function enrollProspectInWinBack(opts: {
     .limit(1);
   if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence.` };
 
-  const apiKey = await resolveCredential(opts.engagementId, stack.email_platform);
   const prospectName = opts.prospectName?.trim() || opts.prospectEmail;
+  const enrollmentId = crypto.randomUUID();
+
+  if (isSmtp) {
+    // No ESP-side list/workflow to enroll into — this app owns the send
+    // schedule itself via a durable Inngest sequence, same as the real
+    // cancellation-webhook path (enrollment-service.ts's SMTP block).
+    // That path threads a real skillRuns row through the dispatch event
+    // (sequenceMessageLog.runId, the run history a viewer sees at
+    // /dashboard/runs/[id]) rather than firing the sequence off a null
+    // id — mirrored here with startRun/finishRun instead of skipping it,
+    // which is what left this platform unable to enroll manually at all.
+    const runId = crypto.randomUUID();
+    await startRun({
+      id: runId,
+      engagementId: opts.engagementId,
+      skillName: "win-back",
+      phase: "manual_enrollment",
+      label: `Win-Back manually enrolled for ${prospectName} (direct-send)`,
+    });
+
+    await db.insert(winBackEnrollments).values({
+      id: enrollmentId,
+      engagementId: opts.engagementId,
+      prospectEmail: opts.prospectEmail,
+      prospectName: opts.prospectName?.trim() || null,
+      runId,
+      sourceBookingId: null,
+      recoveryWindowDays: stack.recovery_window_days ?? 30,
+      status: "active",
+    });
+
+    await inngest.send(
+      winBackEmailSmtpSequenceStart.create({
+        engagementId: opts.engagementId,
+        runId,
+        enrollmentId,
+        prospectEmail: opts.prospectEmail,
+        prospectName,
+      })
+    );
+
+    const summary = emptySummary();
+    summary.whatWorked.push(`Started the direct-send SMTP win-back email sequence for ${opts.prospectEmail}.`);
+    await finishRun(runId, { summary });
+
+    return { ok: true, enrollmentId };
+  }
+
+  const apiKey = await resolveCredential(opts.engagementId, stack.email_platform);
 
   await enrollInWinBackSequence(stack.email_platform, apiKey, opts.prospectEmail, prospectName, {
     recovery_list_id: stack.recovery_list_id,
@@ -149,9 +190,8 @@ export async function enrollProspectInWinBack(opts: {
     activecampaign_base_url: stack.activecampaign_base_url,
   });
 
-  const id = crypto.randomUUID();
   await db.insert(winBackEnrollments).values({
-    id,
+    id: enrollmentId,
     engagementId: opts.engagementId,
     prospectEmail: opts.prospectEmail,
     prospectName: opts.prospectName?.trim() || null,
@@ -161,5 +201,5 @@ export async function enrollProspectInWinBack(opts: {
     status: "active",
   });
 
-  return { ok: true, enrollmentId: id };
+  return { ok: true, enrollmentId };
 }

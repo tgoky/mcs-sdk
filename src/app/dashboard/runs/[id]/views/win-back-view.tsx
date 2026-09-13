@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Mail,
   MessageSquare,
@@ -14,10 +15,14 @@ import {
   AlertCircle,
   SquareX,
   ChevronDown,
+  Radio,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "../_shared/status-pill";
 import { formatDiaryDate } from "@/lib/format-datetime";
+import { emailPlatformLabel } from "@/lib/copy";
+import { missingWinBackMetaFor } from "@/lib/win-back-platform-readiness";
 import type { WinBackDetail } from "../_shared/types";
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -54,6 +59,39 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   const [manualExited, setManualExited] = useState<boolean>(false);
 
   const assetMap = run.winBackSequenceAssetMap;
+
+  // Delivery status — this run's `stack` already carries everything needed
+  // to answer "where does this cadence actually go" (no separate fetch):
+  // email_platform + email_platform_credentials_ref is set once, live-
+  // verified, at engagement setup or Edit Stack Settings (see
+  // use-email-integrations.ts and edit-stack-settings.tsx), and is exactly
+  // what enrollProspectInWinBack (chat-winback.ts) and the real
+  // cancellation-triggered enrollment path (pile-on/enrollment-service.ts)
+  // both read before ever calling GHLCRMClient/HubSpotClient/etc. This view
+  // used to show none of that — a fully wired, live CRM/ESP push looked
+  // identical to a client with nothing connected at all.
+  const stack = run.stack;
+  const platform = stack?.email_platform ?? null;
+  const isConnected = Boolean(platform && stack?.email_platform_credentials_ref);
+  const isSmtp = platform === "smtp";
+  // Same readiness check chat-winback.ts and enrollment-service.ts's real
+  // call sites run before ever enrolling anyone — a connected platform
+  // isn't enough on its own for Klaviyo/ActiveCampaign/GHL, each needs
+  // its own list/workflow id set too. Not GHL-specific: every platform
+  // with a real meta requirement gets the same check here.
+  const missingMeta = platform && !isSmtp ? missingWinBackMetaFor(platform, stack ?? {}) : null;
+  const stackSettingsHref = `/dashboard/engagements/${run.engagementId}?fixSection=email#stack-settings`;
+  // Whether a new enrollment (the real cancellation-webhook path, via
+  // gateOrExecute in approval-gate.ts) pushes to the CRM/ESP the moment
+  // it's detected, or waits in the Queue for a human to approve first —
+  // the same Autopilot/Co-Pilot toggle the Autopilot page's right rail
+  // exposes per client (stack.require_approval_for_side_effects +
+  // require_approval_action_types). Worth surfacing here too: this is
+  // exactly the page where "does this actually push automatically"
+  // confusion shows up.
+  const requiresApproval =
+    Boolean(stack?.require_approval_for_side_effects) &&
+    (!stack?.require_approval_action_types?.length || stack.require_approval_action_types.includes("webhook_enrollment"));
 
   // Fall back to today's date if no enrollment exists yet (Preview / Template Mode)
   const enrolledAt = useMemo(() => {
@@ -127,6 +165,72 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
+      {/* ----------------------------------------------------------------- */}
+      {/* 0. DELIVERY STATUS — which platform (if any) actually sends this  */}
+      {/* cadence. Shown regardless of enrollment state, since "is this     */}
+      {/* even connected to anything" is a question worth answering before  */}
+      {/* a single prospect ever enrolls.                                   */}
+      {/* ----------------------------------------------------------------- */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs font-sans",
+          isConnected
+            ? missingMeta
+              ? "border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 text-amber-900 dark:text-amber-200"
+              : "border-zinc-200 dark:border-zinc-800 bg-transparent text-zinc-600 dark:text-zinc-400"
+            : "border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 text-amber-900 dark:text-amber-200"
+        )}
+      >
+        {isConnected ? (
+          <>
+            {isSmtp ? <Mail size={13} className="shrink-0" /> : <Radio size={13} className="shrink-0" />}
+            <span>
+              {isSmtp ? (
+                <>Sending directly via {emailPlatformLabel(platform)} — this app owns the send schedule, no external CRM/ESP is involved.</>
+              ) : missingMeta ? (
+                <>
+                  <strong className="font-semibold">{emailPlatformLabel(platform)} connected, but not ready</strong> — {missingMeta}
+                </>
+              ) : (
+                <>Delivering live via <strong className="font-semibold">{emailPlatformLabel(platform)}</strong> — enrolling actually pushes this prospect into that platform&apos;s own automation.</>
+              )}
+            </span>
+            <span
+              title={
+                requiresApproval
+                  ? "New enrollments wait in the Queue for a human to approve before they push to the CRM/ESP. Change this on the Autopilot page."
+                  : "New enrollments push to the CRM/ESP automatically, no approval step. Change this on the Autopilot page."
+              }
+              className={cn(
+                "shrink-0 text-[10.5px] font-mono font-semibold px-1.5 py-0.5 rounded-md border",
+                requiresApproval
+                  ? "border-amber-300 dark:border-amber-800/60 text-amber-700 dark:text-amber-400"
+                  : "border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400"
+              )}
+            >
+              {requiresApproval ? "Co-Pilot — approval required" : "Autopilot"}
+            </span>
+            <Link
+              href={stackSettingsHref}
+              className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:no-underline shrink-0"
+            >
+              Review connection <ExternalLink size={11} />
+            </Link>
+          </>
+        ) : (
+          <>
+            <AlertCircle size={13} className="shrink-0" />
+            <span>No email or SMS platform connected for this client yet — this cadence has nowhere to actually send beyond what&apos;s previewed below.</span>
+            <Link
+              href={stackSettingsHref}
+              className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:no-underline shrink-0"
+            >
+              Connect one <ExternalLink size={11} />
+            </Link>
+          </>
+        )}
+      </div>
+
       {/* ----------------------------------------------------------------- */}
       {/* 1. CADENCE LIFECYCLE BANNER                                       */}
       {/* ----------------------------------------------------------------- */}
@@ -257,6 +361,13 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         hasEnrollment={!!enrollment}
         sendLog={sendLog}
         exitedOffsetDays={exitedOffsetDays}
+        deliveryNote={
+          !isConnected
+            ? "No platform connected — later messages have nowhere to send yet."
+            : isSmtp
+              ? "The first message is confirmed sent directly. Later messages are queued in this app's own scheduler and sent directly (SMTP/Resend) — the dates above are when they're scheduled to send."
+              : `The first message is confirmed sent directly. Later messages are queued in ${emailPlatformLabel(platform)}'s own automation to go out automatically — the dates above are when they're scheduled to send.`
+        }
       />
     </div>
   );
@@ -278,6 +389,7 @@ function CadenceTimeline({
   hasEnrollment,
   sendLog,
   exitedOffsetDays,
+  deliveryNote,
 }: {
   enrolledAt: Date;
   windowDays: number;
@@ -288,6 +400,7 @@ function CadenceTimeline({
   hasEnrollment: boolean;
   sendLog: WinBackDetail["sendLog"];
   exitedOffsetDays: number | null;
+  deliveryNote: string;
 }) {
   const windowEnd = new Date(enrolledAt.getTime() + windowDays * 86_400_000);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -409,7 +522,7 @@ function CadenceTimeline({
       )}
 
       <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
-        The first message is confirmed sent directly. Later messages are queued in your email/SMS platform to go out automatically — the dates above are when they&apos;re scheduled to send.
+        {deliveryNote}
       </p>
     </div>
   );

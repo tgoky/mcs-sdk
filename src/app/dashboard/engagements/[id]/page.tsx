@@ -20,14 +20,15 @@ import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Loader2, 
-  AlertCircle, 
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  AlertCircle,
   ArrowRight,
   Server,
   ChevronLeft,
+  ChevronRight,
   Megaphone
 } from "lucide-react";
 import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
@@ -79,11 +80,11 @@ export default async function EngagementDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ skill?: string }>;
+  searchParams: Promise<{ skill?: string; month?: string }>;
 }) {
   const session = await getSession();
   const { id } = await params;
-  const { skill: activeSkillFilter } = await searchParams;
+  const { skill: activeSkillFilter, month: activeMonthFilter } = await searchParams;
   const activeWorkspace = await getActiveWorkspace(session.whopUserId!);
 
   const [engagement] = await db
@@ -203,9 +204,41 @@ export default async function EngagementDetailPage({
   ) as Record<RepSkillId, typeof runs>;
   const repAuditEvents = repIdentityGraphRow ? await getRecentAuditEvents(id, 20) : [];
 
-  const filteredRuns = activeSkillFilter
-    ? runs.filter((r) => r.skillName === activeSkillFilter)
-    : runs;
+  // Run History date/month filtering — requested to match the month-nav
+  // pattern the pipeline pages (pre-call-read, pile-on, win-back) already
+  // have. `runs` already holds this engagement's ENTIRE history with no
+  // DB-side LIMIT (only the render below slices to 20), so both the
+  // available-months list and the month filter itself are cheap in-memory
+  // work, not a second query. Only months that actually have a run are
+  // ever offered — landing Prev/Next on a real, non-empty month, not a
+  // calendar dead end.
+  const runMonthKey = (startedAt: (typeof runs)[number]["startedAt"]) => {
+    const d = new Date(startedAt);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const monthLabel = (monthKey: string) => {
+    const [year, month] = monthKey.split("-").map(Number);
+    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  };
+  const availableMonths = Array.from(new Set(runs.map((r) => runMonthKey(r.startedAt)))).sort((a, b) => (a < b ? 1 : -1));
+  const activeMonthIndex = activeMonthFilter ? availableMonths.indexOf(activeMonthFilter) : -1;
+  // Prev = further back in time (older, higher index in a desc-sorted
+  // list); Next = more recent. Both null at the ends of real data, or
+  // when the current filter isn't in the list at all (e.g. a stale/typed
+  // URL) — no wraparound, no landing on a month with nothing in it.
+  const prevMonth = activeMonthIndex !== -1 && activeMonthIndex < availableMonths.length - 1 ? availableMonths[activeMonthIndex + 1] : null;
+  const nextMonth = activeMonthIndex > 0 ? availableMonths[activeMonthIndex - 1] : null;
+
+  const skillFilteredRuns = activeSkillFilter ? runs.filter((r) => r.skillName === activeSkillFilter) : runs;
+  const filteredRuns = activeMonthFilter ? skillFilteredRuns.filter((r) => runMonthKey(r.startedAt) === activeMonthFilter) : skillFilteredRuns;
+
+  const runHistoryHref = (next: { skill?: string; month?: string }) => {
+    const params = new URLSearchParams();
+    if (next.skill) params.set("skill", next.skill);
+    if (next.month) params.set("month", next.month);
+    const qs = params.toString();
+    return `/dashboard/engagements/${id}${qs ? `?${qs}` : ""}#run-history`;
+  };
 
   // Run History's filter chips used to be Showtime-only (SKILLS is that
   // product's own 5-value union) — a client with only Reputation Manager
@@ -441,8 +474,54 @@ export default async function EngagementDetailPage({
         {/* Run History */}
         {runs.length > 0 && (
           <div className="space-y-3" id="run-history">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">Run History</h2>
+
+              {/* Month navigator — same "go back in time" pattern the
+                  pipeline pages (pre-call-read, pile-on, win-back) already
+                  have, applied here so Run History isn't the one place in
+                  the app stuck at "most recent 20, forever." Only steps
+                  between months that actually have a run — see
+                  availableMonths above. */}
+              {availableMonths.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={prevMonth ? runHistoryHref({ skill: activeSkillFilter, month: prevMonth }) : "#"}
+                    scroll={false}
+                    aria-disabled={!prevMonth}
+                    className={`flex items-center justify-center w-6 h-6 rounded-md border border-zinc-200 dark:border-zinc-800 transition-colors ${
+                      prevMonth ? "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" : "text-zinc-300 dark:text-zinc-700 pointer-events-none"
+                    }`}
+                    title="Earlier month with activity"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </Link>
+                  <span className="text-[11px] font-mono font-semibold text-zinc-600 dark:text-zinc-300 min-w-[110px] text-center">
+                    {activeMonthFilter ? monthLabel(activeMonthFilter) : "All time"}
+                  </span>
+                  <Link
+                    href={nextMonth ? runHistoryHref({ skill: activeSkillFilter, month: nextMonth }) : "#"}
+                    scroll={false}
+                    aria-disabled={!nextMonth}
+                    className={`flex items-center justify-center w-6 h-6 rounded-md border border-zinc-200 dark:border-zinc-800 transition-colors ${
+                      nextMonth ? "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" : "text-zinc-300 dark:text-zinc-700 pointer-events-none"
+                    }`}
+                    title="More recent month with activity"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                  {activeMonthFilter && (
+                    <Link
+                      href={runHistoryHref({ skill: activeSkillFilter })}
+                      scroll={false}
+                      className="ml-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                    >
+                      All time
+                    </Link>
+                  )}
+                </div>
+              )}
+
               {filteredRuns.length > 20 && (
                 <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
                   Showing 20 of {filteredRuns.length}
@@ -454,7 +533,7 @@ export default async function EngagementDetailPage({
             {skillsWithRunsAnyProduct.length > 1 && (
               <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
                 <Link
-                  href={`/dashboard/engagements/${id}`}
+                  href={runHistoryHref({ month: activeMonthFilter })}
                   scroll={false}
                   role="tab"
                   aria-selected={!activeSkillFilter}
@@ -468,7 +547,7 @@ export default async function EngagementDetailPage({
                 {skillsWithRunsAnyProduct.map((skill) => (
                   <Link
                     key={skill}
-                    href={`/dashboard/engagements/${id}?skill=${skill}`}
+                    href={runHistoryHref({ skill, month: activeMonthFilter })}
                     scroll={false}
                     role="tab"
                     aria-selected={activeSkillFilter === skill}
@@ -552,16 +631,29 @@ export default async function EngagementDetailPage({
               </div>
             ) : (
               <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors">
-                <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-                  No <span className="font-medium text-zinc-500 dark:text-zinc-400">{anySkillDisplayName(activeSkillFilter)}</span> runs yet.
+                <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500 text-center px-4">
+                  No{activeSkillFilter ? <> <span className="font-medium text-zinc-500 dark:text-zinc-400">{anySkillDisplayName(activeSkillFilter)}</span></> : ""} runs{activeMonthFilter ? ` in ${monthLabel(activeMonthFilter)}` : " yet"}.
                 </p>
-                <Link
-                  href={`/dashboard/engagements/${id}`}
-                  scroll={false}
-                  className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
-                >
-                  Clear filter
-                </Link>
+                <div className="flex items-center gap-3">
+                  {activeMonthFilter && (
+                    <Link
+                      href={runHistoryHref({ skill: activeSkillFilter })}
+                      scroll={false}
+                      className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                    >
+                      Clear month
+                    </Link>
+                  )}
+                  {activeSkillFilter && (
+                    <Link
+                      href={runHistoryHref({ month: activeMonthFilter })}
+                      scroll={false}
+                      className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                    >
+                      Clear module filter
+                    </Link>
+                  )}
+                </div>
               </div>
             )}
           </div>

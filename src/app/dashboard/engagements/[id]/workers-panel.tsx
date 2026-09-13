@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Settings2, ExternalLink, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
-import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
@@ -405,6 +405,16 @@ export function WorkersPanel({
                         className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
                         <span>{workerId === "rep-crisis-response" ? "Incidents" : "Findings"}</span>
+                        <ExternalLink size={11} />
+                      </Link>
+                    )}
+
+                    {COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
+                      <Link
+                        href={workerPrimaryHref(workerId, engagementId)}
+                        className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                      >
+                        <span>Pipeline</span>
                         <ExternalLink size={11} />
                       </Link>
                     )}

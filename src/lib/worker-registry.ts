@@ -888,6 +888,18 @@ const REP_FINDINGS_SOURCE: Partial<Record<WorkerId, string>> = {
  * already that one client's incidents — no engagementId needed. */
 const REP_CRISIS_RESPONSE_HREF = "/dashboard/reputation-manager/incidents";
 
+/** All 7 Cold Open skill ids — unlike Reputation Manager's 4 independent
+ * watch sources, these are sequential phases of ONE pipeline
+ * (icp_lock -> voice_capture -> source_connect -> send_connect ->
+ * daily_send -> reply_sort -> send_report — see coldOpenConfig.phaseState),
+ * so one dedicated page covering the whole pipeline's real output (sends,
+ * pushes, replies) is the right shape, not 7 separate shells or splitting
+ * the shared-page pattern further with a per-skill `?source=` the way RM's
+ * 4 independent watches use it. This was a confirmed, real, standalone gap
+ * — every Cold Open skill fell through to the bare engagement page's Run
+ * History before cold-open-findings-panel.tsx existed. */
+export const COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [...COLD_OPEN_SKILL_IDS];
+
 /**
  * The one real "go see this worker for this client" destination —
  * replaces routing every worker through /dashboard/modules/[skill] (a
@@ -909,6 +921,9 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
   if (REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
     const source = REP_FINDINGS_SOURCE[workerId];
     return `/dashboard/engagements/${engagementId}/skills/reputation-manager${source ? `?source=${source}` : ""}`;
+  }
+  if (COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
+    return `/dashboard/engagements/${engagementId}/skills/cold-open`;
   }
   return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
 }
