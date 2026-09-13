@@ -20,6 +20,12 @@ export interface AuditHistoryItem {
   topIssueCount: number;
   alertsFiredCount: number;
   gapsCount: number;
+  /** Per-metric current/prior values for this run — the raw material for
+   * the Trend tab's chart (one point per run, per metric, across the
+   * engagement's whole audit history). Everything above this was already
+   * a summary of the same underlying topIssues column; this just stops
+   * discarding it before the response goes out. */
+  topIssues: TopIssue[];
 }
 
 export interface ScheduledAudit {
@@ -105,6 +111,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         topIssueCount: issues.length,
         alertsFiredCount: ((a.alertsFired as string[] | null) ?? []).length,
         gapsCount: ((a.gaps as string[] | null) ?? []).length,
+        topIssues: issues,
       };
     });
 

@@ -453,7 +453,9 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   </div>
                 )}
                 {detailError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>}
-                {!detailLoading && !detailError && detail && "audit" in detail && <LeakMapView detail={detail} embedded />}
+                {!detailLoading && !detailError && detail && "audit" in detail && (
+                  <LeakMapView detail={detail} embedded history={history} />
+                )}
               </div>
             )}
           </>

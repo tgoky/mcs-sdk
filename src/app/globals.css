@@ -299,6 +299,23 @@
   background-image: radial-gradient(#3f3f46 0.5px, transparent 0.5px);
 }
 
+/* Trend chart tokens (leak-map-trend-chart.tsx) — validated categorical
+   slot 1 from the dataviz palette, light/dark steps of the same hue.
+   Single-series line charts only, so this is the one color the method
+   needs; a second series would take slot 2 rather than reusing this. */
+:root {
+  --chart-line-1: #2a78d6;
+  --chart-grid: #e1e0d9;
+  --chart-axis: #898781;
+  --chart-surface: #fcfcfb;
+}
+.dark {
+  --chart-line-1: #3987e5;
+  --chart-grid: #2c2c2a;
+  --chart-axis: #898781;
+  --chart-surface: #1a1a19;
+}
+
 /* Page-level ambient wash — pure CSS, no image asset. Replaces the idea
    of gluing a light source behind every individual glass card (a hack
    repeated per component, and exactly what caused the edge-bleed bug in

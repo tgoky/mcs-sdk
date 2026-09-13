@@ -18,6 +18,8 @@ export function ViewSwitcher({
   modes,
   labels,
   icons,
+  variant,
+  containerClassName,
 }: {
   value: RunViewMode;
   onChange: (mode: RunViewMode) => void;
@@ -35,10 +37,23 @@ export function ViewSwitcher({
    * a different glyph too (an actual calendar icon next to "Overview"
    * reads just as wrong as the word "Calendar" did). */
   icons?: Partial<Record<RunViewMode, LucideIcon>>;
+  /** "pill" (default) is the original look — each button gets its own
+   * background highlight when active, no outer container. "seamless" is
+   * for a group of tabs meant to sit directly on the page with no chrome
+   * at all (a trading-terminal-style tab row) — active/inactive is just a
+   * text color and weight change, nothing else. Two ViewSwitchers sharing
+   * one mode/onChange pair (one per variant) is how a single row ends up
+   * with a plain tab group on one side and a housed toggle on the other. */
+  variant?: "pill" | "seamless";
+  /** Extra classes on the outer wrapping div — e.g. a background + border
+   * to visually "house" a pill-variant group as its own control, distinct
+   * from a seamless group with no chrome of its own on the same row. */
+  containerClassName?: string;
 }) {
   const visibleModes = modes ? MODES.filter((m) => modes.includes(m.key)) : MODES;
+  const seamless = variant === "seamless";
   return (
-    <div className={cn("inline-flex items-center gap-0.5 p-0.5", className)}>
+    <div className={cn("inline-flex items-center", seamless ? "gap-4" : "gap-0.5 p-0.5", containerClassName, className)}>
       {visibleModes.map(({ key, label: defaultLabel, icon: DefaultIcon }) => {
         const label = labels?.[key] ?? defaultLabel;
         const Icon = icons?.[key] ?? DefaultIcon;
@@ -49,10 +64,17 @@ export function ViewSwitcher({
             type="button"
             onClick={() => onChange(key)}
             aria-pressed={active}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer hover-lift press-settle",
-              active ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-elevation-1" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            )}
+            className={
+              seamless
+                ? cn(
+                    "flex items-center gap-1.5 text-xs transition-colors cursor-pointer",
+                    active ? "font-bold text-zinc-900 dark:text-white" : "font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  )
+                : cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer hover-lift press-settle",
+                    active ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-elevation-1" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  )
+            }
           >
             <Icon size={13} />
             <span className="hidden sm:inline">{label}</span>

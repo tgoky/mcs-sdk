@@ -31,7 +31,13 @@ function humanizeGap(gap: string): string {
 }
 
 import { auditRunTypeLabel } from "@/lib/copy";
-import type { AuditRow, LeakMapDetail } from "../_shared/types";
+import type { AuditRow, LeakMapDetail, TopIssue } from "../_shared/types";
+import { LeakMapTrendChart } from "./leak-map-trend-chart";
+
+/** Just enough of AuditHistoryItem (leak-map-schedule/route.ts) for the
+ * Trend tab — a separate local type instead of importing the API route's
+ * type so this view doesn't couple to a specific route module. */
+type TrendHistoryEntry = { id: string; createdAt: string; topIssues: TopIssue[] };
 
 type IssueType = AuditRow["topIssues"] extends (infer T)[] | null ? T : never;
 
@@ -42,9 +48,15 @@ function severityRank(s: string) {
 export function LeakMapView({
   detail,
   embedded = false,
+  history,
 }: {
   detail: LeakMapDetail;
   embedded?: boolean;
+  /** This engagement's past audits, for the Trend tab's chart. Only the
+   * embedded call site (leak-map-schedule.tsx) has this — the standalone
+   * /dashboard/runs/[id] page only ever loads one run, so there's nothing
+   * to trend there and the Trend tab simply doesn't show. */
+  history?: TrendHistoryEntry[];
 }) {
   const { audit } = detail;
   const [mode, setMode] = useState<RunViewMode>("calendar");
@@ -128,19 +140,38 @@ export function LeakMapView({
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        {!embedded && (
-          <div className="relative w-64">
-            <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
-            <input
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Search metric, issue, or report copy..."
-              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+      {/* TOOLBAR — a seamless "Trend" tab (only when history is available
+          to chart) sits on the left like a plain content tab; Overview/List
+          stays housed as its own toggle on the right, since that's a view
+          mode rather than a separate destination. flex-1 on the left
+          group (not a conditional ml-auto) is what keeps the right group
+          pinned to the end regardless of what's actually rendered on the
+          left — search box, the Trend tab, both, or neither. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          {!embedded && (
+            <div className="relative w-64">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+              <input
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                placeholder="Search metric, issue, or report copy..."
+                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+              />
+            </div>
+          )}
+
+          {history !== undefined && (
+            <ViewSwitcher
+              value={mode}
+              onChange={setMode}
+              modes={["board"]}
+              labels={{ board: "Trend" }}
+              icons={{ board: TrendingUp }}
+              variant="seamless"
             />
-          </div>
-        )}
+          )}
+        </div>
 
         <ViewSwitcher
           value={mode}
@@ -148,11 +179,20 @@ export function LeakMapView({
           modes={["calendar", "list"]}
           labels={{ calendar: "Overview" }}
           icons={{ calendar: LayoutDashboard }}
-          className={embedded ? undefined : "ml-auto"}
+          containerClassName="bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200/70 dark:border-zinc-800/70"
         />
       </div>
 
-      {!audit ? (
+      {/* Trend doesn't depend on this specific run's own audit existing —
+          it's this engagement's whole history, so it renders independent
+          of the !audit branch below rather than nested inside it. */}
+      {mode === "board" && history !== undefined && (
+        <div key="board" className="run-view-content-enter">
+          <LeakMapTrendChart history={history} />
+        </div>
+      )}
+
+      {mode !== "board" && (!audit ? (
         <EmptyState
           icon={AlertTriangle}
           title="No audit recorded for this run"
@@ -390,7 +430,7 @@ export function LeakMapView({
             </div>
           )}
         </>
-      )}
+      ))}
     </div>
   );
 }

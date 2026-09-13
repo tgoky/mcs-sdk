@@ -21,6 +21,7 @@ import {
   Shirt
 } from "lucide-react";
 import { RunPinDownPieceButton } from "./run-pin-down-piece-button";
+import { cn } from "@/lib/utils";
 
 const PILLAR_LABELS: Record<string, string> = {
   common_questions: "Common Questions Brief",
@@ -160,6 +161,7 @@ function SquareLabel({ color, children }: { color: string; children: React.React
 function DeliverableRow({
   id,
   isOpen,
+  anyOpen,
   onToggle,
   icon: Icon,
   squircleClass = "bg-teal-200 text-teal-950 dark:bg-teal-900/60 dark:text-teal-200",
@@ -169,6 +171,11 @@ function DeliverableRow({
 }: {
   id: string;
   isOpen: boolean;
+  /** True when some row (not necessarily this one) is expanded — lets a
+   * closed row dim/blur itself so the open one gets the reader's full
+   * attention, without the open row needing to know anything about its
+   * siblings. */
+  anyOpen: boolean;
   onToggle: () => void;
   icon: React.ElementType;
   squircleClass?: string;
@@ -176,13 +183,15 @@ function DeliverableRow({
   subtitle: string;
   children: React.ReactNode;
 }) {
+  const dimmed = anyOpen && !isOpen;
   return (
     <div
-      className={
+      className={cn(
         isOpen
           ? "bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-900 dark:text-zinc-100 rounded-2xl my-3 transition-all duration-200"
-          : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200"
-      }
+          : "border-b border-zinc-200/80 dark:border-zinc-800/60 last:border-b-0 transition-all duration-200",
+        dimmed && "opacity-40 blur-[1px] hover:opacity-100 hover:blur-none"
+      )}
     >
       <button
         type="button"
@@ -360,6 +369,7 @@ export function DeliverablesPanel({
         <DeliverableRow
           id="brand_voice"
           isOpen={openRowId === "brand_voice"}
+          anyOpen={openRowId !== null}
           onToggle={() => toggleRow("brand_voice")}
           icon={Globe}
           squircleClass="bg-purple-200 text-purple-950 dark:bg-purple-900/60 dark:text-purple-200"
@@ -579,6 +589,7 @@ export function DeliverablesPanel({
               key={b.id}
               id={b.id}
               isOpen={openRowId === b.id}
+              anyOpen={openRowId !== null}
               onToggle={() => toggleRow(b.id)}
               icon={PillarIcon}
               squircleClass={cfg.squircleClass}
@@ -628,6 +639,7 @@ export function DeliverablesPanel({
           <DeliverableRow
             id="script_pack"
             isOpen={openRowId === "script_pack"}
+            anyOpen={openRowId !== null}
             onToggle={() => toggleRow("script_pack")}
             icon={Video}
             squircleClass="bg-sky-200 text-sky-950 dark:bg-sky-900/60 dark:text-sky-200"
@@ -762,6 +774,7 @@ export function DeliverablesPanel({
           <DeliverableRow
             id="page_audit"
             isOpen={openRowId === "page_audit"}
+            anyOpen={openRowId !== null}
             onToggle={() => toggleRow("page_audit")}
             icon={FileText}
             squircleClass="bg-zinc-300 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-200"
@@ -823,6 +836,7 @@ export function DeliverablesPanel({
           <DeliverableRow
             id="page_audit_empty"
             isOpen={openRowId === "page_audit_empty"}
+            anyOpen={openRowId !== null}
             onToggle={() => toggleRow("page_audit_empty")}
             icon={FileText}
             squircleClass="bg-zinc-300 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-200"
