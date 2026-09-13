@@ -1,0 +1,644 @@
+From 17e44c272bae16fd5ff0ca61188cdff7abd2c6cb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 16:16:33 +0000
+Subject: [PATCH] Give AI Engine/Trustpilot/Reddit/Twitter Watch real Configure
+ panels
+
+Each of these 4 Reputation Manager skills already had a real, verified
+server-side action (ad-hoc AI engine check, Outscraper cutoff scan,
+Reddit timeframe widen, X since: scan) reachable only through Teammates
+chat, with no dashboard UI path to it and no Configure entry point on
+either the engagement page or the Library. Pause/resume already worked
+for these via the existing Skills panel toggle (engagementSkills.enabled)
+- that part wasn't actually missing, contrary to what I told the user.
+
+Adds one Configure form per skill (mirroring the existing worker-config-
+forms pattern) that calls the same POST rep-findings/trigger actions chat
+already uses, and wires hasHingesPanel: true for all 4 into both places
+that render a worker's inline Configure form (the engagement page's
+WorkersPanel and the Library's ProductDetailClient) so the Configure
+button now actually opens something instead of falling through to a
+blank panel.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../engagements/[id]/workers-panel.tsx        |  16 +++
+ .../library/product-detail-client.tsx         |   8 ++
+ .../rep-engine-panel-config-form.tsx          | 117 ++++++++++++++++++
+ .../rep-reddit-watch-config-form.tsx          | 117 ++++++++++++++++++
+ .../rep-trustpilot-watch-config-form.tsx      | 112 +++++++++++++++++
+ .../rep-twitter-watch-config-form.tsx         | 114 +++++++++++++++++
+ src/lib/rep-skill-manifest.ts                 |  27 ++--
+ 7 files changed, 503 insertions(+), 8 deletions(-)
+ create mode 100644 src/components/worker-config-forms/rep-engine-panel-config-form.tsx
+ create mode 100644 src/components/worker-config-forms/rep-reddit-watch-config-form.tsx
+ create mode 100644 src/components/worker-config-forms/rep-trustpilot-watch-config-form.tsx
+ create mode 100644 src/components/worker-config-forms/rep-twitter-watch-config-form.tsx
+
+diff --git a/src/app/dashboard/engagements/[id]/workers-panel.tsx b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+index 9cd710b..2bd6c03 100644
+--- a/src/app/dashboard/engagements/[id]/workers-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+@@ -13,6 +13,10 @@ import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-con
+ import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
+ import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
+ import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
++import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
++import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
++import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
++import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
+ import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
+ import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
+ import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
+@@ -219,6 +223,18 @@ export function WorkersPanel({
+           {expandedWorker === "rep-onboarding" && (
+             <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+           )}
++          {expandedWorker === "rep-engine-panel" && (
++            <RepEnginePanelConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
++          )}
++          {expandedWorker === "rep-trustpilot-watch" && (
++            <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
++          )}
++          {expandedWorker === "rep-reddit-watch" && (
++            <RepRedditWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
++          )}
++          {expandedWorker === "rep-twitter-watch" && (
++            <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
++          )}
+           {expandedWorker === "icp-lock" && (
+             <IcpLockConfigForm
+               engagementId={engagementId}
+diff --git a/src/components/library/product-detail-client.tsx b/src/components/library/product-detail-client.tsx
+index 2005f0e..3d30789 100644
+--- a/src/components/library/product-detail-client.tsx
++++ b/src/components/library/product-detail-client.tsx
+@@ -31,6 +31,10 @@ import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-con
+ import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
+ import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
+ import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
++import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
++import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
++import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
++import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
+ import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
+ 
+ export function ProductDetailClient({
+@@ -128,6 +132,10 @@ export function ProductDetailClient({
+     if (worker.id === "pre-call-read") return <PreCallReadConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+     if (worker.id === "win-back") return <WinBackConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+     if (worker.id === "rep-onboarding") return <RepOnboardingConfigForm engagementId={engagementId} onCancel={close} />;
++    if (worker.id === "rep-engine-panel") return <RepEnginePanelConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
++    if (worker.id === "rep-trustpilot-watch") return <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
++    if (worker.id === "rep-reddit-watch") return <RepRedditWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
++    if (worker.id === "rep-twitter-watch") return <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+     if (worker.id === "pin-down") {
+       return (
+         <PinDownConfigForm
+diff --git a/src/components/worker-config-forms/rep-engine-panel-config-form.tsx b/src/components/worker-config-forms/rep-engine-panel-config-form.tsx
+new file mode 100644
+index 0000000..333b03b
+--- /dev/null
++++ b/src/components/worker-config-forms/rep-engine-panel-config-form.tsx
+@@ -0,0 +1,117 @@
++"use client";
++
++// AI Engine Watch has no persisted settings to save — it already runs off
++// whatever repIdentityGraphs.seedPanelPrompts and .activeEngines the
++// Identity Setup bridge captured. What was actually missing wasn't
++// configuration, it was a way to reach the one real action this skill
++// already supports server-side (triggerEngineAdhocCheckForEngagement /
++// POST rep-findings/trigger action=check_ai_engines) without going through
++// Teammates chat — same shared trigger function either surface calls, so
++// behavior can't drift between them.
++
++import { useState } from "react";
++import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
++
++export function RepEnginePanelConfigForm({
++  engagementId,
++  onCancel,
++  cancelLabel = "Back to engagement",
++}: {
++  engagementId: string;
++  onCancel: () => void;
++  cancelLabel?: string;
++}) {
++  const [subject, setSubject] = useState("");
++  const [question, setQuestion] = useState("");
++  const [running, setRunning] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [runId, setRunId] = useState<string | null>(null);
++  const [message, setMessage] = useState<string | null>(null);
++
++  async function runCheck() {
++    setRunning(true);
++    setError(null);
++    setRunId(null);
++    setMessage(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings/trigger`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ action: "check_ai_engines", subject: subject.trim() || undefined, question: question.trim() || undefined }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setError(data.error ?? "Couldn't start the check.");
++        return;
++      }
++      setRunId(data.runId ?? null);
++      setMessage(data.message ?? "Check started.");
++    } catch (e: unknown) {
++      setError(e instanceof Error ? e.message : "Unknown error");
++    } finally {
++      setRunning(false);
++    }
++  }
++
++  return (
++    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
++      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
++        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
++          AI Engine Watch
++        </h1>
++        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
++          The scheduled watch already runs off the prompts and engines chosen in Identity Setup — nothing to tune
++          here. This runs the same check on demand, right now, instead of waiting for the next scheduled pass.
++        </p>
++      </div>
++
++      <InputField
++        label="Subject (optional)"
++        value={subject}
++        onChange={setSubject}
++        placeholder="Leave blank to use the operator name from Identity Setup"
++        helpText="Who or what to ask the engines about."
++      />
++      <TextAreaField
++        label="Question (optional)"
++        value={question}
++        onChange={setQuestion}
++        placeholder="Leave blank to use the standard reputation-check prompt"
++        rows={2}
++        helpText="A specific question to ask ChatGPT, Claude, Perplexity, Grok, and Gemini right now."
++      />
++
++      {error && (
++        <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
++          ⚠ {error}
++        </p>
++      )}
++      {message && !error && (
++        <p className="text-xs font-mono font-semibold flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
++          ✓ {message}
++          {runId && (
++            <a href={`/dashboard/runs/${runId}`} className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
++              View run →
++            </a>
++          )}
++        </p>
++      )}
++
++      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++        <button
++          onClick={onCancel}
++          className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
++        >
++          {cancelLabel}
++        </button>
++        <button
++          onClick={runCheck}
++          disabled={running}
++          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
++        >
++          {running ? "Checking…" : "Check AI engines now"}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/rep-reddit-watch-config-form.tsx b/src/components/worker-config-forms/rep-reddit-watch-config-form.tsx
+new file mode 100644
+index 0000000..f407ac9
+--- /dev/null
++++ b/src/components/worker-config-forms/rep-reddit-watch-config-form.tsx
+@@ -0,0 +1,117 @@
++"use client";
++
++// Reddit Watch has no persisted settings — it already searches the
++// operator name and high-priority entity names from Identity Setup on a
++// schedule. The one real gap was that redditapis.com's documented sort=top
++// + t=<timeframe> technique for reaching further back (verified against
++// their own reference docs — see reddit-watch-service.ts's
++// runRepRedditDeepScan) was only reachable through Teammates chat. This
++// calls the exact same trigger function chat does.
++
++import { useState } from "react";
++import { SelectField } from "@/app/dashboard/engagements/new/form-fields";
++
++const TIMEFRAMES = [
++  { value: "day", label: "Past day" },
++  { value: "week", label: "Past week" },
++  { value: "month", label: "Past month" },
++  { value: "year", label: "Past year" },
++  { value: "all", label: "All time" },
++];
++
++export function RepRedditWatchConfigForm({
++  engagementId,
++  onCancel,
++  cancelLabel = "Back to engagement",
++}: {
++  engagementId: string;
++  onCancel: () => void;
++  cancelLabel?: string;
++}) {
++  const [timeframe, setTimeframe] = useState("month");
++  const [running, setRunning] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [runId, setRunId] = useState<string | null>(null);
++  const [message, setMessage] = useState<string | null>(null);
++
++  async function runScan() {
++    setRunning(true);
++    setError(null);
++    setRunId(null);
++    setMessage(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings/trigger`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ action: "reddit_deep_scan", deepScanTimeframe: timeframe }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setError(data.error ?? "Couldn't start the scan.");
++        return;
++      }
++      setRunId(data.runId ?? null);
++      setMessage(data.message ?? "Scan started.");
++    } catch (e: unknown) {
++      setError(e instanceof Error ? e.message : "Unknown error");
++    } finally {
++      setRunning(false);
++    }
++  }
++
++  return (
++    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
++      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
++        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
++          Reddit Watch
++        </h1>
++        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
++          The scheduled watch already searches recency-sorted for the operator name and high-priority entities from
++          Identity Setup daily — nothing to tune there. Reddit has no exact date-cutoff parameter like Trustpilot or
++          X do, so widening the scan means picking a top-ranked timeframe instead — each one is a genuinely separate
++          listing, not a deeper page of the same search.
++        </p>
++      </div>
++
++      <SelectField
++        label="Widen scan to"
++        value={timeframe}
++        onChange={setTimeframe}
++        options={TIMEFRAMES}
++        helpText="Re-searches sorted by top posts in this window and adds anything the daily watch's recency-sorted search hasn't already found."
++      />
++
++      {error && (
++        <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
++          ⚠ {error}
++        </p>
++      )}
++      {message && !error && (
++        <p className="text-xs font-mono font-semibold flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
++          ✓ {message}
++          {runId && (
++            <a href={`/dashboard/runs/${runId}`} className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
++              View run →
++            </a>
++          )}
++        </p>
++      )}
++
++      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++        <button
++          onClick={onCancel}
++          className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
++        >
++          {cancelLabel}
++        </button>
++        <button
++          onClick={runScan}
++          disabled={running}
++          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
++        >
++          {running ? "Scanning…" : "Widen Reddit scan"}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/rep-trustpilot-watch-config-form.tsx b/src/components/worker-config-forms/rep-trustpilot-watch-config-form.tsx
+new file mode 100644
+index 0000000..60d1c48
+--- /dev/null
++++ b/src/components/worker-config-forms/rep-trustpilot-watch-config-form.tsx
+@@ -0,0 +1,112 @@
++"use client";
++
++// Trustpilot Watch has no persisted settings — it already reviews the
++// domain captured in Identity Setup on a schedule. The one real gap was
++// that Outscraper's own documented `cutoff` param (verified against their
++// /trustpilot-reviews reference docs — see trustpilot-watch-service.ts's
++// runRepTrustpilotDeepScan) was only reachable through Teammates chat.
++// This calls the exact same trigger function chat does.
++
++import { useState } from "react";
++import { InputField } from "@/app/dashboard/engagements/new/form-fields";
++
++const TODAY = new Date().toISOString().slice(0, 10);
++
++export function RepTrustpilotWatchConfigForm({
++  engagementId,
++  onCancel,
++  cancelLabel = "Back to engagement",
++}: {
++  engagementId: string;
++  onCancel: () => void;
++  cancelLabel?: string;
++}) {
++  const [sinceDate, setSinceDate] = useState("");
++  const [running, setRunning] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [runId, setRunId] = useState<string | null>(null);
++  const [message, setMessage] = useState<string | null>(null);
++
++  const valid = /^\d{4}-\d{2}-\d{2}$/.test(sinceDate) && sinceDate <= TODAY;
++
++  async function runScan() {
++    if (!valid) return;
++    setRunning(true);
++    setError(null);
++    setRunId(null);
++    setMessage(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings/trigger`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ action: "trustpilot_deep_scan", deepScanSinceDate: sinceDate }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setError(data.error ?? "Couldn't start the scan.");
++        return;
++      }
++      setRunId(data.runId ?? null);
++      setMessage(data.message ?? "Scan started.");
++    } catch (e: unknown) {
++      setError(e instanceof Error ? e.message : "Unknown error");
++    } finally {
++      setRunning(false);
++    }
++  }
++
++  return (
++    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
++      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
++        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
++          Trustpilot Watch
++        </h1>
++        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
++          The scheduled watch already checks the domain from Identity Setup daily, newest reviews first — nothing to
++          tune there. This reaches further back than that daily window, in one deeper pull.
++        </p>
++      </div>
++
++      <InputField
++        label="Scan back to"
++        type="date"
++        value={sinceDate}
++        onChange={setSinceDate}
++        required
++        helpText="Pulls every Trustpilot review published since this date, scores what's new, and adds it to this client's findings — same pipeline the daily watch uses."
++      />
++
++      {error && (
++        <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
++          ⚠ {error}
++        </p>
++      )}
++      {message && !error && (
++        <p className="text-xs font-mono font-semibold flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
++          ✓ {message}
++          {runId && (
++            <a href={`/dashboard/runs/${runId}`} className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
++              View run →
++            </a>
++          )}
++        </p>
++      )}
++
++      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++        <button
++          onClick={onCancel}
++          className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
++        >
++          {cancelLabel}
++        </button>
++        <button
++          onClick={runScan}
++          disabled={running || !valid}
++          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
++        >
++          {running ? "Scanning…" : "Scan Trustpilot deeper"}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/rep-twitter-watch-config-form.tsx b/src/components/worker-config-forms/rep-twitter-watch-config-form.tsx
+new file mode 100644
+index 0000000..12e47ca
+--- /dev/null
++++ b/src/components/worker-config-forms/rep-twitter-watch-config-form.tsx
+@@ -0,0 +1,114 @@
++"use client";
++
++// Twitter/X Watch has no persisted settings — it already searches the
++// operator name, high-priority entity names, and @handle from Identity
++// Setup on a schedule. The one real gap was that Advanced Search's
++// documented since: operator (verified against docs.twitterapis.com — see
++// twitter-watch-service.ts's runRepTwitterDeepScan) was only reachable
++// through Teammates chat. This calls the exact same trigger function chat
++// does.
++
++import { useState } from "react";
++import { InputField } from "@/app/dashboard/engagements/new/form-fields";
++
++const TODAY = new Date().toISOString().slice(0, 10);
++
++export function RepTwitterWatchConfigForm({
++  engagementId,
++  onCancel,
++  cancelLabel = "Back to engagement",
++}: {
++  engagementId: string;
++  onCancel: () => void;
++  cancelLabel?: string;
++}) {
++  const [sinceDate, setSinceDate] = useState("");
++  const [running, setRunning] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [runId, setRunId] = useState<string | null>(null);
++  const [message, setMessage] = useState<string | null>(null);
++
++  const valid = /^\d{4}-\d{2}-\d{2}$/.test(sinceDate) && sinceDate <= TODAY;
++
++  async function runScan() {
++    if (!valid) return;
++    setRunning(true);
++    setError(null);
++    setRunId(null);
++    setMessage(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/rep-findings/trigger`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ action: "twitter_deep_scan", deepScanSinceDate: sinceDate }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setError(data.error ?? "Couldn't start the scan.");
++        return;
++      }
++      setRunId(data.runId ?? null);
++      setMessage(data.message ?? "Scan started.");
++    } catch (e: unknown) {
++      setError(e instanceof Error ? e.message : "Unknown error");
++    } finally {
++      setRunning(false);
++    }
++  }
++
++  return (
++    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
++      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
++        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
++          Twitter/X Watch
++        </h1>
++        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
++          The scheduled watch already searches the operator name, high-priority entities, and @handle from Identity
++          Setup daily — nothing to tune there. This reaches further back than that daily window using X's own
++          since: search operator, in one deeper pull.
++        </p>
++      </div>
++
++      <InputField
++        label="Scan back to"
++        type="date"
++        value={sinceDate}
++        onChange={setSinceDate}
++        required
++        helpText="Pulls every matching tweet posted since this date, scores what's new, and adds it to this client's findings — same pipeline the daily watch uses."
++      />
++
++      {error && (
++        <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
++          ⚠ {error}
++        </p>
++      )}
++      {message && !error && (
++        <p className="text-xs font-mono font-semibold flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
++          ✓ {message}
++          {runId && (
++            <a href={`/dashboard/runs/${runId}`} className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
++              View run →
++            </a>
++          )}
++        </p>
++      )}
++
++      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++        <button
++          onClick={onCancel}
++          className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
++        >
++          {cancelLabel}
++        </button>
++        <button
++          onClick={runScan}
++          disabled={running || !valid}
++          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
++        >
++          {running ? "Scanning…" : "Scan X deeper"}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/lib/rep-skill-manifest.ts b/src/lib/rep-skill-manifest.ts
+index 162e086..545a658 100644
+--- a/src/lib/rep-skill-manifest.ts
++++ b/src/lib/rep-skill-manifest.ts
+@@ -83,11 +83,13 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
+     // engagementSkills already uses everywhere else, rather than
+     // needing an explicit turn-on action.
+     runOnSetup: false,
+-    // v1 has no dedicated settings screen — nothing to configure yet
+-    // beyond the identity graph. A hinges panel is worth adding once
+-    // there's something to tune (which engines, which prompts, cadence)
+-    // rather than building a settings screen with nothing on it.
+-    hasHingesPanel: false,
++    // Which engines run and which prompts they're asked are tuned from
++    // Identity Setup (activeEngines, seedPanelPrompts), not here — this
++    // panel's own real job is the one thing that genuinely IS scoped to
++    // this skill and had no UI path to it: running an ad-hoc check right
++    // now instead of waiting for the next scheduled pass (see
++    // rep-engine-panel-config-form.tsx).
++    hasHingesPanel: true,
+   },
+   "rep-trustpilot-watch": {
+     id: "rep-trustpilot-watch",
+@@ -95,7 +97,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
+     description:
+       "Checks for new Trustpilot reviews of this client daily and flags anything that raises a serious issue.",
+     runOnSetup: false, // same reasoning as rep-engine-panel — starts once the identity graph has a domain, no separate turn-on
+-    hasHingesPanel: false,
++    // Real, already-built action with no UI path before this — Outscraper's
++    // documented cutoff param for scanning further back than the daily
++    // watch's window (see rep-trustpilot-watch-config-form.tsx).
++    hasHingesPanel: true,
+   },
+   "rep-reddit-watch": {
+     id: "rep-reddit-watch",
+@@ -103,7 +108,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
+     description:
+       "Searches Reddit for new mentions of this client daily and flags anything that raises a serious issue.",
+     runOnSetup: false,
+-    hasHingesPanel: false,
++    // Real, already-built action with no UI path before this — widening
++    // the search to a top-ranked timeframe beyond the daily watch's
++    // recency-sorted window (see rep-reddit-watch-config-form.tsx).
++    hasHingesPanel: true,
+   },
+   "rep-twitter-watch": {
+     id: "rep-twitter-watch",
+@@ -111,7 +119,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
+     description:
+       "Searches X for new mentions of this client daily and flags anything that raises a serious issue.",
+     runOnSetup: false,
+-    hasHingesPanel: false,
++    // Real, already-built action with no UI path before this — Advanced
++    // Search's documented since: operator for scanning further back than
++    // the daily watch's window (see rep-twitter-watch-config-form.tsx).
++    hasHingesPanel: true,
+   },
+   "rep-crisis-response": {
+     id: "rep-crisis-response",
+-- 
+2.43.0
+

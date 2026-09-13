@@ -31,6 +31,10 @@ import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-con
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
 import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
+import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
+import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
+import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
+import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 
 export function ProductDetailClient({
@@ -128,6 +132,10 @@ export function ProductDetailClient({
     if (worker.id === "pre-call-read") return <PreCallReadConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "win-back") return <WinBackConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "rep-onboarding") return <RepOnboardingConfigForm engagementId={engagementId} onCancel={close} />;
+    if (worker.id === "rep-engine-panel") return <RepEnginePanelConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "rep-trustpilot-watch") return <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "rep-reddit-watch") return <RepRedditWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "rep-twitter-watch") return <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "pin-down") {
       return (
         <PinDownConfigForm

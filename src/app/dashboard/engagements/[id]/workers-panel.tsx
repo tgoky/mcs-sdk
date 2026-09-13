@@ -13,6 +13,10 @@ import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-con
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
 import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
+import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
+import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
+import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
+import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
 import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
@@ -218,6 +222,18 @@ export function WorkersPanel({
           )}
           {expandedWorker === "rep-onboarding" && (
             <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
+          )}
+          {expandedWorker === "rep-engine-panel" && (
+            <RepEnginePanelConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "rep-trustpilot-watch" && (
+            <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "rep-reddit-watch" && (
+            <RepRedditWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "rep-twitter-watch" && (
+            <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
           )}
           {expandedWorker === "icp-lock" && (
             <IcpLockConfigForm

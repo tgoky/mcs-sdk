@@ -83,11 +83,13 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     // engagementSkills already uses everywhere else, rather than
     // needing an explicit turn-on action.
     runOnSetup: false,
-    // v1 has no dedicated settings screen — nothing to configure yet
-    // beyond the identity graph. A hinges panel is worth adding once
-    // there's something to tune (which engines, which prompts, cadence)
-    // rather than building a settings screen with nothing on it.
-    hasHingesPanel: false,
+    // Which engines run and which prompts they're asked are tuned from
+    // Identity Setup (activeEngines, seedPanelPrompts), not here — this
+    // panel's own real job is the one thing that genuinely IS scoped to
+    // this skill and had no UI path to it: running an ad-hoc check right
+    // now instead of waiting for the next scheduled pass (see
+    // rep-engine-panel-config-form.tsx).
+    hasHingesPanel: true,
   },
   "rep-trustpilot-watch": {
     id: "rep-trustpilot-watch",
@@ -95,7 +97,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     description:
       "Checks for new Trustpilot reviews of this client daily and flags anything that raises a serious issue.",
     runOnSetup: false, // same reasoning as rep-engine-panel — starts once the identity graph has a domain, no separate turn-on
-    hasHingesPanel: false,
+    // Real, already-built action with no UI path before this — Outscraper's
+    // documented cutoff param for scanning further back than the daily
+    // watch's window (see rep-trustpilot-watch-config-form.tsx).
+    hasHingesPanel: true,
   },
   "rep-reddit-watch": {
     id: "rep-reddit-watch",
@@ -103,7 +108,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     description:
       "Searches Reddit for new mentions of this client daily and flags anything that raises a serious issue.",
     runOnSetup: false,
-    hasHingesPanel: false,
+    // Real, already-built action with no UI path before this — widening
+    // the search to a top-ranked timeframe beyond the daily watch's
+    // recency-sorted window (see rep-reddit-watch-config-form.tsx).
+    hasHingesPanel: true,
   },
   "rep-twitter-watch": {
     id: "rep-twitter-watch",
@@ -111,7 +119,10 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     description:
       "Searches X for new mentions of this client daily and flags anything that raises a serious issue.",
     runOnSetup: false,
-    hasHingesPanel: false,
+    // Real, already-built action with no UI path before this — Advanced
+    // Search's documented since: operator for scanning further back than
+    // the daily watch's window (see rep-twitter-watch-config-form.tsx).
+    hasHingesPanel: true,
   },
   "rep-crisis-response": {
     id: "rep-crisis-response",
