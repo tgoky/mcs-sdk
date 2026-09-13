@@ -22,7 +22,8 @@ import {
   Tooltip,
   type TooltipContentProps,
 } from "recharts";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, ChevronDown } from "lucide-react";
+import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
 import type { TopIssue } from "../_shared/types";
 
 type HistoryEntryLike = {
@@ -107,17 +108,37 @@ export function LeakMapTrendChart({ history }: { history: HistoryEntryLike[] }) 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <select
-          value={activeMetric ?? ""}
-          onChange={(e) => setSelected(e.target.value)}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 cursor-pointer"
+        <ActionMenu
+          align="start"
+          panelWidth={240}
+          trigger={({ toggle, open }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <span className="truncate max-w-[160px]">{activeMetric}</span>
+              <ChevronDown size={12} className="shrink-0 text-zinc-400" />
+            </button>
+          )}
         >
-          {metricNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          {(closeMenu) => (
+            <>
+              {metricNames.map((name) => (
+                <ActionMenuItem
+                  key={name}
+                  label={name}
+                  active={name === activeMetric}
+                  onClick={() => {
+                    setSelected(name);
+                    closeMenu();
+                  }}
+                />
+              ))}
+            </>
+          )}
+        </ActionMenu>
         {latest?.value !== null && (
           <p className="text-xs font-mono text-zinc-500 dark:text-zinc-500">
             Latest: <span className="font-bold text-zinc-900 dark:text-white">{latest.value}</span>

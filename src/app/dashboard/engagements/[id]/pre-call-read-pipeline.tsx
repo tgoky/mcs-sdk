@@ -270,10 +270,10 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Shared Toolbar & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-2 shadow-sm font-sans">
         <div className="flex flex-wrap items-center gap-2">
           {/* Universal Month Navigation */}
-          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-md border border-zinc-200 dark:border-zinc-800 p-1">
             <button
               type="button"
               onClick={() => handleMonthChange(new Date(year, month - 1, 1))}
@@ -306,7 +306,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name or email..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -314,7 +314,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             type="button"
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -330,7 +330,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
         </div>
 
         {/* Theme-aware view switcher (Month, Day View, List) */}
-        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
           {([
             ["month", CalendarIcon, "Month"],
             ["day", Clock, "Day View"],
@@ -355,12 +355,12 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* 1. MONTH VIEW */}
       {mode === "month" && !loading && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+        <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -446,7 +446,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       {mode === "day" && !loading && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: HOURLY TIMELINE GRID */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
+          <div className="lg:col-span-7 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl flex flex-col font-sans">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 px-4 py-3 font-sans">
               <div className="flex items-center gap-2 font-sans">
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
@@ -499,7 +499,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                             type="button"
                             onClick={() => setSelectedEntryId(entry.id)}
                             className={cn(
-                              "w-full rounded-xl p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
+                              "w-full rounded-md p-2.5 text-left transition-all cursor-pointer flex items-start justify-between gap-2 shadow-xs font-sans border-0",
                               isSelected
                                 ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-white ring-1 ring-zinc-400 dark:ring-zinc-600"
                                 : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700/80"
@@ -547,7 +547,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           {/* RIGHT 5 COLUMNS: MINI CALENDAR + PROSPECT INSPECTOR PANEL */}
           <div className="lg:col-span-5 space-y-3 font-sans">
             {/* MINI CALENDAR NAVIGATOR */}
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
               <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
               <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
@@ -573,7 +573,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             </div>
 
             {/* FULL PROSPECT INSPECTOR PANEL */}
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
               {selectedEntry ? (
                 <>
                   <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -625,7 +625,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     )}
                   </div>
 
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
                     <div className="flex items-center justify-between font-sans">
                       <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                       <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
@@ -657,7 +657,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   </div>
 
                   {selectedEntry.briefText ? (
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
+                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
                       <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
                       <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
                     </div>
@@ -666,7 +666,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   )}
 
                   {selectedEntry.runId && (
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
                       <button
                         type="button"
                         onClick={() => setShowRunActivity((p) => !p)}
@@ -708,7 +708,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       {mode === "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 font-sans">
           {/* LEFT 7 COLUMNS: SMART CHRONOLOGICAL FEED */}
-          <div className="lg:col-span-7 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
+          <div className="lg:col-span-7 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
             {/* List Feed Scope Control Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
@@ -952,7 +952,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           </div>
 
           {/* RIGHT 5 COLUMNS: PROSPECT INSPECTOR PANEL ONLY */}
-          <div className="lg:col-span-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
+          <div className="lg:col-span-5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-4 space-y-4 shadow-xl font-sans">
             {selectedEntry ? (
               <>
                 <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
@@ -1004,7 +1004,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   )}
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
                   <div className="flex items-center justify-between font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                     <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
@@ -1036,7 +1036,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 </div>
 
                 {selectedEntry.briefText ? (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
                     <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
                     <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
                   </div>
@@ -1045,7 +1045,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 )}
 
                 {selectedEntry.runId && (
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
                     <button
                       type="button"
                       onClick={() => setShowRunActivity((p) => !p)}

@@ -69,10 +69,11 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
     const items = listBuffer;
     listBuffer = [];
     blocks.push(
-      <ul key={`ul-${key++}`} className="list-disc pl-5 space-y-1.5 my-2.5">
+      <ul key={`ul-${key++}`} className="list-none space-y-1.5 my-2.5">
         {items.map((item, idx) => (
-          <li key={idx} className="leading-relaxed">
-            {renderInline(item, `li-${key}-${idx}`)}
+          <li key={idx} className="flex items-start gap-2 leading-relaxed">
+            <span className="mt-[5px] w-1.5 h-1.5 rounded-[2px] bg-zinc-400 dark:bg-zinc-600 shrink-0" aria-hidden="true" />
+            <span>{renderInline(item, `li-${key}-${idx}`)}</span>
           </li>
         ))}
       </ul>
@@ -217,10 +218,11 @@ export function SimpleMarkdown({ text, className }: { text: string; className?: 
           <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1.5">
             {renderInline(boldOnly[1], `seg-h-${segKey}`)}
           </p>
-          <ul className="list-disc pl-5 space-y-1">
+          <ul className="list-none space-y-1">
             {segItems.map((item, idx) => (
-              <li key={idx} className="leading-relaxed">
-                {renderInline(item, `seg-li-${segKey}-${idx}`)}
+              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                <span className="mt-[5px] w-1.5 h-1.5 rounded-[2px] bg-zinc-400 dark:bg-zinc-600 shrink-0" aria-hidden="true" />
+                <span>{renderInline(item, `seg-li-${segKey}-${idx}`)}</span>
               </li>
             ))}
           </ul>
