@@ -1,0 +1,22 @@
+diff --git a/src/app/dashboard/live-execution-feed.tsx b/src/app/dashboard/live-execution-feed.tsx
+index 21addb7..f291e9d 100644
+--- a/src/app/dashboard/live-execution-feed.tsx
++++ b/src/app/dashboard/live-execution-feed.tsx
+@@ -258,7 +258,7 @@ function RunPreview({ run }: { run: SkillRun }) {
+     <div className="space-y-2">
+       <div className="flex items-center justify-between gap-2">
+         <span className="font-semibold text-foreground truncate">{displayName}</span>
+-        <VerboseTime isoString={run.startedAt} className="text-xs" />
++        <VerboseTime isoString={run.startedAt} className="text-xs" showFreshIndicator={false} />
+       </div>
+       <div className="flex items-center gap-1.5 text-muted-foreground">
+         <span className="font-mono font-bold uppercase tracking-wide text-[11px]">{anySkillDisplayName(run.skillName)}</span>
+@@ -428,7 +428,7 @@ function RunRow({
+               New
+             </span>
+           )}
+-          <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" />
++          <VerboseTime isoString={run.startedAt} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 font-mono" showFreshIndicator={false} />
+         </div>
+       </td>
+ 
