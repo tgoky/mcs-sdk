@@ -17,6 +17,7 @@ export function ViewSwitcher({
   className,
   modes,
   labels,
+  icons,
 }: {
   value: RunViewMode;
   onChange: (mode: RunViewMode) => void;
