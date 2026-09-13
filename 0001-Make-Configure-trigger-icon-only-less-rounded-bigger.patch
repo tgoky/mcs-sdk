@@ -1,0 +1,40 @@
+From 14602e35f60ba98515ef2edb4c0a24f0dd8721e1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 10:07:36 +0000
+Subject: [PATCH] Make Configure trigger icon-only, less rounded, bigger icon
+
+Drops the "Configure" text label in favor of an icon-only square button
+(w-8 h-8, aria-label/title carry the accessible name), tones the
+corner radius down from rounded-lg to rounded-md, and bumps the
+Settings icon from 13px to 17px so it reads clearly on its own without
+the label. Single shared component, so this applies to every skill
+page that renders it (pin-down, win-back, pre-call-read, leak-map).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../dashboard/engagements/[id]/skill-configure-menu.tsx    | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx b/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
+index 4dc077c..592c4cb 100644
+--- a/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
++++ b/src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
+@@ -34,10 +34,11 @@ export function SkillConfigureMenu({ skillId, engagementId }: { skillId: Configu
+           type="button"
+           onClick={toggle}
+           aria-expanded={open}
+-          className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
++          aria-label="Configure"
++          title="Configure"
++          className="hover-lift press-settle flex items-center justify-center rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 w-8 h-8 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+         >
+-          <Settings size={13} />
+-          Configure
++          <Settings size={17} />
+         </button>
+       )}
+     >
+-- 
+2.43.0
+

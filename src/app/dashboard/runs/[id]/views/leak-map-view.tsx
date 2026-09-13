@@ -140,46 +140,31 @@ export function LeakMapView({
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
-      {/* TOOLBAR — a seamless "Trend" tab (only when history is available
-          to chart) sits on the left like a plain content tab; Overview/List
-          stays housed as its own toggle on the right, since that's a view
-          mode rather than a separate destination. flex-1 on the left
-          group (not a conditional ml-auto) is what keeps the right group
-          pinned to the end regardless of what's actually rendered on the
-          left — search box, the Trend tab, both, or neither. */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          {!embedded && (
-            <div className="relative w-64">
-              <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
-              <input
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                placeholder="Search metric, issue, or report copy..."
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
-              />
-            </div>
-          )}
-
-          {history !== undefined && (
-            <ViewSwitcher
-              value={mode}
-              onChange={setMode}
-              modes={["board"]}
-              labels={{ board: "Trend" }}
-              icons={{ board: TrendingUp }}
-              variant="seamless"
+      {/* TOOLBAR — Overview / Metrics Table / Trend / Report as one flat
+          row of seamless, borderless tabs (no pill/background chrome) —
+          all four are peer destinations now, not a content group plus a
+          separate view-mode toggle. Trend only appears when there's
+          history to chart. */}
+      <div className="flex flex-wrap items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+        {!embedded && (
+          <div className="relative w-64">
+            <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-500 dark:text-zinc-500" />
+            <input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Search metric, issue, or report copy..."
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
-          )}
-        </div>
+          </div>
+        )}
 
         <ViewSwitcher
           value={mode}
           onChange={setMode}
-          modes={["calendar", "list"]}
-          labels={{ calendar: "Overview" }}
-          icons={{ calendar: LayoutDashboard }}
-          containerClassName="bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200/70 dark:border-zinc-800/70"
+          modes={history !== undefined ? ["calendar", "list", "board", "report"] : ["calendar", "list", "report"]}
+          labels={{ calendar: "Overview", list: "Metrics Table", board: "Trend" }}
+          icons={{ calendar: LayoutDashboard, board: TrendingUp }}
+          variant="seamless"
         />
       </div>
 
@@ -202,8 +187,11 @@ export function LeakMapView({
         <>
           {/* OVERVIEW VIEW — mode key stays "calendar" (shared RunViewMode
               type across every skill view), only the label/icon shown here
-              are overridden; this is the verdict + report screen, not an
-              actual calendar grid. */}
+              are overridden; this is the verdict/diagnostic screen, not an
+              actual calendar grid. The Executive Report used to live at
+              the bottom of this same view — split into its own "report"
+              tab below since it's a distinct destination, not a
+              continuation of the metrics list. */}
           {mode === "calendar" && (
             <div key="calendar" className="run-view-content-enter space-y-4">
               {/* Verdict — the one thing this view leads with. Bigger dot,
@@ -318,43 +306,6 @@ export function LeakMapView({
                   </ul>
                 </details>
               )}
-
-              {/* Executive Report Reader — flows in the page's own scroll
-                  now, no forced inner scrollbox hiding most of it. Its own
-                  bordered container (with real top margin from whatever's
-                  above) so it reads as a distinct destination on the page,
-                  not a continuation of the metrics/gaps list you could
-                  scroll straight past. */}
-              <div className="mt-2 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
-                <div className="mb-3 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <SquishySkillBadge skill="leak-map" size={24} />
-                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>
-                  </div>
-                  {audit.reportMarkdown && (
-                    <button
-                      type="button"
-                      onClick={handleCopyReport}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
-                    >
-                      {copiedReport ? (
-                        <Check size={12} className="text-emerald-400" />
-                      ) : (
-                        <Copy size={12} />
-                      )}
-                      <span>{copiedReport ? "Copied" : "Copy Report"}</span>
-                    </button>
-                  )}
-                </div>
-
-                {audit.reportMarkdown ? (
-                  <SimpleMarkdown text={audit.reportMarkdown} className="pt-2 text-xs text-zinc-700 dark:text-zinc-300" />
-                ) : (
-                  <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
-                    No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
-                  </p>
-                )}
-              </div>
             </div>
           )}
 
@@ -426,6 +377,42 @@ export function LeakMapView({
                     })}
                   </tbody>
                 </table>
+              )}
+            </div>
+          )}
+
+          {/* REPORT VIEW — the Executive Audit Report on its own, split
+              out of Overview so it's a real destination rather than a
+              scroll-past continuation of the metrics list. */}
+          {mode === "report" && (
+            <div key="report" className="run-view-content-enter rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-4">
+              <div className="mb-3 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <SquishySkillBadge skill="leak-map" size={24} />
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Executive Audit Report</h2>
+                </div>
+                {audit.reportMarkdown && (
+                  <button
+                    type="button"
+                    onClick={handleCopyReport}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+                  >
+                    {copiedReport ? (
+                      <Check size={12} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={12} />
+                    )}
+                    <span>{copiedReport ? "Copied" : "Copy Report"}</span>
+                  </button>
+                )}
+              </div>
+
+              {audit.reportMarkdown ? (
+                <SimpleMarkdown text={audit.reportMarkdown} className="pt-2 text-xs text-zinc-700 dark:text-zinc-300" />
+              ) : (
+                <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
+                  No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
+                </p>
               )}
             </div>
           )}

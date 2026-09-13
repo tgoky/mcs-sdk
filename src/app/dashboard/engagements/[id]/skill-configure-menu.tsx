@@ -34,10 +34,11 @@ export function SkillConfigureMenu({ skillId, engagementId }: { skillId: Configu
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+          aria-label="Configure"
+          title="Configure"
+          className="hover-lift press-settle flex items-center justify-center rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 w-8 h-8 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
         >
-          <Settings size={13} />
-          Configure
+          <Settings size={17} />
         </button>
       )}
     >
