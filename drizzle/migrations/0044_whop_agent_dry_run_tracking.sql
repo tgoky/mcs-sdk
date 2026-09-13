@@ -1,0 +1,1 @@
+ALTER TABLE "whop_agent_connections" ADD COLUMN "dry_run_cleared_skills" jsonb DEFAULT '[]'::jsonb NOT NULL;

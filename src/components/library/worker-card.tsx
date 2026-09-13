@@ -15,12 +15,14 @@ const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   showtime: "Showtime",
   "reputation-manager": "Reputation Manager",
   "cold-open": "Cold Open",
+  "whop-agent": "Whop Agent",
 };
 
 const PRODUCT_ACCENT: Record<WorkerDefinition["productId"], string> = {
   showtime: "border-amber-200 dark:border-amber-900/70",
   "reputation-manager": "border-indigo-200 dark:border-indigo-900/70",
   "cold-open": "border-rose-200 dark:border-rose-900/70",
+  "whop-agent": "border-sky-200 dark:border-sky-900/70",
 };
 
 /**

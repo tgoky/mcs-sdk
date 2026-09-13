@@ -113,7 +113,13 @@ export type NotificationType =
   // digest.ts's rollup of everything that happened since the last digest
   // run and never crossed realTimeAlertFloor — the spec's "everything else
   // batches into the daily digest, which you review once daily."
-  | "reputation_daily_digest";
+  | "reputation_daily_digest"
+  // Whop Agent's receiver health subsystem (spec Section 7.4) — a
+  // subscription approaching or past the 72-hour auto-disable deadline, or
+  // one Whop has already disabled. Confirmed against this file's own
+  // "both real consumers use array membership checks" note above: safe to
+  // add without an exhaustive-switch break.
+  | "whop_webhook_health";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 

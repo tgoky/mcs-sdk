@@ -20,9 +20,10 @@
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { COLD_OPEN_SKILL_IDS, COLD_OPEN_SKILL_MANIFEST, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS, WHOP_AGENT_SKILL_MANIFEST, type WhopAgentSkillId } from "@/lib/whop-agent-skill-manifest";
 import type { ProductId } from "@/lib/product-catalog";
 
-export type WorkerId = SkillId | RepSkillId | ColdOpenSkillId;
+export type WorkerId = SkillId | RepSkillId | ColdOpenSkillId | WhopAgentSkillId;
 
 /**
  * How a worker's config field should be sourced when it's being enabled
@@ -751,6 +752,31 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
   "send-report": [],
 };
 
+// Traced against connect-service.ts's real writes and the whop-connect
+// hinges panel (whop-connect-config-form.tsx). Every other Whop Agent
+// skill reuses this one credential — see whop-agent-skill-manifest.ts's
+// requiredCredentials — so none of them repeat it as a separate entry,
+// same convention pin-down's shared booking/email credentials already
+// established for its downstream skills.
+const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigField[]>> = {
+  "whop-connect": [
+    {
+      key: "whopBotApiKeyCredential",
+      label: "Whop Bot API key",
+      kind: "secret",
+      description: "Pasted from Whop Dashboard → Developer → API keys — routes to the credential vault, never rendered as plain text or sent through chat.",
+    },
+  ],
+  "whop-cancellation-save-offer": [
+    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes." },
+    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for." },
+    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out." },
+  ],
+  "whop-bridge-manager": [
+    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed." },
+  ],
+};
+
 // Single source of truth for category, kept out of skill-manifest.ts and
 // rep-skill-manifest.ts on purpose — those files stay each product's own
 // id/name/description authority (see this module's header), while
@@ -776,6 +802,21 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "daily-send": "Outreach & Sequences",
   "reply-sort": "Outreach & Sequences",
   "send-report": "Analysis & Briefing",
+  "whop-connect": "Setup",
+  "whop-product-launch-preflight": "Setup",
+  "whop-purchase-cap-copilot": "Setup",
+  "whop-drift-monitor": "Monitoring",
+  "whop-weekly-ops-report": "Analysis & Briefing",
+  "whop-portfolio-rollup": "Analysis & Briefing",
+  "whop-cancellation-save-offer": "Crisis & Recovery",
+  "whop-refund-dispute-velocity": "Monitoring",
+  "whop-bulk-promo-codes": "Setup",
+  "whop-payout-hold-kit": "Crisis & Recovery",
+  "whop-dispute-response": "Crisis & Recovery",
+  "whop-ads-draft-approve": "Outreach & Sequences",
+  "whop-bridge-manager": "Monitoring",
+  "whop-daily-change-digest": "Monitoring",
+  "whop-attribution-report": "Analysis & Briefing",
 };
 
 function buildRegistry(): Record<WorkerId, WorkerDefinition> {
@@ -823,12 +864,26 @@ function buildRegistry(): Record<WorkerId, WorkerDefinition> {
     };
   }
 
+  for (const id of WHOP_AGENT_SKILL_IDS) {
+    const entry = WHOP_AGENT_SKILL_MANIFEST[id];
+    registry[id] = {
+      id,
+      productId: "whop-agent",
+      name: entry.name,
+      description: entry.description,
+      category: WORKER_CATEGORIES[id],
+      runOnSetup: entry.runOnSetup,
+      hasHingesPanel: entry.hasHingesPanel,
+      configFields: WHOP_AGENT_CONFIG_FIELDS[id] ?? [],
+    };
+  }
+
   return registry;
 }
 
 export const WORKER_REGISTRY: Record<WorkerId, WorkerDefinition> = buildRegistry();
 
-export const WORKER_IDS: WorkerId[] = [...SKILL_IDS, ...REP_SKILL_IDS, ...COLD_OPEN_SKILL_IDS];
+export const WORKER_IDS: WorkerId[] = [...SKILL_IDS, ...REP_SKILL_IDS, ...COLD_OPEN_SKILL_IDS, ...WHOP_AGENT_SKILL_IDS];
 
 export function isWorkerId(value: string): value is WorkerId {
   return (WORKER_IDS as string[]).includes(value);
@@ -855,7 +910,18 @@ export function allWorkers(): WorkerDefinition[] {
  * own links — two independently-maintained copies of "which workers have
  * a page" is exactly the kind of drift this registry exists to prevent.
  */
-export const SKILLS_WITH_OWN_PAGE: WorkerId[] = ["pre-call-read", "pile-on", "win-back", "leak-map", "pin-down"];
+export const SKILLS_WITH_OWN_PAGE: WorkerId[] = [
+  "pre-call-read",
+  "pile-on",
+  "win-back",
+  "leak-map",
+  "pin-down",
+  // Sections 11.9-11.12's dedicated workspaces.
+  "whop-payout-hold-kit",
+  "whop-dispute-response",
+  "whop-bridge-manager",
+  "whop-ads-draft-approve",
+];
 
 /** The 4 Reputation Manager "watch" workers — same shape (a stream of
  * findings: text + sentiment + flag + permalink), so they share one

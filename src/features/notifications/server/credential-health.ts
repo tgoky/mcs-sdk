@@ -14,6 +14,7 @@ import {
   checkReplyIoCredential,
   checkApifyCredential,
 } from "@/features/cold-open/server/credential-check";
+import { checkWhopBotApiKeyCredential } from "@/lib/whop-agent/probe";
 
 // Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
 // literal "TZ=UTC 0 13 * * *" cron expression on credentialHealthCron;
@@ -81,6 +82,11 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) 
   cold_open_lemlist: (secret) => checkLemlistCredential(secret),
   cold_open_reply_io: (secret) => checkReplyIoCredential(secret),
   cold_open_apify: (secret) => checkApifyCredential(secret),
+  // Whop Agent's pasted Bot API key (Section 2.7 "Token expiry or
+  // revocation" — detected on the first credential-level 401/403 not tied
+  // to a named scope). GET /v1/accounts is the spec's own hard-stop probe,
+  // meaningful regardless of which scopes the key was ever granted.
+  whop_bot_api_key: (secret) => checkWhopBotApiKeyCredential(secret),
 };
 
 export interface CredentialHealthResult {

@@ -48,7 +48,25 @@ export type PendingActionType =
   // behalf (see draft-response.ts's header), so every draft this queues is
   // always headed for a human to review and paste manually. Queued
   // directly via the exported queuePendingAction, not gateOrExecute.
-  | "rep_response_approval";
+  | "rep_response_approval"
+  // Whop Agent (Section 8.3): confirmation gates on infrastructure the
+  // operator built themselves. Same as rep_response_approval — always
+  // gated, no opt-in check, queued directly via queuePendingAction from
+  // webhook-audit-service.ts rather than through gateOrExecute. More
+  // Whop action types (dedupe delete, re-enable, promo code removal,
+  // dispute evidence submit, ads flip-to-active) join this union as each
+  // of those skills is built.
+  | "whop_webhook_pin"
+  | "whop_webhook_dedupe_delete"
+  | "whop_webhook_reenable"
+  | "whop_product_launch_bulk_confirm"
+  | "whop_cancel_discount_configure"
+  | "whop_cancellation_offer_create"
+  | "whop_drift_fingerprint_adopt"
+  | "whop_bulk_promo_codes_confirm"
+  | "whop_promo_code_remove"
+  | "whop_dispute_evidence_submit"
+  | "whop_ads_flip_to_active";
 
 export function isApprovalRequired(
   stack: EngagementStack | null | undefined,
@@ -389,6 +407,94 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       { eventType: "approval", payload: { approver: "sole_authority", decision: "approved" } },
       payload?.draftEventId ?? null
     );
+  },
+
+  // Whop Agent — Section 2.5 Step 2 / Section 8.3. Re-derives the pin date
+  // from the payload (queued at request time by queueWebhookPin) rather
+  // than re-reading whopAgentConnections here, since an operator could have
+  // started a pin advancement between queue and approval — the confirmation
+  // screen showed this exact date, so that's the date that executes.
+  whop_webhook_pin: async (engagementId, payload) => {
+    const { executeWebhookPin } = await import("@/features/whop-agent/server/webhook-audit-service");
+    await executeWebhookPin(engagementId, payload.whopWebhookId, payload.pinnedVersionDate);
+  },
+
+  // Whop Agent — Section 2.5 Step 3. Deletes exactly the ids the
+  // confirmation screen showed (payload.deleteWhopWebhookIds), never a
+  // freshly-recomputed group — the operator approved specific ids.
+  whop_webhook_dedupe_delete: async (engagementId, payload) => {
+    const { executeWebhookDedupe } = await import("@/features/whop-agent/server/webhook-audit-service");
+    await executeWebhookDedupe(engagementId, payload.deleteWhopWebhookIds);
+  },
+
+  // Whop Agent — Section 7.4 steps 4-6. Only ever reached after a passing
+  // destination probe (checked before this was queued) AND explicit
+  // operator approval — "fully automatic re-enable was considered and
+  // rejected."
+  whop_webhook_reenable: async (engagementId, payload) => {
+    const { executeWebhookReenable } = await import("@/features/whop-agent/server/receiver-health-service");
+    await executeWebhookReenable(engagementId, payload.whopWebhookId);
+  },
+
+  // Whop Agent — Section 5.1's bulk-launch guardrail. Runs each queued
+  // input through the exact same runProductLaunchPreflight path a single
+  // launch takes (pre-flight validation, dry-run gate, and all), just once
+  // per approved input rather than immediately on submit.
+  whop_product_launch_bulk_confirm: async (engagementId, payload) => {
+    const { runProductLaunchPreflight } = await import("@/features/whop-agent/server/product-launch-preflight-service");
+    for (const input of payload.inputs) {
+      await runProductLaunchPreflight(engagementId, input);
+    }
+  },
+
+  // Whop Agent — Playbook 5.6 step 1. A native, live-infrastructure pricing
+  // change, gated regardless of any opt-in approval setting.
+  whop_cancel_discount_configure: async (engagementId, payload) => {
+    const { executeNativeCancelDiscountConfig } = await import("@/features/whop-agent/server/cancellation-save-offer-service");
+    await executeNativeCancelDiscountConfig(engagementId, payload.planId, payload.percentage, payload.intervals);
+  },
+
+  // Whop Agent — Playbook 5.6 step 2. Creates the promo code only; the
+  // message itself is sent by the operator, never this agent.
+  whop_cancellation_offer_create: async (engagementId, payload) => {
+    const { executeCancellationOfferCreate } = await import("@/features/whop-agent/server/cancellation-save-offer-service");
+    await executeCancellationOfferCreate(engagementId, payload);
+  },
+
+  // Whop Agent — Playbook 5.3. "Approval" only means "start using this
+  // shape as the new baseline fingerprint" — it never touches Whop itself.
+  whop_drift_fingerprint_adopt: async (engagementId, payload) => {
+    const { executeDriftFingerprintAdopt } = await import("@/features/whop-agent/server/drift-monitor-service");
+    await executeDriftFingerprintAdopt(engagementId, payload.whopWebhookId, payload.nextFingerprint);
+  },
+
+  whop_bulk_promo_codes_confirm: async (engagementId, payload) => {
+    const { executeBulkPromoCodesConfirm } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
+    await executeBulkPromoCodesConfirm(engagementId, payload.specs);
+  },
+
+  // Section 14 open question #2 (delete vs deactivate) — the executor
+  // itself resolves which path Whop actually accepts and reports it;
+  // gated because both are effectively irreversible for the code itself.
+  whop_promo_code_remove: async (engagementId, payload) => {
+    const { removePromoCode } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
+    await removePromoCode(engagementId, payload.promoCodeId);
+  },
+
+  // Whop Agent — Playbook 5.10. Needs the elevated credential the
+  // manifest declares; re-checks the evidence window immediately before
+  // submitting, independent of the check that ran when this was queued.
+  whop_dispute_evidence_submit: async (engagementId, payload) => {
+    const { executeDisputeEvidenceSubmit } = await import("@/features/whop-agent/server/dispute-response-service");
+    await executeDisputeEvidenceSubmit(engagementId, payload.disputeId, payload.draft);
+  },
+
+  // Whop Agent — Playbook 5.11. Needs the elevated credential the
+  // manifest declares; this is the one call in the whole catalog that
+  // starts real Meta ad spend.
+  whop_ads_flip_to_active: async (engagementId, payload) => {
+    const { executeAdsFlipToActive } = await import("@/features/whop-agent/server/whop-ads-service");
+    await executeAdsFlipToActive(engagementId, payload.adId);
   },
 };
 

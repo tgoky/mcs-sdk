@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "whop_webhook_registry_agent_dedupe_unique" ON "whop_webhook_registry" USING btree ("engagement_id","duplicate_group_key") WHERE "whop_webhook_registry"."created_by_agent" = true;

@@ -8,6 +8,20 @@ import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
+import {
+  processWhopWebhookEvent,
+  whopReceiverHealthSweepCron,
+  whopReceiverHealthSweepSingleCron,
+  whopWeeklyOpsReportCron,
+  whopPortfolioRollupCron,
+  whopVelocityReconciliationCron,
+  whopVelocityReconciliationSingleCron,
+  whopDailyChangeDigestCron,
+  whopDriftMonitorCron,
+  deliverToBridge,
+  processWhopAdsDraft,
+  processBulkPromoCodesBatch,
+} from "@/inngest/whop-agent";
 import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron, repDigestCron } from "@/inngest/reputation-manager";
 import { coldOpenDailySendCron, coldOpenReplySortCron } from "@/inngest/cold-open";
 import {
@@ -136,6 +150,29 @@ export const { GET, POST, PUT } = serve({
     // thread so the webhook response to the booking platform is never
     // gated on external-network calls.
     processBookingWebhookEvent,
+    // Whop Agent's inbound webhook worker — see the module comment on
+    // whopWebhookProcess in src/lib/inngest.ts.
+    processWhopWebhookEvent,
+    // Whop Agent's receiver health subsystem (Section 7.4) — platform-
+    // level, runs regardless of which Whop Agent skills are enabled.
+    whopReceiverHealthSweepCron,
+    whopReceiverHealthSweepSingleCron,
+    // Weekly ops report (Monday) / portfolio rollup (Wednesday) — staggered
+    // per Section 9.8/5.5. See src/inngest/whop-agent.ts.
+    whopWeeklyOpsReportCron,
+    whopPortfolioRollupCron,
+    // Refund/Dispute Velocity Alert reconciliation (every 4h, Section 5.7).
+    whopVelocityReconciliationCron,
+    whopVelocityReconciliationSingleCron,
+    // Daily digest (Section 5.13) / weekly drift monitor (Section 5.3).
+    whopDailyChangeDigestCron,
+    whopDriftMonitorCron,
+    // Bridge delivery retries (Section 5.12) / Ads draft polling (Section 5.11).
+    deliverToBridge,
+    processWhopAdsDraft,
+    // Bulk Promo Codes batch execution (Section 5.8) — dispatched here
+    // instead of run inline so its per-code 429 backoff uses step.sleep.
+    processBulkPromoCodesBatch,
     // Reputation Manager's own cron — kept in its own file
     // (src/inngest/reputation-manager.ts), separate from crons.ts which
     // is Showtime-only. See that file's own comment for cadence

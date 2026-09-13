@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
-import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig } from "@/models/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig, whopAgentConnections } from "@/models/schema";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { COLD_OPEN_SKILL_IDS, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
 
 /**
@@ -247,13 +248,14 @@ export async function setSkillEnabledForEngagement(
  * client look like it already has all 11 workers turned on.
  */
 export async function getEnabledWorkerIdsForEngagement(engagementId: string): Promise<WorkerId[]> {
-  const [rows, [engagement], repGraph, coldOpenRow] = await Promise.all([
+  const [rows, [engagement], repGraph, coldOpenRow, whopConnectionRow] = await Promise.all([
     db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
       .from(engagementSkills)
       .where(eq(engagementSkills.engagementId, engagementId)),
     db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
     db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1),
     db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1),
+    db.select({ engagementId: whopAgentConnections.engagementId }).from(whopAgentConnections).where(and(eq(whopAgentConnections.engagementId, engagementId), isNull(whopAgentConnections.disconnectedAt))).limit(1),
   ]);
 
   const explicitlyEnabled = new Set(rows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
@@ -262,12 +264,14 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
   const hasShowtimeEvidence = Boolean(engagement?.stack);
   const hasRepEvidence = repGraph.length > 0;
   const hasColdOpenEvidence = coldOpenRow.length > 0;
+  const hasWhopAgentEvidence = whopConnectionRow.length > 0;
 
   return WORKER_IDS.filter((id) => {
     if (explicitlyDisabled.has(id)) return false;
     if (explicitlyEnabled.has(id)) return true;
     if ((SKILL_IDS as string[]).includes(id)) return hasShowtimeEvidence;
     if ((COLD_OPEN_SKILL_IDS as string[]).includes(id)) return hasColdOpenEvidence;
+    if ((WHOP_AGENT_SKILL_IDS as string[]).includes(id)) return hasWhopAgentEvidence;
     return hasRepEvidence;
   });
 }
@@ -285,6 +289,8 @@ export function resolveEnabledWorkerIds(opts: {
    * hasRepEvidence would for an RM-unaware caller before this field
    * existed. */
   hasColdOpenEvidence?: boolean;
+  /** Same optionality reasoning as hasColdOpenEvidence, for Whop Agent. */
+  hasWhopAgentEvidence?: boolean;
   explicitRows: { skillId: string; enabled: boolean; enabledAt: Date | null }[];
 }): WorkerId[] {
   const explicitlyEnabled = new Set(opts.explicitRows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
@@ -295,6 +301,7 @@ export function resolveEnabledWorkerIds(opts: {
     if (explicitlyEnabled.has(id)) return true;
     if ((SKILL_IDS as string[]).includes(id)) return opts.hasShowtimeEvidence;
     if ((COLD_OPEN_SKILL_IDS as string[]).includes(id)) return Boolean(opts.hasColdOpenEvidence);
+    if ((WHOP_AGENT_SKILL_IDS as string[]).includes(id)) return Boolean(opts.hasWhopAgentEvidence);
     return opts.hasRepEvidence;
   });
 }

@@ -1,19 +1,21 @@
 import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
 import { SKILL_IDS } from "@/lib/skill-manifest";
 import { COLD_OPEN_SKILL_IDS } from "@/lib/cold-open-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
 /**
  * Product-level metadata deliberately lives separately from the individual
  * skill manifests. A workspace installs products; engagements enable or
  * disable the skills inside those products.
  */
-export const PRODUCT_IDS = ["showtime", "reputation-manager", "cold-open"] as const;
+export const PRODUCT_IDS = ["showtime", "reputation-manager", "cold-open", "whop-agent"] as const;
 export type ProductId = (typeof PRODUCT_IDS)[number];
 
 export const PRODUCT_SKILL_IDS = {
   showtime: SKILL_IDS,
   "reputation-manager": REP_SKILL_IDS,
   "cold-open": COLD_OPEN_SKILL_IDS,
+  "whop-agent": WHOP_AGENT_SKILL_IDS,
 } as const;
 
 export function isProductId(value: string | null | undefined): value is ProductId {

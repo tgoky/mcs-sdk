@@ -23,6 +23,8 @@ import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-c
 import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
 import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
 import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
+import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
+import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -121,6 +123,7 @@ export function WorkersPanel({
     const productId = WORKER_REGISTRY[workerId].productId;
     if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
     if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
+    if (productId === "whop-agent") return `/api/engagements/${engagementId}/skills/whop-agent/${workerId}`;
     return `/api/engagements/${engagementId}/skills/${workerId}`;
   }
 
@@ -262,6 +265,12 @@ export function WorkersPanel({
               onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
               cancelLabel="Close"
             />
+          )}
+          {expandedWorker === "whop-cancellation-save-offer" && (
+            <WhopCancellationSaveOfferConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
+          )}
+          {expandedWorker === "whop-bridge-manager" && (
+            <WhopBridgeManagerConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
           )}
         </div>
       ) : (

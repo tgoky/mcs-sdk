@@ -36,6 +36,8 @@ import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/r
 import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
 import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
+import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
+import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
 
 export function ProductDetailClient({
   productId,
@@ -136,6 +138,8 @@ export function ProductDetailClient({
     if (worker.id === "rep-trustpilot-watch") return <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "rep-reddit-watch") return <RepRedditWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "rep-twitter-watch") return <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "whop-cancellation-save-offer") return <WhopCancellationSaveOfferConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
+    if (worker.id === "whop-bridge-manager") return <WhopBridgeManagerConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
     if (worker.id === "pin-down") {
       return (
         <PinDownConfigForm

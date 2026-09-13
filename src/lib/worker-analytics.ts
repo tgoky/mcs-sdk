@@ -27,6 +27,7 @@ import {
 } from "@/models/schema";
 import { and, eq, gte, inArray, isNull, desc } from "drizzle-orm";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+import type { ProductId } from "@/lib/product-catalog";
 
 const OVERVIEW_WINDOW_DAYS = 7;
 const DETAIL_WINDOW_DAYS = 30;
@@ -43,7 +44,7 @@ function daysAgo(days: number): Date {
 export interface WorkerOverviewStat {
   workerId: WorkerId;
   name: string;
-  productId: "showtime" | "reputation-manager" | "cold-open";
+  productId: ProductId;
   activeClients: number;
   runsInWindow: number;
   successRate: number | null;
@@ -199,7 +200,7 @@ export interface RepSignalSummary {
 }
 
 export interface WorkerAnalyticsDetail {
-  worker: { id: WorkerId; name: string; description: string; productId: "showtime" | "reputation-manager" | "cold-open" };
+  worker: { id: WorkerId; name: string; description: string; productId: ProductId };
   windowDays: number;
   runsInWindow: number;
   successRate: number | null;

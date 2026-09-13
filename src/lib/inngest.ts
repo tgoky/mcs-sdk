@@ -375,6 +375,109 @@ export const bookingWebhookProcess = eventType("pile-on/booking-webhook-process"
   schema: staticSchema<BookingWebhookProcessData>(),
 });
 
+// Whop Agent's inbound webhook processing — the route only does signature
+// verification, replay-timestamp checking, and webhook-id dedup (all DB-
+// only plus one HMAC compute, well inside Whop's 5-second ack deadline —
+// Section 7.3), then dispatches here. The change-ledger write, per-skill
+// event routing (save-offer trigger, dispute trigger, etc. as those skills
+// land), and any webhook-registry bookkeeping all happen in this async
+// worker, decoupled from Whop's own ack timer the same way
+// bookingWebhookProcess decouples booking-platform acks above. Only
+// engagementId + the already-verified envelope travel over the wire — no
+// credential, matching this file's own "don't ship the full tenant row"
+// rule for anything Inngest Cloud persists.
+export type WhopWebhookProcessData = {
+  engagementId: string;
+  whopWebhookId: string;
+  envelope: { type: string; data?: Record<string, unknown>; previous_attributes?: Record<string, unknown> };
+  occurredAtIso: string;
+  // Section 7.4 step 5 / Section 5.12: gap replay backfilling an outage
+  // window re-emits through this same event, marked so a downstream
+  // destination (the Bridge Manager in particular) can dedupe against a
+  // live delivery it may have already seen.
+  replay?: boolean;
+};
+
+export const whopWebhookProcess = eventType("whop-agent/webhook-process", {
+  schema: staticSchema<WhopWebhookProcessData>(),
+});
+
+// Section 7.4's health sweep fan-out — same cheap-prep-then-fan-out shape
+// as credentialHealthCron/checkSingleCredentialHealthCron in crons.ts.
+export type WhopReceiverHealthSweepSingleData = { engagementId: string };
+export const whopReceiverHealthSweepSingle = eventType("whop-agent/receiver-health-sweep-single", {
+  schema: staticSchema<WhopReceiverHealthSweepSingleData>(),
+});
+
+// Section 5.7's reconciliation fan-out — same shape as the receiver health
+// sweep above.
+export type WhopVelocityReconciliationSingleData = { engagementId: string };
+export const whopVelocityReconciliationSingle = eventType("whop-agent/velocity-reconciliation-single", {
+  schema: staticSchema<WhopVelocityReconciliationSingleData>(),
+});
+
+// Playbook 5.12 — one durable Inngest invocation per delivered event,
+// using step.sleep for the corrected 6-attempt/~17h backoff (Section 7.3)
+// instead of a hand-rolled scheduling table. Inngest's own durable-
+// function model is exactly the "retry with these delays" primitive this
+// needs; a parallel DB-backed retry queue would just be reinventing it.
+export type WhopBridgeDeliverData = {
+  engagementId: string;
+  envelope: { type: string; data?: Record<string, unknown>; previous_attributes?: Record<string, unknown> };
+  replay?: boolean;
+};
+export const whopBridgeDeliver = eventType("whop-agent/bridge-deliver", {
+  schema: staticSchema<WhopBridgeDeliverData>(),
+});
+
+// Playbook 5.11 — media generation is async with a poll loop (Section
+// 5.11's own "write-then-poll only"), so this dispatches through Inngest
+// rather than running synchronously from an API route, same reasoning as
+// the bridge delivery retries above.
+export type WhopAdsDraftProcessData = {
+  runId: string;
+  engagementId: string;
+  input: {
+    productId: string;
+    creativeBrief: string;
+    budgetCents: number;
+    budgetLevel: "ad_group" | "campaign";
+    targeting?: Record<string, unknown>;
+  };
+};
+export const whopAdsDraftProcess = eventType("whop-agent/ads-draft-process", {
+  schema: staticSchema<WhopAdsDraftProcessData>(),
+});
+
+// Playbook 5.8 — a live batch honors Whop's literal "Try again in N
+// seconds" 429 hint per code, up to 3 attempts each (see
+// bulk-promo-codes-service.ts's runBatchLive). A batch of 25 codes at 3
+// retries apiece can run well past a serverless route's request timeout,
+// and an in-memory setTimeout backoff doesn't survive a process recycle
+// mid-batch — same reasoning as the bridge delivery retries above, so this
+// dispatches through Inngest's durable step.sleep rather than blocking the
+// confirming HTTP request.
+export type WhopBulkPromoCodesProcessData = {
+  runId: string;
+  engagementId: string;
+  specs: Array<{
+    code: string;
+    planIds: string[];
+    discountPercentage: number;
+    newUsersOnly?: boolean;
+    existingMembershipsOnly?: boolean;
+    churnedUsersOnly?: boolean;
+    onePerCustomer?: boolean;
+    stock?: number;
+    unlimitedStock?: boolean;
+    promoDurationMonths?: number;
+    expiresAt?: string;
+  }>;
+};
+export const whopBulkPromoCodesProcess = eventType("whop-agent/bulk-promo-codes-process", {
+  schema: staticSchema<WhopBulkPromoCodesProcessData>(),
+});
+
 export const inngest = new Inngest({
   id: "showtime-revenue-infrastructure", // App name identifier inside the dashboard
   checkpointing: {

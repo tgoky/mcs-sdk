@@ -295,6 +295,34 @@
       "when": 1789058200126,
       "tag": "0041_robust_charles_xavier",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1789253176677,
+      "tag": "0042_whop_agent_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789253994253,
+      "tag": "0043_whop_webhook_signing_secret",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789255243621,
+      "tag": "0044_whop_agent_dry_run_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789258798071,
+      "tag": "0045_optimal_romulus",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ── Run instrumentation types ───────────────────────────────────────────────
 // Mirrors the five-field phase-log format from the OG skill pack
@@ -221,6 +222,20 @@ export type EngagementStack = {
   // 30-day window if unset.
   recovery_window_days?: 14 | 21 | 30 | 45 | 60;
   daily_send_tolerance?: number; // max touches/day; default 2 (email+SMS same day allowed)
+  // Whop Agent Playbook 5.6 (Cancellation Save-Offer) — operator-set, no
+  // sane default for discount/duration/message the way tenure/cooldown
+  // have real spec-stated defaults. Unset means the save-offer engine has
+  // nothing to propose yet, not "propose with a guessed discount."
+  whop_save_offer_discount_percentage?: number;
+  whop_save_offer_duration_months?: number;
+  whop_save_offer_message?: string; // supports {discount}/{months} template tokens
+  whop_save_offer_min_tenure_days?: number; // defaults to 30 if unset
+  whop_save_offer_cooldown_days?: number; // defaults to 90 if unset
+  // Whop Agent Playbook 5.12 (Whop-to-External Bridge Manager). No
+  // sane default for a destination the operator owns — unset means the
+  // bridge is configured to do nothing, not "route somewhere guessed."
+  whop_bridge_destination_url?: string;
+  whop_bridge_field_mapping?: Record<string, string>; // Whop field name -> destination field name, identity mapping when unset
   // Optional: list/workflow to auto-enroll a prospect into once they're
   // declared "lost" (recovery window elapsed with no rebook) — see
   // src/features/win-back/server/lost-deal-sweep.ts. If unset, the sweep
@@ -2765,5 +2780,181 @@ export const coldOpenReplies = pgTable(
   (table) => ({
     coldOpenRepliesEngagementIdx: index("cold_open_replies_engagement_idx").on(table.engagementId),
     coldOpenRepliesExternalIdUnique: uniqueIndex("cold_open_replies_external_id_unique").on(table.engagementId, table.externalReplyId),
+  })
+);
+
+// ── Whop Agent: Connection State (Section 2.1/2.4/2.6/6.2 of the spec) ─────
+// One row per engagement — the Whop business that engagement's operator
+// connected. Deliberately engagement-scoped, not workspace-scoped, matching
+// every other per-client credential in this schema (credentialsRefs,
+// repIdentityGraphs): pin-down configures *that buyer's* confirmation page,
+// Whop Agent runs playbooks against *that buyer's* Whop store. Portfolio
+// Rollup (5.5) reads across every engagement in a workspace, the same way
+// getPrimaryEngagementIdsForWorkspaces already aggregates per-workspace —
+// it does not require a separate multi-account concept here.
+//
+// The actual Bot API key lives in credentialsRefs/credentialVault under
+// provider "whop_bot_api_key", resolved via resolveCredential(engagementId,
+// "whop_bot_api_key") exactly like every other pasted key in this app — this
+// table holds only what the connect-flow probe *learned about* that key,
+// never the key itself.
+export type WhopScopeProbeResult = {
+  ok: boolean;
+  // Set only for the named-scope denial class (Section 2.4's "Two denial
+  // classes") — e.g. "dms:read". Never fabricated for the unnamed-403 class.
+  missingScope?: string;
+  // True for a denial with no named scope in the body (payments, invoices,
+  // affiliates, payment methods on a standard key) — reported honestly as
+  // "did not unlock, Whop did not say why," never guessed at.
+  unnamedDenial?: boolean;
+  checkedAt: string;
+};
+
+export const whopAgentConnections = pgTable("whop_agent_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .unique()
+    .references(() => engagements.engagementId),
+  // "bot" | "app" | "oauth" | "unknown" — detected by probing
+  // GET /api/v5/app/users per Section 2.1, since the apik_ prefix alone
+  // can't tell a Bot key from an Account key apart.
+  credentialType: text("credential_type").$type<"bot" | "app" | "oauth" | "unknown">().notNull().default("unknown"),
+  // biz_... from GET /v1/accounts — the hard-stop probe (Section 2.4).
+  whopAccountId: text("whop_account_id"),
+  // Keyed by the probe table's own row label (Section 2.4), e.g.
+  // "products", "webhooks", "dispute_alerts" — one entry per probe.
+  scopeProbeResults: jsonb("scope_probe_results").$type<Record<string, WhopScopeProbeResult>>(),
+  lastScopeProbeAt: timestamp("last_scope_probe_at"),
+  // The validated Api-Version-Date candidate (Section 2.6) — read from a
+  // live response header, then confirmed by an explicit read with that date
+  // set before ever being trusted. Never advanced automatically (Section
+  // 2.6 "Pin advancement. Never automatic.").
+  pinnedVersionDate: text("pinned_version_date"),
+  // Per-credential circuit breaker (Section 6.2) — trips on consistent
+  // credential-level failures (401, or 403 not tied to a named scope),
+  // resets only on a successful reconnect, never on a time-based cooldown.
+  circuitBreakerState: text("circuit_breaker_state").$type<"closed" | "open">().notNull().default("closed"),
+  circuitBreakerTrippedAt: timestamp("circuit_breaker_tripped_at"),
+  circuitBreakerReason: text("circuit_breaker_reason"),
+  lastSuccessfulCallAt: timestamp("last_successful_call_at"),
+  disconnectedAt: timestamp("disconnected_at"),
+  // Section 8.2: "Any playbook that writes to Whop defaults to dry-run on
+  // first execution for a given operator against their live account."
+  // Skill ids that have had at least one live (non-dry-run) execution
+  // reviewed — a skill not in this list defaults to dry-run regardless of
+  // what a caller requests, and only an explicit operator confirmation on
+  // a dry-run's own results adds it here (see whop-agent write-skill
+  // services' shared dry-run gate).
+  dryRunClearedSkills: jsonb("dry_run_cleared_skills").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Whop Agent: Webhook Registry (Section 2.5/2.6/7.2/7.4) ─────────────────
+// One row per Whop-side webhook subscription the agent knows about, whether
+// the agent created it or only audited it at connect. createdByAgent decides
+// what disconnect tears down (Section 2.7: agent-created subscriptions are
+// removed; audited pre-existing ones are left alone and just reported).
+export const whopWebhookRegistry = pgTable(
+  "whop_webhook_registry",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    whopWebhookId: text("whop_webhook_id").notNull(), // hook_...
+    url: text("url").notNull(),
+    events: jsonb("events").$type<string[]>().notNull(),
+    createdByAgent: boolean("created_by_agent").notNull().default(false),
+    apiVersion: text("api_version"), // "v1" | "v2" | "v5" — v2/v5 unverifiable, never created by the agent
+    // Null means unpinned (Section 2.5 pin audit). Compared against the
+    // account-level pinnedVersionDate on every health sweep — a mismatch is
+    // reported ("someone changed a subscription outside the agent"), never
+    // silently corrected (Section 2.6).
+    apiVersionDate: text("api_version_date"),
+    // Normalized (url, sorted event list) tuple hash — groups duplicate
+    // subscriptions for the Section 2.5 Step 3 dedupe offer. Null once a
+    // subscription has been resolved out of its duplicate set.
+    duplicateGroupKey: text("duplicate_group_key"),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    failingSince: timestamp("failing_since"),
+    lastFailureAt: timestamp("last_failure_at"),
+    disabledAt: timestamp("disabled_at"),
+    disabledReason: text("disabled_reason"),
+    lastDeliveryReceivedAt: timestamp("last_delivery_received_at"),
+    // Populated only for createdByAgent rows — Whop returns the ws_...
+    // signing secret exactly once, at creation. Encrypted with the same
+    // AES-256-GCM + key-rotation scheme as every other secret in this
+    // schema (see lib/credentials.ts's encryptSecret/decryptSecret,
+    // exported for exactly this reuse rather than a second crypto
+    // implementation). Null for an audited-but-not-agent-created
+    // subscription — the agent was never shown that secret and cannot
+    // verify deliveries on it, only read its metadata.
+    signingSecretEncrypted: text("signing_secret_encrypted"),
+    signingSecretIv: text("signing_secret_iv"),
+    signingSecretKeyVersion: integer("signing_secret_key_version"),
+    // Only populated for the 6 pin-exempt resources (cards, plans,
+    // transfers, swaps, deposits, exports) — Playbook 5.3's structural
+    // fingerprint, staged pending review on a diff, never silently adopted.
+    schemaFingerprint: jsonb("schema_fingerprint"),
+    schemaFingerprintUpdatedAt: timestamp("schema_fingerprint_updated_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    whopWebhookRegistryUnique: uniqueIndex("whop_webhook_registry_unique").on(table.engagementId, table.whopWebhookId),
+    whopWebhookRegistryEngagementIdx: index("whop_webhook_registry_engagement_idx").on(table.engagementId),
+    // Closes the ensureAgentWebhookSubscription() check-then-create race:
+    // two concurrent calls for the same (engagement, event set) can both
+    // pass the pre-insert SELECT and both create a live Whop-side
+    // subscription. This partial unique index makes the second INSERT fail
+    // at the DB rather than silently succeed, so the caller can detect the
+    // race and clean up its now-redundant subscription instead of leaving
+    // two live, duplicate-delivering webhooks on the account. Scoped to
+    // createdByAgent rows only — pre-existing subscriptions the Section 2.5
+    // audit discovers are allowed to be duplicates of each other (that's
+    // the condition the audit's own dedupe offer exists to surface).
+    whopWebhookRegistryAgentDedupeUnique: uniqueIndex("whop_webhook_registry_agent_dedupe_unique")
+      .on(table.engagementId, table.duplicateGroupKey)
+      .where(sql`${table.createdByAgent} = true`),
+  })
+);
+
+// ── Whop Agent: Change Ledger (Playbook 5.13) ──────────────────────────────
+// Append-only record of every previous_attributes delta received on an
+// .updated event (or membership.cancel_at_period_end_changed, which carries
+// the same field) — the entire data source for the Daily Change Digest.
+// Zero read-back, zero cache maintenance: reconstructing this by polling and
+// diffing every resource would be exactly the shadow-ledger pattern Section
+// 3 forbids, and previous_attributes makes that unnecessary.
+export const whopChangeLedger = pgTable(
+  "whop_change_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    resourceType: text("resource_type").notNull(), // "plan" | "product" | "membership" | ...
+    resourceId: text("resource_id").notNull(),
+    eventType: text("event_type").notNull(), // "plan.updated", "membership.cancel_at_period_end_changed", ...
+    // Field name -> { previous, current } — current is best-effort (present
+    // when the envelope's own resource object carries it), previous always
+    // comes straight from previous_attributes, never inferred.
+    changedFields: jsonb("changed_fields").$type<Record<string, { previous: unknown; current?: unknown }>>(),
+    // False for an .updated event that arrived with no previous_attributes
+    // at all — logged as "changed, delta unavailable" per Section 7.5,
+    // never fabricated. changedFields is null in that case.
+    deltaAvailable: boolean("delta_available").notNull().default(true),
+    // Whether this entry falls inside the default material-field allowlist
+    // for its resourceType (Section 5.13 guardrails) — an operator can widen
+    // the allowlist, but the digest still needs to know which entries were
+    // material by the default rule at write time.
+    material: boolean("material").notNull().default(true),
+    occurredAt: timestamp("occurred_at").notNull(), // the event's own timestamp
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    whopChangeLedgerEngagementIdx: index("whop_change_ledger_engagement_idx").on(table.engagementId, table.occurredAt),
   })
 );

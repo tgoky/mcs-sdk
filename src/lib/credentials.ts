@@ -67,6 +67,12 @@ function getKeyForVersion(version: number): string {
  * Encrypts a credential value for storage. Always encrypts against the
  * current key version — see the key-rotation comment above.
  * Uses AES-256-GCM — authenticated encryption, tamper-evident.
+ *
+ * Exported as encryptSecret/decryptSecret below for reuse by anything that
+ * needs this exact key-rotation-aware AES-256-GCM scheme outside the
+ * credentialsRefs/credentialVault tables themselves (e.g. whopWebhookRegistry's
+ * per-subscription signing secret) — one crypto implementation for every
+ * secret this app stores, not a second one reinvented per table.
  */
 function encrypt(plaintext: string): { encryptedValue: string; iv: string; keyVersion: number } {
   const key = getKeyForVersion(CURRENT_KEY_VERSION);
@@ -95,6 +101,14 @@ function decrypt(encryptedValue: string, iv: string, keyVersion: number): string
   const decipher = createDecipheriv("aes-256-gcm", Buffer.from(key, "hex"), Buffer.from(iv, "hex"));
   decipher.setAuthTag(authTag);
   return decipher.update(encrypted) + decipher.final("utf8");
+}
+
+export function encryptSecret(plaintext: string): { encryptedValue: string; iv: string; keyVersion: number } {
+  return encrypt(plaintext);
+}
+
+export function decryptSecret(encryptedValue: string, iv: string, keyVersion: number): string {
+  return decrypt(encryptedValue, iv, keyVersion);
 }
 
 /**

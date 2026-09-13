@@ -165,6 +165,33 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
       return "config" in detail ? <ColdOpenSetupView detail={detail} /> : null;
     case "send-report":
       return <AdhocRunSummaryView detail={detail} />;
+    // Whop Agent's 14 skills — same gap the 6 chat-only RM actions and
+    // Cold Open's send-report above already had fixed: before this they
+    // had no case here at all, so every one of them fell through to
+    // `default: <PinDownView>`, rendering Showtime's script/brief/page-
+    // audit deliverables (always null for a Whop Agent run) instead of
+    // anything real. None of these write a per-run structured table this
+    // view layer already knows how to join into a dedicated view (the
+    // detail route's own default case already returns exactly the
+    // `{ run }` shape AdhocRunSummaryView expects) — their real output is
+    // entirely in the run's own five-field summary (see run-log.ts),
+    // which this renders faithfully rather than nothing at all.
+    case "whop-connect":
+    case "whop-product-launch-preflight":
+    case "whop-purchase-cap-copilot":
+    case "whop-drift-monitor":
+    case "whop-weekly-ops-report":
+    case "whop-portfolio-rollup":
+    case "whop-cancellation-save-offer":
+    case "whop-refund-dispute-velocity":
+    case "whop-bulk-promo-codes":
+    case "whop-payout-hold-kit":
+    case "whop-dispute-response":
+    case "whop-ads-draft-approve":
+    case "whop-bridge-manager":
+    case "whop-daily-change-digest":
+    case "whop-attribution-report":
+      return <AdhocRunSummaryView detail={detail} />;
     case "pin-down":
     default:
       return <PinDownView detail={detail} />;
