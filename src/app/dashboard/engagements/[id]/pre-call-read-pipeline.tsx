@@ -245,6 +245,24 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
     }
   }, [selectedDayKey, selectedDayEntries, selectedEntryId]);
 
+  // Day View's month-change handler lands on the 1st of the new month —
+  // a day that almost never has any calls — so the left Hourly Timeline
+  // panel just renders empty every time you switch months, which reads
+  // as "the left panel didn't update" even though it technically did.
+  // Once the new month's data has loaded, jump to the nearest day that
+  // actually has calls instead of sitting on an empty day-1. Only runs
+  // once per month load (autoCorrectedMonthRef) so it never fights a
+  // later, deliberate click on a day that's genuinely empty.
+  const autoCorrectedMonthRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || mode !== "day") return;
+    if (autoCorrectedMonthRef.current === monthString) return;
+    autoCorrectedMonthRef.current = monthString;
+    if (selectedDayEntries.length > 0) return;
+    const candidate = monthDaysSmart.pastAndToday.find((d) => d.calls.length > 0) ?? monthDaysSmart.future.find((d) => d.calls.length > 0);
+    if (candidate) handleUpdateSelectedDate(candidate.dateObj);
+  }, [loading, mode, monthString, selectedDayEntries, monthDaysSmart]);
+
   const selectedEntry = useMemo(
     () => filtered.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? null,
     [filtered, selectedEntryId, selectedDayEntries]

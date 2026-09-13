@@ -1,0 +1,56 @@
+From 22c4c85dc52a91127cd07c3fc890586ce1044ac1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 13 Sep 2026 12:30:53 +0000
+Subject: [PATCH] Fix Day View not visibly updating after a month switch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Root cause: handleMonthChange lands selectedDate on the 1st of the new
+month, a day that almost never has any calls — so the left Hourly
+Timeline panel just renders empty every time, reading as "didn't
+update" even though the right panel (mini calendar month label,
+prospect inspector) does visibly change. Added an effect that, once
+the new month's data has loaded, jumps to the nearest day that actually
+has calls instead of sitting on an empty day-1. Guarded to run once per
+month load so it never overrides a later, deliberate click on a day
+that's genuinely empty within the same month.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AkznvRLnBokzbdmJ2WwaEM
+---
+ .../[id]/pre-call-read-pipeline.tsx            | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx b/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
+index 4c19810..cc2370e 100644
+--- a/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
++++ b/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
+@@ -245,6 +245,24 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string })
+     }
+   }, [selectedDayKey, selectedDayEntries, selectedEntryId]);
+ 
++  // Day View's month-change handler lands on the 1st of the new month —
++  // a day that almost never has any calls — so the left Hourly Timeline
++  // panel just renders empty every time you switch months, which reads
++  // as "the left panel didn't update" even though it technically did.
++  // Once the new month's data has loaded, jump to the nearest day that
++  // actually has calls instead of sitting on an empty day-1. Only runs
++  // once per month load (autoCorrectedMonthRef) so it never fights a
++  // later, deliberate click on a day that's genuinely empty.
++  const autoCorrectedMonthRef = useRef<string | null>(null);
++  useEffect(() => {
++    if (loading || mode !== "day") return;
++    if (autoCorrectedMonthRef.current === monthString) return;
++    autoCorrectedMonthRef.current = monthString;
++    if (selectedDayEntries.length > 0) return;
++    const candidate = monthDaysSmart.pastAndToday.find((d) => d.calls.length > 0) ?? monthDaysSmart.future.find((d) => d.calls.length > 0);
++    if (candidate) handleUpdateSelectedDate(candidate.dateObj);
++  }, [loading, mode, monthString, selectedDayEntries, monthDaysSmart]);
++
+   const selectedEntry = useMemo(
+     () => filtered.find((e) => e.id === selectedEntryId) ?? selectedDayEntries[0] ?? null,
+     [filtered, selectedEntryId, selectedDayEntries]
+-- 
+2.43.0
+
