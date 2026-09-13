@@ -1,0 +1,81 @@
+diff --git a/src/app/dashboard/engagements/[id]/page.tsx b/src/app/dashboard/engagements/[id]/page.tsx
+index 6637a3a..634fc14 100644
+--- a/src/app/dashboard/engagements/[id]/page.tsx
++++ b/src/app/dashboard/engagements/[id]/page.tsx
+@@ -251,11 +251,20 @@ export default async function EngagementDetailPage({
+   const runsBySkillAnyProduct: Record<string, typeof runs> = { ...runsBySkill, ...repRunsBySkill };
+   const skillsWithRunsAnyProduct: string[] = [...skillsWithRuns, ...repSkillsWithRuns];
+ 
+-  const artifactRows = await db
+-    .select()
+-    .from(artifacts)
+-    .where(eq(artifacts.engagementId, id))
+-    .orderBy(desc(artifacts.createdAt));
++  // Runtime Ownership section disabled for now (see the commented JSX
++  // block below) — artifacts.owner is hardcoded to "mudd_ventures" on
++  // every insert (recovery-service.ts), with no code path anywhere that
++  // ever writes "buyer", so the panel this fed could only ever display
++  // "Runs on our infra" regardless of an engagement's real export state
++  // (that real state lives in stack.runtime_ownership_model instead, set
++  // by markWinBackExported — a real mechanism, just not wired to this
++  // table or to any dashboard UI yet). Re-enable once the panel reads the
++  // real flag and a real export action exists to flip it.
++  // const artifactRows = await db
++  //   .select()
++  //   .from(artifacts)
++  //   .where(eq(artifacts.engagementId, id))
++  //   .orderBy(desc(artifacts.createdAt));
+ 
+   const conversationIntelligenceSessionRows = await db
+     .select()
+@@ -269,15 +278,15 @@ export default async function EngagementDetailPage({
+     lastProcessedAt: conversationIntelligenceSessionRows.find((s) => s.completedAt)?.completedAt?.toISOString(),
+   };
+ 
+-  const ARTIFACT_TYPE_LABELS: Record<string, string> = {
+-    recovery_cadence: "Win-Back recovery cadence",
+-    long_term_nurture: "Win-Back long-term nurture",
+-  };
++  // const ARTIFACT_TYPE_LABELS: Record<string, string> = {
++  //   recovery_cadence: "Win-Back recovery cadence",
++  //   long_term_nurture: "Win-Back long-term nurture",
++  // };
+ 
+-  const OWNER_LABELS: Record<string, string> = {
+-    mudd_ventures: "Runs on our infra",
+-    buyer: "Exported to buyer's infra",
+-  };
++  // const OWNER_LABELS: Record<string, string> = {
++  //   mudd_ventures: "Runs on our infra",
++  //   buyer: "Exported to buyer's infra",
++  // };
+ 
+   const chipBase = "px-2.5 py-1 rounded-md text-[11px] font-mono border transition-colors inline-flex items-center gap-1.5 select-none";
+   const chipActive = "bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100";
+@@ -439,7 +448,17 @@ export default async function EngagementDetailPage({
+           <CallIntelligenceLog sessions={conversationIntelligenceSessionRows} />
+         )}
+ 
+-        {/* Runtime Ownership */}
++        {/* Runtime Ownership — commented out for now, not deleted.
++            Disabled because it was misleading, not because the section
++            has no future: artifacts.owner is hardcoded to "mudd_ventures"
++            on every insert (recovery-service.ts), so this could only ever
++            show "Runs on our infra" no matter what actually happened to
++            the engagement. The real export state (stack.runtime_ownership_model)
++            and a real export action (exportWinBackToSkillPack /
++            markWinBackExported, src/features/win-back/server/export-to-skill-pack.ts)
++            both exist server-side, just disconnected from this table and
++            from any dashboard UI. Re-enable once the panel reads that real
++            flag and a real "Export" action can actually flip it.
+         {artifactRows.length > 0 && (
+           <div className="space-y-2">
+             <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+@@ -470,6 +489,7 @@ export default async function EngagementDetailPage({
+             </div>
+           </div>
+         )}
++        */}
+ 
+         {/* Run History */}
+         {runs.length > 0 && (
