@@ -329,6 +329,63 @@ export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMent
 export type RepTwitterWatchDetail = { run: RunDetailBase; mentions: RepTwitterMentionRow[] };
 export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
 
+// ── Cold Open's own run-detail shapes ───────────────────────────────────
+// Fixes the same class of gap RM's 5 skills got fixed for: before this,
+// none of Cold Open's 7 skills had a case in the detail route's switch OR
+// this file's SkillView switch, so they fell to `default: <PinDownView>`
+// (already patched to route to the generic AdhocRunSummaryView instead —
+// see runs/[id]/page.tsx's own comment). Daily Send and Reply Sort DO
+// write to real per-engagement tables worth a dedicated view; the 4 setup
+// skills (ICP Lock, Voice Capture, Source Connect, Send Connect) share one
+// config-snapshot view, same "one view over the whole captured state"
+// precedent RepOnboardingDetail already set for rep-onboarding — a setup
+// run's value is "what got captured," not a time-scoped slice.
+
+export interface ColdOpenLeadRow {
+  id: string;
+  email: string;
+  domain: string;
+  companyName: string;
+  firstName: string | null;
+  lastName: string | null;
+  title: string | null;
+  icp: string | null;
+  source: string | null;
+  campaignId: string;
+  status: "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error" | "discarded";
+  statusDetail: unknown;
+  pushedAt: string | null;
+  createdAt: string;
+}
+
+export interface ColdOpenReplyRow {
+  id: string;
+  leadEmail: string;
+  campaignId: string | null;
+  disposition: "interested" | "not_now" | "not_a_fit" | "objection" | "auto_reply" | "unsubscribe" | "unclassified";
+  classificationSource: "heuristic" | "model" | "error" | "none";
+  rawBody: string;
+  routedToQueue: boolean;
+  classifiedAt: string;
+}
+
+export interface ColdOpenSetupConfigRow {
+  productIdentity: { name: string; url: string; price: string; valueProp: string } | null;
+  icps: { slug: string; label: string; weight: number }[];
+  sizingBounds: Record<string, { teamSizeMin?: number; teamSizeMax?: number; disqualifyIf: string[] }>;
+  reviewRequiredIcps: string[];
+  voiceProfile: { greeting: string; signOff: string; tone: string; sourceDomain?: string } | null;
+  subjectVariants: string[];
+  leadSources: { icp: string; fetcherType: "csv" | "apify" | "sales_nav"; dailyLimit?: number }[];
+  sendPlatform: { platform: string; baseUrl?: string } | null;
+  campaignMap: Record<string, string>;
+  autoPushIcps: string[];
+}
+
+export type DailySendDetail = { run: RunDetailBase; leads: ColdOpenLeadRow[] };
+export type ReplySortDetail = { run: RunDetailBase; replies: ColdOpenReplyRow[] };
+export type ColdOpenSetupDetail = { run: RunDetailBase; config: ColdOpenSetupConfigRow | null };
+
 // The 6 chat-only adhoc actions built this session (rep-engine-adhoc-check,
 // rep-crisis-stress-test, rep-draft-response, rep-twitter-deep-scan,
 // rep-trustpilot-deep-scan, rep-reddit-deep-scan) never had a matching case
@@ -353,4 +410,7 @@ export type RunDetailPayload =
   | RepRedditWatchDetail
   | RepTwitterWatchDetail
   | RepCrisisResponseDetail
-  | AdhocRunDetail;
+  | AdhocRunDetail
+  | DailySendDetail
+  | ReplySortDetail
+  | ColdOpenSetupDetail;

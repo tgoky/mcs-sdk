@@ -33,6 +33,9 @@ import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
 import { RepTwitterWatchView } from "./views/rep-twitter-watch-view";
 import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
 import { AdhocRunSummaryView } from "./views/adhoc-run-summary-view";
+import { DailySendView } from "./views/daily-send-view";
+import { ReplySortView } from "./views/reply-sort-view";
+import { ColdOpenSetupView } from "./views/cold-open-setup-view";
 import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
@@ -142,17 +145,24 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
     case "rep-twitter-deep-scan":
     case "rep-trustpilot-deep-scan":
     case "rep-reddit-deep-scan":
-    // Cold Open's 7 skills have no dedicated view (same reasoning as the
-    // 6 rep-adhoc actions above) — before this, none of these had a case
-    // here at all, so they fell to `default: <PinDownView>`, which
-    // silently rendered Pin-Down's Showtime page-builder UI against a
-    // cold-open run's detail payload (every Pin-Down-specific field null).
+    // Cold Open's 7 skills — daily-send and reply-sort now get real
+    // dedicated views (coldOpenLeads.runId gives Daily Send a genuine
+    // per-run scope; Reply Sort uses the same time-window scope the RM
+    // watch views above use for their own runId-less tables). The 4
+    // setup skills share one config-snapshot view, same "one view over
+    // the whole captured state" precedent rep-onboarding's case above
+    // set. Send Report stays on the generic summary view below — its
+    // real output already IS its own run summary (a rollup it computes
+    // fresh and logs each time), nothing else to show.
+    case "daily-send":
+      return "leads" in detail ? <DailySendView detail={detail} /> : null;
+    case "reply-sort":
+      return "replies" in detail ? <ReplySortView detail={detail} /> : null;
     case "icp-lock":
     case "voice-capture":
     case "source-connect":
     case "send-connect":
-    case "daily-send":
-    case "reply-sort":
+      return "config" in detail ? <ColdOpenSetupView detail={detail} /> : null;
     case "send-report":
       return <AdhocRunSummaryView detail={detail} />;
     case "pin-down":

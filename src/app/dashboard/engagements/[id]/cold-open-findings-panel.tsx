@@ -18,11 +18,27 @@
 // list + detail split, search, and status/disposition filter chips.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Send, MessageSquare, Search, RefreshCw, Clock, ExternalLink, Check, X, Loader2 } from "lucide-react";
+import { Send, MessageSquare, Search, RefreshCw, Clock, ExternalLink, Check, X, Loader2, Settings2, Target, Mic, Database, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
+import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
+import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
+import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
+import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
+import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
+import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
 import type { ColdOpenLeadStatus, ColdOpenReplyDisposition, ColdOpenPhaseKey, ColdOpenPhaseState, ColdOpenRunSummary } from "@/models/schema";
+
+type ConfigurableColdOpenSkill = "icp-lock" | "voice-capture" | "source-connect" | "send-connect" | "daily-send";
+
+const CONFIGURABLE_SKILLS: { id: ConfigurableColdOpenSkill; label: string; icon: typeof Target }[] = [
+  { id: "icp-lock", label: "ICP Lock", icon: Target },
+  { id: "voice-capture", label: "Voice Capture", icon: Mic },
+  { id: "source-connect", label: "Source Connect", icon: Database },
+  { id: "send-connect", label: "Send Connect", icon: Link2 },
+  { id: "daily-send", label: "Daily Send", icon: Send },
+];
 
 type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -144,6 +160,12 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
   const [data, setData] = useState<FindingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Configure entry point — every other skill with its own dedicated page
+  // (Pile-On, Win-Back, Leak-Map, Pre-Call-Read) puts a Configure menu
+  // directly on that page; this one had none, so the 5 configurable Cold
+  // Open skills were only reachable via the Library. Same inline-swap
+  // pattern WorkersPanel already uses for Configure, scoped to this page.
+  const [configuringSkill, setConfiguringSkill] = useState<ConfigurableColdOpenSkill | null>(null);
   const [tab, setTab] = useState<"sends" | "replies">("sends");
   const [filterText, setFilterText] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState<"all" | ColdOpenLeadStatus>("all");
@@ -264,6 +286,29 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
   const last7Days = data.last7Days;
   const totalReplies7d = Object.values(last7Days.repliesByDisposition).reduce((sum, n) => sum + n, 0);
 
+  if (configuringSkill) {
+    const close = () => {
+      setConfiguringSkill(null);
+      load();
+    };
+    return (
+      <div className="space-y-4 font-sans antialiased">
+        <button
+          type="button"
+          onClick={close}
+          className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+        >
+          <X className="w-3.5 h-3.5" /> Close — back to Cold Open
+        </button>
+        {configuringSkill === "icp-lock" && <IcpLockConfigForm engagementId={engagementId} onCancel={close} onSaved={close} cancelLabel="Close" />}
+        {configuringSkill === "voice-capture" && <VoiceCaptureConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
+        {configuringSkill === "source-connect" && <SourceConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
+        {configuringSkill === "send-connect" && <SendConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
+        {configuringSkill === "daily-send" && <DailySendConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
       {/* Pipeline status — the 7 phases, send platform, and last run's summary */}
@@ -367,14 +412,42 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-        >
-          <RefreshCw size={13} className={cn(loading && "animate-spin")} />
-        </button>
+        <div className="flex items-center gap-2">
+          <ActionMenu
+            trigger={({ toggle }) => (
+              <button
+                type="button"
+                onClick={toggle}
+                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <Settings2 size={13} /> Configure
+              </button>
+            )}
+          >
+            {(close) =>
+              CONFIGURABLE_SKILLS.map((skill) => (
+                <ActionMenuItem
+                  key={skill.id}
+                  icon={skill.icon}
+                  label={skill.label}
+                  onClick={() => {
+                    setConfiguringSkill(skill.id);
+                    close();
+                  }}
+                />
+              ))
+            }
+          </ActionMenu>
+
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
       {tab === "sends" ? (

@@ -15,6 +15,9 @@ import {
   repRedditMentions,
   repTwitterMentions,
   repIncidents,
+  coldOpenLeads,
+  coldOpenReplies,
+  coldOpenConfig,
 } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
@@ -219,6 +222,52 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           )
           .limit(1);
         return NextResponse.json({ run: row, incident: incident ?? null });
+      }
+
+      // Cold Open's 7 skills — same class of fix as the 5 RM skills above,
+      // just added later. Daily Send genuinely writes one row per lead
+      // per run (coldOpenLeads.runId), so it gets a real per-run scope,
+      // not a time window. Reply Sort's ingestion table has no runId
+      // column (replies arrive on their own schedule, not per-dispatch),
+      // so it uses the same [startedAt, completedAt ?? now] window scope
+      // the RM watch skills above already established. The 4 setup skills
+      // share one config-snapshot case — same "one view over the whole
+      // captured state" reasoning rep-onboarding's case above uses.
+      case "daily-send": {
+        const leads = await db
+          .select()
+          .from(coldOpenLeads)
+          .where(eq(coldOpenLeads.runId, row.id))
+          .orderBy(asc(coldOpenLeads.createdAt));
+        return NextResponse.json({ run: row, leads });
+      }
+
+      case "reply-sort": {
+        const windowEnd = row.completedAt ?? new Date();
+        const replies = await db
+          .select()
+          .from(coldOpenReplies)
+          .where(
+            and(
+              eq(coldOpenReplies.engagementId, row.engagementId),
+              gte(coldOpenReplies.classifiedAt, row.startedAt),
+              lte(coldOpenReplies.classifiedAt, windowEnd)
+            )
+          )
+          .orderBy(asc(coldOpenReplies.classifiedAt));
+        return NextResponse.json({ run: row, replies });
+      }
+
+      case "icp-lock":
+      case "voice-capture":
+      case "source-connect":
+      case "send-connect": {
+        const [config] = await db
+          .select()
+          .from(coldOpenConfig)
+          .where(eq(coldOpenConfig.engagementId, row.engagementId))
+          .limit(1);
+        return NextResponse.json({ run: row, config: config ?? null });
       }
 
       case "pin-down":

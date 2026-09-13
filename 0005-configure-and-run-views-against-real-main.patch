@@ -1,0 +1,605 @@
+diff --git a/src/app/api/skill-runs/[id]/detail/route.ts b/src/app/api/skill-runs/[id]/detail/route.ts
+index 0a76600..a821d8c 100644
+--- a/src/app/api/skill-runs/[id]/detail/route.ts
++++ b/src/app/api/skill-runs/[id]/detail/route.ts
+@@ -15,6 +15,9 @@ import {
+   repRedditMentions,
+   repTwitterMentions,
+   repIncidents,
++  coldOpenLeads,
++  coldOpenReplies,
++  coldOpenConfig,
+ } from "@/models/schema";
+ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+@@ -221,6 +224,52 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
+         return NextResponse.json({ run: row, incident: incident ?? null });
+       }
+ 
++      // Cold Open's 7 skills — same class of fix as the 5 RM skills above,
++      // just added later. Daily Send genuinely writes one row per lead
++      // per run (coldOpenLeads.runId), so it gets a real per-run scope,
++      // not a time window. Reply Sort's ingestion table has no runId
++      // column (replies arrive on their own schedule, not per-dispatch),
++      // so it uses the same [startedAt, completedAt ?? now] window scope
++      // the RM watch skills above already established. The 4 setup skills
++      // share one config-snapshot case — same "one view over the whole
++      // captured state" reasoning rep-onboarding's case above uses.
++      case "daily-send": {
++        const leads = await db
++          .select()
++          .from(coldOpenLeads)
++          .where(eq(coldOpenLeads.runId, row.id))
++          .orderBy(asc(coldOpenLeads.createdAt));
++        return NextResponse.json({ run: row, leads });
++      }
++
++      case "reply-sort": {
++        const windowEnd = row.completedAt ?? new Date();
++        const replies = await db
++          .select()
++          .from(coldOpenReplies)
++          .where(
++            and(
++              eq(coldOpenReplies.engagementId, row.engagementId),
++              gte(coldOpenReplies.classifiedAt, row.startedAt),
++              lte(coldOpenReplies.classifiedAt, windowEnd)
++            )
++          )
++          .orderBy(asc(coldOpenReplies.classifiedAt));
++        return NextResponse.json({ run: row, replies });
++      }
++
++      case "icp-lock":
++      case "voice-capture":
++      case "source-connect":
++      case "send-connect": {
++        const [config] = await db
++          .select()
++          .from(coldOpenConfig)
++          .where(eq(coldOpenConfig.engagementId, row.engagementId))
++          .limit(1);
++        return NextResponse.json({ run: row, config: config ?? null });
++      }
++
+       case "pin-down":
+       default:
+         return NextResponse.json({ run: row });
+diff --git a/src/app/dashboard/engagements/[id]/cold-open-findings-panel.tsx b/src/app/dashboard/engagements/[id]/cold-open-findings-panel.tsx
+index f04b69e..98effa8 100644
+--- a/src/app/dashboard/engagements/[id]/cold-open-findings-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/cold-open-findings-panel.tsx
+@@ -18,12 +18,28 @@
+ // list + detail split, search, and status/disposition filter chips.
+ 
+ import { useCallback, useEffect, useMemo, useState } from "react";
+-import { Send, MessageSquare, Search, RefreshCw, Clock, ExternalLink, Check, X, Loader2 } from "lucide-react";
++import { Send, MessageSquare, Search, RefreshCw, Clock, ExternalLink, Check, X, Loader2, Settings2, Target, Mic, Database, Link2 } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+ import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
++import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
++import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
++import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
++import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
++import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
++import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
+ import type { ColdOpenLeadStatus, ColdOpenReplyDisposition, ColdOpenPhaseKey, ColdOpenPhaseState, ColdOpenRunSummary } from "@/models/schema";
+ 
++type ConfigurableColdOpenSkill = "icp-lock" | "voice-capture" | "source-connect" | "send-connect" | "daily-send";
++
++const CONFIGURABLE_SKILLS: { id: ConfigurableColdOpenSkill; label: string; icon: typeof Target }[] = [
++  { id: "icp-lock", label: "ICP Lock", icon: Target },
++  { id: "voice-capture", label: "Voice Capture", icon: Mic },
++  { id: "source-connect", label: "Source Connect", icon: Database },
++  { id: "send-connect", label: "Send Connect", icon: Link2 },
++  { id: "daily-send", label: "Daily Send", icon: Send },
++];
++
+ type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+ 
+ type ColdOpenLeadRow = {
+@@ -144,6 +160,12 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
+   const [data, setData] = useState<FindingsData | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
++  // Configure entry point — every other skill with its own dedicated page
++  // (Pile-On, Win-Back, Leak-Map, Pre-Call-Read) puts a Configure menu
++  // directly on that page; this one had none, so the 5 configurable Cold
++  // Open skills were only reachable via the Library. Same inline-swap
++  // pattern WorkersPanel already uses for Configure, scoped to this page.
++  const [configuringSkill, setConfiguringSkill] = useState<ConfigurableColdOpenSkill | null>(null);
+   const [tab, setTab] = useState<"sends" | "replies">("sends");
+   const [filterText, setFilterText] = useState("");
+   const [leadStatusFilter, setLeadStatusFilter] = useState<"all" | ColdOpenLeadStatus>("all");
+@@ -264,6 +286,29 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
+   const last7Days = data.last7Days;
+   const totalReplies7d = Object.values(last7Days.repliesByDisposition).reduce((sum, n) => sum + n, 0);
+ 
++  if (configuringSkill) {
++    const close = () => {
++      setConfiguringSkill(null);
++      load();
++    };
++    return (
++      <div className="space-y-4 font-sans antialiased">
++        <button
++          type="button"
++          onClick={close}
++          className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
++        >
++          <X className="w-3.5 h-3.5" /> Close — back to Cold Open
++        </button>
++        {configuringSkill === "icp-lock" && <IcpLockConfigForm engagementId={engagementId} onCancel={close} onSaved={close} cancelLabel="Close" />}
++        {configuringSkill === "voice-capture" && <VoiceCaptureConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
++        {configuringSkill === "source-connect" && <SourceConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
++        {configuringSkill === "send-connect" && <SendConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
++        {configuringSkill === "daily-send" && <DailySendConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
++      </div>
++    );
++  }
++
+   return (
+     <div className="flex flex-col gap-3 font-sans antialiased">
+       {/* Pipeline status — the 7 phases, send platform, and last run's summary */}
+@@ -367,14 +412,42 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
+           </div>
+         </div>
+ 
+-        <button
+-          type="button"
+-          onClick={load}
+-          disabled={loading}
+-          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+-        >
+-          <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+-        </button>
++        <div className="flex items-center gap-2">
++          <ActionMenu
++            trigger={({ toggle }) => (
++              <button
++                type="button"
++                onClick={toggle}
++                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
++              >
++                <Settings2 size={13} /> Configure
++              </button>
++            )}
++          >
++            {(close) =>
++              CONFIGURABLE_SKILLS.map((skill) => (
++                <ActionMenuItem
++                  key={skill.id}
++                  icon={skill.icon}
++                  label={skill.label}
++                  onClick={() => {
++                    setConfiguringSkill(skill.id);
++                    close();
++                  }}
++                />
++              ))
++            }
++          </ActionMenu>
++
++          <button
++            type="button"
++            onClick={load}
++            disabled={loading}
++            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
++          >
++            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
++          </button>
++        </div>
+       </div>
+ 
+       {tab === "sends" ? (
+diff --git a/src/app/dashboard/runs/[id]/_shared/types.ts b/src/app/dashboard/runs/[id]/_shared/types.ts
+index 1826160..796770b 100644
+--- a/src/app/dashboard/runs/[id]/_shared/types.ts
++++ b/src/app/dashboard/runs/[id]/_shared/types.ts
+@@ -329,6 +329,63 @@ export type RepRedditWatchDetail = { run: RunDetailBase; mentions: RepRedditMent
+ export type RepTwitterWatchDetail = { run: RunDetailBase; mentions: RepTwitterMentionRow[] };
+ export type RepCrisisResponseDetail = { run: RunDetailBase; incident: RepIncidentRow | null };
+ 
++// ── Cold Open's own run-detail shapes ───────────────────────────────────
++// Fixes the same class of gap RM's 5 skills got fixed for: before this,
++// none of Cold Open's 7 skills had a case in the detail route's switch OR
++// this file's SkillView switch, so they fell to `default: <PinDownView>`
++// (already patched to route to the generic AdhocRunSummaryView instead —
++// see runs/[id]/page.tsx's own comment). Daily Send and Reply Sort DO
++// write to real per-engagement tables worth a dedicated view; the 4 setup
++// skills (ICP Lock, Voice Capture, Source Connect, Send Connect) share one
++// config-snapshot view, same "one view over the whole captured state"
++// precedent RepOnboardingDetail already set for rep-onboarding — a setup
++// run's value is "what got captured," not a time-scoped slice.
++
++export interface ColdOpenLeadRow {
++  id: string;
++  email: string;
++  domain: string;
++  companyName: string;
++  firstName: string | null;
++  lastName: string | null;
++  title: string | null;
++  icp: string | null;
++  source: string | null;
++  campaignId: string;
++  status: "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error" | "discarded";
++  statusDetail: unknown;
++  pushedAt: string | null;
++  createdAt: string;
++}
++
++export interface ColdOpenReplyRow {
++  id: string;
++  leadEmail: string;
++  campaignId: string | null;
++  disposition: "interested" | "not_now" | "not_a_fit" | "objection" | "auto_reply" | "unsubscribe" | "unclassified";
++  classificationSource: "heuristic" | "model" | "error" | "none";
++  rawBody: string;
++  routedToQueue: boolean;
++  classifiedAt: string;
++}
++
++export interface ColdOpenSetupConfigRow {
++  productIdentity: { name: string; url: string; price: string; valueProp: string } | null;
++  icps: { slug: string; label: string; weight: number }[];
++  sizingBounds: Record<string, { teamSizeMin?: number; teamSizeMax?: number; disqualifyIf: string[] }>;
++  reviewRequiredIcps: string[];
++  voiceProfile: { greeting: string; signOff: string; tone: string; sourceDomain?: string } | null;
++  subjectVariants: string[];
++  leadSources: { icp: string; fetcherType: "csv" | "apify" | "sales_nav"; dailyLimit?: number }[];
++  sendPlatform: { platform: string; baseUrl?: string } | null;
++  campaignMap: Record<string, string>;
++  autoPushIcps: string[];
++}
++
++export type DailySendDetail = { run: RunDetailBase; leads: ColdOpenLeadRow[] };
++export type ReplySortDetail = { run: RunDetailBase; replies: ColdOpenReplyRow[] };
++export type ColdOpenSetupDetail = { run: RunDetailBase; config: ColdOpenSetupConfigRow | null };
++
+ // The 6 chat-only adhoc actions built this session (rep-engine-adhoc-check,
+ // rep-crisis-stress-test, rep-draft-response, rep-twitter-deep-scan,
+ // rep-trustpilot-deep-scan, rep-reddit-deep-scan) never had a matching case
+@@ -353,4 +410,7 @@ export type RunDetailPayload =
+   | RepRedditWatchDetail
+   | RepTwitterWatchDetail
+   | RepCrisisResponseDetail
+-  | AdhocRunDetail;
++  | AdhocRunDetail
++  | DailySendDetail
++  | ReplySortDetail
++  | ColdOpenSetupDetail;
+diff --git a/src/app/dashboard/runs/[id]/page.tsx b/src/app/dashboard/runs/[id]/page.tsx
+index 7d25fd9..ac6c711 100644
+--- a/src/app/dashboard/runs/[id]/page.tsx
++++ b/src/app/dashboard/runs/[id]/page.tsx
+@@ -33,6 +33,9 @@ import { RepRedditWatchView } from "./views/rep-reddit-watch-view";
+ import { RepTwitterWatchView } from "./views/rep-twitter-watch-view";
+ import { RepCrisisResponseView } from "./views/rep-crisis-response-view";
+ import { AdhocRunSummaryView } from "./views/adhoc-run-summary-view";
++import { DailySendView } from "./views/daily-send-view";
++import { ReplySortView } from "./views/reply-sort-view";
++import { ColdOpenSetupView } from "./views/cold-open-setup-view";
+ import { runStatusLabel, RUN_DETAIL_COPY as copy } from "@/lib/copy";
+ import { anySkillDisplayName } from "@/lib/any-skill";
+ import { formatDiaryDateTime, formatReadableDuration } from "@/lib/format-datetime";
+@@ -142,17 +145,24 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
+     case "rep-twitter-deep-scan":
+     case "rep-trustpilot-deep-scan":
+     case "rep-reddit-deep-scan":
+-    // Cold Open's 7 skills have no dedicated view (same reasoning as the
+-    // 6 rep-adhoc actions above) — before this, none of these had a case
+-    // here at all, so they fell to `default: <PinDownView>`, which
+-    // silently rendered Pin-Down's Showtime page-builder UI against a
+-    // cold-open run's detail payload (every Pin-Down-specific field null).
++    // Cold Open's 7 skills — daily-send and reply-sort now get real
++    // dedicated views (coldOpenLeads.runId gives Daily Send a genuine
++    // per-run scope; Reply Sort uses the same time-window scope the RM
++    // watch views above use for their own runId-less tables). The 4
++    // setup skills share one config-snapshot view, same "one view over
++    // the whole captured state" precedent rep-onboarding's case above
++    // set. Send Report stays on the generic summary view below — its
++    // real output already IS its own run summary (a rollup it computes
++    // fresh and logs each time), nothing else to show.
++    case "daily-send":
++      return "leads" in detail ? <DailySendView detail={detail} /> : null;
++    case "reply-sort":
++      return "replies" in detail ? <ReplySortView detail={detail} /> : null;
+     case "icp-lock":
+     case "voice-capture":
+     case "source-connect":
+     case "send-connect":
+-    case "daily-send":
+-    case "reply-sort":
++      return "config" in detail ? <ColdOpenSetupView detail={detail} /> : null;
+     case "send-report":
+       return <AdhocRunSummaryView detail={detail} />;
+     case "pin-down":
+diff --git a/src/app/dashboard/runs/[id]/views/cold-open-setup-view.tsx b/src/app/dashboard/runs/[id]/views/cold-open-setup-view.tsx
+new file mode 100644
+index 0000000..b6ed045
+--- /dev/null
++++ b/src/app/dashboard/runs/[id]/views/cold-open-setup-view.tsx
+@@ -0,0 +1,116 @@
++"use client";
++
++// Shared run-detail view for Cold Open's 4 setup skills (ICP Lock, Voice
++// Capture, Source Connect, Send Connect) — same "one view over the whole
++// captured state" precedent RepOnboardingView already set for
++// rep-onboarding: a setup run's real value is what got captured, not a
++// time-scoped slice of an ingestion table (these skills have none).
++
++import { Target, Mic, Database, Send as SendIcon } from "lucide-react";
++import { EmptyState } from "../_shared/empty-state";
++import type { ColdOpenSetupDetail } from "../_shared/types";
++
++export function ColdOpenSetupView({ detail }: { detail: ColdOpenSetupDetail }) {
++  const { config } = detail;
++
++  if (!config) {
++    return (
++      <EmptyState
++        icon={Target}
++        title="No Cold Open config recorded"
++        description="This run either failed before its settings were saved, or ran before ICP Lock had been completed for this client."
++      />
++    );
++  }
++
++  return (
++    <div className="flex flex-col gap-4 font-sans antialiased">
++      {config.productIdentity && (
++        <div>
++          <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 mb-2">
++            <Target size={13} className="text-zinc-500 dark:text-zinc-500" />
++            <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">Product identity</h3>
++          </div>
++          <p className="text-xs text-zinc-800 dark:text-zinc-200 font-semibold">{config.productIdentity.name}</p>
++          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{config.productIdentity.valueProp}</p>
++          <p className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600 mt-1">
++            {config.productIdentity.url} · {config.productIdentity.price}
++          </p>
++        </div>
++      )}
++
++      {config.icps.length > 0 && (
++        <div>
++          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
++            ICPs ({config.icps.length})
++          </h3>
++          <div className="flex flex-wrap gap-1.5">
++            {config.icps.map((icp) => (
++              <span
++                key={icp.slug}
++                className="text-[11px] font-mono px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800"
++              >
++                {icp.label} <span className="text-zinc-400 dark:text-zinc-600">(weight {icp.weight})</span>
++                {config.reviewRequiredIcps.includes(icp.slug) && <span className="text-amber-600 dark:text-amber-400"> · review-required</span>}
++              </span>
++            ))}
++          </div>
++        </div>
++      )}
++
++      {config.voiceProfile && (
++        <div>
++          <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 mb-2">
++            <Mic size={13} className="text-zinc-500 dark:text-zinc-500" />
++            <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">Voice</h3>
++          </div>
++          <p className="text-xs text-zinc-600 dark:text-zinc-400">
++            <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tone:</span> {config.voiceProfile.tone}
++          </p>
++          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 italic">&ldquo;{config.voiceProfile.greeting}&rdquo;</p>
++          <p className="text-xs text-zinc-600 dark:text-zinc-400 italic">&ldquo;{config.voiceProfile.signOff}&rdquo;</p>
++          {config.subjectVariants.length > 0 && (
++            <p className="text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600 mt-1">{config.subjectVariants.length} subject variant(s)</p>
++          )}
++        </div>
++      )}
++
++      {config.leadSources.length > 0 && (
++        <div>
++          <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 mb-2">
++            <Database size={13} className="text-zinc-500 dark:text-zinc-500" />
++            <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">Lead sources</h3>
++          </div>
++          <div className="space-y-1.5">
++            {config.leadSources.map((src, i) => (
++              <p key={i} className="text-xs text-zinc-600 dark:text-zinc-400">
++                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{src.icp}</span> — {src.fetcherType}
++                {src.dailyLimit ? ` · up to ${src.dailyLimit}/day` : ""}
++              </p>
++            ))}
++          </div>
++        </div>
++      )}
++
++      {config.sendPlatform && (
++        <div>
++          <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 mb-2">
++            <SendIcon size={13} className="text-zinc-500 dark:text-zinc-500" />
++            <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">Send platform</h3>
++          </div>
++          <p className="text-xs text-zinc-800 dark:text-zinc-200 font-semibold">{config.sendPlatform.platform}</p>
++          {Object.keys(config.campaignMap).length > 0 && (
++            <div className="mt-1.5 space-y-0.5">
++              {Object.entries(config.campaignMap).map(([icp, campaignId]) => (
++                <p key={icp} className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
++                  {icp} → {campaignId}
++                  {config.autoPushIcps.includes(icp) && <span className="text-[#424d77] dark:text-[#c5b7ea]"> (auto-push)</span>}
++                </p>
++              ))}
++            </div>
++          )}
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/runs/[id]/views/daily-send-view.tsx b/src/app/dashboard/runs/[id]/views/daily-send-view.tsx
+new file mode 100644
+index 0000000..82b1f45
+--- /dev/null
++++ b/src/app/dashboard/runs/[id]/views/daily-send-view.tsx
+@@ -0,0 +1,80 @@
++"use client";
++
++// Daily Send's own run-detail view — the real, per-run scope
++// coldOpenLeads.runId makes possible (each lead row is tied to the exact
++// run that fetched/pushed it), same as Pile-On/Win-Back's own per-run
++// views. Before this existed, an individual Daily Send run fell to the
++// generic AdhocRunSummaryView — prose bullets ("pushed 18, held 2") with
++// no way to see which leads those actually were.
++
++import { Send } from "lucide-react";
++import { EmptyState } from "../_shared/empty-state";
++import { StatusPill } from "../_shared/status-pill";
++import type { DailySendDetail } from "../_shared/types";
++
++type Tone = "success" | "warning" | "danger" | "info" | "neutral";
++
++const LEAD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
++  pushed: { label: "Pushed", tone: "success" },
++  dry_run: { label: "Dry run", tone: "info" },
++  held: { label: "Held for review", tone: "warning" },
++  duplicate: { label: "Duplicate", tone: "neutral" },
++  skipped_dead: { label: "Skipped — dead lead", tone: "neutral" },
++  skipped_filtered: { label: "Skipped — filtered", tone: "neutral" },
++  error: { label: "Error", tone: "danger" },
++  discarded: { label: "Discarded", tone: "neutral" },
++};
++
++function leadName(l: DailySendDetail["leads"][number]): string {
++  const name = [l.firstName, l.lastName].filter(Boolean).join(" ").trim();
++  return name || l.email;
++}
++
++export function DailySendView({ detail }: { detail: DailySendDetail }) {
++  const { leads } = detail;
++
++  if (leads.length === 0) {
++    return (
++      <EmptyState
++        icon={Send}
++        title="No leads recorded for this run"
++        description="This run either fetched nothing new (every lead already on file was a duplicate) or failed before any lead was processed."
++      />
++    );
++  }
++
++  const pushed = leads.filter((l) => l.status === "pushed").length;
++  const held = leads.filter((l) => l.status === "held").length;
++  const errors = leads.filter((l) => l.status === "error").length;
++
++  return (
++    <div className="flex flex-col gap-2 font-sans antialiased">
++      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
++        {leads.length} lead{leads.length === 1 ? "" : "s"} · {pushed} pushed
++        {held > 0 ? ` · ${held} held` : ""}
++        {errors > 0 ? ` · ${errors} error(s)` : ""}
++      </p>
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
++        {leads.map((l) => {
++          const meta = LEAD_STATUS_META[l.status] ?? { label: l.status, tone: "neutral" as Tone };
++          return (
++            <div key={l.id} className="py-3 first:pt-0">
++              <div className="flex items-center justify-between gap-2 mb-1">
++                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{leadName(l)}</span>
++                <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
++              </div>
++              <p className="text-xs text-zinc-600 dark:text-zinc-400">
++                {l.companyName} {l.icp ? `· ${l.icp}` : ""} · {l.campaignId}
++              </p>
++              {l.status === "error" && l.statusDetail != null && (
++                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-mono break-all">
++                  {typeof l.statusDetail === "string" ? l.statusDetail : JSON.stringify(l.statusDetail)}
++                </p>
++              )}
++            </div>
++          );
++        })}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/dashboard/runs/[id]/views/reply-sort-view.tsx b/src/app/dashboard/runs/[id]/views/reply-sort-view.tsx
+new file mode 100644
+index 0000000..ee88754
+--- /dev/null
++++ b/src/app/dashboard/runs/[id]/views/reply-sort-view.tsx
+@@ -0,0 +1,73 @@
++"use client";
++
++// Reply Sort's own run-detail view. coldOpenReplies has no runId column
++// (replies arrive on their own schedule via the ESP's inbox, not tied to
++// a specific dispatch the way a pushed lead is) — scoped to this run's
++// own [startedAt, completedAt] window instead, same convention the RM
++// watch views already use for their own runId-less ingestion tables.
++
++import { MessageSquare, ExternalLink } from "lucide-react";
++import { EmptyState } from "../_shared/empty-state";
++import { StatusPill } from "../_shared/status-pill";
++import type { ReplySortDetail } from "../_shared/types";
++
++type Tone = "success" | "warning" | "danger" | "info" | "neutral";
++
++const DISPOSITION_META: Record<string, { label: string; tone: Tone }> = {
++  interested: { label: "Interested", tone: "success" },
++  objection: { label: "Objection", tone: "warning" },
++  not_now: { label: "Not now", tone: "info" },
++  not_a_fit: { label: "Not a fit", tone: "neutral" },
++  auto_reply: { label: "Auto-reply", tone: "neutral" },
++  unsubscribe: { label: "Unsubscribe", tone: "neutral" },
++  unclassified: { label: "Unclassified — needs review", tone: "danger" },
++};
++
++export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
++  const { replies } = detail;
++
++  if (replies.length === 0) {
++    return (
++      <EmptyState
++        icon={MessageSquare}
++        title="No replies classified in this run"
++        description="No new replies came in during this run's window — a normal, healthy outcome, not a failure."
++      />
++    );
++  }
++
++  const routed = replies.filter((r) => r.routedToQueue).length;
++
++  return (
++    <div className="flex flex-col gap-2 font-sans antialiased">
++      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
++        {replies.length} repl{replies.length === 1 ? "y" : "ies"} classified{routed > 0 ? ` · ${routed} routed to Queue` : ""}
++      </p>
++      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
++        {replies.map((r) => {
++          const meta = DISPOSITION_META[r.disposition] ?? { label: r.disposition, tone: "neutral" as Tone };
++          return (
++            <div key={r.id} className="py-3 first:pt-0">
++              <div className="flex items-center justify-between gap-2 mb-1">
++                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{r.leadEmail}</span>
++                <div className="flex items-center gap-1.5">
++                  <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
++                  {r.routedToQueue && (
++                    <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
++                      Queue <ExternalLink size={10} />
++                    </a>
++                  )}
++                </div>
++              </div>
++              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{r.rawBody}</p>
++              <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 mt-1">
++                classified via {r.classificationSource}
++                {r.campaignId ? ` · ${r.campaignId}` : ""}
++              </p>
++            </div>
++          );
++        })}
++      </div>
++    </div>
++  );
++}
