@@ -5,7 +5,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { engagements, repIncidents } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { RESPONSE_POSTURES, type ResponsePostureId } from "@/features/reputation-manager/rep-thresholds";
 import { draftForChosenPosture } from "@/features/reputation-manager/server/response-routing";
 
@@ -64,11 +64,36 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  if (incident.selectedPosture) {
-    return NextResponse.json({ error: `A posture (${incident.selectedPosture}) has already been chosen for this incident.` }, { status: 409 });
-  }
+  // Atomic claim, not check-then-act: the plain SELECT above followed by
+  // an unconditional UPDATE let two concurrent requests for the same
+  // incident (a double-click, two tabs open on the same incident, a
+  // client retry after a slow/dropped response) both read
+  // selectedPosture: null and both go on to write it and call
+  // draftForChosenPosture below — two LLM-drafted responses queued as two
+  // separate pending actions for the same tier-3 incident, exactly the
+  // "double the operator's Approve queue" failure mode already fixed for
+  // held-leads' double-click race and approval-gate's double-decide race
+  // elsewhere in this codebase. The UPDATE's own WHERE clause is the
+  // lock-free compare-and-swap: only the request that finds
+  // selectedPosture still null gets to set it, so only one caller ever
+  // proceeds past this point.
+  const [claimed] = await db
+    .update(repIncidents)
+    .set({ selectedPosture: posture })
+    .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.engagementId, engagementId), isNull(repIncidents.selectedPosture)))
+    .returning({ selectedPosture: repIncidents.selectedPosture });
 
-  await db.update(repIncidents).set({ selectedPosture: posture }).where(eq(repIncidents.id, incidentId));
+  if (!claimed) {
+    const [current] = await db
+      .select({ selectedPosture: repIncidents.selectedPosture })
+      .from(repIncidents)
+      .where(eq(repIncidents.id, incidentId))
+      .limit(1);
+    return NextResponse.json(
+      { error: `A posture (${current?.selectedPosture ?? "unknown"}) has already been chosen for this incident.` },
+      { status: 409 }
+    );
+  }
 
   if (posture === "escalate_externally") {
     // The one posture that isn't "draft something" — the operator decided
