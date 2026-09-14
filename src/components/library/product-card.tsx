@@ -20,6 +20,7 @@ import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import { HOME_COPY } from "@/lib/copy";
 import { StatChip } from "@/components/library/stat-chip";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function ProductCard({
   productId,
@@ -47,6 +48,7 @@ export function ProductCard({
   successRate: number | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,8 +61,10 @@ export function ProductCard({
       if (!res.ok) throw new Error(body.error ?? `Could not ${installed ? "uninstall" : "install"} ${name}.`);
       if (installed) {
         // Uninstalling: stay put, just refresh this card's state.
+        toast.success(`${name} uninstalled.`);
         router.refresh();
       } else {
+        toast.success(`${name} installed.`);
         // Installing: a silent grid refresh left people staring at a
         // relabeled button with no next step — go straight to the
         // product's own page, where its first (onboarding) skill is

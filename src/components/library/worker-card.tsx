@@ -11,6 +11,7 @@ import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { EnablePileOnModal } from "./enable-worker-modal";
 import { ProductOnboardingGateModal } from "./product-onboarding-gate-modal";
+import { useToast } from "@/components/toast/toast-provider";
 
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   showtime: "Showtime",
@@ -98,6 +99,7 @@ export function WorkerCard({
   productOnboardingSkipDismissed?: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEnableModal, setShowEnableModal] = useState(false);
@@ -156,6 +158,7 @@ export function WorkerCard({
         }
         throw new Error(body.error ?? `Could not enable ${worker.name}.`);
       }
+      toast.success(`${worker.name} enabled.`);
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);

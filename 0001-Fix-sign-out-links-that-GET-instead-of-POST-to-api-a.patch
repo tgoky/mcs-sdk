@@ -1,0 +1,125 @@
+From 748b70e14bb7638f3dc82bfbde522abeb311e4da Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 14 Sep 2026 12:39:39 +0000
+Subject: [PATCH 1/2] Fix sign-out links that GET instead of POST to
+ /api/auth/logout
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The logout route only handles POST, but the mobile nav sign-out link
+and the workspace home page sign-out link were plain <a>/<Link>
+navigations (GET), which 405'd against the route and left the session
+cookie intact — users appeared to sign out but stayed logged in.
+Switch both to POST forms, matching the working desktop sign-out in
+primary-rail.tsx.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QxF9pja3hAyT4tJNN6dTRK
+---
+ src/app/dashboard/mobile-nav.tsx | 15 ++++++++-------
+ src/app/home/page.tsx            | 16 ++++++++--------
+ tests/unit/home-page.test.tsx    |  6 ++++--
+ tests/unit/mobile-nav.test.tsx   |  6 ++++--
+ 4 files changed, 24 insertions(+), 19 deletions(-)
+
+diff --git a/src/app/dashboard/mobile-nav.tsx b/src/app/dashboard/mobile-nav.tsx
+index 67451f5..0a22581 100644
+--- a/src/app/dashboard/mobile-nav.tsx
++++ b/src/app/dashboard/mobile-nav.tsx
+@@ -69,13 +69,14 @@ export function MobileNav({ links, displayName }: { links: NavLink[]; displayNam
+                 <span className="text-sm text-zinc-800 dark:text-zinc-300 font-bold font-mono truncate max-w-[160px]">
+                   {displayName}
+                 </span>
+-                <a
+-                  href="/api/auth/logout"
+-             
+-                  className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+-                >
+-                  Sign out
+-                </a>
++                <form action="/api/auth/logout" method="POST">
++                  <button
++                    type="submit"
++                    className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors bg-transparent border-none cursor-pointer"
++                  >
++                    Sign out
++                  </button>
++                </form>
+               </div>
+             )}
+           </div>
+diff --git a/src/app/home/page.tsx b/src/app/home/page.tsx
+index 57c9830..ae9cb93 100644
+--- a/src/app/home/page.tsx
++++ b/src/app/home/page.tsx
+@@ -1,5 +1,4 @@
+ import { getSession } from "@/lib/session";
+-import Link from "next/link";
+ import { ThemeToggle } from "@/components/theme-toggle";
+ import { HOME_COPY } from "@/lib/copy";
+ import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+@@ -82,13 +81,14 @@ export default async function WorkspaceHomePage() {
+             </div>
+             <div className="flex items-center gap-3">
+               <ThemeToggle />
+-              <Link
+-                href="/api/auth/logout"
+-                prefetch={false}
+-                className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900"
+-              >
+-                {HOME_COPY.signOut}
+-              </Link>
++              <form action="/api/auth/logout" method="POST">
++                <button
++                  type="submit"
++                  className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent border-none cursor-pointer"
++                >
++                  {HOME_COPY.signOut}
++                </button>
++              </form>
+             </div>
+           </header>
+ 
+diff --git a/tests/unit/home-page.test.tsx b/tests/unit/home-page.test.tsx
+index 18b1163..a4b7f02 100644
+--- a/tests/unit/home-page.test.tsx
++++ b/tests/unit/home-page.test.tsx
+@@ -46,10 +46,12 @@ describe("WorkspaceHomePage", () => {
+     expect(screen.getByRole("button", { name: /Open Reputation Manager/ })).not.toBeDisabled();
+   });
+ 
+-  it("provides a sign-out link", async () => {
++  it("provides a sign-out control that posts to the logout route", async () => {
+     vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
+     await renderHomePage();
+-    expect(screen.getByText("Sign out").closest("a")).toHaveAttribute("href", "/api/auth/logout");
++    const form = screen.getByText("Sign out").closest("form");
++    expect(form).toHaveAttribute("action", "/api/auth/logout");
++    expect(form).toHaveAttribute("method", "POST");
+   });
+ 
+   it("never reintroduces the old animated/pulsing decorative elements", async () => {
+diff --git a/tests/unit/mobile-nav.test.tsx b/tests/unit/mobile-nav.test.tsx
+index 9be8599..d6fd666 100644
+--- a/tests/unit/mobile-nav.test.tsx
++++ b/tests/unit/mobile-nav.test.tsx
+@@ -37,11 +37,13 @@ describe("MobileNav", () => {
+     }
+   });
+ 
+-  it("shows the display name and a sign-out link when provided", () => {
++  it("shows the display name and a sign-out control that posts to the logout route", () => {
+     render(<MobileNav links={links} displayName="alex" />);
+     fireEvent.click(screen.getByLabelText("Toggle menu"));
+     expect(screen.getByText("alex")).toBeInTheDocument();
+-    expect(screen.getByText("Sign out").closest("a")).toHaveAttribute("href", "/api/auth/logout");
++    const form = screen.getByText("Sign out").closest("form");
++    expect(form).toHaveAttribute("action", "/api/auth/logout");
++    expect(form).toHaveAttribute("method", "POST");
+   });
+ 
+   it("omits the user footer entirely when no displayName is given", () => {
+-- 
+2.43.0
+

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Whop Agent">
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#18181b"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="none" stroke="#3f3f46" stroke-width="1"/>
+  <circle cx="22" cy="32" r="8" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+  <circle cx="42" cy="32" r="8" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+  <path d="M29 32 L35 32" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

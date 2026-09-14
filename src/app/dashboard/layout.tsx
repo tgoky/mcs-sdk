@@ -10,6 +10,7 @@ import { getUserAvatar } from "@/lib/user-avatar";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 import { TourProvider } from "@/components/tours/tour-provider";
 import { TourOverlay } from "@/components/tours/tour-overlay";
+import { ToastProvider } from "@/components/toast/toast-provider";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -64,7 +65,8 @@ export default async function DashboardLayout({
 
   return (
     <BreadcrumbProvider>
-      <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
+      <ToastProvider>
+        <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
         {/* Real-time booking toast listener */}
         <BookingToast />
 
@@ -96,6 +98,7 @@ export default async function DashboardLayout({
 
         <TourOverlay />
       </TourProvider>
+      </ToastProvider>
     </BreadcrumbProvider>
   );
 }

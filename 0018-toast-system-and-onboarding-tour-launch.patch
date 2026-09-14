@@ -1,0 +1,346 @@
+diff --git a/src/app/dashboard/engagements/[id]/workers-panel.tsx b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+index 79d4ecb..0326d67 100644
+--- a/src/app/dashboard/engagements/[id]/workers-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+@@ -28,6 +28,7 @@ import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/wh
+ import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
+ import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
+ import type { ProductId } from "@/lib/product-catalog";
++import { useToast } from "@/components/toast/toast-provider";
+ 
+ /**
+  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
+@@ -110,6 +111,7 @@ export function WorkersPanel({
+   productOnboardingSkipDismissed?: Partial<Record<ProductId, boolean>>;
+ }) {
+   const router = useRouter();
++  const toast = useToast();
+   const [states, setStates] = useState<Record<string, boolean>>(initialStates);
+   const [skipDismissed, setSkipDismissed] = useState<Partial<Record<ProductId, boolean>>>(productOnboardingSkipDismissed);
+   const [gateWorkerId, setGateWorkerId] = useState<WorkerId | null>(null);
+@@ -167,6 +169,7 @@ export function WorkersPanel({
+             setGateWorkerId(workerId);
+           }
+         } else {
++          toast.success(`${WORKER_REGISTRY[workerId].name} ${nextState ? "enabled" : "disabled"}.`);
+           router.refresh();
+         }
+       } catch {
+diff --git a/src/app/dashboard/layout.tsx b/src/app/dashboard/layout.tsx
+index 2162f40..68901d2 100644
+--- a/src/app/dashboard/layout.tsx
++++ b/src/app/dashboard/layout.tsx
+@@ -10,6 +10,7 @@ import { getUserAvatar } from "@/lib/user-avatar";
+ import { MobileNavPill } from "@/components/mobile-nav-pill";
+ import { TourProvider } from "@/components/tours/tour-provider";
+ import { TourOverlay } from "@/components/tours/tour-overlay";
++import { ToastProvider } from "@/components/toast/toast-provider";
+ import { db } from "@/lib/db";
+ import { engagements, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+@@ -64,7 +65,8 @@ export default async function DashboardLayout({
+ 
+   return (
+     <BreadcrumbProvider>
+-      <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
++      <ToastProvider>
++        <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
+         {/* Real-time booking toast listener */}
+         <BookingToast />
+ 
+@@ -96,6 +98,7 @@ export default async function DashboardLayout({
+ 
+         <TourOverlay />
+       </TourProvider>
++      </ToastProvider>
+     </BreadcrumbProvider>
+   );
+ }
+diff --git a/src/components/library/product-card.tsx b/src/components/library/product-card.tsx
+index 71ae76a..1b4f1f2 100644
+--- a/src/components/library/product-card.tsx
++++ b/src/components/library/product-card.tsx
+@@ -20,6 +20,7 @@ import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+ import { HOME_COPY } from "@/lib/copy";
+ import { StatChip } from "@/components/library/stat-chip";
+ import { AnySkillBadge } from "@/components/any-skill-badge";
++import { useToast } from "@/components/toast/toast-provider";
+ 
+ export function ProductCard({
+   productId,
+@@ -47,6 +48,7 @@ export function ProductCard({
+   successRate: number | null;
+ }) {
+   const router = useRouter();
++  const toast = useToast();
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+@@ -59,8 +61,10 @@ export function ProductCard({
+       if (!res.ok) throw new Error(body.error ?? `Could not ${installed ? "uninstall" : "install"} ${name}.`);
+       if (installed) {
+         // Uninstalling: stay put, just refresh this card's state.
++        toast.success(`${name} uninstalled.`);
+         router.refresh();
+       } else {
++        toast.success(`${name} installed.`);
+         // Installing: a silent grid refresh left people staring at a
+         // relabeled button with no next step — go straight to the
+         // product's own page, where its first (onboarding) skill is
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 4ce0ed6..3aaa50d 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -11,6 +11,7 @@ import type { SkillPlaybook } from "@/lib/skill-playbooks";
+ import { AnySkillBadge } from "@/components/any-skill-badge";
+ import { EnablePileOnModal } from "./enable-worker-modal";
+ import { ProductOnboardingGateModal } from "./product-onboarding-gate-modal";
++import { useToast } from "@/components/toast/toast-provider";
+ 
+ const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
+   showtime: "Showtime",
+@@ -98,6 +99,7 @@ export function WorkerCard({
+   productOnboardingSkipDismissed?: boolean;
+ }) {
+   const router = useRouter();
++  const toast = useToast();
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const [showEnableModal, setShowEnableModal] = useState(false);
+@@ -156,6 +158,7 @@ export function WorkerCard({
+         }
+         throw new Error(body.error ?? `Could not enable ${worker.name}.`);
+       }
++      toast.success(`${worker.name} enabled.`);
+       router.refresh();
+     } catch (cause) {
+       setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);
+diff --git a/src/components/toast/toast-provider.tsx b/src/components/toast/toast-provider.tsx
+new file mode 100644
+index 0000000..710d36c
+--- /dev/null
++++ b/src/components/toast/toast-provider.tsx
+@@ -0,0 +1,102 @@
++"use client";
++
++// The generic "that actually did something" signal every enable/save/
++// delete action in this app was missing — most of them just called
++// router.refresh() on success and left the user to notice a re-rendered
++// button, or nothing changed at all if the update was purely server-
++// side state. Mounted once in dashboard/layout.tsx (survives route
++// changes, same reasoning as TourProvider) so any client component
++// anywhere under /dashboard can call useToast().success(...) without
++// its own portal/state plumbing.
++//
++// Deliberately NOT the same corner as booking-toast.tsx's real-time
++// booking/rebooking alerts (top-right) — this stack lives bottom-right
++// so a "Saved" confirmation from something you just clicked never
++// visually collides with an unrelated live event arriving at the same
++// moment.
++
++import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
++import { createPortal } from "react-dom";
++import { CheckCircle2, XCircle, X } from "lucide-react";
++
++interface ToastEntry {
++  id: number;
++  kind: "success" | "error";
++  message: string;
++}
++
++interface ToastContextValue {
++  success: (message: string) => void;
++  error: (message: string) => void;
++}
++
++const ToastContext = createContext<ToastContextValue | null>(null);
++
++const LIFETIME_MS = 3200;
++
++export function useToast() {
++  const ctx = useContext(ToastContext);
++  if (!ctx) throw new Error("useToast must be used within ToastProvider");
++  return ctx;
++}
++
++let nextId = 0;
++
++export function ToastProvider({ children }: { children: ReactNode }) {
++  const [toasts, setToasts] = useState<ToastEntry[]>([]);
++
++  const dismiss = useCallback((id: number) => {
++    setToasts((prev) => prev.filter((t) => t.id !== id));
++  }, []);
++
++  const push = useCallback(
++    (kind: ToastEntry["kind"], message: string) => {
++      const id = ++nextId;
++      setToasts((prev) => [...prev, { id, kind, message }]);
++      setTimeout(() => dismiss(id), LIFETIME_MS);
++    },
++    [dismiss]
++  );
++
++  const value: ToastContextValue = {
++    success: useCallback((message: string) => push("success", message), [push]),
++    error: useCallback((message: string) => push("error", message), [push]),
++  };
++
++  return (
++    <ToastContext.Provider value={value}>
++      {children}
++      {typeof document !== "undefined" &&
++        createPortal(
++          <div className="fixed bottom-4 right-4 z-[9996] flex flex-col-reverse gap-2 w-72 pointer-events-none font-sans antialiased">
++            {toasts.map((t) => (
++              <div
++                key={t.id}
++                className={`pointer-events-auto flex items-start gap-2.5 rounded-lg border shadow-lg px-3 py-2.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 ${
++                  t.kind === "success"
++                    ? "bg-background border-emerald-200 dark:border-emerald-900/60"
++                    : "bg-background border-rose-200 dark:border-rose-900/60"
++                }`}
++              >
++                {t.kind === "success" ? (
++                  <CheckCircle2 size={16} className="text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
++                ) : (
++                  <XCircle size={16} className="text-rose-500 dark:text-rose-400 shrink-0 mt-0.5" />
++                )}
++                <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-snug flex-1 min-w-0">{t.message}</p>
++                <button
++                  type="button"
++                  onClick={() => dismiss(t.id)}
++                  aria-label="Dismiss"
++                  className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer shrink-0 -m-0.5 p-0.5"
++                >
++                  <X size={12} />
++                </button>
++              </div>
++            ))}
++          </div>,
++          document.body
++        )}
++    </ToastContext.Provider>
++  );
++}
+diff --git a/src/components/worker-config-forms/icp-lock-config-form.tsx b/src/components/worker-config-forms/icp-lock-config-form.tsx
+index fd74932..e080f3e 100644
+--- a/src/components/worker-config-forms/icp-lock-config-form.tsx
++++ b/src/components/worker-config-forms/icp-lock-config-form.tsx
+@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
+ import { InputField } from "@/app/dashboard/engagements/new/form-fields";
+ import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
++import { useTour } from "@/components/tours/tour-provider";
+ 
+ type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
+ 
+@@ -37,6 +38,7 @@ export function IcpLockConfigForm({
+   cancelLabel?: string;
+ }) {
+   const router = useRouter();
++  const { start: startTour } = useTour();
+   const [loading, setLoading] = useState(true);
+   const [loadError, setLoadError] = useState<string | null>(null);
+   const [buyer, setBuyer] = useState("");
+@@ -140,6 +142,10 @@ export function IcpLockConfigForm({
+       const data = await res.json();
+       if (!res.ok) throw new Error(data.error ?? "Failed to save");
+       router.refresh();
++      // Cold Open's own onboarding just finished — auto-launch its tour
++      // (no-op if this engagement isn't the workspace's primary one,
++      // same guard every other tour entry point relies on).
++      startTour("cold-open");
+       if (onSaved) onSaved({ runId: data.runId });
+       else onCancel();
+     } catch (e) {
+diff --git a/src/components/worker-config-forms/pin-down-config-form.tsx b/src/components/worker-config-forms/pin-down-config-form.tsx
+index f2181af..5ecf872 100644
+--- a/src/components/worker-config-forms/pin-down-config-form.tsx
++++ b/src/components/worker-config-forms/pin-down-config-form.tsx
+@@ -17,6 +17,7 @@ import { TemplatePicker } from "@/app/dashboard/engagements/new/steps/template-p
+ import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new/types";
+ import { DEFAULT_FORM } from "@/app/dashboard/engagements/new/constants";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
++import { useTour } from "@/components/tours/tour-provider";
+ 
+ export function PinDownConfigForm({
+   engagementId,
+@@ -29,6 +30,7 @@ export function PinDownConfigForm({
+   onSaved: (result: { runId?: string }) => void;
+   cancelLabel?: string;
+ }) {
++  const { start: startTour } = useTour();
+   const [loading, setLoading] = useState(true);
+   const [loadError, setLoadError] = useState<string | null>(null);
+   const [buyer, setBuyer] = useState("");
+@@ -123,6 +125,11 @@ export function PinDownConfigForm({
+         setSaving(false);
+         return;
+       }
++      // Showtime's own onboarding just finished — auto-launch its tour
++      // wherever onSaved below navigates. start() is a no-op if this
++      // engagement isn't the workspace's primary one (nothing to scope
++      // the tour to), same guard every other tour entry point relies on.
++      startTour("showtime");
+       onSaved({ runId: data.runId });
+     } catch (e: unknown) {
+       const message = e instanceof Error ? e.message : "Unknown error";
+diff --git a/src/components/worker-config-forms/rep-onboarding-config-form.tsx b/src/components/worker-config-forms/rep-onboarding-config-form.tsx
+index 36ca6c8..592f7e5 100644
+--- a/src/components/worker-config-forms/rep-onboarding-config-form.tsx
++++ b/src/components/worker-config-forms/rep-onboarding-config-form.tsx
+@@ -20,9 +20,11 @@ import {
+ } from "@/features/reputation-manager/identity-graph-form";
+ import type { RepCollision } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
++import { useTour } from "@/components/tours/tour-provider";
+ 
+ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
+   const router = useRouter();
++  const { start: startTour } = useTour();
+ 
+   const [loading, setLoading] = useState(true);
+   const [loadError, setLoadError] = useState<string | null>(null);
+@@ -80,6 +82,10 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
+       if (!res.ok) throw new Error(data.error ?? "Failed to save");
+       setSaved(true);
+       setWasDisabled(false);
++      // Reputation Manager's own onboarding just finished — auto-launch
++      // its tour (no-op if this engagement isn't the workspace's primary
++      // one, same guard every other tour entry point relies on).
++      startTour("reputation-manager");
+       router.refresh();
+     } catch (e) {
+       setSaveError(e instanceof Error ? e.message : "Failed to save");
+diff --git a/src/components/worker-config-forms/whop-connect-config-form.tsx b/src/components/worker-config-forms/whop-connect-config-form.tsx
+index 62c1819..d840e0b 100644
+--- a/src/components/worker-config-forms/whop-connect-config-form.tsx
++++ b/src/components/worker-config-forms/whop-connect-config-form.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useEffect, useState } from "react";
+ import { CheckCircle2, XCircle, Loader2, ShieldAlert } from "lucide-react";
++import { useTour } from "@/components/tours/tour-provider";
+ 
+ interface ScopeProbeResult {
+   ok: boolean;
+@@ -42,6 +43,7 @@ const PROBE_LABELS: Record<string, { label: string; locksWhat: string }> = {
+ };
+ 
+ export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId: string; onSaved?: () => void }) {
++  const { start: startTour } = useTour();
+   const [state, setState] = useState<ConnectState | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [apiKey, setApiKey] = useState("");
+@@ -83,6 +85,10 @@ export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId:
+         pinnedVersionDate: body.pinnedVersionDate,
+         circuitBreakerState: "closed",
+       });
++      // Whop Agent's own onboarding just finished — auto-launch its tour
++      // (no-op if this engagement isn't the workspace's primary one,
++      // same guard every other tour entry point relies on).
++      startTour("whop-agent");
+       onSaved?.();
+     } catch {
+       setError("Network error while connecting to Whop.");

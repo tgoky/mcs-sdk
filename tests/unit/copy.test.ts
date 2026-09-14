@@ -133,10 +133,12 @@ describe("HOME_COPY / WORKSPACE_PRODUCTS", () => {
     }
   });
 
-  it("exposes the two currently installable products at their own entry points", () => {
+  it("exposes the currently installable products at their own entry points", () => {
     const available = WORKSPACE_PRODUCTS.filter((p) => p.status === "available");
-    expect(available.map((p) => p.id).sort()).toEqual(["reputation-manager", "showtime"]);
+    expect(available.map((p) => p.id).sort()).toEqual(["cold-open", "reputation-manager", "showtime", "whop-agent"]);
     expect(available.find((p) => p.id === "showtime")?.href).toBe("/dashboard");
     expect(available.find((p) => p.id === "reputation-manager")?.href).toBe("/dashboard/reputation-manager");
+    expect(available.find((p) => p.id === "cold-open")?.href).toBe("/dashboard/library/cold-open");
+    expect(available.find((p) => p.id === "whop-agent")?.href).toBe("/dashboard/library/whop-agent");
   });
 });

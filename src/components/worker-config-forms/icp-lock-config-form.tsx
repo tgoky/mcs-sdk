@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useTour } from "@/components/tours/tour-provider";
 
 type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
 
@@ -37,6 +38,7 @@ export function IcpLockConfigForm({
   cancelLabel?: string;
 }) {
   const router = useRouter();
+  const { start: startTour } = useTour();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
@@ -140,6 +142,10 @@ export function IcpLockConfigForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       router.refresh();
+      // Cold Open's own onboarding just finished — auto-launch its tour
+      // (no-op if this engagement isn't the workspace's primary one,
+      // same guard every other tour entry point relies on).
+      startTour("cold-open");
       if (onSaved) onSaved({ runId: data.runId });
       else onCancel();
     } catch (e) {

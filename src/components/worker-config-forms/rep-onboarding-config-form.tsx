@@ -20,9 +20,11 @@ import {
 } from "@/features/reputation-manager/identity-graph-form";
 import type { RepCollision } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useTour } from "@/components/tours/tour-provider";
 
 export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
   const router = useRouter();
+  const { start: startTour } = useTour();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,6 +82,10 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSaved(true);
       setWasDisabled(false);
+      // Reputation Manager's own onboarding just finished — auto-launch
+      // its tour (no-op if this engagement isn't the workspace's primary
+      // one, same guard every other tour entry point relies on).
+      startTour("reputation-manager");
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");

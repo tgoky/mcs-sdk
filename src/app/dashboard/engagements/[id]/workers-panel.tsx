@@ -28,6 +28,7 @@ import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/wh
 import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
 import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -110,6 +111,7 @@ export function WorkersPanel({
   productOnboardingSkipDismissed?: Partial<Record<ProductId, boolean>>;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [states, setStates] = useState<Record<string, boolean>>(initialStates);
   const [skipDismissed, setSkipDismissed] = useState<Partial<Record<ProductId, boolean>>>(productOnboardingSkipDismissed);
   const [gateWorkerId, setGateWorkerId] = useState<WorkerId | null>(null);
@@ -167,6 +169,7 @@ export function WorkersPanel({
             setGateWorkerId(workerId);
           }
         } else {
+          toast.success(`${WORKER_REGISTRY[workerId].name} ${nextState ? "enabled" : "disabled"}.`);
           router.refresh();
         }
       } catch {

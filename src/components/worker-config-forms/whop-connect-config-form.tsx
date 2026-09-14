@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Loader2, ShieldAlert } from "lucide-react";
+import { useTour } from "@/components/tours/tour-provider";
 
 interface ScopeProbeResult {
   ok: boolean;
@@ -42,6 +43,7 @@ const PROBE_LABELS: Record<string, { label: string; locksWhat: string }> = {
 };
 
 export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId: string; onSaved?: () => void }) {
+  const { start: startTour } = useTour();
   const [state, setState] = useState<ConnectState | null>(null);
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState("");
@@ -83,6 +85,10 @@ export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId:
         pinnedVersionDate: body.pinnedVersionDate,
         circuitBreakerState: "closed",
       });
+      // Whop Agent's own onboarding just finished — auto-launch its tour
+      // (no-op if this engagement isn't the workspace's primary one,
+      // same guard every other tour entry point relies on).
+      startTour("whop-agent");
       onSaved?.();
     } catch {
       setError("Network error while connecting to Whop.");

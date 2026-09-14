@@ -17,6 +17,7 @@ import { TemplatePicker } from "@/app/dashboard/engagements/new/steps/template-p
 import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new/types";
 import { DEFAULT_FORM } from "@/app/dashboard/engagements/new/constants";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useTour } from "@/components/tours/tour-provider";
 
 export function PinDownConfigForm({
   engagementId,
@@ -29,6 +30,7 @@ export function PinDownConfigForm({
   onSaved: (result: { runId?: string }) => void;
   cancelLabel?: string;
 }) {
+  const { start: startTour } = useTour();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
@@ -123,6 +125,11 @@ export function PinDownConfigForm({
         setSaving(false);
         return;
       }
+      // Showtime's own onboarding just finished — auto-launch its tour
+      // wherever onSaved below navigates. start() is a no-op if this
+      // engagement isn't the workspace's primary one (nothing to scope
+      // the tour to), same guard every other tour entry point relies on.
+      startTour("showtime");
       onSaved({ runId: data.runId });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";

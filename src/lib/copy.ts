@@ -647,15 +647,15 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     description:
       "Connect a Whop seller account and run curated ops playbooks against it: launch pre-flight, cancellation save-offers, dispute response, webhook fleet health, and portfolio reporting — every write verified and gated.",
     href: "/dashboard/library/whop-agent",
-    // coming_soon until enough of the 14 playbooks in
-    // whop-agent-skill-manifest.ts are marked implemented:true to be a
-    // real product, not just the connect flow + webhook subsystem — see
-    // that file's own implemented flag, not asserted here independently.
-    status: "coming_soon",
-    // Real artwork not produced yet — same placeholder gap this app's own
-    // convention (WORKSPACE_PRODUCTS' other entries all ship real images)
-    // flags rather than silently reusing an unrelated icon.
-    image: "/images/whop-agent.png",
+    // All 15 playbooks in whop-agent-skill-manifest.ts are now
+    // implemented:true, each with a real execute function or its own
+    // dedicated route (enforced by whop-agent-skill-registry.ts's
+    // module-load invariant) — a real product, not just the connect flow
+    // + webhook subsystem.
+    status: "available",
+    // Simple placeholder icon in the same style as cold-open.svg — real
+    // artwork not produced yet.
+    image: "/images/whop-agent.svg",
   },
 ];
 
