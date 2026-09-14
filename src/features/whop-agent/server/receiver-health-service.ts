@@ -5,14 +5,14 @@
 // regardless of which Whop Agent skills are enabled, because every
 // webhook-driven skill depends on it.
 import { db } from "@/lib/db";
-import { engagements, whopWebhookRegistry, whopAgentConnections, type EngagementStack } from "@/models/schema";
+import { engagements, whopWebhookRegistry, whopAgentConnections, activeAlerts, type EngagementStack } from "@/models/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { queuePendingAction } from "@/lib/approval-gate";
 import { auditWebhookFleet } from "./webhook-audit-service";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { replayGapDeliveries, getAgentWebhookSecrets } from "./webhook-subscription-service";
-import { alertFiredWithinCooldown, recordAlertFired } from "@/lib/whop-agent/alert-cooldown";
+import { claimAlertFiring } from "@/lib/whop-agent/alert-cooldown";
 import { signWhopWebhookPayload } from "@/lib/whop-agent/webhook-verify";
 
 type HealthTier = "degraded_12h" | "degraded_24h" | "urgent_48h";
@@ -32,12 +32,20 @@ const TIER_THRESHOLDS_HOURS: Array<{ tier: HealthTier; hours: number; severity: 
 // shared implementation (also used by the Refund/Dispute Velocity Alert).
 const TIER_COOLDOWN_HOURS = 4;
 
-async function alreadyFiredRecently(source: string): Promise<boolean> {
-  return alertFiredWithinCooldown(source, TIER_COOLDOWN_HOURS);
+/** Atomically checks cooldown and records the firing in one step — see
+ * alert-cooldown.ts's own header for why this can't be a separate check
+ * then a separate record without reopening the exact race it closes. */
+async function claimFiring(source: string, metricName: string, threshold: string, severity: string, engagementId: string): Promise<boolean> {
+  return claimAlertFiring({ source, cooldownHours: TIER_COOLDOWN_HOURS, engagementId, metricName, threshold, severity });
 }
 
-async function recordFired(source: string, metricName: string, threshold: string, severity: string, engagementId: string): Promise<void> {
-  await recordAlertFired({ source, engagementId, metricName, threshold, severity });
+/** Updates only the outcome detail (threshold/severity) on an already-
+ * claimed alert row — used by attemptReenable, which must claim the
+ * cooldown window before its network probe (so two overlapping sweeps
+ * can't both probe and both queue a duplicate re-enable action) but only
+ * learns the real outcome after the probe returns. */
+async function updateFiringOutcome(source: string, threshold: string, severity: string): Promise<void> {
+  await db.update(activeAlerts).set({ threshold, severity }).where(eq(activeAlerts.source, source));
 }
 
 async function alertOperator(engagementId: string, title: string, body: string, severity: "warning" | "critical"): Promise<void> {
@@ -84,8 +92,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
     // Pin-mismatch: reported, never corrected (Section 2.6/7.4).
     if (row.apiVersionDate && connection.pinnedVersionDate && row.apiVersionDate !== connection.pinnedVersionDate) {
       const source = `whop:pin-mismatch:${row.whopWebhookId}`;
-      if (!(await alreadyFiredRecently(source))) {
-        await recordFired(source, "pin_mismatch", connection.pinnedVersionDate, "warning", engagementId);
+      if (await claimFiring(source, "pin_mismatch", connection.pinnedVersionDate, "warning", engagementId)) {
         await alertOperator(
           engagementId,
           "A Whop webhook's pin changed outside the agent",
@@ -106,8 +113,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
     for (const { tier, hours, severity } of TIER_THRESHOLDS_HOURS) {
       if (hoursFailing < hours) continue;
       const source = `whop:${tier}:${row.whopWebhookId}`;
-      if (await alreadyFiredRecently(source)) break;
-      await recordFired(source, "webhook_failing_hours", String(hours), severity, engagementId);
+      if (!(await claimFiring(source, "webhook_failing_hours", String(hours), severity, engagementId))) break;
 
       const hoursRemaining = Math.max(0, Math.round(72 - hoursFailing));
       const body =
@@ -136,7 +142,13 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
   }
 
   const source = `whop:reenable-candidate:${row.whopWebhookId}`;
-  if (await alreadyFiredRecently(source)) return;
+  // Claimed up front, before the probe — the real outcome (probe passed/
+  // failed/no secret) is filled in via updateFiringOutcome below once
+  // known. Claiming here, not after the probe, is what actually closes
+  // the race between two overlapping sweeps: without it, both could pass
+  // this gate, both probe, and both queue their own duplicate
+  // whop_webhook_reenable pending action for the same subscription.
+  if (!(await claimFiring(source, "reenable_probe", "pending", "warning", engagementId))) return;
 
   // Step 2: probe the destination directly. An agent-created subscription's
   // url is this app's own receiver route (webhookReceiverUrl in
@@ -159,7 +171,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
       // No signing secret on file (e.g. torn down on disconnect) — can't
       // produce a probe the receiver would ever accept. Report rather than
       // silently probe-and-fail.
-      await recordFired(source, "reenable_probe", "no_secret_on_file", "critical", engagementId);
+      await updateFiringOutcome(source, "no_secret_on_file", "critical");
       await alertOperator(
         engagementId,
         "Disabled webhook can't be re-enable-probed",
@@ -193,7 +205,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
     probePassed = false;
   }
 
-  await recordFired(source, "reenable_probe", probePassed ? "passed" : "failed", probePassed ? "warning" : "critical", engagementId);
+  await updateFiringOutcome(source, probePassed ? "passed" : "failed", probePassed ? "warning" : "critical");
 
   if (!probePassed) {
     await alertOperator(

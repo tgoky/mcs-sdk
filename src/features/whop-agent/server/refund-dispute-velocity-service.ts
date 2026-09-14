@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
-import { alertFiredWithinCooldown, recordAlertFired } from "@/lib/whop-agent/alert-cooldown";
+import { claimAlertFiring } from "@/lib/whop-agent/alert-cooldown";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { listConnectedEngagementIds } from "./receiver-health-service";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
@@ -83,8 +83,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
     const refundRate = latestValue(refundRateRes);
     if (refundRate !== null && refundRate >= REFUND_RATE_THRESHOLD) {
       const source = `whop:refund-velocity:${engagementId}`;
-      if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
-        await recordAlertFired({ source, engagementId, metricName: "refund_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "warning" });
+      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "refund_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "warning" })) {
         await alertOperator(
           engagementId,
           "Refund velocity above threshold",
@@ -97,8 +96,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
     const disputeRate = latestValue(disputeRateRes);
     if (disputeRate !== null && disputeRate >= REFUND_RATE_THRESHOLD) {
       const source = `whop:dispute-rate-velocity:${engagementId}`;
-      if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
-        await recordAlertFired({ source, engagementId, metricName: "dispute_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "critical" });
+      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "critical" })) {
         await alertOperator(engagementId, "Dispute velocity above threshold", `Dispute rate is ${(disputeRate * 100).toFixed(1)}% over the last week.`, "critical");
       }
     }
@@ -107,8 +105,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
   const disputeAlertCount = latestValue(disputeAlertsRes);
   if (disputeAlertCount !== null && disputeAlertCount >= DISPUTE_ALERT_THRESHOLD) {
     const source = `whop:dispute-alert-velocity:${engagementId}`;
-    if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
-      await recordAlertFired({ source, engagementId, metricName: "dispute_alerts", threshold: String(DISPUTE_ALERT_THRESHOLD), severity: "critical" });
+    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_alerts", threshold: String(DISPUTE_ALERT_THRESHOLD), severity: "critical" })) {
       await alertOperator(
         engagementId,
         "Dispute-alert velocity above threshold",

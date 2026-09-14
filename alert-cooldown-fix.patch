@@ -1,0 +1,329 @@
+diff --git a/src/features/whop-agent/server/receiver-health-service.ts b/src/features/whop-agent/server/receiver-health-service.ts
+index 6513799..4f73b76 100644
+--- a/src/features/whop-agent/server/receiver-health-service.ts
++++ b/src/features/whop-agent/server/receiver-health-service.ts
+@@ -5,14 +5,14 @@
+ // regardless of which Whop Agent skills are enabled, because every
+ // webhook-driven skill depends on it.
+ import { db } from "@/lib/db";
+-import { engagements, whopWebhookRegistry, whopAgentConnections, type EngagementStack } from "@/models/schema";
++import { engagements, whopWebhookRegistry, whopAgentConnections, activeAlerts, type EngagementStack } from "@/models/schema";
+ import { and, eq, isNull } from "drizzle-orm";
+ import { notifyUser } from "@/lib/notify";
+ import { queuePendingAction } from "@/lib/approval-gate";
+ import { auditWebhookFleet } from "./webhook-audit-service";
+ import { WhopAgentClient } from "@/lib/whop-agent/client";
+ import { replayGapDeliveries, getAgentWebhookSecrets } from "./webhook-subscription-service";
+-import { alertFiredWithinCooldown, recordAlertFired } from "@/lib/whop-agent/alert-cooldown";
++import { claimAlertFiring } from "@/lib/whop-agent/alert-cooldown";
+ import { signWhopWebhookPayload } from "@/lib/whop-agent/webhook-verify";
+ 
+ type HealthTier = "degraded_12h" | "degraded_24h" | "urgent_48h";
+@@ -32,12 +32,20 @@ const TIER_THRESHOLDS_HOURS: Array<{ tier: HealthTier; hours: number; severity:
+ // shared implementation (also used by the Refund/Dispute Velocity Alert).
+ const TIER_COOLDOWN_HOURS = 4;
+ 
+-async function alreadyFiredRecently(source: string): Promise<boolean> {
+-  return alertFiredWithinCooldown(source, TIER_COOLDOWN_HOURS);
++/** Atomically checks cooldown and records the firing in one step — see
++ * alert-cooldown.ts's own header for why this can't be a separate check
++ * then a separate record without reopening the exact race it closes. */
++async function claimFiring(source: string, metricName: string, threshold: string, severity: string, engagementId: string): Promise<boolean> {
++  return claimAlertFiring({ source, cooldownHours: TIER_COOLDOWN_HOURS, engagementId, metricName, threshold, severity });
+ }
+ 
+-async function recordFired(source: string, metricName: string, threshold: string, severity: string, engagementId: string): Promise<void> {
+-  await recordAlertFired({ source, engagementId, metricName, threshold, severity });
++/** Updates only the outcome detail (threshold/severity) on an already-
++ * claimed alert row — used by attemptReenable, which must claim the
++ * cooldown window before its network probe (so two overlapping sweeps
++ * can't both probe and both queue a duplicate re-enable action) but only
++ * learns the real outcome after the probe returns. */
++async function updateFiringOutcome(source: string, threshold: string, severity: string): Promise<void> {
++  await db.update(activeAlerts).set({ threshold, severity }).where(eq(activeAlerts.source, source));
+ }
+ 
+ async function alertOperator(engagementId: string, title: string, body: string, severity: "warning" | "critical"): Promise<void> {
+@@ -84,8 +92,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
+     // Pin-mismatch: reported, never corrected (Section 2.6/7.4).
+     if (row.apiVersionDate && connection.pinnedVersionDate && row.apiVersionDate !== connection.pinnedVersionDate) {
+       const source = `whop:pin-mismatch:${row.whopWebhookId}`;
+-      if (!(await alreadyFiredRecently(source))) {
+-        await recordFired(source, "pin_mismatch", connection.pinnedVersionDate, "warning", engagementId);
++      if (await claimFiring(source, "pin_mismatch", connection.pinnedVersionDate, "warning", engagementId)) {
+         await alertOperator(
+           engagementId,
+           "A Whop webhook's pin changed outside the agent",
+@@ -106,8 +113,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
+     for (const { tier, hours, severity } of TIER_THRESHOLDS_HOURS) {
+       if (hoursFailing < hours) continue;
+       const source = `whop:${tier}:${row.whopWebhookId}`;
+-      if (await alreadyFiredRecently(source)) break;
+-      await recordFired(source, "webhook_failing_hours", String(hours), severity, engagementId);
++      if (!(await claimFiring(source, "webhook_failing_hours", String(hours), severity, engagementId))) break;
+ 
+       const hoursRemaining = Math.max(0, Math.round(72 - hoursFailing));
+       const body =
+@@ -136,7 +142,13 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
+   }
+ 
+   const source = `whop:reenable-candidate:${row.whopWebhookId}`;
+-  if (await alreadyFiredRecently(source)) return;
++  // Claimed up front, before the probe — the real outcome (probe passed/
++  // failed/no secret) is filled in via updateFiringOutcome below once
++  // known. Claiming here, not after the probe, is what actually closes
++  // the race between two overlapping sweeps: without it, both could pass
++  // this gate, both probe, and both queue their own duplicate
++  // whop_webhook_reenable pending action for the same subscription.
++  if (!(await claimFiring(source, "reenable_probe", "pending", "warning", engagementId))) return;
+ 
+   // Step 2: probe the destination directly. An agent-created subscription's
+   // url is this app's own receiver route (webhookReceiverUrl in
+@@ -159,7 +171,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
+       // No signing secret on file (e.g. torn down on disconnect) — can't
+       // produce a probe the receiver would ever accept. Report rather than
+       // silently probe-and-fail.
+-      await recordFired(source, "reenable_probe", "no_secret_on_file", "critical", engagementId);
++      await updateFiringOutcome(source, "no_secret_on_file", "critical");
+       await alertOperator(
+         engagementId,
+         "Disabled webhook can't be re-enable-probed",
+@@ -193,7 +205,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
+     probePassed = false;
+   }
+ 
+-  await recordFired(source, "reenable_probe", probePassed ? "passed" : "failed", probePassed ? "warning" : "critical", engagementId);
++  await updateFiringOutcome(source, probePassed ? "passed" : "failed", probePassed ? "warning" : "critical");
+ 
+   if (!probePassed) {
+     await alertOperator(
+diff --git a/src/features/whop-agent/server/refund-dispute-velocity-service.ts b/src/features/whop-agent/server/refund-dispute-velocity-service.ts
+index c1fc8e7..6c7c842 100644
+--- a/src/features/whop-agent/server/refund-dispute-velocity-service.ts
++++ b/src/features/whop-agent/server/refund-dispute-velocity-service.ts
+@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
+ import { engagements, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { notifyUser } from "@/lib/notify";
+-import { alertFiredWithinCooldown, recordAlertFired } from "@/lib/whop-agent/alert-cooldown";
++import { claimAlertFiring } from "@/lib/whop-agent/alert-cooldown";
+ import { WhopAgentClient } from "@/lib/whop-agent/client";
+ import { listConnectedEngagementIds } from "./receiver-health-service";
+ import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+@@ -83,8 +83,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
+     const refundRate = latestValue(refundRateRes);
+     if (refundRate !== null && refundRate >= REFUND_RATE_THRESHOLD) {
+       const source = `whop:refund-velocity:${engagementId}`;
+-      if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
+-        await recordAlertFired({ source, engagementId, metricName: "refund_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "warning" });
++      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "refund_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "warning" })) {
+         await alertOperator(
+           engagementId,
+           "Refund velocity above threshold",
+@@ -97,8 +96,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
+     const disputeRate = latestValue(disputeRateRes);
+     if (disputeRate !== null && disputeRate >= REFUND_RATE_THRESHOLD) {
+       const source = `whop:dispute-rate-velocity:${engagementId}`;
+-      if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
+-        await recordAlertFired({ source, engagementId, metricName: "dispute_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "critical" });
++      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "critical" })) {
+         await alertOperator(engagementId, "Dispute velocity above threshold", `Dispute rate is ${(disputeRate * 100).toFixed(1)}% over the last week.`, "critical");
+       }
+     }
+@@ -107,8 +105,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
+   const disputeAlertCount = latestValue(disputeAlertsRes);
+   if (disputeAlertCount !== null && disputeAlertCount >= DISPUTE_ALERT_THRESHOLD) {
+     const source = `whop:dispute-alert-velocity:${engagementId}`;
+-    if (!(await alertFiredWithinCooldown(source, RECONCILIATION_COOLDOWN_HOURS))) {
+-      await recordAlertFired({ source, engagementId, metricName: "dispute_alerts", threshold: String(DISPUTE_ALERT_THRESHOLD), severity: "critical" });
++    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_alerts", threshold: String(DISPUTE_ALERT_THRESHOLD), severity: "critical" })) {
+       await alertOperator(
+         engagementId,
+         "Dispute-alert velocity above threshold",
+diff --git a/src/lib/whop-agent/alert-cooldown.ts b/src/lib/whop-agent/alert-cooldown.ts
+index f1de9d2..2a549ab 100644
+--- a/src/lib/whop-agent/alert-cooldown.ts
++++ b/src/lib/whop-agent/alert-cooldown.ts
+@@ -6,36 +6,83 @@
+ // needed the exact same "don't re-fire the same alert every sweep" logic
+ // receiver-health-service.ts (Section 7.4) already had, rather than a
+ // second copy of it.
++//
++// activeAlerts.source has no unique constraint at the schema level — it
++// can't: leak-map's own alert-monitor.ts/notification-pack.ts write many
++// rows sharing the literal source "pack", a completely different, non-
++// unique usage of the same column. So this can't be closed with a unique
++// index the way whop_webhook_registry's race was; a Postgres advisory
++// lock keyed by the source string gives the same all-or-nothing guarantee
++// without touching the table's shape or leak-map's unrelated rows.
++//
++// Both callers (receiver-health-service.ts, refund-dispute-velocity-
++// service.ts) used to call alertFiredWithinCooldown, then separately
++// recordAlertFired, with their own if-check between the two — a real
++// check-then-act gap: two overlapping sweeps for the same source (a slow
++// previous run still finishing when the next cron fires, a manual sweep
++// overlapping the scheduled one) could both see "not in cooldown" and
++// both fire, double-notifying the operator. claimAlertFiring collapses
++// that into one atomic call so there's no gap left for a caller to
++// reopen.
+ import { db } from "@/lib/db";
+ import { activeAlerts } from "@/models/schema";
+-import { eq } from "drizzle-orm";
++import { eq, sql } from "drizzle-orm";
++import crypto from "crypto";
+ 
+-export async function alertFiredWithinCooldown(source: string, cooldownHours: number): Promise<boolean> {
+-  const [row] = await db.select({ lastFiredAt: activeAlerts.lastFiredAt }).from(activeAlerts).where(eq(activeAlerts.source, source)).limit(1);
+-  if (!row?.lastFiredAt) return false;
+-  return Date.now() - row.lastFiredAt.getTime() < cooldownHours * 60 * 60 * 1000;
++function lockKeyFor(source: string): bigint {
++  // pg_advisory_xact_lock takes a signed 64-bit integer. Truncating a
++  // hash to 8 bytes and reading it as a signed bigint is a stable,
++  // collision-resistant-enough mapping from an arbitrary source string
++  // to that keyspace — this only needs to serialize callers racing on
++  // the exact same source string, not provide cryptographic guarantees.
++  const hash = crypto.createHash("sha256").update(source).digest();
++  return hash.readBigInt64BE(0);
+ }
+ 
+-export async function recordAlertFired(opts: {
++/**
++ * Atomically checks whether `source` is still in cooldown and, if not,
++ * records that it just fired — all inside one Postgres transaction-scoped
++ * advisory lock keyed by `source`, so a second concurrent caller for the
++ * same source blocks until the first transaction commits, then sees the
++ * just-recorded lastFiredAt and correctly returns false instead of racing
++ * past the same stale read. Returns true only for the caller that should
++ * actually go on to notify the operator.
++ */
++export async function claimAlertFiring(opts: {
+   source: string;
++  cooldownHours: number;
+   engagementId: string;
+   metricName: string;
+   threshold: string;
+   severity: string;
+-}): Promise<void> {
+-  const existing = await db.select({ id: activeAlerts.id }).from(activeAlerts).where(eq(activeAlerts.source, opts.source)).limit(1);
+-  if (existing.length > 0) {
+-    await db.update(activeAlerts).set({ lastFiredAt: new Date(), severity: opts.severity }).where(eq(activeAlerts.id, existing[0].id));
+-  } else {
+-    await db.insert(activeAlerts).values({
+-      engagementId: opts.engagementId,
+-      metricName: opts.metricName,
+-      threshold: opts.threshold,
+-      comparison: "gte",
+-      evaluationPeriod: "sweep",
+-      severity: opts.severity,
+-      source: opts.source,
+-      lastFiredAt: new Date(),
+-    });
+-  }
++}): Promise<boolean> {
++  const lockKey = lockKeyFor(opts.source);
++
++  return db.transaction(async (tx) => {
++    await tx.execute(sql`select pg_advisory_xact_lock(${lockKey})`);
++
++    const [existing] = await tx.select().from(activeAlerts).where(eq(activeAlerts.source, opts.source)).limit(1);
++
++    if (existing?.lastFiredAt) {
++      const withinCooldown = Date.now() - existing.lastFiredAt.getTime() < opts.cooldownHours * 60 * 60 * 1000;
++      if (withinCooldown) return false;
++    }
++
++    if (existing) {
++      await tx.update(activeAlerts).set({ lastFiredAt: new Date(), severity: opts.severity }).where(eq(activeAlerts.id, existing.id));
++    } else {
++      await tx.insert(activeAlerts).values({
++        engagementId: opts.engagementId,
++        metricName: opts.metricName,
++        threshold: opts.threshold,
++        comparison: "gte",
++        evaluationPeriod: "sweep",
++        severity: opts.severity,
++        source: opts.source,
++        lastFiredAt: new Date(),
++      });
++    }
++
++    return true;
++  });
+ }
+diff --git a/tests/integration/alert-cooldown-race.test.ts b/tests/integration/alert-cooldown-race.test.ts
+new file mode 100644
+index 0000000..3c701be
+--- /dev/null
++++ b/tests/integration/alert-cooldown-race.test.ts
+@@ -0,0 +1,71 @@
++// tests/integration/alert-cooldown-race.test.ts
++//
++// Two overlapping sweeps for the same alert source (a slow previous
++// health sweep still finishing when the next 4-hour cron fires, or a
++// manual trigger overlapping a scheduled one) used to both pass
++// alertFiredWithinCooldown's check before either committed
++// recordAlertFired's write — a real check-then-act gap. For
++// attemptReenable specifically, that meant two overlapping sweeps could
++// both probe the same disabled webhook and both queue a duplicate
++// whop_webhook_reenable pending action. claimAlertFiring closes it with a
++// Postgres advisory lock keyed by the alert's source string — no schema
++// change, since activeAlerts.source has no unique constraint at the
++// table level and can't (leak-map's own alert-monitor.ts/notification-
++// pack.ts write many rows sharing the literal source "pack").
++import { describe, it, expect, afterEach } from "vitest";
++import crypto from "crypto";
++
++const hasDb = Boolean(process.env.DATABASE_URL);
++const d = hasDb ? describe : describe.skip;
++
++d("claimAlertFiring — real-database concurrent-sweep race check", () => {
++  const engagementId = `test-eng-alert-${crypto.randomUUID()}`;
++  const workspaceId = `test-ws-alert-${crypto.randomUUID()}`;
++  const whopUserId = `test-user-alert-${crypto.randomUUID()}`;
++  const source = `whop:test-alert:${crypto.randomUUID()}`;
++
++  afterEach(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, activeAlerts } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    await db.delete(activeAlerts).where(eq(activeAlerts.source, source));
++    await db.delete(engagements).where(eq(engagements.engagementId, engagementId));
++    await db.delete(workspaces).where(eq(workspaces.workspaceId, workspaceId));
++  });
++
++  it("two concurrent claims for a source with no existing row: exactly one wins", async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces } = await import("@/models/schema");
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    const { claimAlertFiring } = await import("@/lib/whop-agent/alert-cooldown");
++    const claim = () =>
++      claimAlertFiring({ source, cooldownHours: 4, engagementId, metricName: "test_metric", threshold: "1", severity: "warning" });
++
++    const [a, b] = await Promise.all([claim(), claim()]);
++    const claimedCount = [a, b].filter(Boolean).length;
++    expect(claimedCount).toBe(1);
++
++    const { activeAlerts } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    const rows = await db.select().from(activeAlerts).where(eq(activeAlerts.source, source));
++    // Not two rows from a lost insert-vs-insert race, and not zero from
++    // both callers incorrectly bailing.
++    expect(rows).toHaveLength(1);
++  });
++
++  it("a claim within the cooldown window returns false and does not touch the row", async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces } = await import("@/models/schema");
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    const { claimAlertFiring } = await import("@/lib/whop-agent/alert-cooldown");
++    const first = await claimAlertFiring({ source, cooldownHours: 4, engagementId, metricName: "test_metric", threshold: "1", severity: "warning" });
++    const second = await claimAlertFiring({ source, cooldownHours: 4, engagementId, metricName: "test_metric", threshold: "1", severity: "warning" });
++
++    expect(first).toBe(true);
++    expect(second).toBe(false);
++  });
++});
