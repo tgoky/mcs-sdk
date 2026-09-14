@@ -10,11 +10,16 @@
 // — the whole point is the user shouldn't have to think about products
 // as a separate concept), then flips the worker on for this engagement.
 //
-// Same runOnSetup gate skills/[skillId]/route.ts already enforces, for
-// the same reason: a worker like pin-down or rep-onboarding doesn't mean
-// anything as a bare boolean flip — it needs real setup data collected
-// through its own bridge page first. This route refuses those and points
-// the caller at the bridge instead of pretending a plain toggle worked.
+// Same product-onboarding gate skills/[skillId]/route.ts and its rep/
+// cold-open/whop-agent siblings all enforce (see
+// src/lib/product-onboarding.ts's header for the full "why"): the whole
+// product needs its own onboarding worker (pin-down/rep-onboarding/
+// icp-lock/whop-connect) to have actually run before ANY of that
+// product's skills means anything as a bare boolean flip — not just the
+// onboarding worker's own runOnSetup flag against itself, which used to
+// leave every other skill in the product enable-able with zero check.
+// This route refuses those and points the caller at the onboarding
+// bridge instead of pretending a plain toggle worked.
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -22,8 +27,9 @@ import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
-import { isWorkerId, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { isWorkerId, WORKER_REGISTRY, PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isProductOnboarded } from "@/lib/product-onboarding";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -44,16 +50,6 @@ export async function POST(
     }
 
     const worker = WORKER_REGISTRY[workerId];
-    if (worker.runOnSetup) {
-      return NextResponse.json(
-        {
-          error: `${worker.name} needs its own setup before it can run — use its configure panel instead of a plain enable.`,
-          bridgeHref: `/dashboard/engagements/${id}/bridges/${workerId}`,
-        },
-        { status: 422 }
-      );
-    }
-
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [row] = await db
@@ -70,6 +66,30 @@ export async function POST(
 
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+    }
+
+    if (worker.runOnSetup) {
+      return NextResponse.json(
+        {
+          error: `${worker.name} needs its own setup before it can run — use its configure panel instead of a plain enable.`,
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${workerId}`,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (!(await isProductOnboarded(worker.productId, id))) {
+      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
+      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
+      return NextResponse.json(
+        {
+          error: `${onboardingWorker.name} needs to run for this client before ${worker.name} means anything.`,
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
+          productId: worker.productId,
+          onboardingWorkerName: onboardingWorker.name,
+        },
+        { status: 422 }
+      );
     }
 
     const installResult = await installPackageInWorkspace(session.whopUserId, activeWorkspace.workspaceId, worker.productId);

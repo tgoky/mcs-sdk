@@ -23,8 +23,12 @@ import type { EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isProductOnboarded } from "@/lib/product-onboarding";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 
-export type EnablePileOnResult = { ok: true } | { ok: false; error: string };
+export type EnablePileOnResult =
+  | { ok: true }
+  | { ok: false; error: string; bridgeHref?: string; productId?: "showtime"; onboardingWorkerName?: string };
 
 const VALID_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"];
 const VALID_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"];
@@ -48,6 +52,18 @@ export async function enablePileOnForEngagement(
     .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
     .limit(1);
   if (!row) return { ok: false, error: "Client not found." };
+
+  if (!(await isProductOnboarded("showtime", engagementId))) {
+    const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID.showtime;
+    const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
+    return {
+      ok: false,
+      error: `${onboardingWorker.name} needs to run for this client before Pre-Call Sequence means anything.`,
+      bridgeHref: `/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}`,
+      productId: "showtime",
+      onboardingWorkerName: onboardingWorker.name,
+    };
+  }
 
   const installResult = await installPackageInWorkspace(whopUserId, workspaceId, "showtime");
   if ("error" in installResult) return { ok: false, error: installResult.error };

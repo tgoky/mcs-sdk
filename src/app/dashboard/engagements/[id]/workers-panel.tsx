@@ -25,6 +25,9 @@ import { SendConnectConfigForm } from "@/components/worker-config-forms/send-con
 import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
 import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
 import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
+import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
+import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
+import type { ProductId } from "@/lib/product-catalog";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -90,15 +93,26 @@ export function WorkersPanel({
   initialStates,
   runsByWorker,
   isPaused = false,
+  productOnboarded = {},
+  productOnboardingSkipDismissed = {},
 }: {
   engagementId: string;
   workerIds: WorkerId[];
   initialStates: Record<string, boolean>;
   runsByWorker: Record<string, ModuleRunDTO[]>;
   isPaused?: boolean;
+  /** Per-product onboarding status (see src/lib/product-onboarding.ts) —
+   * this page can show workers from several products at once, unlike the
+   * Library's per-product page, so this is keyed rather than one value.
+   * A product missing from this map is treated as onboarded (ungated),
+   * same permissive default worker-card.tsx uses. */
+  productOnboarded?: Partial<Record<ProductId, boolean>>;
+  productOnboardingSkipDismissed?: Partial<Record<ProductId, boolean>>;
 }) {
   const router = useRouter();
   const [states, setStates] = useState<Record<string, boolean>>(initialStates);
+  const [skipDismissed, setSkipDismissed] = useState<Partial<Record<ProductId, boolean>>>(productOnboardingSkipDismissed);
+  const [gateWorkerId, setGateWorkerId] = useState<WorkerId | null>(null);
   // UX-audit fix: was a single `string | null`, so toggling worker B
   // while worker A's request was still in flight overwrote A's busy
   // state with B's — whichever request's `finally` resolved first then
@@ -144,6 +158,14 @@ export function WorkersPanel({
 
         if (!res.ok) {
           setStates((prev) => ({ ...prev, [workerId]: previousState }));
+          // Defensive backstop for the gate handleToggleClick already
+          // checks proactively via productOnboarded — a race (onboarding
+          // status changed between page load and click) still lands here
+          // instead of just silently reverting the toggle.
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 422 && body.bridgeHref) {
+            setGateWorkerId(workerId);
+          }
         } else {
           router.refresh();
         }
@@ -160,8 +182,18 @@ export function WorkersPanel({
   }
 
   function handleToggleClick(workerId: WorkerId) {
-    if (!states[workerId] && WORKER_REGISTRY[workerId].runOnSetup) {
+    const worker = WORKER_REGISTRY[workerId];
+    const enabling = !states[workerId];
+    if (enabling && worker.runOnSetup) {
       router.push(`/dashboard/engagements/${engagementId}/bridges/${workerId}`);
+      return;
+    }
+    // Already known client-side — open the gate modal directly instead of
+    // a round trip just to be told the same thing the page already knows.
+    // Same product-onboarding gate worker-card.tsx checks (see
+    // src/lib/product-onboarding.ts's header).
+    if (enabling && !worker.runOnSetup && productOnboarded[worker.productId] === false) {
+      setGateWorkerId(workerId);
       return;
     }
     handleToggle(workerId);
@@ -316,6 +348,11 @@ export function WorkersPanel({
                     onClick={() => !isBusy && handleToggleClick(workerId)}
                     disabled={isBusy}
                     aria-label={`Toggle ${worker.name}`}
+                    title={
+                      !isEnabled && !worker.runOnSetup && productOnboarded[worker.productId] === false
+                        ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " — click for details"}`
+                        : undefined
+                    }
                     className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
                       isEnabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
                     } ${isBusy ? "opacity-50" : ""}`}
@@ -437,6 +474,22 @@ export function WorkersPanel({
         })}
       </div>
       )}
+
+      {gateWorkerId && (() => {
+        const worker = WORKER_REGISTRY[gateWorkerId];
+        const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
+        return (
+          <ProductOnboardingGateModal
+            engagementId={engagementId}
+            productId={worker.productId}
+            workerName={worker.name}
+            onboardingWorkerName={WORKER_REGISTRY[onboardingWorkerId].name}
+            bridgeHref={`/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}`}
+            onClose={() => setGateWorkerId(null)}
+            onSkipped={() => setSkipDismissed((prev) => ({ ...prev, [worker.productId]: true }))}
+          />
+        );
+      })()}
     </div>
   );
 }

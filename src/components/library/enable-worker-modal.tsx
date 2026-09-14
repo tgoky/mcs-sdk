@@ -32,6 +32,7 @@
 // field list is pile-on-specific today.
 
 import { useState } from "react";
+import Link from "next/link";
 import { Loader2, ArrowRight, Settings2, MessageCircle } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
@@ -90,6 +91,12 @@ export function EnablePileOnModal({
   const [adDataPlatform, setAdDataPlatform] = useState("none");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when the product-onboarding gate refused this enable (see
+  // src/lib/product-onboarding.ts) — distinct from this modal's own
+  // "Skip for now" above, which skips the two OPTIONAL config fields,
+  // not onboarding. A gated attempt gets a link straight to the real
+  // fix instead of just red text with nowhere to go.
+  const [gateBridgeHref, setGateBridgeHref] = useState<string | null>(null);
 
   function selectMode(next: "form" | "chat") {
     setMode(next);
@@ -99,6 +106,7 @@ export function EnablePileOnModal({
   async function submitForm(skip: boolean) {
     setPending(true);
     setError(null);
+    setGateBridgeHref(null);
     try {
       const res = await fetch(`/api/engagements/${engagementId}/workers/pile-on/enable-with-config`, {
         method: "POST",
@@ -106,7 +114,10 @@ export function EnablePileOnModal({
         body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
+      if (!res.ok) {
+        if (body?.bridgeHref) setGateBridgeHref(body.bridgeHref);
+        throw new Error(body?.error ?? "Could not enable Pile-On.");
+      }
       writeStoredMode("form");
       onEnabled();
     } catch (e) {
@@ -170,8 +181,13 @@ export function EnablePileOnModal({
             </div>
 
             {error && (
-              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
-                {error}
+              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+                <p>{error}</p>
+                {gateBridgeHref && (
+                  <Link href={gateBridgeHref} className="inline-flex items-center gap-1 font-bold underline underline-offset-2 hover:text-rose-900 dark:hover:text-rose-200 transition-colors">
+                    Finish setup <ArrowRight size={11} />
+                  </Link>
+                )}
               </div>
             )}
 

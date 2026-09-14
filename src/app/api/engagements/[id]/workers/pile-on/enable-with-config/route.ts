@@ -27,7 +27,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const result = await enablePileOnForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, { smsPlatform, adDataPlatform });
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      const status = result.bridgeHref ? 422 : 400;
+      return NextResponse.json(
+        { error: result.error, bridgeHref: result.bridgeHref, productId: result.productId, onboardingWorkerName: result.onboardingWorkerName },
+        { status }
+      );
     }
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

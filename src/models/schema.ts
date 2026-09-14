@@ -478,6 +478,22 @@ export type EngagementStack = {
     platform: string;
     exportedFlowId?: string; // set only when method === "live_api"
   };
+
+  // ── Cross-cutting: per-product onboarding gate (enable/route.ts and its
+  // 4 sibling toggle routes) ─────────────────────────────────────────────
+  // Enabling any skill in a product used to only ever check that ONE
+  // skill's own runOnSetup flag against itself — every other skill in the
+  // same product enabled immediately with zero check that the product's
+  // own onboarding (pin-down / rep-onboarding / icp-lock / whop-connect)
+  // had actually completed (see src/lib/product-onboarding.ts). Skipping
+  // does NOT weaken that server-side gate — the skill still won't enable
+  // until onboarding genuinely finishes — it only stops the client from
+  // hard-redirecting to the onboarding bridge on every subsequent Enable
+  // click for a *different* skill in the same still-ungated product; the
+  // client shows a quiet inline "finish setup" note there instead. Keyed
+  // by ProductId rather than one flag per product so a 5th product never
+  // needs a new column here, just a new key.
+  product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────

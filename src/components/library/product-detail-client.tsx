@@ -51,6 +51,8 @@ export function ProductDetailClient({
   workerStats,
   engagementId,
   buyerName,
+  productOnboarded = true,
+  productOnboardingSkipDismissed = false,
 }: {
   productId: string;
   name: string;
@@ -65,6 +67,11 @@ export function ProductDetailClient({
   workerStats: WorkerOverviewStat[];
   engagementId: string | null;
   buyerName?: string | null;
+  /** Whether THIS product's own onboarding worker has actually run for
+   * this engagement — see src/lib/product-onboarding.ts. Every worker on
+   * this page shares one value since they're all the same product. */
+  productOnboarded?: boolean;
+  productOnboardingSkipDismissed?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -323,6 +330,8 @@ export function ProductDetailClient({
                     onToggleConfigure={
                       worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
                     }
+                    productOnboarded={productOnboarded}
+                    productOnboardingSkipDismissed={productOnboardingSkipDismissed}
                   />
                 )}
               </Fragment>

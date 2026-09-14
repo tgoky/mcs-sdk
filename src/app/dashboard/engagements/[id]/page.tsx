@@ -37,6 +37,9 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
 import { getActiveWorkspace } from "@/lib/workspace";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
+import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
+import { WORKER_REGISTRY } from "@/lib/worker-registry";
+import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { startOfWeek } from "@/lib/dashboard-stats";
 import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
@@ -160,6 +163,21 @@ export default async function EngagementDetailPage({
   // there), not something this page needs its own "show everything so
   // there's a way to turn it back on" fallback for anymore.
   const workerIds: WorkerId[] = await getEnabledWorkerIdsForEngagement(id);
+
+  // Product-onboarding gate (see src/lib/product-onboarding.ts) — only
+  // computed for products actually represented in workerIds, since a
+  // product with nothing enabled here has nothing on this page's grid to
+  // gate in the first place (WorkersPanel only ever shows the already-
+  // enabled subset; see this page's own comment above).
+  const productIdsInPlay = Array.from(new Set(workerIds.map((wid) => WORKER_REGISTRY[wid].productId)));
+  const stackForGate = engagement.stack as EngagementStack | null;
+  const productOnboardedEntries = await Promise.all(
+    productIdsInPlay.map(async (pid): Promise<[ProductId, boolean]> => [pid, await isProductOnboarded(pid, id)])
+  );
+  const productOnboarded: Partial<Record<ProductId, boolean>> = Object.fromEntries(productOnboardedEntries);
+  const productOnboardingSkipDismissed: Partial<Record<ProductId, boolean>> = Object.fromEntries(
+    PRODUCT_IDS.map((pid) => [pid, isProductOnboardingSkipDismissed(stackForGate, pid)])
+  );
 
   // Same dynamic, per-worker block model dashboard/reports uses now —
   // replaces the old separately-gated ClientReportCard/RepClientReportCard
@@ -398,6 +416,8 @@ export default async function EngagementDetailPage({
           initialStates={{}}
           runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
           isPaused={Boolean(engagement.pausedAt)}
+          productOnboarded={productOnboarded}
+          productOnboardingSkipDismissed={productOnboardingSkipDismissed}
         />
 
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}

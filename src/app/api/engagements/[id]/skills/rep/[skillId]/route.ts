@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isRepSkillId, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isProductOnboarded } from "@/lib/product-onboarding";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -40,24 +42,6 @@ export async function POST(
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
     }
 
-    // rep-onboarding (runOnSetup) can be turned OFF via plain bookkeeping,
-    // but turning it on requires the identity-graph bridge — every other
-    // Reputation Manager skill reads that graph, so there's nothing for
-    // this row to mean until the bridge has actually run once. The panel's
-    // own toggle already redirects here instead of calling this endpoint
-    // (see rep-skills-panel.tsx's handleToggleClick), so a real user never
-    // sees this response — it's defense-in-depth for any other caller,
-    // which is exactly why it carries a bridgeUrl instead of just prose.
-    if (REP_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
-      return NextResponse.json(
-        {
-          error: "Identity Setup runs once during onboarding and must be configured from its bridge panel.",
-          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
-        },
-        { status: 422 }
-      );
-    }
-
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [row] = await db
@@ -74,6 +58,42 @@ export async function POST(
 
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+    }
+
+    // rep-onboarding (runOnSetup) can be turned OFF via plain bookkeeping,
+    // but turning it on requires the identity-graph bridge — every other
+    // Reputation Manager skill reads that graph, so there's nothing for
+    // this row to mean until the bridge has actually run once. The panel's
+    // own toggle already redirects here instead of calling this endpoint
+    // (see rep-skills-panel.tsx's handleToggleClick), so a real user never
+    // sees this response — it's defense-in-depth for any other caller,
+    // which is exactly why it carries a bridgeHref instead of just prose.
+    if (REP_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+      return NextResponse.json(
+        {
+          error: "Identity Setup runs once during onboarding and must be configured from its bridge panel.",
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}`,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Same product-onboarding gate enable/route.ts enforces (see
+    // src/lib/product-onboarding.ts's header) — every other Reputation
+    // Manager skill needs Identity Setup to have actually run first, not
+    // just its own runOnSetup flag against itself.
+    if (body.enabled && !REP_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("reputation-manager", id))) {
+      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID["reputation-manager"];
+      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
+      return NextResponse.json(
+        {
+          error: `${onboardingWorker.name} needs to run for this client before ${REP_SKILL_MANIFEST[skillId].name} means anything.`,
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
+          productId: "reputation-manager",
+          onboardingWorkerName: onboardingWorker.name,
+        },
+        { status: 422 }
+      );
     }
 
     await setSkillEnabledForEngagement(id, skillId, body.enabled);

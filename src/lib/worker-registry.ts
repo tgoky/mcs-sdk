@@ -993,3 +993,19 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
   }
   return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
 }
+
+/**
+ * The one worker per product whose completion IS that product's real
+ * onboarding signal — see src/lib/product-onboarding.ts, which reads each
+ * one's actual output (confirmationPageUrl, a repIdentityGraphs row, a
+ * coldOpenConfig row, a whopAgentConnections row) rather than trusting a
+ * boolean. Used both server-side (the enable-gate routes' 422 body) and
+ * client-side (which bridge the "finish setup" CTA points at — a
+ * gated skill's OWN bridge href doesn't exist for anything but this one).
+ */
+export const PRODUCT_ONBOARDING_WORKER_ID: Record<ProductId, WorkerId> = {
+  showtime: "pin-down",
+  "reputation-manager": "rep-onboarding",
+  "cold-open": "icp-lock",
+  "whop-agent": "whop-connect",
+};

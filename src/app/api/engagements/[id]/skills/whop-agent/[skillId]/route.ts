@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isWhopAgentSkillId, WHOP_AGENT_SKILL_MANIFEST } from "@/lib/whop-agent-skill-manifest";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isProductOnboarded } from "@/lib/product-onboarding";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -34,21 +36,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
     }
 
-    // whop-connect (runOnSetup) can be turned off via plain bookkeeping,
-    // but turning it on requires actually pasting a key and running the
-    // scope probe — every other Whop Agent skill depends on that
-    // connection existing, so there's nothing for this row to mean until
-    // the bridge has run once.
-    if (WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
-      return NextResponse.json(
-        {
-          error: "Connect Whop Account runs from its own setup screen, not a plain toggle.",
-          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
-        },
-        { status: 422 }
-      );
-    }
-
     if (!WHOP_AGENT_SKILL_MANIFEST[skillId].implemented && body.enabled) {
       return NextResponse.json({ error: `${WHOP_AGENT_SKILL_MANIFEST[skillId].name} isn't built yet.` }, { status: 422 });
     }
@@ -69,6 +56,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+    }
+
+    // whop-connect (runOnSetup) can be turned off via plain bookkeeping,
+    // but turning it on requires actually pasting a key and running the
+    // scope probe — every other Whop Agent skill depends on that
+    // connection existing, so there's nothing for this row to mean until
+    // the bridge has run once.
+    if (WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+      return NextResponse.json(
+        {
+          error: "Connect Whop Account runs from its own setup screen, not a plain toggle.",
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}`,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Same product-onboarding gate enable/route.ts enforces (see
+    // src/lib/product-onboarding.ts's header) — every other Whop Agent
+    // skill needs the Whop connection to actually exist first, not just
+    // its own runOnSetup flag against itself.
+    if (body.enabled && !WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("whop-agent", id))) {
+      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID["whop-agent"];
+      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
+      return NextResponse.json(
+        {
+          error: `${onboardingWorker.name} needs to run for this client before ${WHOP_AGENT_SKILL_MANIFEST[skillId].name} means anything.`,
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
+          productId: "whop-agent",
+          onboardingWorkerName: onboardingWorker.name,
+        },
+        { status: 422 }
+      );
     }
 
     await setSkillEnabledForEngagement(id, skillId, body.enabled);

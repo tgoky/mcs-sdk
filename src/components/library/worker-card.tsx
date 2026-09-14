@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, BarChart3, X, AlertTriangle } from "lucide-react";
+import { Settings, BarChart3, X, AlertTriangle, ArrowRight } from "lucide-react";
 import type { WorkerDefinition } from "@/lib/worker-registry";
-import { workerPrimaryHref } from "@/lib/worker-registry";
+import { workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { EnablePileOnModal } from "./enable-worker-modal";
+import { ProductOnboardingGateModal } from "./product-onboarding-gate-modal";
 
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
   showtime: "Showtime",
@@ -55,6 +56,8 @@ export function WorkerCard({
   variant = "card",
   playbook,
   index,
+  productOnboarded = true,
+  productOnboardingSkipDismissed = false,
 }: {
   worker: WorkerDefinition;
   enabled: boolean;
@@ -82,13 +85,33 @@ export function WorkerCard({
   /** 1-based position in its Worker's skill list, for the row variant's
    * "01." numbering — matches the old Library's step numbering. */
   index?: number;
+  /** Whether this worker's PRODUCT has completed its own onboarding
+   * (see src/lib/product-onboarding.ts) — not this worker's own
+   * runOnSetup flag, which only ever gated itself. Defaults to true
+   * (ungated) so a caller that hasn't fetched this yet doesn't
+   * accidentally block every Enable button. */
+  productOnboarded?: boolean;
+  /** Whether this engagement already dismissed the onboarding-gate modal
+   * for this worker's product — see product-onboarding-gate-modal.tsx's
+   * header. When true, a gated skill shows a quiet inline note instead of
+   * popping the modal again. */
+  productOnboardingSkipDismissed?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEnableModal, setShowEnableModal] = useState(false);
+  const [skipDismissed, setSkipDismissed] = useState(productOnboardingSkipDismissed);
+  const [gateModalOpen, setGateModalOpen] = useState(false);
 
   const needsOwnSetup = worker.runOnSetup;
+  // Every OTHER skill in a not-yet-onboarded product — not this worker's
+  // own runOnSetup flag, which only ever gated itself (see
+  // src/lib/product-onboarding.ts's header for the full gap this closes).
+  const needsProductOnboarding = !needsOwnSetup && !productOnboarded;
+  const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
+  const onboardingWorkerName = WORKER_REGISTRY[onboardingWorkerId].name;
+  const onboardingBridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}?from=/dashboard/library` : null;
   // pile-on is the one worker with real "ask" config fields and no hinges
   // panel to answer them in — see enable-worker-modal.tsx's own header
   // for why this is scoped to pile-on specifically, not driven generically
@@ -122,13 +145,38 @@ export function WorkerCard({
     try {
       const response = await fetch(`/api/engagements/${engagementId}/workers/${worker.id}/enable`, { method: "POST" });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? `Could not enable ${worker.name}.`);
+      if (!response.ok) {
+        // Defensive backstop for the gate this component already checks
+        // proactively via productOnboarded — a race (onboarding status
+        // changed between page load and click) still lands here instead
+        // of a plain error string.
+        if (response.status === 422 && body.bridgeHref) {
+          setGateModalOpen(true);
+          return;
+        }
+        throw new Error(body.error ?? `Could not enable ${worker.name}.`);
+      }
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);
     } finally {
       setPending(false);
     }
+  }
+
+  function handleEnableClick() {
+    if (needsLighterForm) {
+      setShowEnableModal(true);
+      return;
+    }
+    if (needsProductOnboarding) {
+      // Already known client-side (productOnboarded) — open the gate
+      // modal directly instead of a round trip just to be told the same
+      // thing the page already knows.
+      setGateModalOpen(true);
+      return;
+    }
+    enable();
   }
 
   // Icon-only, circular — the exact same shape every individual skill
@@ -177,10 +225,20 @@ export function WorkerCard({
     ) : (
       <span className="text-xs text-zinc-500 dark:text-zinc-500">Create a client first to set this up.</span>
     )
+  ) : needsProductOnboarding && skipDismissed ? (
+    // Already dismissed once this session — no more popping the gate
+    // modal on every skill in this product, just a quiet reminder that
+    // stays available without being in the way.
+    <Link
+      href={onboardingBridgeHref ?? "#"}
+      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors whitespace-nowrap"
+    >
+      Needs {onboardingWorkerName} first <ArrowRight size={11} />
+    </Link>
   ) : (
     <button
       type="button"
-      onClick={() => (needsLighterForm ? setShowEnableModal(true) : enable())}
+      onClick={handleEnableClick}
       disabled={pending || !engagementId}
       title={!engagementId ? "Create a client first" : undefined}
       className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap"
@@ -198,6 +256,18 @@ export function WorkerCard({
         setShowEnableModal(false);
         router.refresh();
       }}
+    />
+  );
+
+  const gateModal = gateModalOpen && engagementId && onboardingBridgeHref && (
+    <ProductOnboardingGateModal
+      engagementId={engagementId}
+      productId={worker.productId}
+      workerName={worker.name}
+      onboardingWorkerName={onboardingWorkerName}
+      bridgeHref={onboardingBridgeHref}
+      onClose={() => setGateModalOpen(false)}
+      onSkipped={() => setSkipDismissed(true)}
     />
   );
 
@@ -310,6 +380,7 @@ export function WorkerCard({
 
         {error && <p className="mt-2 pl-[3rem] text-xs text-rose-600 dark:text-rose-400">{error}</p>}
         {enableModal}
+        {gateModal}
       </div>
     );
   }
@@ -358,6 +429,7 @@ export function WorkerCard({
       <div className="pt-4 flex items-center gap-2">{actionControls}</div>
       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
       {enableModal}
+      {gateModal}
     </div>
   );
 }

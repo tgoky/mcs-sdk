@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { isProductOnboarded } from "@/lib/product-onboarding";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -31,15 +33,6 @@ export async function POST(
       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
     }
 
-    // runOnSetup skills (Pin-Down) can be turned OFF via plain bookkeeping,
-    // but enabling them requires going through their dedicated setup workflow.
-    if (SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
-      return NextResponse.json(
-        { error: "Pin-Down runs once during setup and must be configured from its bridge panel." },
-        { status: 422 }
-      );
-    }
-
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [row] = await db
@@ -56,6 +49,33 @@ export async function POST(
 
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+    }
+
+    // runOnSetup skills (Pin-Down) can be turned OFF via plain bookkeeping,
+    // but enabling them requires going through their dedicated setup workflow.
+    if (SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+      return NextResponse.json(
+        { error: "Pin-Down runs once during setup and must be configured from its bridge panel.", bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}` },
+        { status: 422 }
+      );
+    }
+
+    // Same product-onboarding gate enable/route.ts enforces (see
+    // src/lib/product-onboarding.ts's header) — every non-onboarding
+    // Showtime skill needs pin-down to have actually run first, not just
+    // its own runOnSetup flag against itself.
+    if (body.enabled && !SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("showtime", id))) {
+      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID.showtime;
+      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
+      return NextResponse.json(
+        {
+          error: `${onboardingWorker.name} needs to run for this client before ${SKILL_MANIFEST[skillId].name} means anything.`,
+          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
+          productId: "showtime",
+          onboardingWorkerName: onboardingWorker.name,
+        },
+        { status: 422 }
+      );
     }
 
     await setSkillEnabledForEngagement(id, skillId, body.enabled);

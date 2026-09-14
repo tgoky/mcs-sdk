@@ -1,0 +1,1185 @@
+diff --git a/src/app/api/engagements/[id]/products/[productId]/skip-onboarding/route.ts b/src/app/api/engagements/[id]/products/[productId]/skip-onboarding/route.ts
+new file mode 100644
+index 0000000..ddf2463
+--- /dev/null
++++ b/src/app/api/engagements/[id]/products/[productId]/skip-onboarding/route.ts
+@@ -0,0 +1,69 @@
++// src/app/api/engagements/[id]/products/[productId]/skip-onboarding/route.ts
++//
++// The "Skip for now" side of the product onboarding gate (see
++// src/lib/product-onboarding.ts's header for the full picture). This
++// deliberately does NOT touch whether the product is onboarded — it only
++// records that the operator has already seen and dismissed the "finish
++// setup" prompt for this product, on this engagement, so enable/route.ts
++// and its siblings can keep refusing a bare enable (unchanged) while the
++// CLIENT stops hard-redirecting to the onboarding bridge on every
++// subsequent attempt and shows a quiet inline note instead.
++
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements, type EngagementStack } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { isProductId } from "@/lib/product-catalog";
++import { and, eq } from "drizzle-orm";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++export async function POST(_req: Request, { params }: { params: Promise<{ id: string; productId: string }> }) {
++  try {
++    const { id, productId } = await params;
++    if (!isProductId(productId)) {
++      return NextResponse.json({ error: `Unknown product: ${productId}` }, { status: 400 });
++    }
++
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [row] = await db
++      .select({ engagementId: engagements.engagementId, stack: engagements.stack })
++      .from(engagements)
++      .where(
++        and(
++          eq(engagements.engagementId, id),
++          eq(engagements.whopUserId, session.whopUserId),
++          eq(engagements.workspaceId, activeWorkspace.workspaceId)
++        )
++      )
++      .limit(1);
++
++    if (!row) {
++      return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
++    }
++
++    const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
++    const nextStack: EngagementStack = {
++      ...stack,
++      product_onboarding_skip_dismissed_at: {
++        ...stack.product_onboarding_skip_dismissed_at,
++        [productId]: new Date().toISOString(),
++      },
++    };
++
++    await db.update(engagements).set({ stack: nextStack, updatedAt: new Date() }).where(eq(engagements.engagementId, id));
++
++    return NextResponse.json({ ok: true });
++  } catch (err) {
++    console.error("[engagements/[id]/products/[productId]/skip-onboarding POST]", err);
++    return NextResponse.json({ error: "Failed to skip onboarding." }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/engagements/[id]/skills/[skillId]/route.ts b/src/app/api/engagements/[id]/skills/[skillId]/route.ts
+index ef2b04b..3e5c406 100644
+--- a/src/app/api/engagements/[id]/skills/[skillId]/route.ts
++++ b/src/app/api/engagements/[id]/skills/[skillId]/route.ts
+@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import { isSkillId, SKILL_MANIFEST } from "@/lib/skill-manifest";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
++import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -31,15 +33,6 @@ export async function POST(
+       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
+     }
+ 
+-    // runOnSetup skills (Pin-Down) can be turned OFF via plain bookkeeping,
+-    // but enabling them requires going through their dedicated setup workflow.
+-    if (SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+-      return NextResponse.json(
+-        { error: "Pin-Down runs once during setup and must be configured from its bridge panel." },
+-        { status: 422 }
+-      );
+-    }
+-
+     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+ 
+     const [row] = await db
+@@ -58,6 +51,33 @@ export async function POST(
+       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+     }
+ 
++    // runOnSetup skills (Pin-Down) can be turned OFF via plain bookkeeping,
++    // but enabling them requires going through their dedicated setup workflow.
++    if (SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
++      return NextResponse.json(
++        { error: "Pin-Down runs once during setup and must be configured from its bridge panel.", bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}` },
++        { status: 422 }
++      );
++    }
++
++    // Same product-onboarding gate enable/route.ts enforces (see
++    // src/lib/product-onboarding.ts's header) — every non-onboarding
++    // Showtime skill needs pin-down to have actually run first, not just
++    // its own runOnSetup flag against itself.
++    if (body.enabled && !SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("showtime", id))) {
++      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID.showtime;
++      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++      return NextResponse.json(
++        {
++          error: `${onboardingWorker.name} needs to run for this client before ${SKILL_MANIFEST[skillId].name} means anything.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
++          productId: "showtime",
++          onboardingWorkerName: onboardingWorker.name,
++        },
++        { status: 422 }
++      );
++    }
++
+     await setSkillEnabledForEngagement(id, skillId, body.enabled);
+ 
+     return NextResponse.json({ ok: true, skillId, enabled: body.enabled, name: SKILL_MANIFEST[skillId].name });
+diff --git a/src/app/api/engagements/[id]/skills/cold-open/[skillId]/route.ts b/src/app/api/engagements/[id]/skills/cold-open/[skillId]/route.ts
+index b3378d9..f604f05 100644
+--- a/src/app/api/engagements/[id]/skills/cold-open/[skillId]/route.ts
++++ b/src/app/api/engagements/[id]/skills/cold-open/[skillId]/route.ts
+@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import { isColdOpenSkillId, COLD_OPEN_SKILL_MANIFEST } from "@/lib/cold-open-skill-manifest";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
++import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -40,22 +42,6 @@ export async function POST(
+       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
+     }
+ 
+-    // icp-lock (runOnSetup) can be turned OFF via plain bookkeeping, but
+-    // turning it on requires its own bridge — every other Cold Open skill
+-    // reads coldOpenConfig, so there's nothing for this row to mean until
+-    // the bridge has actually run once. Same defense-in-depth reasoning
+-    // rep-onboarding's own toggle route documents — the panel already
+-    // redirects here instead of calling this endpoint.
+-    if (COLD_OPEN_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+-      return NextResponse.json(
+-        {
+-          error: "ICP Lock runs once during setup and must be configured from its bridge panel.",
+-          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
+-        },
+-        { status: 422 }
+-      );
+-    }
+-
+     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+ 
+     const [row] = await db
+@@ -74,6 +60,40 @@ export async function POST(
+       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+     }
+ 
++    // icp-lock (runOnSetup) can be turned OFF via plain bookkeeping, but
++    // turning it on requires its own bridge — every other Cold Open skill
++    // reads coldOpenConfig, so there's nothing for this row to mean until
++    // the bridge has actually run once. Same defense-in-depth reasoning
++    // rep-onboarding's own toggle route documents — the panel already
++    // redirects here instead of calling this endpoint.
++    if (COLD_OPEN_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
++      return NextResponse.json(
++        {
++          error: "ICP Lock runs once during setup and must be configured from its bridge panel.",
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}`,
++        },
++        { status: 422 }
++      );
++    }
++
++    // Same product-onboarding gate enable/route.ts enforces (see
++    // src/lib/product-onboarding.ts's header) — every other Cold Open
++    // skill needs ICP Lock to have actually run first, not just its own
++    // runOnSetup flag against itself.
++    if (body.enabled && !COLD_OPEN_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("cold-open", id))) {
++      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID["cold-open"];
++      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++      return NextResponse.json(
++        {
++          error: `${onboardingWorker.name} needs to run for this client before ${COLD_OPEN_SKILL_MANIFEST[skillId].name} means anything.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
++          productId: "cold-open",
++          onboardingWorkerName: onboardingWorker.name,
++        },
++        { status: 422 }
++      );
++    }
++
+     await setSkillEnabledForEngagement(id, skillId, body.enabled);
+ 
+     return NextResponse.json({ ok: true, skillId, enabled: body.enabled, name: COLD_OPEN_SKILL_MANIFEST[skillId].name });
+diff --git a/src/app/api/engagements/[id]/skills/rep/[skillId]/route.ts b/src/app/api/engagements/[id]/skills/rep/[skillId]/route.ts
+index dd1a4b4..da19b3f 100644
+--- a/src/app/api/engagements/[id]/skills/rep/[skillId]/route.ts
++++ b/src/app/api/engagements/[id]/skills/rep/[skillId]/route.ts
+@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import { isRepSkillId, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
++import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -40,24 +42,6 @@ export async function POST(
+       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
+     }
+ 
+-    // rep-onboarding (runOnSetup) can be turned OFF via plain bookkeeping,
+-    // but turning it on requires the identity-graph bridge — every other
+-    // Reputation Manager skill reads that graph, so there's nothing for
+-    // this row to mean until the bridge has actually run once. The panel's
+-    // own toggle already redirects here instead of calling this endpoint
+-    // (see rep-skills-panel.tsx's handleToggleClick), so a real user never
+-    // sees this response — it's defense-in-depth for any other caller,
+-    // which is exactly why it carries a bridgeUrl instead of just prose.
+-    if (REP_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+-      return NextResponse.json(
+-        {
+-          error: "Identity Setup runs once during onboarding and must be configured from its bridge panel.",
+-          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
+-        },
+-        { status: 422 }
+-      );
+-    }
+-
+     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+ 
+     const [row] = await db
+@@ -76,6 +60,42 @@ export async function POST(
+       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+     }
+ 
++    // rep-onboarding (runOnSetup) can be turned OFF via plain bookkeeping,
++    // but turning it on requires the identity-graph bridge — every other
++    // Reputation Manager skill reads that graph, so there's nothing for
++    // this row to mean until the bridge has actually run once. The panel's
++    // own toggle already redirects here instead of calling this endpoint
++    // (see rep-skills-panel.tsx's handleToggleClick), so a real user never
++    // sees this response — it's defense-in-depth for any other caller,
++    // which is exactly why it carries a bridgeHref instead of just prose.
++    if (REP_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
++      return NextResponse.json(
++        {
++          error: "Identity Setup runs once during onboarding and must be configured from its bridge panel.",
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}`,
++        },
++        { status: 422 }
++      );
++    }
++
++    // Same product-onboarding gate enable/route.ts enforces (see
++    // src/lib/product-onboarding.ts's header) — every other Reputation
++    // Manager skill needs Identity Setup to have actually run first, not
++    // just its own runOnSetup flag against itself.
++    if (body.enabled && !REP_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("reputation-manager", id))) {
++      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID["reputation-manager"];
++      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++      return NextResponse.json(
++        {
++          error: `${onboardingWorker.name} needs to run for this client before ${REP_SKILL_MANIFEST[skillId].name} means anything.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
++          productId: "reputation-manager",
++          onboardingWorkerName: onboardingWorker.name,
++        },
++        { status: 422 }
++      );
++    }
++
+     await setSkillEnabledForEngagement(id, skillId, body.enabled);
+ 
+     return NextResponse.json({ ok: true, skillId, enabled: body.enabled, name: REP_SKILL_MANIFEST[skillId].name });
+diff --git a/src/app/api/engagements/[id]/skills/whop-agent/[skillId]/route.ts b/src/app/api/engagements/[id]/skills/whop-agent/[skillId]/route.ts
+index 6d87dbe..6d668d5 100644
+--- a/src/app/api/engagements/[id]/skills/whop-agent/[skillId]/route.ts
++++ b/src/app/api/engagements/[id]/skills/whop-agent/[skillId]/route.ts
+@@ -6,6 +6,8 @@ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import { isWhopAgentSkillId, WHOP_AGENT_SKILL_MANIFEST } from "@/lib/whop-agent-skill-manifest";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
++import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -34,21 +36,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+       return NextResponse.json({ error: "enabled must be a boolean." }, { status: 400 });
+     }
+ 
+-    // whop-connect (runOnSetup) can be turned off via plain bookkeeping,
+-    // but turning it on requires actually pasting a key and running the
+-    // scope probe — every other Whop Agent skill depends on that
+-    // connection existing, so there's nothing for this row to mean until
+-    // the bridge has run once.
+-    if (WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
+-      return NextResponse.json(
+-        {
+-          error: "Connect Whop Account runs from its own setup screen, not a plain toggle.",
+-          bridgeUrl: `/dashboard/engagements/${id}/bridges/${skillId}`,
+-        },
+-        { status: 422 }
+-      );
+-    }
+-
+     if (!WHOP_AGENT_SKILL_MANIFEST[skillId].implemented && body.enabled) {
+       return NextResponse.json({ error: `${WHOP_AGENT_SKILL_MANIFEST[skillId].name} isn't built yet.` }, { status: 422 });
+     }
+@@ -71,6 +58,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+     }
+ 
++    // whop-connect (runOnSetup) can be turned off via plain bookkeeping,
++    // but turning it on requires actually pasting a key and running the
++    // scope probe — every other Whop Agent skill depends on that
++    // connection existing, so there's nothing for this row to mean until
++    // the bridge has run once.
++    if (WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && body.enabled) {
++      return NextResponse.json(
++        {
++          error: "Connect Whop Account runs from its own setup screen, not a plain toggle.",
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${skillId}`,
++        },
++        { status: 422 }
++      );
++    }
++
++    // Same product-onboarding gate enable/route.ts enforces (see
++    // src/lib/product-onboarding.ts's header) — every other Whop Agent
++    // skill needs the Whop connection to actually exist first, not just
++    // its own runOnSetup flag against itself.
++    if (body.enabled && !WHOP_AGENT_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("whop-agent", id))) {
++      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID["whop-agent"];
++      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++      return NextResponse.json(
++        {
++          error: `${onboardingWorker.name} needs to run for this client before ${WHOP_AGENT_SKILL_MANIFEST[skillId].name} means anything.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
++          productId: "whop-agent",
++          onboardingWorkerName: onboardingWorker.name,
++        },
++        { status: 422 }
++      );
++    }
++
+     await setSkillEnabledForEngagement(id, skillId, body.enabled);
+ 
+     return NextResponse.json({ ok: true, skillId, enabled: body.enabled, name: WHOP_AGENT_SKILL_MANIFEST[skillId].name });
+diff --git a/src/app/api/engagements/[id]/workers/[workerId]/enable/route.ts b/src/app/api/engagements/[id]/workers/[workerId]/enable/route.ts
+index 658320a..8594910 100644
+--- a/src/app/api/engagements/[id]/workers/[workerId]/enable/route.ts
++++ b/src/app/api/engagements/[id]/workers/[workerId]/enable/route.ts
+@@ -10,11 +10,16 @@
+ // — the whole point is the user shouldn't have to think about products
+ // as a separate concept), then flips the worker on for this engagement.
+ //
+-// Same runOnSetup gate skills/[skillId]/route.ts already enforces, for
+-// the same reason: a worker like pin-down or rep-onboarding doesn't mean
+-// anything as a bare boolean flip — it needs real setup data collected
+-// through its own bridge page first. This route refuses those and points
+-// the caller at the bridge instead of pretending a plain toggle worked.
++// Same product-onboarding gate skills/[skillId]/route.ts and its rep/
++// cold-open/whop-agent siblings all enforce (see
++// src/lib/product-onboarding.ts's header for the full "why"): the whole
++// product needs its own onboarding worker (pin-down/rep-onboarding/
++// icp-lock/whop-connect) to have actually run before ANY of that
++// product's skills means anything as a bare boolean flip — not just the
++// onboarding worker's own runOnSetup flag against itself, which used to
++// leave every other skill in the product enable-able with zero check.
++// This route refuses those and points the caller at the onboarding
++// bridge instead of pretending a plain toggle worked.
+ 
+ import { NextResponse } from "next/server";
+ import { db } from "@/lib/db";
+@@ -22,8 +27,9 @@ import { engagements } from "@/models/schema";
+ import { and, eq } from "drizzle-orm";
+ import { getSession } from "@/lib/session";
+ import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
+-import { isWorkerId, WORKER_REGISTRY } from "@/lib/worker-registry";
++import { isWorkerId, WORKER_REGISTRY, PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
+ 
+ export const runtime = "nodejs";
+ export const revalidate = 0;
+@@ -44,16 +50,6 @@ export async function POST(
+     }
+ 
+     const worker = WORKER_REGISTRY[workerId];
+-    if (worker.runOnSetup) {
+-      return NextResponse.json(
+-        {
+-          error: `${worker.name} needs its own setup before it can run — use its configure panel instead of a plain enable.`,
+-          bridgeHref: `/dashboard/engagements/${id}/bridges/${workerId}`,
+-        },
+-        { status: 422 }
+-      );
+-    }
+-
+     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+ 
+     const [row] = await db
+@@ -72,6 +68,30 @@ export async function POST(
+       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+     }
+ 
++    if (worker.runOnSetup) {
++      return NextResponse.json(
++        {
++          error: `${worker.name} needs its own setup before it can run — use its configure panel instead of a plain enable.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${workerId}`,
++        },
++        { status: 422 }
++      );
++    }
++
++    if (!(await isProductOnboarded(worker.productId, id))) {
++      const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
++      const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++      return NextResponse.json(
++        {
++          error: `${onboardingWorker.name} needs to run for this client before ${worker.name} means anything.`,
++          bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
++          productId: worker.productId,
++          onboardingWorkerName: onboardingWorker.name,
++        },
++        { status: 422 }
++      );
++    }
++
+     const installResult = await installPackageInWorkspace(session.whopUserId, activeWorkspace.workspaceId, worker.productId);
+     if ("error" in installResult) {
+       return NextResponse.json({ error: installResult.error }, { status: 400 });
+diff --git a/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts b/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
+index 4a21092..e1104b4 100644
+--- a/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
++++ b/src/app/api/engagements/[id]/workers/pile-on/enable-with-config/route.ts
+@@ -27,7 +27,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
+ 
+     const result = await enablePileOnForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, { smsPlatform, adDataPlatform });
+     if (!result.ok) {
+-      return NextResponse.json({ error: result.error }, { status: 400 });
++      const status = result.bridgeHref ? 422 : 400;
++      return NextResponse.json(
++        { error: result.error, bridgeHref: result.bridgeHref, productId: result.productId, onboardingWorkerName: result.onboardingWorkerName },
++        { status }
++      );
+     }
+     return NextResponse.json({ ok: true });
+   } catch (error: unknown) {
+diff --git a/src/app/dashboard/engagements/[id]/page.tsx b/src/app/dashboard/engagements/[id]/page.tsx
+index 634fc14..4a5e445 100644
+--- a/src/app/dashboard/engagements/[id]/page.tsx
++++ b/src/app/dashboard/engagements/[id]/page.tsx
+@@ -37,6 +37,9 @@ import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context"
+ import { getActiveWorkspace } from "@/lib/workspace";
+ import type { ReportPeriod } from "@/features/reports/server/report-service";
+ import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
++import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
++import { WORKER_REGISTRY } from "@/lib/worker-registry";
++import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
+ import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
+ import { startOfWeek } from "@/lib/dashboard-stats";
+ import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
+@@ -161,6 +164,21 @@ export default async function EngagementDetailPage({
+   // there's a way to turn it back on" fallback for anymore.
+   const workerIds: WorkerId[] = await getEnabledWorkerIdsForEngagement(id);
+ 
++  // Product-onboarding gate (see src/lib/product-onboarding.ts) — only
++  // computed for products actually represented in workerIds, since a
++  // product with nothing enabled here has nothing on this page's grid to
++  // gate in the first place (WorkersPanel only ever shows the already-
++  // enabled subset; see this page's own comment above).
++  const productIdsInPlay = Array.from(new Set(workerIds.map((wid) => WORKER_REGISTRY[wid].productId)));
++  const stackForGate = engagement.stack as EngagementStack | null;
++  const productOnboardedEntries = await Promise.all(
++    productIdsInPlay.map(async (pid): Promise<[ProductId, boolean]> => [pid, await isProductOnboarded(pid, id)])
++  );
++  const productOnboarded: Partial<Record<ProductId, boolean>> = Object.fromEntries(productOnboardedEntries);
++  const productOnboardingSkipDismissed: Partial<Record<ProductId, boolean>> = Object.fromEntries(
++    PRODUCT_IDS.map((pid) => [pid, isProductOnboardingSkipDismissed(stackForGate, pid)])
++  );
++
+   // Same dynamic, per-worker block model dashboard/reports uses now —
+   // replaces the old separately-gated ClientReportCard/RepClientReportCard
+   // split below, which showed a real, correctly-zeroed Showtime card even
+@@ -398,6 +416,8 @@ export default async function EngagementDetailPage({
+           initialStates={{}}
+           runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
+           isPaused={Boolean(engagement.pausedAt)}
++          productOnboarded={productOnboarded}
++          productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+         />
+ 
+         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
+diff --git a/src/app/dashboard/engagements/[id]/workers-panel.tsx b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+index d5492b6..79d4ecb 100644
+--- a/src/app/dashboard/engagements/[id]/workers-panel.tsx
++++ b/src/app/dashboard/engagements/[id]/workers-panel.tsx
+@@ -25,6 +25,9 @@ import { SendConnectConfigForm } from "@/components/worker-config-forms/send-con
+ import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
+ import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
+ import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
++import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
++import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
++import type { ProductId } from "@/lib/product-catalog";
+ 
+ /**
+  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
+@@ -90,15 +93,26 @@ export function WorkersPanel({
+   initialStates,
+   runsByWorker,
+   isPaused = false,
++  productOnboarded = {},
++  productOnboardingSkipDismissed = {},
+ }: {
+   engagementId: string;
+   workerIds: WorkerId[];
+   initialStates: Record<string, boolean>;
+   runsByWorker: Record<string, ModuleRunDTO[]>;
+   isPaused?: boolean;
++  /** Per-product onboarding status (see src/lib/product-onboarding.ts) —
++   * this page can show workers from several products at once, unlike the
++   * Library's per-product page, so this is keyed rather than one value.
++   * A product missing from this map is treated as onboarded (ungated),
++   * same permissive default worker-card.tsx uses. */
++  productOnboarded?: Partial<Record<ProductId, boolean>>;
++  productOnboardingSkipDismissed?: Partial<Record<ProductId, boolean>>;
+ }) {
+   const router = useRouter();
+   const [states, setStates] = useState<Record<string, boolean>>(initialStates);
++  const [skipDismissed, setSkipDismissed] = useState<Partial<Record<ProductId, boolean>>>(productOnboardingSkipDismissed);
++  const [gateWorkerId, setGateWorkerId] = useState<WorkerId | null>(null);
+   // UX-audit fix: was a single `string | null`, so toggling worker B
+   // while worker A's request was still in flight overwrote A's busy
+   // state with B's — whichever request's `finally` resolved first then
+@@ -144,6 +158,14 @@ export function WorkersPanel({
+ 
+         if (!res.ok) {
+           setStates((prev) => ({ ...prev, [workerId]: previousState }));
++          // Defensive backstop for the gate handleToggleClick already
++          // checks proactively via productOnboarded — a race (onboarding
++          // status changed between page load and click) still lands here
++          // instead of just silently reverting the toggle.
++          const body = await res.json().catch(() => ({}));
++          if (res.status === 422 && body.bridgeHref) {
++            setGateWorkerId(workerId);
++          }
+         } else {
+           router.refresh();
+         }
+@@ -160,10 +182,20 @@ export function WorkersPanel({
+   }
+ 
+   function handleToggleClick(workerId: WorkerId) {
+-    if (!states[workerId] && WORKER_REGISTRY[workerId].runOnSetup) {
++    const worker = WORKER_REGISTRY[workerId];
++    const enabling = !states[workerId];
++    if (enabling && worker.runOnSetup) {
+       router.push(`/dashboard/engagements/${engagementId}/bridges/${workerId}`);
+       return;
+     }
++    // Already known client-side — open the gate modal directly instead of
++    // a round trip just to be told the same thing the page already knows.
++    // Same product-onboarding gate worker-card.tsx checks (see
++    // src/lib/product-onboarding.ts's header).
++    if (enabling && !worker.runOnSetup && productOnboarded[worker.productId] === false) {
++      setGateWorkerId(workerId);
++      return;
++    }
+     handleToggle(workerId);
+   }
+ 
+@@ -316,6 +348,11 @@ export function WorkersPanel({
+                     onClick={() => !isBusy && handleToggleClick(workerId)}
+                     disabled={isBusy}
+                     aria-label={`Toggle ${worker.name}`}
++                    title={
++                      !isEnabled && !worker.runOnSetup && productOnboarded[worker.productId] === false
++                        ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " — click for details"}`
++                        : undefined
++                    }
+                     className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
+                       isEnabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
+                     } ${isBusy ? "opacity-50" : ""}`}
+@@ -437,6 +474,22 @@ export function WorkersPanel({
+         })}
+       </div>
+       )}
++
++      {gateWorkerId && (() => {
++        const worker = WORKER_REGISTRY[gateWorkerId];
++        const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
++        return (
++          <ProductOnboardingGateModal
++            engagementId={engagementId}
++            productId={worker.productId}
++            workerName={worker.name}
++            onboardingWorkerName={WORKER_REGISTRY[onboardingWorkerId].name}
++            bridgeHref={`/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}`}
++            onClose={() => setGateWorkerId(null)}
++            onSkipped={() => setSkipDismissed((prev) => ({ ...prev, [worker.productId]: true }))}
++          />
++        );
++      })()}
+     </div>
+   );
+ }
+diff --git a/src/app/dashboard/library/[product]/page.tsx b/src/app/dashboard/library/[product]/page.tsx
+index e683e05..d98a1e7 100644
+--- a/src/app/dashboard/library/[product]/page.tsx
++++ b/src/app/dashboard/library/[product]/page.tsx
+@@ -20,9 +20,10 @@ import { isProductId, skillIdsForProduct } from "@/lib/product-catalog";
+ import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+ import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+ import { db } from "@/lib/db";
+-import { engagements } from "@/models/schema";
++import { engagements, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { ProductDetailClient } from "@/components/library/product-detail-client";
++import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
+ 
+ export const dynamic = "force-dynamic";
+ export const revalidate = 0;
+@@ -36,18 +37,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{
+   const workspace = await getActiveWorkspace(whopUserId);
+   const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
+ 
+-  const [enabledWorkerIds, overview, installed, buyerName] = await Promise.all([
++  const [enabledWorkerIds, overview, installed, engagementRow, productOnboarded] = await Promise.all([
+     engagementId ? getEnabledWorkerIdsForEngagement(engagementId) : Promise.resolve([]),
+     getWorkspaceWorkerOverview(whopUserId, workspace.workspaceId),
+     isPackageInstalledInWorkspace(workspace.workspaceId, product),
+     engagementId
+       ? db
+-          .select({ buyer: engagements.buyer })
++          .select({ buyer: engagements.buyer, stack: engagements.stack })
+           .from(engagements)
+           .where(eq(engagements.engagementId, engagementId))
+           .limit(1)
+-          .then((r) => r[0]?.buyer ?? null)
++          .then((r) => r[0] ?? null)
+       : Promise.resolve(null),
++    engagementId ? isProductOnboarded(product, engagementId) : Promise.resolve(true),
+   ]);
+ 
+   const meta = WORKSPACE_PRODUCTS.find((p) => p.id === product);
+@@ -65,7 +67,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{
+       enabledWorkerIds={enabledWorkerIds}
+       workerStats={overview.workers.filter((w) => (skillIds as string[]).includes(w.workerId))}
+       engagementId={engagementId}
+-      buyerName={buyerName}
++      buyerName={engagementRow?.buyer ?? null}
++      productOnboarded={productOnboarded}
++      productOnboardingSkipDismissed={isProductOnboardingSkipDismissed(engagementRow?.stack as EngagementStack | null, product)}
+     />
+   );
+ }
+diff --git a/src/components/library/enable-worker-modal.tsx b/src/components/library/enable-worker-modal.tsx
+index f6ed6c4..f90c6f0 100644
+--- a/src/components/library/enable-worker-modal.tsx
++++ b/src/components/library/enable-worker-modal.tsx
+@@ -32,6 +32,7 @@
+ // field list is pile-on-specific today.
+ 
+ import { useState } from "react";
++import Link from "next/link";
+ import { Loader2, ArrowRight, Settings2, MessageCircle } from "lucide-react";
+ import { Modal } from "@/components/modal";
+ import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
+@@ -90,6 +91,12 @@ export function EnablePileOnModal({
+   const [adDataPlatform, setAdDataPlatform] = useState("none");
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
++  // Set only when the product-onboarding gate refused this enable (see
++  // src/lib/product-onboarding.ts) — distinct from this modal's own
++  // "Skip for now" above, which skips the two OPTIONAL config fields,
++  // not onboarding. A gated attempt gets a link straight to the real
++  // fix instead of just red text with nowhere to go.
++  const [gateBridgeHref, setGateBridgeHref] = useState<string | null>(null);
+ 
+   function selectMode(next: "form" | "chat") {
+     setMode(next);
+@@ -99,6 +106,7 @@ export function EnablePileOnModal({
+   async function submitForm(skip: boolean) {
+     setPending(true);
+     setError(null);
++    setGateBridgeHref(null);
+     try {
+       const res = await fetch(`/api/engagements/${engagementId}/workers/pile-on/enable-with-config`, {
+         method: "POST",
+@@ -106,7 +114,10 @@ export function EnablePileOnModal({
+         body: JSON.stringify(skip ? {} : { smsPlatform, adDataPlatform }),
+       });
+       const body = await res.json().catch(() => ({}));
+-      if (!res.ok) throw new Error(body?.error ?? "Could not enable Pile-On.");
++      if (!res.ok) {
++        if (body?.bridgeHref) setGateBridgeHref(body.bridgeHref);
++        throw new Error(body?.error ?? "Could not enable Pile-On.");
++      }
+       writeStoredMode("form");
+       onEnabled();
+     } catch (e) {
+@@ -170,8 +181,13 @@ export function EnablePileOnModal({
+             </div>
+ 
+             {error && (
+-              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
+-                {error}
++              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
++                <p>{error}</p>
++                {gateBridgeHref && (
++                  <Link href={gateBridgeHref} className="inline-flex items-center gap-1 font-bold underline underline-offset-2 hover:text-rose-900 dark:hover:text-rose-200 transition-colors">
++                    Finish setup <ArrowRight size={11} />
++                  </Link>
++                )}
+               </div>
+             )}
+ 
+diff --git a/src/components/library/product-detail-client.tsx b/src/components/library/product-detail-client.tsx
+index a46a24b..48fdcdc 100644
+--- a/src/components/library/product-detail-client.tsx
++++ b/src/components/library/product-detail-client.tsx
+@@ -51,6 +51,8 @@ export function ProductDetailClient({
+   workerStats,
+   engagementId,
+   buyerName,
++  productOnboarded = true,
++  productOnboardingSkipDismissed = false,
+ }: {
+   productId: string;
+   name: string;
+@@ -65,6 +67,11 @@ export function ProductDetailClient({
+   workerStats: WorkerOverviewStat[];
+   engagementId: string | null;
+   buyerName?: string | null;
++  /** Whether THIS product's own onboarding worker has actually run for
++   * this engagement — see src/lib/product-onboarding.ts. Every worker on
++   * this page shares one value since they're all the same product. */
++  productOnboarded?: boolean;
++  productOnboardingSkipDismissed?: boolean;
+ }) {
+   const router = useRouter();
+   const [pending, setPending] = useState(false);
+@@ -323,6 +330,8 @@ export function ProductDetailClient({
+                     onToggleConfigure={
+                       worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                     }
++                    productOnboarded={productOnboarded}
++                    productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+                   />
+                 )}
+               </Fragment>
+diff --git a/src/components/library/product-onboarding-gate-modal.tsx b/src/components/library/product-onboarding-gate-modal.tsx
+new file mode 100644
+index 0000000..b62da18
+--- /dev/null
++++ b/src/components/library/product-onboarding-gate-modal.tsx
+@@ -0,0 +1,88 @@
++"use client";
++
++// Shown wherever an Enable action (worker-card.tsx, workers-panel.tsx's
++// toggle, EnablePileOnModal) discovers a skill's product hasn't
++// completed its own onboarding — see src/lib/product-onboarding.ts's
++// header for the full "why". Built on the app's existing Modal (same
++// createPortal + fade/zoom motion every other overlay in this app
++// already uses — dropdown-menu.tsx, popover.tsx, sheet.tsx) so this
++// reads as the same system instead of a one-off.
++//
++// "Skip for now" persists the dismissal (POST .../skip-onboarding) so
++// the caller can stop popping this modal for every other skill in the
++// same product this session — see onSkipped. It never enables anything
++// and never touches whether the product is actually onboarded: the
++// server-side gate this modal is a response to keeps refusing a bare
++// enable regardless of whether skip was ever clicked.
++
++import { useState } from "react";
++import { useRouter } from "next/navigation";
++import { ArrowRight, Wand2 } from "lucide-react";
++import { Modal } from "@/components/modal";
++import type { ProductId } from "@/lib/product-catalog";
++
++export function ProductOnboardingGateModal({
++  engagementId,
++  productId,
++  workerName,
++  onboardingWorkerName,
++  bridgeHref,
++  onClose,
++  onSkipped,
++}: {
++  engagementId: string;
++  productId: ProductId;
++  workerName: string;
++  onboardingWorkerName: string;
++  bridgeHref: string;
++  onClose: () => void;
++  onSkipped: () => void;
++}) {
++  const router = useRouter();
++  const [skipping, setSkipping] = useState(false);
++  const [skipError, setSkipError] = useState<string | null>(null);
++
++  async function handleSkip() {
++    setSkipping(true);
++    setSkipError(null);
++    try {
++      const res = await fetch(`/api/engagements/${engagementId}/products/${productId}/skip-onboarding`, { method: "POST" });
++      if (!res.ok) throw new Error("Couldn't save that — try again.");
++      onSkipped();
++      onClose();
++    } catch (cause) {
++      setSkipError(cause instanceof Error ? cause.message : "Couldn't save that — try again.");
++      setSkipping(false);
++    }
++  }
++
++  return (
++    <Modal title="Setup needed" icon={Wand2} onClose={onClose} maxWidthClass="max-w-sm">
++      <div className="space-y-4">
++        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
++          <strong className="font-bold text-zinc-900 dark:text-white">{onboardingWorkerName}</strong> needs to run for
++          this client before <strong className="font-bold text-zinc-900 dark:text-white">{workerName}</strong> means
++          anything — every other skill in this product reads what it sets up.
++        </p>
++        {skipError && <p className="text-xs text-rose-600 dark:text-rose-400">{skipError}</p>}
++        <div className="flex items-center gap-2 pt-1">
++          <button
++            type="button"
++            onClick={() => router.push(bridgeHref)}
++            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
++          >
++            Finish setup <ArrowRight size={13} />
++          </button>
++          <button
++            type="button"
++            onClick={handleSkip}
++            disabled={skipping}
++            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 transition-colors cursor-pointer"
++          >
++            {skipping ? "Skipping…" : "Skip for now"}
++          </button>
++        </div>
++      </div>
++    </Modal>
++  );
++}
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 25dbaf0..1ab4732 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -3,13 +3,14 @@
+ import { useState } from "react";
+ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+-import { Settings, BarChart3, X, AlertTriangle } from "lucide-react";
++import { Settings, BarChart3, X, AlertTriangle, ArrowRight } from "lucide-react";
+ import type { WorkerDefinition } from "@/lib/worker-registry";
+-import { workerPrimaryHref } from "@/lib/worker-registry";
++import { workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ import type { WorkerOverviewStat } from "@/lib/worker-analytics";
+ import type { SkillPlaybook } from "@/lib/skill-playbooks";
+ import { AnySkillBadge } from "@/components/any-skill-badge";
+ import { EnablePileOnModal } from "./enable-worker-modal";
++import { ProductOnboardingGateModal } from "./product-onboarding-gate-modal";
+ 
+ const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
+   showtime: "Showtime",
+@@ -55,6 +56,8 @@ export function WorkerCard({
+   variant = "card",
+   playbook,
+   index,
++  productOnboarded = true,
++  productOnboardingSkipDismissed = false,
+ }: {
+   worker: WorkerDefinition;
+   enabled: boolean;
+@@ -82,13 +85,33 @@ export function WorkerCard({
+   /** 1-based position in its Worker's skill list, for the row variant's
+    * "01." numbering — matches the old Library's step numbering. */
+   index?: number;
++  /** Whether this worker's PRODUCT has completed its own onboarding
++   * (see src/lib/product-onboarding.ts) — not this worker's own
++   * runOnSetup flag, which only ever gated itself. Defaults to true
++   * (ungated) so a caller that hasn't fetched this yet doesn't
++   * accidentally block every Enable button. */
++  productOnboarded?: boolean;
++  /** Whether this engagement already dismissed the onboarding-gate modal
++   * for this worker's product — see product-onboarding-gate-modal.tsx's
++   * header. When true, a gated skill shows a quiet inline note instead of
++   * popping the modal again. */
++  productOnboardingSkipDismissed?: boolean;
+ }) {
+   const router = useRouter();
+   const [pending, setPending] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const [showEnableModal, setShowEnableModal] = useState(false);
++  const [skipDismissed, setSkipDismissed] = useState(productOnboardingSkipDismissed);
++  const [gateModalOpen, setGateModalOpen] = useState(false);
+ 
+   const needsOwnSetup = worker.runOnSetup;
++  // Every OTHER skill in a not-yet-onboarded product — not this worker's
++  // own runOnSetup flag, which only ever gated itself (see
++  // src/lib/product-onboarding.ts's header for the full gap this closes).
++  const needsProductOnboarding = !needsOwnSetup && !productOnboarded;
++  const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
++  const onboardingWorkerName = WORKER_REGISTRY[onboardingWorkerId].name;
++  const onboardingBridgeHref = engagementId ? `/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}?from=/dashboard/library` : null;
+   // pile-on is the one worker with real "ask" config fields and no hinges
+   // panel to answer them in — see enable-worker-modal.tsx's own header
+   // for why this is scoped to pile-on specifically, not driven generically
+@@ -122,7 +145,17 @@ export function WorkerCard({
+     try {
+       const response = await fetch(`/api/engagements/${engagementId}/workers/${worker.id}/enable`, { method: "POST" });
+       const body = await response.json().catch(() => ({}));
+-      if (!response.ok) throw new Error(body.error ?? `Could not enable ${worker.name}.`);
++      if (!response.ok) {
++        // Defensive backstop for the gate this component already checks
++        // proactively via productOnboarded — a race (onboarding status
++        // changed between page load and click) still lands here instead
++        // of a plain error string.
++        if (response.status === 422 && body.bridgeHref) {
++          setGateModalOpen(true);
++          return;
++        }
++        throw new Error(body.error ?? `Could not enable ${worker.name}.`);
++      }
+       router.refresh();
+     } catch (cause) {
+       setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);
+@@ -131,6 +164,21 @@ export function WorkerCard({
+     }
+   }
+ 
++  function handleEnableClick() {
++    if (needsLighterForm) {
++      setShowEnableModal(true);
++      return;
++    }
++    if (needsProductOnboarding) {
++      // Already known client-side (productOnboarded) — open the gate
++      // modal directly instead of a round trip just to be told the same
++      // thing the page already knows.
++      setGateModalOpen(true);
++      return;
++    }
++    enable();
++  }
++
+   // Icon-only, circular — the exact same shape every individual skill
+   // page (skills/[workerId]/page.tsx) already uses for its own back
+   // button: w-8 h-8, rounded-full, a subtle border and fill. No text
+@@ -177,10 +225,20 @@ export function WorkerCard({
+     ) : (
+       <span className="text-xs text-zinc-500 dark:text-zinc-500">Create a client first to set this up.</span>
+     )
++  ) : needsProductOnboarding && skipDismissed ? (
++    // Already dismissed once this session — no more popping the gate
++    // modal on every skill in this product, just a quiet reminder that
++    // stays available without being in the way.
++    <Link
++      href={onboardingBridgeHref ?? "#"}
++      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors whitespace-nowrap"
++    >
++      Needs {onboardingWorkerName} first <ArrowRight size={11} />
++    </Link>
+   ) : (
+     <button
+       type="button"
+-      onClick={() => (needsLighterForm ? setShowEnableModal(true) : enable())}
++      onClick={handleEnableClick}
+       disabled={pending || !engagementId}
+       title={!engagementId ? "Create a client first" : undefined}
+       className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap"
+@@ -201,6 +259,18 @@ export function WorkerCard({
+     />
+   );
+ 
++  const gateModal = gateModalOpen && engagementId && onboardingBridgeHref && (
++    <ProductOnboardingGateModal
++      engagementId={engagementId}
++      productId={worker.productId}
++      workerName={worker.name}
++      onboardingWorkerName={onboardingWorkerName}
++      bridgeHref={onboardingBridgeHref}
++      onClose={() => setGateModalOpen(false)}
++      onSkipped={() => setSkipDismissed(true)}
++    />
++  );
++
+   if (variant === "row") {
+     // Every worker's own dedicated page already exists (workerPrimaryHref
+     // covers all of them — its own schedule page, RM's findings page,
+@@ -310,6 +380,7 @@ export function WorkerCard({
+ 
+         {error && <p className="mt-2 pl-[3rem] text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+         {enableModal}
++        {gateModal}
+       </div>
+     );
+   }
+@@ -358,6 +429,7 @@ export function WorkerCard({
+       <div className="pt-4 flex items-center gap-2">{actionControls}</div>
+       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+       {enableModal}
++      {gateModal}
+     </div>
+   );
+ }
+diff --git a/src/lib/enable-pile-on.ts b/src/lib/enable-pile-on.ts
+index d36fac4..b2ced53 100644
+--- a/src/lib/enable-pile-on.ts
++++ b/src/lib/enable-pile-on.ts
+@@ -23,8 +23,12 @@ import type { EngagementStack } from "@/models/schema";
+ import { and, eq } from "drizzle-orm";
+ import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
+ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
++import { isProductOnboarded } from "@/lib/product-onboarding";
++import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+ 
+-export type EnablePileOnResult = { ok: true } | { ok: false; error: string };
++export type EnablePileOnResult =
++  | { ok: true }
++  | { ok: false; error: string; bridgeHref?: string; productId?: "showtime"; onboardingWorkerName?: string };
+ 
+ const VALID_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"];
+ const VALID_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"];
+@@ -49,6 +53,18 @@ export async function enablePileOnForEngagement(
+     .limit(1);
+   if (!row) return { ok: false, error: "Client not found." };
+ 
++  if (!(await isProductOnboarded("showtime", engagementId))) {
++    const onboardingWorkerId = PRODUCT_ONBOARDING_WORKER_ID.showtime;
++    const onboardingWorker = WORKER_REGISTRY[onboardingWorkerId];
++    return {
++      ok: false,
++      error: `${onboardingWorker.name} needs to run for this client before Pre-Call Sequence means anything.`,
++      bridgeHref: `/dashboard/engagements/${engagementId}/bridges/${onboardingWorkerId}`,
++      productId: "showtime",
++      onboardingWorkerName: onboardingWorker.name,
++    };
++  }
++
+   const installResult = await installPackageInWorkspace(whopUserId, workspaceId, "showtime");
+   if ("error" in installResult) return { ok: false, error: installResult.error };
+ 
+diff --git a/src/lib/product-onboarding.ts b/src/lib/product-onboarding.ts
+new file mode 100644
+index 0000000..a3f4ef8
+--- /dev/null
++++ b/src/lib/product-onboarding.ts
+@@ -0,0 +1,59 @@
++// src/lib/product-onboarding.ts
++//
++// The real gap: enable/route.ts and its 4 per-product sibling toggle
++// routes (skills/[skillId], skills/rep/[skillId], skills/cold-open/
++// [skillId], skills/whop-agent/[skillId]) each only ever checked that ONE
++// skill's own runOnSetup flag against itself. Every other skill in that
++// same product enabled immediately with zero check that the product's
++// own onboarding (pin-down / rep-onboarding / icp-lock / whop-connect)
++// had actually run for this client — so "Daily Send" could be switched on
++// before ICP Lock ever fired. This module is the one shared answer to
++// "has this product actually been onboarded for this engagement," reused
++// by all 5 routes instead of each reimplementing its own guess, plus the
++// client-side pages that need to know before rendering an Enable button.
++//
++// Each product's signal is real, already-written data — not a new flag
++// this pass invents:
++//   - showtime: pin-down writes engagements.confirmationPageUrl once its
++//     onboarding run actually deploys (or reuses) a confirmation page.
++//   - reputation-manager: rep-onboarding writes a repIdentityGraphs row.
++//   - cold-open: icp-lock writes a coldOpenConfig row.
++//   - whop-agent: whop-connect writes a whopAgentConnections row.
++
++import { db } from "@/lib/db";
++import { engagements, repIdentityGraphs, coldOpenConfig, whopAgentConnections, type EngagementStack } from "@/models/schema";
++import { eq } from "drizzle-orm";
++import type { ProductId } from "@/lib/product-catalog";
++
++export async function isProductOnboarded(productId: ProductId, engagementId: string): Promise<boolean> {
++  if (productId === "showtime") {
++    const [row] = await db
++      .select({ confirmationPageUrl: engagements.confirmationPageUrl })
++      .from(engagements)
++      .where(eq(engagements.engagementId, engagementId))
++      .limit(1);
++    return Boolean(row?.confirmationPageUrl);
++  }
++  if (productId === "reputation-manager") {
++    const [row] = await db.select({ id: repIdentityGraphs.id }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
++    return Boolean(row);
++  }
++  if (productId === "cold-open") {
++    const [row] = await db.select({ id: coldOpenConfig.id }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1);
++    return Boolean(row);
++  }
++  // whop-agent
++  const [row] = await db.select({ id: whopAgentConnections.id }).from(whopAgentConnections).where(eq(whopAgentConnections.engagementId, engagementId)).limit(1);
++  return Boolean(row);
++}
++
++/** Reads the per-product "skip for now" dismissal off an already-fetched
++ * stack — never fetches itself, since every caller of this already has
++ * (or is about to have) the engagement row in hand. Skipping only
++ * changes how the CLIENT reacts to a gated product (a quiet inline note
++ * instead of a hard redirect every time) — it never touches whether
++ * isProductOnboarded returns true, so the actual enable gate above is
++ * unaffected by it. */
++export function isProductOnboardingSkipDismissed(stack: EngagementStack | null | undefined, productId: ProductId): boolean {
++  return Boolean(stack?.product_onboarding_skip_dismissed_at?.[productId]);
++}
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index cd85fcd..4ea2a69 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -993,3 +993,19 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
+   }
+   return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
+ }
++
++/**
++ * The one worker per product whose completion IS that product's real
++ * onboarding signal — see src/lib/product-onboarding.ts, which reads each
++ * one's actual output (confirmationPageUrl, a repIdentityGraphs row, a
++ * coldOpenConfig row, a whopAgentConnections row) rather than trusting a
++ * boolean. Used both server-side (the enable-gate routes' 422 body) and
++ * client-side (which bridge the "finish setup" CTA points at — a
++ * gated skill's OWN bridge href doesn't exist for anything but this one).
++ */
++export const PRODUCT_ONBOARDING_WORKER_ID: Record<ProductId, WorkerId> = {
++  showtime: "pin-down",
++  "reputation-manager": "rep-onboarding",
++  "cold-open": "icp-lock",
++  "whop-agent": "whop-connect",
++};
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index 4788a9c..4d78f23 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -478,6 +478,22 @@ export type EngagementStack = {
+     platform: string;
+     exportedFlowId?: string; // set only when method === "live_api"
+   };
++
++  // ── Cross-cutting: per-product onboarding gate (enable/route.ts and its
++  // 4 sibling toggle routes) ─────────────────────────────────────────────
++  // Enabling any skill in a product used to only ever check that ONE
++  // skill's own runOnSetup flag against itself — every other skill in the
++  // same product enabled immediately with zero check that the product's
++  // own onboarding (pin-down / rep-onboarding / icp-lock / whop-connect)
++  // had actually completed (see src/lib/product-onboarding.ts). Skipping
++  // does NOT weaken that server-side gate — the skill still won't enable
++  // until onboarding genuinely finishes — it only stops the client from
++  // hard-redirecting to the onboarding bridge on every subsequent Enable
++  // click for a *different* skill in the same still-ungated product; the
++  // client shows a quiet inline "finish setup" note there instead. Keyed
++  // by ProductId rather than one flag per product so a 5th product never
++  // needs a new column here, just a new key.
++  product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
+ };
+ 
+ // ── Users ─────────────────────────────────────────────────────────────────
