@@ -1,0 +1,644 @@
+diff --git a/drizzle/migrations/0046_real_captain_britain.sql b/drizzle/migrations/0046_real_captain_britain.sql
+new file mode 100644
+index 0000000..6cbbcd3
+--- /dev/null
++++ b/drizzle/migrations/0046_real_captain_britain.sql
+@@ -0,0 +1 @@
++CREATE UNIQUE INDEX "win_back_enrollments_source_booking_unique" ON "win_back_enrollments" USING btree ("engagement_id","source_booking_id");
+\ No newline at end of file
+diff --git a/drizzle/migrations/meta/0046_snapshot.json b/drizzle/migrations/meta/0046_snapshot.json
+index 0b41564..efd7e5f 100644
+--- a/drizzle/migrations/meta/0046_snapshot.json
++++ b/drizzle/migrations/meta/0046_snapshot.json
+@@ -1,5 +1,5 @@
+ {
+-  "id": "e2d5badf-38c8-4f90-9c1b-c41cae26a574",
++  "id": "1cdb7a2e-a6b5-4d7f-94f9-f855bb8f6e93",
+   "prevId": "df173b2c-f755-489e-8881-0a3e7fb29d88",
+   "version": "7",
+   "dialect": "postgresql",
+@@ -1552,12 +1552,6 @@
+           "notNull": true,
+           "default": false
+         },
+-        "queue_resolved_at": {
+-          "name": "queue_resolved_at",
+-          "type": "timestamp",
+-          "primaryKey": false,
+-          "notNull": false
+-        },
+         "classified_at": {
+           "name": "classified_at",
+           "type": "timestamp",
+@@ -5423,7 +5417,29 @@
+           "default": "now()"
+         }
+       },
+-      "indexes": {},
++      "indexes": {
++        "win_back_enrollments_source_booking_unique": {
++          "name": "win_back_enrollments_source_booking_unique",
++          "columns": [
++            {
++              "expression": "engagement_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            },
++            {
++              "expression": "source_booking_id",
++              "isExpression": false,
++              "asc": true,
++              "nulls": "last"
++            }
++          ],
++          "isUnique": true,
++          "concurrently": false,
++          "method": "btree",
++          "with": {}
++        }
++      },
+       "foreignKeys": {
+         "win_back_enrollments_engagement_id_engagements_engagement_id_fk": {
+           "name": "win_back_enrollments_engagement_id_engagements_engagement_id_fk",
+diff --git a/drizzle/migrations/meta/_journal.json b/drizzle/migrations/meta/_journal.json
+index 23db6a5..9851ebc 100644
+--- a/drizzle/migrations/meta/_journal.json
++++ b/drizzle/migrations/meta/_journal.json
+@@ -327,8 +327,8 @@
+     {
+       "idx": 46,
+       "version": "7",
+-      "when": 1789323722178,
+-      "tag": "0046_cold_open_reply_queue_resolution",
++      "when": 1789378289499,
++      "tag": "0046_real_captain_britain",
+       "breakpoints": true
+     }
+   ]
+diff --git a/src/features/leak-map/server/alert-monitor.ts b/src/features/leak-map/server/alert-monitor.ts
+index 0c170d1..177d607 100644
+--- a/src/features/leak-map/server/alert-monitor.ts
++++ b/src/features/leak-map/server/alert-monitor.ts
+@@ -1,6 +1,6 @@
+ import { db } from "@/lib/db";
+ import { activeAlerts, briefedCallsLog, auditRunsLog, engagements, type EngagementStack } from "@/models/schema";
+-import { eq, gte, inArray, desc, isNull } from "drizzle-orm";
++import { and, eq, gte, inArray, desc, isNull, lt, or } from "drizzle-orm";
+ import { callClaude, MODEL } from "@/lib/llm";
+ import { fetchWithTimeout } from "@/lib/http";
+ 
+@@ -10,9 +10,13 @@ import { fetchWithTimeout } from "@/lib/http";
+  * Cooldown is tracked via activeAlerts.lastFiredAt — no skillRuns abuse.
+  * Slack delivery uses per-engagement webhook, never a global env var.
+  *
+- * PERFORMANCE: 4 queries total, no N+1 — one join for alerts+stack, one
++ * PERFORMANCE: no N+1 on the read side — one join for alerts+stack, one
+  * sweep for recent briefedCallsLog rows, one sweep for the latest
+- * auditRunsLog row per engagement, one batched cooldown UPDATE.
++ * auditRunsLog row per engagement. The cooldown UPDATE is deliberately
++ * NOT batched at the end (it used to be) — see the atomic-claim comment
++ * below for why each breached alert claims its own cooldown right before
++ * firing, one UPDATE per alert that actually fires, not one at the end
++ * covering all of them.
+  *
+  * Metric handlers:
+  *   - person_match_confidence: computed live from the last 24h of
+@@ -112,7 +116,6 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
+   }
+ 
+   // ── Evaluate & Fan-out ──────────────────────────────────────────────
+-  const triggeredAlertIds: string[] = [];
+   const outboundPromises: Promise<void>[] = [];
+ 
+   for (const alert of alertsWithStack) {
+@@ -154,6 +157,38 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
+     if (alert.comparison === "above" && currentValue > threshold) breached = true;
+     if (!breached) continue;
+ 
++    // Atomic claim, not check-then-act — this used to be a JS-side
++    // lastFiredAt check up front (already passed above) plus one big
++    // batched UPDATE at the very end, after every Slack/LLM call for
++    // every triggered alert had already gone out. Two overlapping
++    // invocations of this function race that gap directly: the scheduled
++    // Inngest cron (every 6h) and this module's own admin-invocable
++    // manual-trigger route (alert-monitor/route.ts, "kept as a
++    // manually-triggerable... equivalent") are two real, documented entry
++    // points into the exact same evaluator, and nothing serializes them
++    // against each other — an admin triggering a manual check while the
++    // cron happens to also be running would have both invocations read
++    // the same stale lastFiredAt, both decide this alert is breached and
++    // off cooldown, and both fire — a duplicate Slack page plus a doubled
++    // LLM call for one real breach. Same failure shape as this codebase's
++    // whop-agent alert-cooldown.ts already had to fix. The UPDATE's own
++    // WHERE clause (re-checking the cooldown at claim time, not trusting
++    // the JS-side check from the top of this loop) is the lock-free
++    // compare-and-swap: only the invocation that actually claims the row
++    // gets to build the outbound Slack/LLM promise below.
++    const cooldownCutoff = new Date(Date.now() - cooldownMs);
++    const [claimed] = await db
++      .update(activeAlerts)
++      .set({ lastFiredAt: new Date() })
++      .where(
++        and(
++          eq(activeAlerts.id, alert.id),
++          or(isNull(activeAlerts.lastFiredAt), lt(activeAlerts.lastFiredAt, cooldownCutoff))
++        )
++      )
++      .returning({ id: activeAlerts.id });
++    if (!claimed) continue; // another concurrent invocation already claimed and fired this alert
++
+     const slackWebhookUrl = (alert.stack as EngagementStack | null)?.slack_webhook_url;
+     if (!slackWebhookUrl) {
+       console.warn(
+@@ -213,18 +248,14 @@ Write a one-paragraph alert for the sales operator.`,
+       })
+     );
+ 
+-    triggeredAlertIds.push(alert.id);
+     triggered++;
+   }
+ 
+-  await Promise.all(outboundPromises);
+-
+-  if (triggeredAlertIds.length > 0) {
+-    await db
+-      .update(activeAlerts)
+-      .set({ lastFiredAt: new Date() })
+-      .where(inArray(activeAlerts.id, triggeredAlertIds));
+-  }
++  // lastFiredAt is now stamped per-alert at claim time (above), not
++  // batched here at the end — see the claim comment for why: batching it
++  // here was the second half of the original check-then-act gap, since
++  // every Slack/LLM call for every triggered alert had already gone out
++  // by the time this ran.
+ 
+   return triggered;
+ }
+diff --git a/src/features/pile-on/server/enrollment-service.ts b/src/features/pile-on/server/enrollment-service.ts
+index 42e319b..c7cff68 100644
+--- a/src/features/pile-on/server/enrollment-service.ts
++++ b/src/features/pile-on/server/enrollment-service.ts
+@@ -417,27 +417,60 @@ export async function handleInboundBookingEvent(
+ 
+   // ── booking.cancelled / no-showed → Win-Back ─────────────────────────
+   else if (eventKind === "cancelled") {
+-    // Win-Back no-show gap fix — dedup guard. A given booking can now
+-    // reach this branch from more than one source: a real
+-    // booking.cancelled webhook from the platform, a rep-logged no_show
+-    // outcome (dashboard or Slack), Recall bot telemetry, or the
+-    // assumed-no-show sweep (see outcome-resolution.ts) — and more than
+-    // one of those can legitimately fire for the same booking (e.g. a
+-    // true no-show that the prospect later also cancels through the
+-    // calendar UI). Without this check each source would create its own
+-    // active winBackEnrollments row and the prospect would get enrolled
+-    // — and emailed — more than once for one missed call. bookingId is
+-    // already resolved above for both branches; this is the authoritative
+-    // check (outcome-resolution.ts's own pre-check is best-effort only).
+-    const [alreadyEnrolled] = await db
+-      .select({ id: winBackEnrollments.id })
+-      .from(winBackEnrollments)
+-      .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
+-      .limit(1);
+-
+-    if (alreadyEnrolled) {
++    // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
++    // Only meaningful in "fresh_link" mode; extracted here (once, at
++    // cancellation time) rather than on-demand later, since the
++    // cancellation webhook payload is the only place this per-booking
++    // identifier ever appears — the booking platform doesn't expose it
++    // via any subsequent lookup. Pure payload parsing, no side effect —
++    // safe to compute before the atomic claim below.
++    const freshRescheduleLink =
++      stack.reschedule_mode === "fresh_link" ? extractFreshRescheduleLink(stack.booking_platform, payload) : null;
++
++    // Win-Back no-show gap fix — dedup guard, now an atomic claim instead
++    // of check-then-act. A given booking can reach this branch from more
++    // than one source: a real booking.cancelled webhook from the
++    // platform, a rep-logged no_show outcome (dashboard or Slack), Recall
++    // bot telemetry, or the assumed-no-show sweep (see
++    // outcome-resolution.ts) — and more than one of those can legitimately
++    // fire for the same booking at nearly the same instant, with nothing
++    // serializing the resulting Inngest invocations against each other.
++    // This used to be a plain SELECT for an existing row, checked in JS,
++    // followed later by an unconditional INSERT — the comment here even
++    // called it "the authoritative check," but with no lock between the
++    // read and the write it wasn't one: two concurrent deliveries for the
++    // same booking could both see "not enrolled yet" and both insert,
++    // double-enrolling — and double-emailing/texting — one prospect for
++    // one missed call. The INSERT itself is now the atomic claim, backed
++    // by winBackEnrollments' real unique index on (engagementId,
++    // sourceBookingId) — only the caller whose row actually lands gets to
++    // proceed to the ESP/SMS/hybrid-personalization side effects below;
++    // the loser's onConflictDoNothing insert returns nothing and this
++    // bails out exactly like the old "already enrolled" branch did.
++    const [enrollmentRow] = await db
++      .insert(winBackEnrollments)
++      .values({
++        id: crypto.randomUUID(),
++        engagementId: tenant.engagementId,
++        prospectEmail,
++        prospectName,
++        runId,
++        recoveryWindowDays: stack.recovery_window_days ?? 30,
++        status: "active",
++        freshRescheduleLink,
++        sourceBookingId: bookingId,
++      })
++      .onConflictDoNothing({ target: [winBackEnrollments.engagementId, winBackEnrollments.sourceBookingId] })
++      .returning({ id: winBackEnrollments.id });
++
++    if (!enrollmentRow) {
++      const [existing] = await db
++        .select({ id: winBackEnrollments.id })
++        .from(winBackEnrollments)
++        .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
++        .limit(1);
+       summary.openItems.push(
+-        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking (enrollment ${alreadyEnrolled.id}) — skipped a duplicate enrollment.`
++        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking${existing ? ` (enrollment ${existing.id})` : ""} — skipped a duplicate enrollment.`
+       );
+       await logStep(runId, {
+         phase: "recovery_enrollment",
+@@ -482,34 +515,6 @@ export async function handleInboundBookingEvent(
+     }
+     await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: `Enrolled ${prospectName} in win-back sequence` });
+ 
+-    // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
+-    // Only meaningful in "fresh_link" mode; extracted here (once, at
+-    // cancellation time) rather than on-demand later, since the
+-    // cancellation webhook payload is the only place this per-booking
+-    // identifier ever appears — the booking platform doesn't expose it
+-    // via any subsequent lookup.
+-    const freshRescheduleLink =
+-      stack.reschedule_mode === "fresh_link" ? extractFreshRescheduleLink(stack.booking_platform, payload) : null;
+-
+-    const [enrollmentRow] = await db
+-      .insert(winBackEnrollments)
+-      .values({
+-        id: crypto.randomUUID(),
+-        engagementId: tenant.engagementId,
+-        prospectEmail,
+-        prospectName,
+-        runId,
+-        recoveryWindowDays: stack.recovery_window_days ?? 30,
+-        status: "active",
+-        freshRescheduleLink,
+-        // Win-Back no-show gap fix — see the dedup guard above. Persisted
+-        // on every enrollment (not just outcome-resolution-triggered
+-        // ones) so a genuine platform cancellation and a later no-show
+-        // resolution for the same booking can't both create a row either.
+-        sourceBookingId: bookingId,
+-      })
+-      .returning({ id: winBackEnrollments.id });
+-
+     if (stack.reschedule_mode === "fresh_link") {
+       // Whatever we resolved — the platform's real fresh link, or (when
+       // the platform doesn't support one, or this specific payload
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index c7c4fc2..22c8a28 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -478,39 +478,6 @@ export type EngagementStack = {
+     platform: string;
+     exportedFlowId?: string; // set only when method === "live_api"
+   };
+-
+-  // ── Cross-cutting: per-product onboarding gate (enable/route.ts and its
+-  // 4 sibling toggle routes) ─────────────────────────────────────────────
+-  // Enabling any skill in a product used to only ever check that ONE
+-  // skill's own runOnSetup flag against itself — every other skill in the
+-  // same product enabled immediately with zero check that the product's
+-  // own onboarding (pin-down / rep-onboarding / icp-lock / whop-connect)
+-  // had actually completed (see src/lib/product-onboarding.ts). Skipping
+-  // does NOT weaken that server-side gate — the skill still won't enable
+-  // until onboarding genuinely finishes — it only stops the client from
+-  // hard-redirecting to the onboarding bridge on every subsequent Enable
+-  // click for a *different* skill in the same still-ungated product; the
+-  // client shows a quiet inline "finish setup" note there instead. Keyed
+-  // by ProductId rather than one flag per product so a 5th product never
+-  // needs a new column here, just a new key.
+-  product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
+-
+-  // ── Interactive product tours (src/lib/tours) ───────────────────────────
+-  // Progress survives a page reload or navigating away mid-tour — a tour
+-  // can span several routes (dashboard -> Library -> an engagement's own
+-  // skill page), so this can't live in component state or even
+-  // sessionStorage alone. Keyed by TourId, one entry per tour this
+-  // workspace's primary engagement has ever started. "completed" is only
+-  // set once every step actually reached its real target element (see
+-  // tour-provider.tsx) — not just "the user clicked next" — so a step
+-  // skipped because a product isn't onboarded yet doesn't retroactively
+-  // count as seen.
+-  tour_state?: Partial<
+-    Record<
+-      string,
+-      { status: "in_progress" | "completed"; currentStepId: string; completedStepIds: string[]; updatedAt: string }
+-    >
+-  >;
+ };
+ 
+ // ── Users ─────────────────────────────────────────────────────────────────
+@@ -1191,7 +1158,27 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
+   exitReason: text("exit_reason"),
+   exitedAt: timestamp("exited_at"),
+   createdAt: timestamp("created_at").defaultNow().notNull(),
+-});
++}, (table) => ({
++  // Win-Back no-show gap fix's dedup guard (enrollment-service.ts's
++  // cancelled branch) used to be a plain SELECT-then-INSERT with no lock
++  // between them — the comment there even calls it "the authoritative
++  // check," but it wasn't one. The same booking can legitimately reach
++  // that branch from more than one source at nearly the same instant (a
++  // platform webhook, a rep's Slack/dashboard click, Recall bot
++  // telemetry, or the assumed-no-show sweep — see outcome-resolution.ts's
++  // own header), and nothing serializes those Inngest invocations against
++  // each other, so two concurrent calls could both pass the "not already
++  // enrolled" check and both insert an active row — double-enrolling one
++  // prospect in the win-back email/SMS cadence for one missed call. A
++  // normal (non-partial) unique index is correct here even though
++  // sourceBookingId is nullable: Postgres unique indexes already treat
++  // NULL as distinct from every other NULL, so legacy rows with no
++  // sourceBookingId (enrolled before this column existed) are completely
++  // unaffected — only two rows sharing the same real, non-null
++  // (engagementId, sourceBookingId) pair collide, which is exactly the
++  // case this is meant to stop.
++  winBackEnrollmentsSourceBookingUnique: uniqueIndex("win_back_enrollments_source_booking_unique").on(table.engagementId, table.sourceBookingId),
++}));
+ 
+ // ── Audit Runs Log ────────────────────────────────────────────────────────
+ export const auditRunsLog = pgTable("audit_runs_log", {
+@@ -2815,12 +2802,6 @@ export const coldOpenReplies = pgTable(
+     // deal; a queue visit costs a click" reasoning reply_classifier.py's
+     // own header states.
+     routedToQueue: boolean("routed_to_queue").notNull().default(false),
+-    // Set once a human has seen and dealt with this reply from the Queue
+-    // panel — mirrors humanBlockers' resolved state, but as a timestamp
+-    // (like repIncidents.resolvedAt) rather than a status enum, since a
+-    // queue-worthy reply has exactly one terminal state (handled), not an
+-    // approve/reject or resolve/abandon choice.
+-    queueResolvedAt: timestamp("queue_resolved_at"),
+ 
+     classifiedAt: timestamp("classified_at").defaultNow().notNull(),
+     createdAt: timestamp("created_at").defaultNow().notNull(),
+diff --git a/tests/integration/alert-monitor-cooldown-race.test.ts b/tests/integration/alert-monitor-cooldown-race.test.ts
+new file mode 100644
+index 0000000..acd08f5
+--- /dev/null
++++ b/tests/integration/alert-monitor-cooldown-race.test.ts
+@@ -0,0 +1,117 @@
++// tests/integration/alert-monitor-cooldown-race.test.ts
++//
++// evaluateActiveAlertMonitor (leak-map's alert-monitor.ts) used to check
++// activeAlerts.lastFiredAt in JS up front, then batch-write lastFiredAt
++// for every triggered alert only at the very end, after every Slack/LLM
++// call had already gone out — a check-then-act gap with no lock between
++// the read and the write. Two real, documented entry points call this
++// same evaluator: the scheduled Inngest cron (every 6h) and the
++// admin-invocable manual-trigger route (alert-monitor/route.ts). Nothing
++// serializes them against each other, so an admin triggering a manual
++// check while the cron happens to also be running could have both
++// invocations see the same stale lastFiredAt, both decide the same alert
++// is breached and off cooldown, and both fire — a duplicate Slack page
++// and a doubled LLM call for one real breach.
++//
++// This proves the fix directly: the claim is now a single conditional
++// UPDATE ... WHERE lastFiredAt IS NULL OR lastFiredAt < cutoff, exercised
++// here exactly as alert-monitor.ts runs it, against two genuinely
++// concurrent callers.
++import { describe, it, expect, afterEach } from "vitest";
++import crypto from "crypto";
++
++const hasDb = Boolean(process.env.DATABASE_URL);
++const d = hasDb ? describe : describe.skip;
++
++d("activeAlerts cooldown claim — concurrent overlapping-invocation race", () => {
++  const engagementId = `test-eng-alertmon-${crypto.randomUUID()}`;
++  const workspaceId = `test-ws-alertmon-${crypto.randomUUID()}`;
++  const whopUserId = `test-user-alertmon-${crypto.randomUUID()}`;
++  let alertId: string;
++
++  afterEach(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, activeAlerts } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    await db.delete(activeAlerts).where(eq(activeAlerts.engagementId, engagementId));
++    await db.delete(engagements).where(eq(engagements.engagementId, engagementId));
++    await db.delete(workspaces).where(eq(workspaces.workspaceId, workspaceId));
++  });
++
++  it("two concurrent evaluator invocations claiming the same breached alert: exactly one wins", async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, activeAlerts } = await import("@/models/schema");
++    const { eq, and, isNull, lt, or } = await import("drizzle-orm");
++
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    const [row] = await db
++      .insert(activeAlerts)
++      .values({
++        engagementId,
++        metricName: "show_rate",
++        threshold: "50",
++        comparison: "below",
++        evaluationPeriod: "daily",
++        severity: "high",
++        source: "pack",
++        lastFiredAt: null,
++      })
++      .returning();
++    alertId = row.id;
++
++    const cooldownMs = 12 * 60 * 60 * 1000;
++
++    // Mirrors alert-monitor.ts's own claim exactly — the atomic
++    // conditional UPDATE that replaced the JS-side check + batched
++    // end-of-run write.
++    const claimAlert = () => {
++      const cooldownCutoff = new Date(Date.now() - cooldownMs);
++      return db
++        .update(activeAlerts)
++        .set({ lastFiredAt: new Date() })
++        .where(and(eq(activeAlerts.id, alertId), or(isNull(activeAlerts.lastFiredAt), lt(activeAlerts.lastFiredAt, cooldownCutoff))))
++        .returning({ id: activeAlerts.id });
++    };
++
++    const [a, b] = await Promise.all([claimAlert(), claimAlert()]);
++
++    const claimedCount = [a, b].filter((r) => r.length > 0).length;
++    expect(claimedCount).toBe(1); // exactly one invocation wins the claim and would go on to send Slack/LLM — the other gets zero rows, not a second page
++  });
++
++  it("a claim within the cooldown window is rejected, not silently re-fired", async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, activeAlerts } = await import("@/models/schema");
++    const { eq, and, isNull, lt, or } = await import("drizzle-orm");
++
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    const [row] = await db
++      .insert(activeAlerts)
++      .values({
++        engagementId,
++        metricName: "show_rate",
++        threshold: "50",
++        comparison: "below",
++        evaluationPeriod: "daily",
++        severity: "high",
++        source: "pack",
++        lastFiredAt: new Date(), // just fired
++      })
++      .returning();
++    alertId = row.id;
++
++    const cooldownMs = 12 * 60 * 60 * 1000;
++    const cooldownCutoff = new Date(Date.now() - cooldownMs);
++    const claimed = await db
++      .update(activeAlerts)
++      .set({ lastFiredAt: new Date() })
++      .where(and(eq(activeAlerts.id, alertId), or(isNull(activeAlerts.lastFiredAt), lt(activeAlerts.lastFiredAt, cooldownCutoff))))
++      .returning({ id: activeAlerts.id });
++
++    expect(claimed).toHaveLength(0); // still inside its cooldown — no claim, no second Slack page
++  });
++});
+diff --git a/tests/integration/win-back-enrollment-race.test.ts b/tests/integration/win-back-enrollment-race.test.ts
+new file mode 100644
+index 0000000..e942000
+--- /dev/null
++++ b/tests/integration/win-back-enrollment-race.test.ts
+@@ -0,0 +1,132 @@
++// tests/integration/win-back-enrollment-race.test.ts
++//
++// enrollment-service.ts's cancelled branch used to SELECT for an existing
++// winBackEnrollments row keyed by sourceBookingId, check it was empty in
++// JS, and only later INSERT — a check-then-act gap with no lock between
++// the read and the write, despite the code's own comment calling it "the
++// authoritative check." The same booking can legitimately reach this
++// branch from more than one source at nearly the same instant — a real
++// booking.cancelled webhook, a rep's Slack/dashboard click, Recall bot
++// telemetry, or the assumed-no-show sweep (see outcome-resolution.ts) —
++// and nothing serializes the resulting Inngest invocations against each
++// other. Two concurrent deliveries for the same booking could both see
++// "not enrolled yet" and both insert, double-enrolling (and
++// double-emailing/texting) one prospect for one missed call.
++//
++// This proves the fix directly against the real schema: winBackEnrollments
++// now has a genuine unique index on (engagementId, sourceBookingId), and
++// the insert uses onConflictDoNothing as an atomic claim — exercised here
++// exactly as enrollment-service.ts's cancelled branch runs it.
++import { describe, it, expect, afterEach } from "vitest";
++import crypto from "crypto";
++
++const hasDb = Boolean(process.env.DATABASE_URL);
++const d = hasDb ? describe : describe.skip;
++
++d("winBackEnrollments — concurrent double-enrollment race on the same booking", () => {
++  const engagementId = `test-eng-winback-${crypto.randomUUID()}`;
++  const workspaceId = `test-ws-winback-${crypto.randomUUID()}`;
++  const whopUserId = `test-user-winback-${crypto.randomUUID()}`;
++  const bookingId = `booking-${crypto.randomUUID()}`;
++
++  afterEach(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, winBackEnrollments } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    await db.delete(winBackEnrollments).where(eq(winBackEnrollments.engagementId, engagementId));
++    await db.delete(engagements).where(eq(engagements.engagementId, engagementId));
++    await db.delete(workspaces).where(eq(workspaces.workspaceId, workspaceId));
++  });
++
++  it("two concurrent enrollment attempts for the same booking: exactly one row lands", async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, winBackEnrollments } = await import("@/models/schema");
++    const { eq, and } = await import("drizzle-orm");
++
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    // Mirrors enrollment-service.ts's cancelled-branch claim exactly — the
++    // atomic INSERT ... ON CONFLICT DO NOTHING that replaced the old
++    // SELECT-then-INSERT.
++    const claimEnrollment = (prospectEmail: string) =>
++      db
++        .insert(winBackEnrollments)
++        .values({
++          id: crypto.randomUUID(),
++          engagementId,
++          prospectEmail,
++          prospectName: "Test Prospect",
++          recoveryWindowDays: 30,
++          status: "active",
++          sourceBookingId: bookingId,
++        })
++        .onConflictDoNothing({ target: [winBackEnrollments.engagementId, winBackEnrollments.sourceBookingId] })
++        .returning({ id: winBackEnrollments.id });
++
++    // Two "different sources" racing for the same booking — e.g. a
++    // platform webhook and a rep's Slack click landing at nearly the same
++    // instant, exactly the scenario the module's own header documents.
++    const [a, b] = await Promise.all([
++      claimEnrollment("prospect@example.com"),
++      claimEnrollment("prospect@example.com"),
++    ]);
++
++    const claimedCount = [a, b].filter((r) => r.length > 0).length;
++    expect(claimedCount).toBe(1); // exactly one insert lands — the other's onConflictDoNothing returns zero rows, not a throw and not a second row
++
++    const rows = await db
++      .select()
++      .from(winBackEnrollments)
++      .where(and(eq(winBackEnrollments.engagementId, engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)));
++    expect(rows).toHaveLength(1); // never double-enrolled in the DB, regardless of how many sources raced for it
++  });
++
++  it("a legacy row with a null sourceBookingId never blocks a real enrollment", async () => {
++    // Confirms the unique index's nullability behavior matches Postgres
++    // semantics (NULL is distinct from NULL) — legacy rows enrolled
++    // before sourceBookingId existed must never collide with each other
++    // or with a real, keyed enrollment.
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, winBackEnrollments } = await import("@/models/schema");
++    const { eq, and, isNull } = await import("drizzle-orm");
++
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++
++    const insertLegacyRow = (email: string) =>
++      db.insert(winBackEnrollments).values({
++        id: crypto.randomUUID(),
++        engagementId,
++        prospectEmail: email,
++        prospectName: "Legacy Prospect",
++        recoveryWindowDays: 30,
++        status: "active",
++        sourceBookingId: null,
++      });
++
++    await insertLegacyRow("legacy1@example.com");
++    await insertLegacyRow("legacy2@example.com"); // must not throw — two nulls are not a conflict
++
++    const [keyed] = await db
++      .insert(winBackEnrollments)
++      .values({
++        id: crypto.randomUUID(),
++        engagementId,
++        prospectEmail: "real@example.com",
++        prospectName: "Real Prospect",
++        recoveryWindowDays: 30,
++        status: "active",
++        sourceBookingId: bookingId,
++      })
++      .onConflictDoNothing({ target: [winBackEnrollments.engagementId, winBackEnrollments.sourceBookingId] })
++      .returning({ id: winBackEnrollments.id });
++    expect(keyed).toBeDefined(); // real, keyed enrollment succeeds independent of the legacy nulls
++
++    const legacyRows = await db
++      .select()
++      .from(winBackEnrollments)
++      .where(and(eq(winBackEnrollments.engagementId, engagementId), isNull(winBackEnrollments.sourceBookingId)));
++    expect(legacyRows).toHaveLength(2);
++  });
++});

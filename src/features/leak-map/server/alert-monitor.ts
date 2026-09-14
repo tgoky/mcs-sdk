@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { activeAlerts, briefedCallsLog, auditRunsLog, engagements, type EngagementStack } from "@/models/schema";
-import { eq, gte, inArray, desc, isNull } from "drizzle-orm";
+import { and, eq, gte, inArray, desc, isNull, lt, or } from "drizzle-orm";
 import { callClaude, MODEL } from "@/lib/llm";
 import { fetchWithTimeout } from "@/lib/http";
 
@@ -10,9 +10,13 @@ import { fetchWithTimeout } from "@/lib/http";
  * Cooldown is tracked via activeAlerts.lastFiredAt — no skillRuns abuse.
  * Slack delivery uses per-engagement webhook, never a global env var.
  *
- * PERFORMANCE: 4 queries total, no N+1 — one join for alerts+stack, one
+ * PERFORMANCE: no N+1 on the read side — one join for alerts+stack, one
  * sweep for recent briefedCallsLog rows, one sweep for the latest
- * auditRunsLog row per engagement, one batched cooldown UPDATE.
+ * auditRunsLog row per engagement. The cooldown UPDATE is deliberately
+ * NOT batched at the end (it used to be) — see the atomic-claim comment
+ * below for why each breached alert claims its own cooldown right before
+ * firing, one UPDATE per alert that actually fires, not one at the end
+ * covering all of them.
  *
  * Metric handlers:
  *   - person_match_confidence: computed live from the last 24h of
@@ -112,7 +116,6 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
   }
 
   // ── Evaluate & Fan-out ──────────────────────────────────────────────
-  const triggeredAlertIds: string[] = [];
   const outboundPromises: Promise<void>[] = [];
 
   for (const alert of alertsWithStack) {
@@ -153,6 +156,38 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
     if (alert.comparison === "below" && currentValue < threshold) breached = true;
     if (alert.comparison === "above" && currentValue > threshold) breached = true;
     if (!breached) continue;
+
+    // Atomic claim, not check-then-act — this used to be a JS-side
+    // lastFiredAt check up front (already passed above) plus one big
+    // batched UPDATE at the very end, after every Slack/LLM call for
+    // every triggered alert had already gone out. Two overlapping
+    // invocations of this function race that gap directly: the scheduled
+    // Inngest cron (every 6h) and this module's own admin-invocable
+    // manual-trigger route (alert-monitor/route.ts, "kept as a
+    // manually-triggerable... equivalent") are two real, documented entry
+    // points into the exact same evaluator, and nothing serializes them
+    // against each other — an admin triggering a manual check while the
+    // cron happens to also be running would have both invocations read
+    // the same stale lastFiredAt, both decide this alert is breached and
+    // off cooldown, and both fire — a duplicate Slack page plus a doubled
+    // LLM call for one real breach. Same failure shape as this codebase's
+    // whop-agent alert-cooldown.ts already had to fix. The UPDATE's own
+    // WHERE clause (re-checking the cooldown at claim time, not trusting
+    // the JS-side check from the top of this loop) is the lock-free
+    // compare-and-swap: only the invocation that actually claims the row
+    // gets to build the outbound Slack/LLM promise below.
+    const cooldownCutoff = new Date(Date.now() - cooldownMs);
+    const [claimed] = await db
+      .update(activeAlerts)
+      .set({ lastFiredAt: new Date() })
+      .where(
+        and(
+          eq(activeAlerts.id, alert.id),
+          or(isNull(activeAlerts.lastFiredAt), lt(activeAlerts.lastFiredAt, cooldownCutoff))
+        )
+      )
+      .returning({ id: activeAlerts.id });
+    if (!claimed) continue; // another concurrent invocation already claimed and fired this alert
 
     const slackWebhookUrl = (alert.stack as EngagementStack | null)?.slack_webhook_url;
     if (!slackWebhookUrl) {
@@ -213,18 +248,14 @@ Write a one-paragraph alert for the sales operator.`,
       })
     );
 
-    triggeredAlertIds.push(alert.id);
     triggered++;
   }
 
-  await Promise.all(outboundPromises);
-
-  if (triggeredAlertIds.length > 0) {
-    await db
-      .update(activeAlerts)
-      .set({ lastFiredAt: new Date() })
-      .where(inArray(activeAlerts.id, triggeredAlertIds));
-  }
+  // lastFiredAt is now stamped per-alert at claim time (above), not
+  // batched here at the end — see the claim comment for why: batching it
+  // here was the second half of the original check-then-act gap, since
+  // every Slack/LLM call for every triggered alert had already gone out
+  // by the time this ran.
 
   return triggered;
 }

@@ -417,27 +417,60 @@ export async function handleInboundBookingEvent(
 
   // ── booking.cancelled / no-showed → Win-Back ─────────────────────────
   else if (eventKind === "cancelled") {
-    // Win-Back no-show gap fix — dedup guard. A given booking can now
-    // reach this branch from more than one source: a real
-    // booking.cancelled webhook from the platform, a rep-logged no_show
-    // outcome (dashboard or Slack), Recall bot telemetry, or the
-    // assumed-no-show sweep (see outcome-resolution.ts) — and more than
-    // one of those can legitimately fire for the same booking (e.g. a
-    // true no-show that the prospect later also cancels through the
-    // calendar UI). Without this check each source would create its own
-    // active winBackEnrollments row and the prospect would get enrolled
-    // — and emailed — more than once for one missed call. bookingId is
-    // already resolved above for both branches; this is the authoritative
-    // check (outcome-resolution.ts's own pre-check is best-effort only).
-    const [alreadyEnrolled] = await db
-      .select({ id: winBackEnrollments.id })
-      .from(winBackEnrollments)
-      .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
-      .limit(1);
+    // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
+    // Only meaningful in "fresh_link" mode; extracted here (once, at
+    // cancellation time) rather than on-demand later, since the
+    // cancellation webhook payload is the only place this per-booking
+    // identifier ever appears — the booking platform doesn't expose it
+    // via any subsequent lookup. Pure payload parsing, no side effect —
+    // safe to compute before the atomic claim below.
+    const freshRescheduleLink =
+      stack.reschedule_mode === "fresh_link" ? extractFreshRescheduleLink(stack.booking_platform, payload) : null;
 
-    if (alreadyEnrolled) {
+    // Win-Back no-show gap fix — dedup guard, now an atomic claim instead
+    // of check-then-act. A given booking can reach this branch from more
+    // than one source: a real booking.cancelled webhook from the
+    // platform, a rep-logged no_show outcome (dashboard or Slack), Recall
+    // bot telemetry, or the assumed-no-show sweep (see
+    // outcome-resolution.ts) — and more than one of those can legitimately
+    // fire for the same booking at nearly the same instant, with nothing
+    // serializing the resulting Inngest invocations against each other.
+    // This used to be a plain SELECT for an existing row, checked in JS,
+    // followed later by an unconditional INSERT — the comment here even
+    // called it "the authoritative check," but with no lock between the
+    // read and the write it wasn't one: two concurrent deliveries for the
+    // same booking could both see "not enrolled yet" and both insert,
+    // double-enrolling — and double-emailing/texting — one prospect for
+    // one missed call. The INSERT itself is now the atomic claim, backed
+    // by winBackEnrollments' real unique index on (engagementId,
+    // sourceBookingId) — only the caller whose row actually lands gets to
+    // proceed to the ESP/SMS/hybrid-personalization side effects below;
+    // the loser's onConflictDoNothing insert returns nothing and this
+    // bails out exactly like the old "already enrolled" branch did.
+    const [enrollmentRow] = await db
+      .insert(winBackEnrollments)
+      .values({
+        id: crypto.randomUUID(),
+        engagementId: tenant.engagementId,
+        prospectEmail,
+        prospectName,
+        runId,
+        recoveryWindowDays: stack.recovery_window_days ?? 30,
+        status: "active",
+        freshRescheduleLink,
+        sourceBookingId: bookingId,
+      })
+      .onConflictDoNothing({ target: [winBackEnrollments.engagementId, winBackEnrollments.sourceBookingId] })
+      .returning({ id: winBackEnrollments.id });
+
+    if (!enrollmentRow) {
+      const [existing] = await db
+        .select({ id: winBackEnrollments.id })
+        .from(winBackEnrollments)
+        .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
+        .limit(1);
       summary.openItems.push(
-        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking (enrollment ${alreadyEnrolled.id}) — skipped a duplicate enrollment.`
+        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking${existing ? ` (enrollment ${existing.id})` : ""} — skipped a duplicate enrollment.`
       );
       await logStep(runId, {
         phase: "recovery_enrollment",
@@ -481,34 +514,6 @@ export async function handleInboundBookingEvent(
       summary.whatWorked.push(`Enrolled in ${stack.email_platform} win-back sequence.`);
     }
     await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: `Enrolled ${prospectName} in win-back sequence` });
-
-    // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
-    // Only meaningful in "fresh_link" mode; extracted here (once, at
-    // cancellation time) rather than on-demand later, since the
-    // cancellation webhook payload is the only place this per-booking
-    // identifier ever appears — the booking platform doesn't expose it
-    // via any subsequent lookup.
-    const freshRescheduleLink =
-      stack.reschedule_mode === "fresh_link" ? extractFreshRescheduleLink(stack.booking_platform, payload) : null;
-
-    const [enrollmentRow] = await db
-      .insert(winBackEnrollments)
-      .values({
-        id: crypto.randomUUID(),
-        engagementId: tenant.engagementId,
-        prospectEmail,
-        prospectName,
-        runId,
-        recoveryWindowDays: stack.recovery_window_days ?? 30,
-        status: "active",
-        freshRescheduleLink,
-        // Win-Back no-show gap fix — see the dedup guard above. Persisted
-        // on every enrollment (not just outcome-resolution-triggered
-        // ones) so a genuine platform cancellation and a later no-show
-        // resolution for the same booking can't both create a row either.
-        sourceBookingId: bookingId,
-      })
-      .returning({ id: winBackEnrollments.id });
 
     if (stack.reschedule_mode === "fresh_link") {
       // Whatever we resolved — the platform's real fresh link, or (when

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "win_back_enrollments_source_booking_unique" ON "win_back_enrollments" USING btree ("engagement_id","source_booking_id");

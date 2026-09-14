@@ -478,39 +478,6 @@ export type EngagementStack = {
     platform: string;
     exportedFlowId?: string; // set only when method === "live_api"
   };
-
-  // ── Cross-cutting: per-product onboarding gate (enable/route.ts and its
-  // 4 sibling toggle routes) ─────────────────────────────────────────────
-  // Enabling any skill in a product used to only ever check that ONE
-  // skill's own runOnSetup flag against itself — every other skill in the
-  // same product enabled immediately with zero check that the product's
-  // own onboarding (pin-down / rep-onboarding / icp-lock / whop-connect)
-  // had actually completed (see src/lib/product-onboarding.ts). Skipping
-  // does NOT weaken that server-side gate — the skill still won't enable
-  // until onboarding genuinely finishes — it only stops the client from
-  // hard-redirecting to the onboarding bridge on every subsequent Enable
-  // click for a *different* skill in the same still-ungated product; the
-  // client shows a quiet inline "finish setup" note there instead. Keyed
-  // by ProductId rather than one flag per product so a 5th product never
-  // needs a new column here, just a new key.
-  product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
-
-  // ── Interactive product tours (src/lib/tours) ───────────────────────────
-  // Progress survives a page reload or navigating away mid-tour — a tour
-  // can span several routes (dashboard -> Library -> an engagement's own
-  // skill page), so this can't live in component state or even
-  // sessionStorage alone. Keyed by TourId, one entry per tour this
-  // workspace's primary engagement has ever started. "completed" is only
-  // set once every step actually reached its real target element (see
-  // tour-provider.tsx) — not just "the user clicked next" — so a step
-  // skipped because a product isn't onboarded yet doesn't retroactively
-  // count as seen.
-  tour_state?: Partial<
-    Record<
-      string,
-      { status: "in_progress" | "completed"; currentStepId: string; completedStepIds: string[]; updatedAt: string }
-    >
-  >;
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────
@@ -1191,7 +1158,27 @@ export const winBackEnrollments = pgTable("win_back_enrollments", {
   exitReason: text("exit_reason"),
   exitedAt: timestamp("exited_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Win-Back no-show gap fix's dedup guard (enrollment-service.ts's
+  // cancelled branch) used to be a plain SELECT-then-INSERT with no lock
+  // between them — the comment there even calls it "the authoritative
+  // check," but it wasn't one. The same booking can legitimately reach
+  // that branch from more than one source at nearly the same instant (a
+  // platform webhook, a rep's Slack/dashboard click, Recall bot
+  // telemetry, or the assumed-no-show sweep — see outcome-resolution.ts's
+  // own header), and nothing serializes those Inngest invocations against
+  // each other, so two concurrent calls could both pass the "not already
+  // enrolled" check and both insert an active row — double-enrolling one
+  // prospect in the win-back email/SMS cadence for one missed call. A
+  // normal (non-partial) unique index is correct here even though
+  // sourceBookingId is nullable: Postgres unique indexes already treat
+  // NULL as distinct from every other NULL, so legacy rows with no
+  // sourceBookingId (enrolled before this column existed) are completely
+  // unaffected — only two rows sharing the same real, non-null
+  // (engagementId, sourceBookingId) pair collide, which is exactly the
+  // case this is meant to stop.
+  winBackEnrollmentsSourceBookingUnique: uniqueIndex("win_back_enrollments_source_booking_unique").on(table.engagementId, table.sourceBookingId),
+}));
 
 // ── Audit Runs Log ────────────────────────────────────────────────────────
 export const auditRunsLog = pgTable("audit_runs_log", {
@@ -2815,12 +2802,6 @@ export const coldOpenReplies = pgTable(
     // deal; a queue visit costs a click" reasoning reply_classifier.py's
     // own header states.
     routedToQueue: boolean("routed_to_queue").notNull().default(false),
-    // Set once a human has seen and dealt with this reply from the Queue
-    // panel — mirrors humanBlockers' resolved state, but as a timestamp
-    // (like repIncidents.resolvedAt) rather than a status enum, since a
-    // queue-worthy reply has exactly one terminal state (handled), not an
-    // approve/reject or resolve/abandon choice.
-    queueResolvedAt: timestamp("queue_resolved_at"),
 
     classifiedAt: timestamp("classified_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

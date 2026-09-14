@@ -1,5 +1,5 @@
 {
-  "id": "e2d5badf-38c8-4f90-9c1b-c41cae26a574",
+  "id": "1cdb7a2e-a6b5-4d7f-94f9-f855bb8f6e93",
   "prevId": "df173b2c-f755-489e-8881-0a3e7fb29d88",
   "version": "7",
   "dialect": "postgresql",
@@ -1551,12 +1551,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "queue_resolved_at": {
-          "name": "queue_resolved_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "classified_at": {
           "name": "classified_at",
@@ -5423,7 +5417,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "win_back_enrollments_source_booking_unique": {
+          "name": "win_back_enrollments_source_booking_unique",
+          "columns": [
+            {
+              "expression": "engagement_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_booking_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "win_back_enrollments_engagement_id_engagements_engagement_id_fk": {
           "name": "win_back_enrollments_engagement_id_engagements_engagement_id_fk",
