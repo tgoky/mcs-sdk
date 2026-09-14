@@ -173,7 +173,7 @@ export function ProductDetailClient({
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">{name}</h1>
             {installed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-white bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-2 py-0.5 rounded-md">
                 <Download size={11} className="stroke-[2.5]" /> Installed
               </span>
             )}
@@ -287,7 +287,7 @@ export function ProductDetailClient({
             No skills match these filters.
           </div>
         ) : (
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
             {/* Configure swaps only that one skill's own row for its config
                 form, in the exact same slot in the list — every other row
                 stays put, so clicking Configure never reflows the page or
@@ -296,7 +296,7 @@ export function ProductDetailClient({
             {filteredWorkers.map((worker, i) => (
               <Fragment key={worker.id}>
                 {expandedWorker === worker.id && engagementId ? (
-                  <div className="py-5">
+                  <div className="py-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {worker.name}</h3>
                       <button

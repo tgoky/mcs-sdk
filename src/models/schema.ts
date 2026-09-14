@@ -2782,6 +2782,12 @@ export const coldOpenReplies = pgTable(
     // deal; a queue visit costs a click" reasoning reply_classifier.py's
     // own header states.
     routedToQueue: boolean("routed_to_queue").notNull().default(false),
+    // Set once a human has seen and dealt with this reply from the Queue
+    // panel — mirrors humanBlockers' resolved state, but as a timestamp
+    // (like repIncidents.resolvedAt) rather than a status enum, since a
+    // queue-worthy reply has exactly one terminal state (handled), not an
+    // approve/reject or resolve/abandon choice.
+    queueResolvedAt: timestamp("queue_resolved_at"),
 
     classifiedAt: timestamp("classified_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -19,6 +19,7 @@ import {
   type IdentityGraphFormState,
 } from "@/features/reputation-manager/identity-graph-form";
 import type { RepCollision } from "@/models/schema";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
   const router = useRouter();
@@ -88,7 +89,11 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
   }
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto py-16 px-4 text-sm text-zinc-500 dark:text-zinc-400">Loading…</div>;
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4">
+        <ConfigFormSkeleton />
+      </div>
+    );
   }
   if (loadError) {
     return <div className="max-w-2xl mx-auto py-16 px-4 text-sm text-red-600 dark:text-red-400">{loadError}</div>;

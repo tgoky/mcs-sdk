@@ -69,6 +69,7 @@ type ColdOpenReplyRow = {
   classificationSource: "heuristic" | "model" | "error" | "none";
   rawBody: string;
   routedToQueue: boolean;
+  queueResolvedAt: string | null;
   classifiedAt: string;
   createdAt: string;
 };
@@ -609,7 +610,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{r.leadEmail}</span>
                             <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
-                            {r.routedToQueue && <StatusPill tone="info">Routed to Queue</StatusPill>}
+                            {r.routedToQueue && !r.queueResolvedAt && <StatusPill tone="info">Routed to Queue</StatusPill>}
                           </div>
                           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{r.rawBody}</p>
                         </div>
@@ -635,7 +636,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusPill tone={REPLY_DISPOSITION_META[selectedReply.disposition].tone}>{REPLY_DISPOSITION_META[selectedReply.disposition].label}</StatusPill>
-                    {selectedReply.routedToQueue && (
+                    {selectedReply.routedToQueue && !selectedReply.queueResolvedAt && (
                       <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                         View in Queue <ExternalLink size={10} />
                       </a>

@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
 
@@ -148,7 +149,7 @@ export function IcpLockConfigForm({
     }
   }
 
-  if (loading) return <div className="p-6 text-xs font-mono text-zinc-500 dark:text-zinc-400">Loading…</div>;
+  if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
   return (

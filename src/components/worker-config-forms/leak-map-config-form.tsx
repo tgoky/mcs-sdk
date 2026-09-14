@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 const DAY_OPTIONS = [
   { value: "0", label: "Sunday" },
@@ -113,7 +114,7 @@ export function LeakMapConfigForm({
   }
 
   if (loading) {
-    return <div className="p-6 text-xs font-mono" style={{ color: "var(--text-muted)" }}>Loading…</div>;
+    return <ConfigFormSkeleton />;
   }
   if (loadError) {
     return (

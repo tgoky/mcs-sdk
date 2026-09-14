@@ -131,6 +131,18 @@ export function WorkerCard({
     }
   }
 
+  // The row variant (product-detail-client.tsx's skill list, the same
+  // shape WorkersPanel already uses on the engagement page) uses that
+  // page's own plain text+icon link style for Configure/Analytics —
+  // no button chrome — instead of the boxed, bordered icon buttons the
+  // grid tile ("card" variant) still uses, where there's no room for a
+  // text label next to the icon.
+  const configureAnalyticsClass =
+    variant === "row"
+      ? "inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+      : "inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors";
+  const iconSize = variant === "row" ? "w-3.5 h-3.5" : "w-4 h-4";
+
   const actionControls = enabled ? (
     <>
       {canConfigureInline ? (
@@ -138,31 +150,30 @@ export function WorkerCard({
           type="button"
           onClick={onToggleConfigure}
           title={isConfiguring ? "Close" : "Configure"}
-          className={`inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
-            isConfiguring
-              ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-              : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
-          }`}
+          className={
+            variant === "row"
+              ? configureAnalyticsClass
+              : `inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
+                  isConfiguring
+                    ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                    : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
+                }`
+          }
         >
-          {isConfiguring ? <X className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+          {isConfiguring ? <X className={iconSize} /> : <Settings className={iconSize} />}
+          {variant === "row" && <span>{isConfiguring ? "Close" : "Configure"}</span>}
         </button>
       ) : (
         plainConfigureHref && (
-          <Link
-            href={plainConfigureHref}
-            title="Configure"
-            className="inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
+          <Link href={plainConfigureHref} title="Configure" className={configureAnalyticsClass}>
+            <Settings className={iconSize} />
+            {variant === "row" && <span>Configure</span>}
           </Link>
         )
       )}
-      <Link
-        href={analyticsHref}
-        title="Analytics"
-        className="inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors"
-      >
-        <BarChart3 className="w-4 h-4" />
+      <Link href={analyticsHref} title="Analytics" className={configureAnalyticsClass}>
+        <BarChart3 className={iconSize} />
+        {variant === "row" && <span>Analytics</span>}
       </Link>
     </>
   ) : needsOwnSetup ? (
@@ -224,7 +235,7 @@ export function WorkerCard({
                 )}
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{worker.name}</h3>
                 {enabled && (
-                  <span className="shrink-0 rounded-md bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 uppercase">
+                  <span className="shrink-0 rounded-md bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
                     Enabled
                   </span>
                 )}
@@ -322,7 +333,7 @@ export function WorkerCard({
             <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">{PRODUCT_LABELS[worker.productId]}</p>
           </div>
           {enabled && (
-            <span className="shrink-0 rounded-md bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 uppercase">
+            <span className="shrink-0 rounded-md bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
               Enabled
             </span>
           )}

@@ -16,6 +16,7 @@ import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 import { TemplatePicker } from "@/app/dashboard/engagements/new/steps/template-picker";
 import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new/types";
 import { DEFAULT_FORM } from "@/app/dashboard/engagements/new/constants";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 export function PinDownConfigForm({
   engagementId,
@@ -131,7 +132,7 @@ export function PinDownConfigForm({
   }
 
   if (loading) {
-    return <div className="p-6 text-xs font-mono" style={{ color: "var(--text-muted)" }}>Loading…</div>;
+    return <ConfigFormSkeleton />;
   }
   if (loadError) {
     return (

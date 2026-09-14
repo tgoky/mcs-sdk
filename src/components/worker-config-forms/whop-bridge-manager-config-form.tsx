@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 export function WhopBridgeManagerConfigForm({
   engagementId,
@@ -88,7 +89,7 @@ export function WhopBridgeManagerConfigForm({
   }
 
   if (loading) {
-    return <div className="p-6 text-xs font-mono" style={{ color: "var(--text-muted)" }}>Loading…</div>;
+    return <ConfigFormSkeleton />;
   }
   if (loadError) {
     return (

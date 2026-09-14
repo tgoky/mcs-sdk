@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X, Loader2 } from "lucide-react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
 
@@ -182,7 +183,7 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
     }
   }
 
-  if (loading) return <div className="p-6 text-xs font-mono text-zinc-500 dark:text-zinc-400">Loading…</div>;
+  if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
   return (

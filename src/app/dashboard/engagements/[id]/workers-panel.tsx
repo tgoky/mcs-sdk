@@ -205,7 +205,7 @@ export function WorkersPanel({
           no card chrome — the form is the content, not a widget floating
           on top of one. */}
       {expandedWorker ? (
-        <div className="space-y-4">
+        <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
           <button
             type="button"
             onClick={() => setExpandedWorker(null)}
@@ -274,7 +274,7 @@ export function WorkersPanel({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
           {workerIds.map((workerId) => {
           const worker = WORKER_REGISTRY[workerId];
           const isEnabled = states[workerId] ?? true;
