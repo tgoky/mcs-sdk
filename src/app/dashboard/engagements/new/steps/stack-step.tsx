@@ -28,7 +28,7 @@ export function StackStep({
       {/* Auto-Detection Banner for Standard Platforms */}
       {form.bookingPlatform && form.bookingPlatform !== "discover_from_docs" && (
         <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-          ✨ <strong>Auto-Detection Active:</strong> No need to copy-paste URLs or Location IDs. On the next step, entering your API key will automatically fetch your live calendar options for you to choose from.
+          <strong>Auto-Detection Active:</strong> No need to copy-paste URLs or Location IDs. On the next step, entering your API key will automatically fetch your live calendar options for you to choose from.
         </div>
       )}
 

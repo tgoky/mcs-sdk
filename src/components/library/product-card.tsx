@@ -57,7 +57,16 @@ export function ProductCard({
       const res = await fetch(`/api/workspaces/packages/${productId}`, { method: installed ? "DELETE" : "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Could not ${installed ? "uninstall" : "install"} ${name}.`);
-      router.refresh();
+      if (installed) {
+        // Uninstalling: stay put, just refresh this card's state.
+        router.refresh();
+      } else {
+        // Installing: a silent grid refresh left people staring at a
+        // relabeled button with no next step — go straight to the
+        // product's own page, where its first (onboarding) skill is
+        // already the prominent "Set up {worker}" action.
+        router.push(`/dashboard/library/${productId}`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not ${installed ? "uninstall" : "install"} ${name}.`);
     } finally {
