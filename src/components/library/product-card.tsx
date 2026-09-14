@@ -84,7 +84,7 @@ export function ProductCard({
                   {name}
                 </h2>
                 {installed && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-white bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-1.5 py-0.5 rounded-md">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-1.5 py-0.5 rounded-md">
                     <Download size={10} className="stroke-[2.5]" /> Installed
                   </span>
                 )}

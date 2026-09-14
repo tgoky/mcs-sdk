@@ -173,7 +173,7 @@ export function ProductDetailClient({
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">{name}</h1>
             {installed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-white bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-2 py-0.5 rounded-md">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-2 py-0.5 rounded-md">
                 <Download size={11} className="stroke-[2.5]" /> Installed
               </span>
             )}

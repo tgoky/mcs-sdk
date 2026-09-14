@@ -131,17 +131,14 @@ export function WorkerCard({
     }
   }
 
-  // The row variant (product-detail-client.tsx's skill list, the same
-  // shape WorkersPanel already uses on the engagement page) uses that
-  // page's own plain text+icon link style for Configure/Analytics —
-  // no button chrome — instead of the boxed, bordered icon buttons the
-  // grid tile ("card" variant) still uses, where there's no room for a
-  // text label next to the icon.
+  // Icon-only, circular — the exact same shape every individual skill
+  // page (skills/[workerId]/page.tsx) already uses for its own back
+  // button: w-8 h-8, rounded-full, a subtle border and fill. No text
+  // label — matching that convention means matching its restraint too,
+  // not adding a label those pages don't have either.
   const configureAnalyticsClass =
-    variant === "row"
-      ? "inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-      : "inline-flex items-center justify-center rounded-lg border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 w-8 h-8 text-zinc-700 dark:text-zinc-200 transition-colors";
-  const iconSize = variant === "row" ? "w-3.5 h-3.5" : "w-4 h-4";
+    "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0";
+  const iconSize = "w-4 h-4";
 
   const actionControls = enabled ? (
     <>
@@ -151,29 +148,22 @@ export function WorkerCard({
           onClick={onToggleConfigure}
           title={isConfiguring ? "Close" : "Configure"}
           className={
-            variant === "row"
-              ? configureAnalyticsClass
-              : `inline-flex items-center justify-center rounded-lg border w-8 h-8 transition-colors cursor-pointer ${
-                  isConfiguring
-                    ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                    : "border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
-                }`
+            isConfiguring
+              ? "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 transition-colors shrink-0"
+              : configureAnalyticsClass
           }
         >
           {isConfiguring ? <X className={iconSize} /> : <Settings className={iconSize} />}
-          {variant === "row" && <span>{isConfiguring ? "Close" : "Configure"}</span>}
         </button>
       ) : (
         plainConfigureHref && (
           <Link href={plainConfigureHref} title="Configure" className={configureAnalyticsClass}>
             <Settings className={iconSize} />
-            {variant === "row" && <span>Configure</span>}
           </Link>
         )
       )}
       <Link href={analyticsHref} title="Analytics" className={configureAnalyticsClass}>
         <BarChart3 className={iconSize} />
-        {variant === "row" && <span>Analytics</span>}
       </Link>
     </>
   ) : needsOwnSetup ? (
@@ -235,7 +225,7 @@ export function WorkerCard({
                 )}
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{worker.name}</h3>
                 {enabled && (
-                  <span className="shrink-0 rounded-md bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
+                  <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
                     Enabled
                   </span>
                 )}
@@ -333,7 +323,7 @@ export function WorkerCard({
             <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">{PRODUCT_LABELS[worker.productId]}</p>
           </div>
           {enabled && (
-            <span className="shrink-0 rounded-md bg-emerald-600 dark:bg-emerald-500 border border-emerald-700 dark:border-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
+            <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
               Enabled
             </span>
           )}
