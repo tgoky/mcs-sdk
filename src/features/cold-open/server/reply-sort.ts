@@ -7,15 +7,18 @@
 //
 // Routing note: `routedToQueue` on coldOpenReplies is real, queryable
 // data (set true for interested/objection/unclassified — the dispositions
-// that cost a deal if missed) but this pass does not wire a new branch
-// into src/lib/queue.ts's own item derivation, which already spans
-// several source tables — that integration is real, separately-scoped
-// follow-up work, not guessed at here. The Run History / send-report
-// view already surfaces these rows today.
+// that cost a deal if missed), and src/lib/queue.ts now reads it as a real
+// 4th source (coldOpenReplyQueueItems) alongside pending_actions/
+// human_blockers/notifications — a queue-worthy reply actually reaches a
+// human in the Queue panel now, not just the Run History / findings view.
+// getColdOpenReplyEngagementId/resolveColdOpenReplyQueueItem below are
+// this table's counterpart to human-blockers.ts's getBlockerEngagementId/
+// resolveBlocker, used by the resolve route the Queue panel calls once a
+// reviewer has actually dealt with one.
 
 import { db } from "@/lib/db";
 import { coldOpenReplies, type ColdOpenReplyDisposition } from "@/models/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { getColdOpenConfig } from "./config";
 import { preconditionCheck } from "./config";
 import { InstantlyReplyFetcher } from "./replies/instantly";
@@ -105,4 +108,28 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
     await failRun(runId, err, { summary }).catch(() => {});
     throw err;
   }
+}
+
+/** Same shape as human-blockers.ts's getBlockerEngagementId — the resolve
+ * route needs the owning engagement before it can check the caller's
+ * access to it. */
+export async function getColdOpenReplyEngagementId(replyId: string): Promise<string | null> {
+  const [row] = await db.select({ engagementId: coldOpenReplies.engagementId }).from(coldOpenReplies).where(eq(coldOpenReplies.id, replyId)).limit(1);
+  return row?.engagementId ?? null;
+}
+
+/** Marks a queue-worthy reply as handled. Only ever acts on a row that's
+ * still routedToQueue with no queueResolvedAt yet — an already-resolved
+ * reply (or one that was never queue-worthy) is left alone rather than
+ * silently "resolving" something that was never outstanding. */
+export async function resolveColdOpenReplyQueueItem(replyId: string): Promise<boolean> {
+  const [existing] = await db
+    .select({ id: coldOpenReplies.id })
+    .from(coldOpenReplies)
+    .where(and(eq(coldOpenReplies.id, replyId), eq(coldOpenReplies.routedToQueue, true), isNull(coldOpenReplies.queueResolvedAt)))
+    .limit(1);
+  if (!existing) return false;
+
+  await db.update(coldOpenReplies).set({ queueResolvedAt: new Date() }).where(eq(coldOpenReplies.id, replyId));
+  return true;
 }

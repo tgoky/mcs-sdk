@@ -1,12 +1,18 @@
 // src/lib/queue.ts
 //
-// The "Queue" is not a new table — it's a read-time merge of three
-// human-in-the-loop systems that already existed with full mutation
-// endpoints but zero UI surfacing them anywhere:
+// The "Queue" is not a new table — it's a read-time merge of human-in-the-
+// loop systems that already existed with full mutation endpoints but zero
+// UI surfacing them anywhere:
 //
-//   pending_actions  (GET /api/actions,  POST /api/actions/[id]/review)
-//   human_blockers   (GET /api/blockers, POST /api/blockers/[id]/resolve)
-//   notifications    (GET /api/notifications, POST /api/notifications/[id]/read)
+//   pending_actions    (GET /api/actions,  POST /api/actions/[id]/review)
+//   human_blockers     (GET /api/blockers, POST /api/blockers/[id]/resolve)
+//   notifications      (GET /api/notifications, POST /api/notifications/[id]/read)
+//   cold_open_replies  (routedToQueue rows — GET cold-open-findings, POST
+//                        /api/cold-open-replies/[id]/resolve) — added later;
+//                        reply-sort.ts always wrote real, queryable
+//                        routedToQueue data but this file never read it
+//                        until now, so a queue-worthy reply never actually
+//                        reached a human here despite the column's name.
 //
 // This file is the single place that decides how a row from each of those
 // tables maps onto one shared "queue item" shape, and how the combined
@@ -28,6 +34,7 @@ import {
   engagements,
   skillRuns,
   engagementSkills,
+  coldOpenReplies,
   type EngagementStack,
 } from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -35,6 +42,12 @@ import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel } from "@
 import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { classifyRunError, type StackSection } from "@/lib/error-classification";
+
+const REPLY_DISPOSITION_LABELS: Record<string, string> = {
+  interested: "Interested reply",
+  objection: "Objection reply",
+  unclassified: "Unclassified reply — needs review",
+};
 
 /**
  * The only two skills src/app/api/skill-runs/trigger/route.ts currently
@@ -46,7 +59,7 @@ import { classifyRunError, type StackSection } from "@/lib/error-classification"
 const RETRIGGERABLE_SKILLS = new Set(["pre-call-read", "leak-map"]);
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
-export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
+export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply";
 
 export interface QueueItem {
   id: string;
@@ -59,11 +72,12 @@ export interface QueueItem {
   runId: string | null;
   createdAt: string; // ISO
   /**
-   * Only set for source "run_failure" — where in "Edit stack settings" the
-   * likely-wrong field lives, e.g. "/dashboard/engagements/eng_123?fixSection=hosting#stack-settings".
-   * Distinct from the generic engagement-page link every other source
-   * falls back to, since this one should land the buyer already scrolled
-   * to (and with) the right section open instead of a blank engagement page.
+   * Set for source "run_failure" (where in "Edit stack settings" the
+   * likely-wrong field lives, e.g. "/dashboard/engagements/eng_123?fixSection=hosting#stack-settings")
+   * and source "cold_open_reply" (straight to that client's Cold Open
+   * page). Distinct from the generic engagement-page link every other
+   * source falls back to, since these should land the reader already on
+   * the specific thing they're here to act on, not a blank engagement page.
    */
   fixHref?: string;
   /** Only set for source "run_failure" — the raw skill id (e.g. "pre-call-read"), needed by the dismiss-run-failure endpoint. */
@@ -144,6 +158,55 @@ function syncSetupQueueItems(
     });
   }
   return items;
+}
+
+/**
+ * Queue-worthy Cold Open replies (interested/objection/unclassified —
+ * see reply-sort.ts's QUEUE_WORTHY) that haven't been marked handled yet.
+ * A real table read, not synthesized — coldOpenReplies.routedToQueue was
+ * always written correctly, this was just never queried from here (see
+ * this file's own header). Deep-links to the engagement's Cold Open page
+ * rather than a runId, since a reply isn't tied to the run that pushed
+ * the original outbound message.
+ */
+async function coldOpenReplyQueueItems(
+  engagementRows: { engagementId: string; buyer: string }[]
+): Promise<QueueItem[]> {
+  if (engagementRows.length === 0) return [];
+  const buyerByEngagement = new Map(engagementRows.map((r) => [r.engagementId, r.buyer]));
+
+  const rows = await db
+    .select({
+      id: coldOpenReplies.id,
+      engagementId: coldOpenReplies.engagementId,
+      leadEmail: coldOpenReplies.leadEmail,
+      disposition: coldOpenReplies.disposition,
+      rawBody: coldOpenReplies.rawBody,
+      classifiedAt: coldOpenReplies.classifiedAt,
+    })
+    .from(coldOpenReplies)
+    .where(
+      and(
+        inArray(coldOpenReplies.engagementId, engagementRows.map((r) => r.engagementId)),
+        eq(coldOpenReplies.routedToQueue, true),
+        isNull(coldOpenReplies.queueResolvedAt)
+      )
+    )
+    .orderBy(desc(coldOpenReplies.classifiedAt))
+    .limit(200);
+
+  return rows.map((r): QueueItem => ({
+    id: r.id,
+    source: "cold_open_reply",
+    category: "action_needed",
+    title: REPLY_DISPOSITION_LABELS[r.disposition] ?? "Cold Open reply",
+    subtitle: `${r.leadEmail} · ${r.rawBody}`,
+    engagementId: r.engagementId,
+    buyer: buyerByEngagement.get(r.engagementId) ?? null,
+    runId: null,
+    createdAt: r.classifiedAt.toISOString(),
+    fixHref: `/dashboard/engagements/${r.engagementId}/skills/cold-open`,
+  }));
 }
 
 /**
@@ -359,6 +422,7 @@ export async function getQueueItems(
   );
 
   const failureItems = await failedRunQueueItems(engagementStackRows);
+  const coldOpenReplyItems = await coldOpenReplyQueueItems(engagementStackRows);
 
   const items: QueueItem[] = [
     ...actionRows.map((a): QueueItem => {
@@ -413,6 +477,7 @@ export async function getQueueItems(
     })),
     ...syncSetupQueueItems(engagementStackRows),
     ...failureItems,
+    ...coldOpenReplyItems,
   ].map((item) => ({
     ...item,
     engagementPausedAt: item.engagementId ? pausedByEngagement.get(item.engagementId) ?? null : null,
@@ -466,6 +531,12 @@ export async function getQueueItems(
  * happens to mark it read. The two sources below (pending_actions,
  * human_blockers) both stamp a real decided/resolved timestamp, so this
  * stays honest about what it can and can't show.
+ *
+ * Also doesn't (yet) include "cold_open_reply", even though
+ * queueResolvedAt gives it the same real timestamp pending_actions/
+ * human_blockers have — scoped out of this pass deliberately, not an
+ * oversight: real archive follow-up work once the active-queue wiring
+ * above has actually been used for a while.
  */
 export type QueueArchiveOutcome = "approved" | "rejected" | "execution_failed" | "resolved" | "abandoned";
 
@@ -625,6 +696,7 @@ export async function getQueueActionableCount(whopUserId: string, workspaceId: s
   ).length;
 
   const failureCount = (await failedRunQueueItems(engagementStackRows)).length;
+  const coldOpenReplyCount = (await coldOpenReplyQueueItems(engagementStackRows)).length;
 
-  return pendingCount.length + blockerCount.length + syncSetupCount + failureCount;
+  return pendingCount.length + blockerCount.length + syncSetupCount + failureCount + coldOpenReplyCount;
 }

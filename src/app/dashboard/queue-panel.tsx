@@ -46,7 +46,7 @@ import { QueueFixDrawer } from "@/components/queue-fix-drawer";
 
 export interface QueueItemDTO {
   id: string;
-  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure";
+  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply";
   category: "approve" | "action_needed" | "alert" | "fyi";
   title: string;
   subtitle: string;
@@ -518,7 +518,28 @@ function QueueRow({
           </>
         )}
 
-        {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && (
+        {item.category === "action_needed" && item.source === "cold_open_reply" && (
+          <>
+            {href ? (
+              <Link
+                href={href}
+                onClick={handleFixLinkClick}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
+              >
+                <ArrowUpRight size={12} /> Open reply
+              </Link>
+            ) : null}
+            <button
+              disabled={isBusy}
+              onClick={() => onDecide("resolved")}
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
+            >
+              <Check size={12} /> Mark handled
+            </button>
+          </>
+        )}
+
+        {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && item.source !== "cold_open_reply" && (
           <>
             <button
               disabled={isBusy}
@@ -756,6 +777,7 @@ export function QueuePanel({
         else if (item.source === "blocker") { label = "Human Holds"; key = "blocker"; }
         else if (item.source === "run_failure") { label = "Fix-It Cards"; key = "run_failure"; }
         else if (item.source === "sync_setup") { label = "Sync Setup Nudges"; key = "sync_setup"; }
+        else if (item.source === "cold_open_reply") { label = "Cold Open Replies"; key = "cold_open_reply"; }
         else { label = "System Alerts & FYIs"; key = "notification"; }
       } else if (groupingMode === "preset") {
         if (item.isCredentialIssue) { label = "Broken Credentials"; key = "broken_keys"; }
@@ -832,6 +854,7 @@ export function QueuePanel({
           if (selectedCategory === "blocker") return item.source === "blocker";
           if (selectedCategory === "run_failure") return item.source === "run_failure";
           if (selectedCategory === "sync_setup") return item.source === "sync_setup";
+          if (selectedCategory === "cold_open_reply") return item.source === "cold_open_reply";
           return item.source === "notification";
         }
         if (groupingMode === "preset") {

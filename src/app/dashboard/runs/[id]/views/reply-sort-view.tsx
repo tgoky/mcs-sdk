@@ -36,7 +36,7 @@ export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
     );
   }
 
-  const routed = replies.filter((r) => r.routedToQueue).length;
+  const routed = replies.filter((r) => r.routedToQueue && !r.queueResolvedAt).length;
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
@@ -52,7 +52,7 @@ export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{r.leadEmail}</span>
                 <div className="flex items-center gap-1.5">
                   <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
-                  {r.routedToQueue && (
+                  {r.routedToQueue && !r.queueResolvedAt && (
                     <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                       Queue <ExternalLink size={10} />
                     </a>

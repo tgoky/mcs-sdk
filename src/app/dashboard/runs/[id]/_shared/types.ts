@@ -366,6 +366,7 @@ export interface ColdOpenReplyRow {
   classificationSource: "heuristic" | "model" | "error" | "none";
   rawBody: string;
   routedToQueue: boolean;
+  queueResolvedAt: string | null;
   classifiedAt: string;
 }
 
