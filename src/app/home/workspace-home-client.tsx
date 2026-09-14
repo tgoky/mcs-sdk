@@ -47,10 +47,20 @@ function workspaceSkills(
  * full-color regardless, reading as "only some skills are even
  * available" when they all equally were.
  */
+// A workspace with every product installed and every skill enabled can
+// easily clear 20+ badges — rendering all of them in one -space-x-1.5
+// strip stopped reading as "your skills" and started reading as visual
+// noise. Cap it the same way the dashboard sidebar and the Tasks
+// Completed breakdown already do, with a "+N" chip standing in for the
+// rest rather than silently truncating with no indication more exist.
+const SKILL_STRIP_CAP = 8;
+
 function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinition[]; enabledIds: Set<string> | null; size: number }) {
+  const visible = skills.slice(0, SKILL_STRIP_CAP);
+  const overflow = skills.length - visible.length;
   return (
     <div className="flex items-center -space-x-1.5 overflow-hidden">
-      {skills.map((skill) => (
+      {visible.map((skill) => (
         <div
           key={skill.id}
           title={skill.name}
@@ -59,6 +69,18 @@ function SkillBadgeStrip({ skills, enabledIds, size }: { skills: WorkerDefinitio
           <AnySkillBadge skill={skill.id} size={size} enabled={enabledIds ? enabledIds.has(skill.id) : true} />
         </div>
       ))}
+      {overflow > 0 && (
+        <div
+          title={skills
+            .slice(SKILL_STRIP_CAP)
+            .map((s) => s.name)
+            .join(", ")}
+          className="relative flex items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800 p-0.5 ring-2 ring-zinc-200/80 dark:ring-zinc-800/80 font-mono font-bold text-zinc-500 dark:text-zinc-400"
+          style={{ width: size, height: size, fontSize: size * 0.45 }}
+        >
+          +{overflow}
+        </div>
+      )}
     </div>
   );
 }

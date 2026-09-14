@@ -12,6 +12,7 @@ import { UpdateCredentialsForm } from "./update-credentials-form";
 import { DeleteClientSection } from "./delete-client-section";
 import { ClientDetailsDrawer, type ClientDetailsDrawerData } from "./client-details-drawer";
 import type { EngagementStack } from "@/models/schema";
+import { useToast } from "@/components/toast/toast-provider";
 
 type ActiveModal = "stack" | "credentials" | "delete" | "details" | null;
 
@@ -43,6 +44,7 @@ export function EngagementActionsMenu({
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const toast = useToast();
   const [activeModal, setActiveModal] = useState<ActiveModal>(() => {
     if (searchParams.get("fixCredential") === "1") return "credentials";
     if (searchParams.get("fixSection")) return "stack";
@@ -203,7 +205,10 @@ export function EngagementActionsMenu({
           data={{ engagementId, buyer: buyerName, ...clientDetails }}
           isOpen
           onClose={() => setActiveModal(null)}
-          onSaved={() => router.refresh()}
+          onSaved={() => {
+            toast.success(`${buyerName}'s details saved.`);
+            router.refresh();
+          }}
         />
       )}
     </>

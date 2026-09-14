@@ -93,7 +93,7 @@ export function Dropdown<T extends string>({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             className={cn(
-              "absolute z-50 min-w-[200px] space-y-0.5 rounded-xl surface-glass-3 p-1 text-xs",
+              "absolute z-50 min-w-[200px] space-y-0.5 rounded-xl surface-glass-3 p-1 text-xs motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150",
               placement === "top" ? "bottom-full mb-1" : "top-full mt-1",
               align === "right" ? "right-0" : "left-0",
               panelClassName

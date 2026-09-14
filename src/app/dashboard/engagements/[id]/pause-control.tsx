@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PauseCircle, PlayCircle, Loader2, X } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * Engagement-level pause/resume. Distinct from the per-run cancel button on
@@ -20,6 +21,7 @@ export function EngagementPauseControl({
   initialPausedReason: string | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pausedAt, setPausedAt] = useState(initialPausedAt);
   const [busy, setBusy] = useState(false);
   const [showReasonInput, setShowReasonInput] = useState(false);
@@ -39,6 +41,7 @@ export function EngagementPauseControl({
       if (res.ok) {
         setPausedAt(data.pausedAt);
         setShowReasonInput(false);
+        toast.success("Client paused.");
         router.refresh();
       } else {
         setError(data.error ?? "Failed to pause.");
@@ -58,6 +61,7 @@ export function EngagementPauseControl({
       const data = await res.json();
       if (res.ok) {
         setPausedAt(null);
+        toast.success("Client resumed.");
         router.refresh();
       } else {
         setError(data.error ?? "Failed to resume.");

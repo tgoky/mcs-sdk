@@ -39,6 +39,7 @@ import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-
 import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
 import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
 import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function ProductDetailClient({
   productId,
@@ -74,6 +75,7 @@ export function ProductDetailClient({
   productOnboardingSkipDismissed?: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
@@ -128,6 +130,7 @@ export function ProductDetailClient({
       const res = await fetch(`/api/workspaces/packages/${productId}`, { method: installed ? "DELETE" : "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Could not ${installed ? "uninstall" : "install"} ${name}.`);
+      toast.success(`${name} ${installed ? "uninstalled" : "installed"}.`);
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not ${installed ? "uninstall" : "install"} ${name}.`);

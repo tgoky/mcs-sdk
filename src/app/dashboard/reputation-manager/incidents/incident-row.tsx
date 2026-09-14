@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Check, Loader2, FileText, Send } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 const STATUS_STYLES: Record<string, string> = {
   open: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-400",
@@ -52,6 +53,7 @@ export interface IncidentRowData {
  * tier 3 posture choice, or a tier 4 escalation outcome. */
 export function IncidentRow({ incident }: { incident: IncidentRowData }) {
   const router = useRouter();
+  const toast = useToast();
   const [resolving, setResolving] = useState(false);
   const [status, setStatus] = useState(incident.status);
   const [postureBusy, setPostureBusy] = useState<string | null>(null);
@@ -71,7 +73,12 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
       });
       if (res.ok) {
         setStatus("resolved");
+        toast.success(`Incident for ${incident.buyer} resolved.`);
         router.refresh();
+      } else {
+        // Nothing else here surfaces a resolve failure — the button just
+        // silently stops spinning with no explanation.
+        toast.error("Failed to resolve incident.");
       }
     } finally {
       setResolving(false);
@@ -95,6 +102,7 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
         return;
       }
       setSelectedPosture(posture);
+      toast.success("Response posture set.");
       router.refresh();
     } finally {
       setPostureBusy(null);
@@ -114,7 +122,12 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
       });
       if (res.ok) {
         setStatus("resolved");
+        toast.success("Escalation outcome logged.");
         router.refresh();
+      } else {
+        // Nothing else here surfaces a failure — the input just stays put
+        // with no explanation.
+        toast.error("Failed to log outcome.");
       }
     } finally {
       setOutcomeBusy(false);

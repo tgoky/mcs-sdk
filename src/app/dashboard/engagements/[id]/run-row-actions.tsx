@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, Eye, RotateCcw, Ban, CheckCheck, Loader2 } from "lucide-react";
 import { ActionMenu, ActionMenuSection, ActionMenuItem } from "@/components/action-menu";
+import { useToast } from "@/components/toast/toast-provider";
 
 const ACTIVE_STATUSES = new Set(["running", "in_progress", "queued", "pending"]);
 const FAILED_STATUSES = new Set(["failed", "error", "timed_out"]);
@@ -29,6 +30,7 @@ export function RunRowActions({
   status: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState<"cancel" | "retry" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -54,6 +56,7 @@ export function RunRowActions({
         return;
       }
       setConfirmingCancel(false);
+      toast.success(`${skillLabel} run cancelled.`);
       router.refresh();
       onDone();
     } catch (e) {
@@ -77,6 +80,7 @@ export function RunRowActions({
         setError(data.error ?? "Failed to start a new run.");
         return;
       }
+      toast.success(`${skillLabel} run started.`);
       router.refresh();
       onDone();
     } catch (e) {
@@ -100,6 +104,7 @@ export function RunRowActions({
         setError(data.error ?? "Failed to dismiss.");
         return;
       }
+      toast.success(`${skillLabel} failure dismissed.`);
       router.refresh();
       onDone();
     } catch (e) {

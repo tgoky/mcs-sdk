@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Link2, Check } from "lucide-react";
 import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel, hostingPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
+import { useToast } from "@/components/toast/toast-provider";
 
 interface VaultCredential {
   id: string;
@@ -30,6 +31,7 @@ function CredentialRow({
   onRequestClose?: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [mode, setMode] = useState<"paste" | "reuse">(currentlyLinkedVaultId ? "reuse" : "paste");
 
   // Paste a new key state
@@ -94,6 +96,7 @@ function CredentialRow({
       setValue("");
       setReuseLabel("");
       setSaveForReuse(false);
+      toast.success(`${label} updated.`);
       router.refresh();
 
       // FIXED: Trigger auto-close on success
@@ -123,6 +126,7 @@ function CredentialRow({
       const data = await res.json();
       if (res.ok) {
         setLinked(true);
+        toast.success(`${label} linked.`);
         router.refresh();
 
         // FIXED: Trigger auto-close on success

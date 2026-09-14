@@ -23,6 +23,7 @@ import {
   UserX,
   UserCheck,
   CalendarClock,
+  Loader2,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, SKILLS } from "@/lib/copy";
 import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
@@ -357,6 +358,10 @@ function QueueRow({
   matchedTag?: CustomTag | null;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
+  // Which decision this row's own busy state belongs to — isBusy alone
+  // can't say whether Approve or Reject is the one in flight, so neither
+  // button's label ever changed while the other request was running.
+  const [pendingDecision, setPendingDecision] = useState<string | null>(null);
   const { busyKey, error, run: dispatch } = useQuickActions();
   const repair = getRepairAction(item);
 
@@ -450,17 +455,25 @@ function QueueRow({
             <>
               <button
                 disabled={isBusy}
-                onClick={() => onDecide("approved")}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
+                onClick={() => {
+                  setPendingDecision("approved");
+                  onDecide("approved");
+                }}
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
               >
-                <Check size={12} /> {copy.actions.approve}
+                {isBusy && pendingDecision === "approved" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                {isBusy && pendingDecision === "approved" ? "Approving…" : copy.actions.approve}
               </button>
               <button
                 disabled={isBusy}
-                onClick={() => onDecide("rejected")}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
+                onClick={() => {
+                  setPendingDecision("rejected");
+                  onDecide("rejected");
+                }}
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
               >
-                <X size={12} /> {copy.actions.reject}
+                {isBusy && pendingDecision === "rejected" ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                {isBusy && pendingDecision === "rejected" ? "Rejecting…" : copy.actions.reject}
               </button>
             </>
           )
@@ -543,17 +556,25 @@ function QueueRow({
           <>
             <button
               disabled={isBusy}
-              onClick={() => onDecide("resolved")}
-              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
+              onClick={() => {
+                setPendingDecision("resolved");
+                onDecide("resolved");
+              }}
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
             >
-              <Check size={12} /> {copy.actions.resolve}
+              {isBusy && pendingDecision === "resolved" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              {isBusy && pendingDecision === "resolved" ? "Resolving…" : copy.actions.resolve}
             </button>
             <button
               disabled={isBusy}
-              onClick={() => onDecide("abandoned")}
-              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
+              onClick={() => {
+                setPendingDecision("abandoned");
+                onDecide("abandoned");
+              }}
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
             >
-              <X size={12} /> {copy.actions.dismiss}
+              {isBusy && pendingDecision === "abandoned" ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+              {isBusy && pendingDecision === "abandoned" ? "Dismissing…" : copy.actions.dismiss}
             </button>
           </>
         )}

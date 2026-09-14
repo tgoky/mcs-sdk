@@ -241,10 +241,10 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
         // to the keyboard. Below `md` this is now that — 100dvh, no
         // backdrop needed since the panel IS opaque and covers the full
         // screen. `md` and up is untouched (centered command palette).
-        <div className="fixed inset-0 z-[100] flex items-end md:items-start justify-center md:bg-black/40 md:backdrop-blur-[2px] md:pt-[12vh]">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-start justify-center md:bg-black/40 md:backdrop-blur-[2px] md:pt-[12vh] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
           <div
             ref={containerRef}
-            className="w-full h-[100dvh] md:h-auto max-w-none md:max-w-xl bg-background md:border border-border md:rounded-xl md:shadow-2xl overflow-hidden font-sans antialiased flex flex-col"
+            className="w-full h-[100dvh] md:h-auto max-w-none md:max-w-xl bg-background md:border border-border md:rounded-xl md:shadow-2xl overflow-hidden font-sans antialiased flex flex-col motion-safe:animate-in motion-safe:slide-in-from-bottom-4 md:motion-safe:slide-in-from-bottom-0 md:motion-safe:zoom-in-95 motion-safe:duration-150"
           >
             {/* Input row */}
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border shrink-0">

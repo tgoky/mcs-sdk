@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, RotateCcw, TriangleAlert } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * Soft delete only (see the DELETE handler's own comment for why a hard
@@ -27,6 +28,7 @@ export function DeleteClientSection({
   onRequestClose?: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [deletedAt, setDeletedAt] = useState(initialDeletedAt);
   const [open, setOpen] = useState(() => embedded);
   const [confirmText, setConfirmText] = useState("");
@@ -45,6 +47,7 @@ export function DeleteClientSection({
       const data = await res.json();
       if (res.ok) {
         setDeletedAt(null);
+        toast.success(`${buyerName} restored.`);
         router.refresh();
       } else {
         setError(data.error ?? "Failed to restore.");
@@ -73,6 +76,7 @@ export function DeleteClientSection({
         // that's a real, separate decision this pass doesn't make for
         // the user, so the workspace is left behind, client-less, until
         // they choose what to do with it.
+        toast.success(`${buyerName} deleted.`);
         router.push("/dashboard");
         router.refresh();
       } else {

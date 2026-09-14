@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
+import { useToast } from "@/components/toast/toast-provider";
 
 interface Client {
   engagementId: string;
@@ -12,6 +13,7 @@ interface Client {
 
 export function NewProjectForm({ clients }: { clients: Client[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -63,6 +65,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
       }
 
       const data = await res.json();
+      toast.success(`"${name.trim()}" created.`);
       router.push(`/dashboard/projects/${data.id}`);
       router.refresh();
     });

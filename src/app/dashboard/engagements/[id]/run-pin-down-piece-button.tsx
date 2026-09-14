@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowRight } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function RunPinDownPieceButton({
   engagementId,
@@ -29,6 +30,7 @@ export function RunPinDownPieceButton({
   buttonLabel: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [value, setValue] = useState(defaultValue);
   const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export function RunPinDownPieceButton({
         setState("done");
         setMessage(data.message ?? "Running — check back shortly.");
         if (data.runId) setRunId(data.runId);
+        toast.success(`${piece === "voice" ? "Voice extraction" : "Page audit"} started.`);
         router.refresh();
       } else {
         setState("error");

@@ -15,6 +15,7 @@ import type { EngagementStack } from "@/models/schema";
 import { BookingSyncStatusCard } from "@/components/booking-sync-status-card";
 import { computeBookingSyncStatus, platformSupportsAutoWebhook } from "@/lib/booking-sync-status";
 import { COMMON_TIMEZONES, allTimezones } from "@/lib/timezones";
+import { useToast } from "@/components/toast/toast-provider";
 
 const BOOKING_PLATFORM_OPTIONS = Object.keys(BOOKING_PLATFORM_LABELS) as Array<keyof typeof BOOKING_PLATFORM_LABELS>;
 const EMAIL_PLATFORM_OPTIONS = Object.keys(EMAIL_PLATFORM_LABELS) as Array<keyof typeof EMAIL_PLATFORM_LABELS>;
@@ -299,6 +300,7 @@ export function EditStackSettings({
   initialHighlightSection?: string | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const searchParams = useSearchParams();
   const fixSection = searchParams.get("fixSection") || initialHighlightSection || null;
   const [open, setOpen] = useState(() => Boolean(fixSection) || embedded);
@@ -463,6 +465,7 @@ export function EditStackSettings({
       const data = await res.json();
       if (res.ok) {
         setSaved(true);
+        toast.success("Stack settings saved.");
         router.refresh();
         if (embedded && onRequestClose) {
           setTimeout(() => {

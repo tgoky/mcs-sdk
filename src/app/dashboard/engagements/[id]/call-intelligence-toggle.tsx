@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Radio, Settings2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { conversationIntelligenceProviderLabel } from "@/lib/copy";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * Connect/disconnect control for this engagement's call intelligence
@@ -37,6 +38,7 @@ export function CallIntelligenceToggle({
   onManage: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [provider, setProvider] = useState(initialProvider ?? "none");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,6 +59,7 @@ export function CallIntelligenceToggle({
       if (res.ok) {
         setProvider("none");
         setConfirming(false);
+        toast.success("Call intelligence disconnected.");
         router.refresh();
       } else {
         setError(data.error ?? "Failed to disconnect.");

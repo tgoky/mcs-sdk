@@ -3,15 +3,26 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { CheckCheck } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function MarkAllReadButton() {
   const router = useRouter();
+  const toast = useToast();
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
     startTransition(async () => {
-      await fetch("/api/notifications/all/read", { method: "POST" });
-      router.refresh();
+      try {
+        const res = await fetch("/api/notifications/all/read", { method: "POST" });
+        if (res.ok) {
+          toast.success("All notifications marked as read.");
+          router.refresh();
+        } else {
+          toast.error("Failed to mark notifications as read.");
+        }
+      } catch {
+        toast.error("Failed to mark notifications as read.");
+      }
     });
   }
 

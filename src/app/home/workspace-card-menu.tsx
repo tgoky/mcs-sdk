@@ -6,6 +6,7 @@ import { Pencil, Trash2, MoreHorizontal, TriangleAlert } from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
 import { Modal } from "@/components/modal";
 import type { Workspace } from "@/lib/workspace";
+import { useToast } from "@/components/toast/toast-provider";
 
 type ActiveModal = "rename" | "delete" | null;
 
@@ -105,6 +106,7 @@ function RenameWorkspaceSection({
   onRequestClose: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [name, setName] = useState(workspace.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +131,7 @@ function RenameWorkspaceSection({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        toast.success(`Workspace renamed to "${trimmed}".`);
         router.refresh();
         onRequestClose();
       } else {
@@ -182,6 +185,7 @@ function DeleteWorkspaceSection({
   onRequestClose: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +201,7 @@ function DeleteWorkspaceSection({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        toast.success(`"${workspace.name}" deleted.`);
         router.refresh();
         onRequestClose();
       } else {

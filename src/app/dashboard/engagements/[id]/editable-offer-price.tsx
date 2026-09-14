@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Pencil, Check, X, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function EditableOfferPrice({
   engagementId,
@@ -14,6 +15,7 @@ export function EditableOfferPrice({
   offerDetails: Record<string, any> | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [price, setPrice] = useState(initialPrice || "");
   const [saving, setSaving] = useState(false);
@@ -34,10 +36,16 @@ export function EditableOfferPrice({
 
       if (res.ok) {
         setIsEditing(false);
+        toast.success(price.trim() ? `Offer price updated to $${price.trim()}.` : "Offer price cleared.");
         router.refresh();
+      } else {
+        // Nothing visible surfaced this failure before — the field just
+        // silently stayed in edit mode with no explanation.
+        toast.error("Failed to update price.");
       }
     } catch (e) {
       console.error("Failed to update price:", e);
+      toast.error("Failed to update price.");
     } finally {
       setSaving(false);
     }

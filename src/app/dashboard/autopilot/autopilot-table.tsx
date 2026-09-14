@@ -10,6 +10,7 @@ import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-sk
 import { SKILL_INFO, ACTION_TYPE_LABELS } from "@/lib/copy";
 import type { PendingActionType } from "@/lib/approval-gate";
 import type { AutopilotClientDTO } from "@/lib/autopilot-clients";
+import { useToast } from "@/components/toast/toast-provider";
 
 export type AutopilotClientRow = AutopilotClientDTO;
 
@@ -40,6 +41,7 @@ function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean
 
 export function AutopilotTable({ clients: initialClients }: { clients: AutopilotClientRow[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [clients, setClients] = useState(initialClients);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
@@ -75,9 +77,13 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
     try {
       const res = await fetch(`/api/engagements/${row.engagementId}/pause`, { method: wasPaused ? "DELETE" : "POST" });
       if (!res.ok) throw new Error("request failed");
+      toast.success(`${row.buyer} ${wasPaused ? "resumed" : "paused"}.`);
       router.refresh();
     } catch {
       patchClient(row.engagementId, { pausedAt: row.pausedAt, pausedReason: row.pausedReason });
+      // Nothing else in this table surfaces a failed toggle — it just
+      // silently snaps back with no explanation.
+      toast.error(`Could not ${wasPaused ? "resume" : "pause"} ${row.buyer}.`);
     } finally {
       setBusy(key, false);
     }
@@ -107,9 +113,11 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         require_approval_for_side_effects: nextValue,
         ...(nextValue ? {} : { require_approval_action_types: [] }),
       });
+      toast.success(`${row.buyer} switched to ${nextValue ? "Co-Pilot" : "Autopilot"}.`);
       router.refresh();
     } catch {
       patchClient(row.engagementId, previous);
+      toast.error(`Could not update automation mode for ${row.buyer}.`);
     } finally {
       setBusy(key, false);
     }
@@ -126,9 +134,11 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
     setBusy(key, true);
     try {
       await patchStack(row.engagementId, { require_approval_action_types: nextList });
+      toast.success("Approval gate updated.");
       router.refresh();
     } catch {
       patchClient(row.engagementId, { requireApprovalActionTypes: previous });
+      toast.error("Could not update the approval gate.");
     } finally {
       setBusy(key, false);
     }
@@ -152,9 +162,11 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         body: JSON.stringify({ enabled: nextEnabled }),
       });
       if (!res.ok) throw new Error("request failed");
+      toast.success(`${SKILL_INFO[skill].name} ${nextEnabled ? "enabled" : "disabled"}.`);
       router.refresh();
     } catch {
       patchClient(row.engagementId, { showtimeSkills: { ...row.showtimeSkills, [skill]: previous } });
+      toast.error(`Could not update ${SKILL_INFO[skill].name}.`);
     } finally {
       setBusy(key, false);
     }
@@ -178,9 +190,11 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         body: JSON.stringify({ enabled: nextEnabled }),
       });
       if (!res.ok) throw new Error("request failed");
+      toast.success(`${REP_SKILL_MANIFEST[skill].name} ${nextEnabled ? "enabled" : "disabled"}.`);
       router.refresh();
     } catch {
       patchClient(row.engagementId, { repSkills: { ...row.repSkills, [skill]: previous } });
+      toast.error(`Could not update ${REP_SKILL_MANIFEST[skill].name}.`);
     } finally {
       setBusy(key, false);
     }

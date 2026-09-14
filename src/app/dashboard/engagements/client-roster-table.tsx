@@ -27,6 +27,7 @@ import {
   SKILLS,
 } from "@/lib/copy";
 import type { EngagementStack } from "@/models/schema";
+import { useToast } from "@/components/toast/toast-provider";
 
 export interface RosterEngagement {
   engagementId: string;
@@ -82,6 +83,7 @@ export function ClientRosterTable({
   runs: RosterRun[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [rows, setRows] = useState<RosterEngagement[]>(() => [...engagements]);
   // Server re-fetches on every router.refresh() (a rename or recolor both
   // trigger one) and hands down a fresh `engagements` array — resync so the
@@ -168,6 +170,7 @@ export function ClientRosterTable({
           )
         );
         setEditingId(null);
+        toast.success(`${trimmedBuyer} updated.`);
         router.refresh();
       } else {
         setErrorRowId(row.engagementId);
@@ -196,6 +199,7 @@ export function ClientRosterTable({
         setErrorRowId(row.engagementId);
         setErrorMessage("Couldn't save that color.");
       } else {
+        toast.success(`Tag color updated for ${row.buyer}.`);
         router.refresh();
       }
     } catch {

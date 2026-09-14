@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { InputField, TextAreaField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import type { ColdOpenLeadSource, ColdOpenLeadSourceType } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useToast } from "@/components/toast/toast-provider";
 
 type SourceRow = {
   icp: string;
@@ -29,6 +30,7 @@ function emptyRow(): SourceRow {
 
 export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = "Close" }: { engagementId: string; onCancel: () => void; cancelLabel?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
@@ -127,6 +129,7 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSaved(true);
+      toast.success(`Source Connect saved${buyer ? ` for ${buyer}` : ""}.`);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");

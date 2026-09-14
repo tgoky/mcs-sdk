@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * FIXED: Previously this component expected an `endpoint` prop, but the parent
@@ -19,6 +20,7 @@ export function TriggerSkillButton({
   label: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function TriggerSkillButton({
         if (data.runId) {
           setRunId(data.runId);
         }
+        toast.success(`${label} triggered.`);
         // Refresh the page so the Run History section updates
         router.refresh();
       } else {

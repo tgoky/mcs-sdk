@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ENGAGEMENT_TAG_COLORS, tagColorHex } from "@/lib/engagement-tag-colors";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/toast/toast-provider";
 
 export interface ClientRailRow {
   engagementId: string;
@@ -42,6 +43,7 @@ const MENU_ICON = "w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover/item
  */
 export function ClientSidebarList({ clients }: { clients: readonly ClientRailRow[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [rows, setRows] = useState<ClientRailRow[]>(() => [...clients]);
   // WorkSidebar re-runs its DB query on every router.refresh() (name edits
   // and color changes both trigger one) and hands down a fresh `clients`
@@ -96,6 +98,7 @@ export function ClientSidebarList({ clients }: { clients: readonly ClientRailRow
       if (res.ok) {
         setRows((prev) => prev.map((r) => (r.engagementId === row.engagementId ? { ...r, buyer: trimmed } : r)));
         setEditingId(null);
+        toast.success(`${trimmed} updated.`);
         router.refresh();
       } else {
         setErrorRowId(row.engagementId);
@@ -125,6 +128,7 @@ export function ClientSidebarList({ clients }: { clients: readonly ClientRailRow
         setErrorRowId(row.engagementId);
         setErrorMessage("Couldn't save that color.");
       } else {
+        toast.success(`Tag color updated for ${row.buyer}.`);
         router.refresh();
       }
     } catch {

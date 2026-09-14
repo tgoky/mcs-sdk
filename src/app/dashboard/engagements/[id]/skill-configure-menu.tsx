@@ -20,8 +20,17 @@ import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-con
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
+import { useToast } from "@/components/toast/toast-provider";
 
 export type ConfigurableSkillId = "pin-down" | "win-back" | "pre-call-read" | "leak-map" | "pile-on";
+
+const SKILL_LABELS: Record<ConfigurableSkillId, string> = {
+  "pin-down": "Pin-Down",
+  "win-back": "Win-Back",
+  "pre-call-read": "Pre-Call Read",
+  "leak-map": "Leak Map",
+  "pile-on": "Pile-On",
+};
 
 export function SkillConfigureMenu({
   skillId,
@@ -37,6 +46,7 @@ export function SkillConfigureMenu({
   pileOnInitial?: { smsPlatform: string; adDataPlatform: string };
 }) {
   const router = useRouter();
+  const toast = useToast();
 
   return (
     <FloatingPanel
@@ -58,6 +68,7 @@ export function SkillConfigureMenu({
       {(close) => {
         const closeAndRefresh = () => {
           close();
+          toast.success(`${SKILL_LABELS[skillId]} configuration saved.`);
           router.refresh();
         };
         return (

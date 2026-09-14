@@ -963,7 +963,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             disabled={outcomeSubmittingId !== null}
                             className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-400 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            <UserX size={11} /> No-Show
+                            <UserX size={11} /> {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "No-Show"}
                           </button>
                           <button
                             type="button"
@@ -971,7 +971,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                             disabled={outcomeSubmittingId !== null}
                             className="hover-lift press-settle shadow-elevation-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-zinc-700 dark:bg-zinc-600 text-white text-[11px] font-bold hover:bg-zinc-600 dark:hover:bg-zinc-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Resched.
+                            {outcomeSubmittingId === selectedEntry.externalCallId ? "…" : "Resched."}
                           </button>
                         </div>
                         {outcomeError && <p className="text-[10.5px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}

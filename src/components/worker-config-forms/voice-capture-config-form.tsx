@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useToast } from "@/components/toast/toast-provider";
 
 type Touchset = { subject: string; body1: string; body2: string; body3: string };
 function emptyTouchset(): Touchset {
@@ -19,6 +20,7 @@ function emptyTouchset(): Touchset {
 
 export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "Close" }: { engagementId: string; onCancel: () => void; cancelLabel?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
@@ -90,6 +92,7 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setWarnings(data.warnings ?? []);
       setSaved(true);
+      toast.success(`Voice Capture saved${buyer ? ` for ${buyer}` : ""}.`);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");

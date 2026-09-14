@@ -7,6 +7,7 @@ import { Upload, UserCircle2, Check, Loader2, ChevronLeft } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { DEFAULT_AVATAR_STYLE, seedsForStyle, defaultSeedForIdentifier, generateAvatarDataUri } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
+import { useToast } from "@/components/toast/toast-provider";
 
 const GRID_SEEDS = seedsForStyle(25);
 const MAX_UPLOAD_DIMENSION = 256;
@@ -69,6 +70,7 @@ export function AvatarPicker({
   initialAvatar: UserAvatarPrefs;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme !== "light";
 
@@ -148,6 +150,7 @@ export function AvatarPicker({
       setAvatar(previewAvatar);
       setStep("collapsed");
       setPendingUpload(null);
+      toast.success("Avatar updated.");
       router.refresh();
     } catch {
       setError("Network error — check your connection.");
@@ -168,6 +171,7 @@ export function AvatarPicker({
       setAvatar({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
       setPendingSeed(defaultSeedForIdentifier(identityFallback));
       setPendingUpload(null);
+      toast.success("Avatar removed.");
       router.refresh();
     } finally {
       setSaving(false);

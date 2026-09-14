@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Bot, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/toast/toast-provider";
 
 /**
  * Co-Pilot / Autopilot toggle for this engagement's confirmation_page_deploy
@@ -21,6 +22,7 @@ export function ApprovalModeToggle({
   initialRequireApproval: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [requireApproval, setRequireApproval] = useState(initialRequireApproval);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,6 +41,7 @@ export function ApprovalModeToggle({
       if (res.ok) {
         setRequireApproval(next);
         setConfirming(false);
+        toast.success(`Switched to ${next ? "Autopilot" : "Co-Pilot"} mode.`);
         router.refresh();
       } else {
         setError(data.error ?? "Failed to update.");

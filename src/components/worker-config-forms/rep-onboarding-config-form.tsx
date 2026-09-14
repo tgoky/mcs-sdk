@@ -21,9 +21,11 @@ import {
 import type { RepCollision } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useTour } from "@/components/tours/tour-provider";
+import { useToast } from "@/components/toast/toast-provider";
 
 export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const { start: startTour } = useTour();
 
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,7 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSaved(true);
       setWasDisabled(false);
+      toast.success(`Identity setup saved for ${buyer || "this client"}.`);
       // Reputation Manager's own onboarding just finished — auto-launch
       // its tour (no-op if this engagement isn't the workspace's primary
       // one, same guard every other tour entry point relies on).

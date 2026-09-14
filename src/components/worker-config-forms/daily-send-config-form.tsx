@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, X, Loader2 } from "lucide-react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { useToast } from "@/components/toast/toast-provider";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
 
@@ -117,6 +118,7 @@ function HeldLeadsPanel({ engagementId }: { engagementId: string }) {
 
 export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Close" }: { engagementId: string; onCancel: () => void; cancelLabel?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
@@ -175,6 +177,7 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSaved(true);
+      toast.success(`Daily Send settings saved${buyer ? ` for ${buyer}` : ""}.`);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");

@@ -51,6 +51,7 @@ export function ProductCard({
   const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
 
   async function toggleInstalled() {
     setPending(true);
@@ -124,22 +125,14 @@ export function ProductCard({
           <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0">
             Inside
           </span>
-          {/* Icons only, hover for the name — a worker (Showtime, Cold
-              Open, ...) is the real top-level thing; its skills (Call
-              Brief, Booking Recovery, ...) live one level down and
-              reading them all out as inline text next to the worker's
-              own name made every skill look like a peer of the worker
-              itself, not something inside it. */}
           <div className="flex items-center -space-x-1.5 shrink-0">
             {skillIds.map((id) => (
-              <div key={id} title={getWorkerDefinition(id).name} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
+              <div key={id} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
                 <AnySkillBadge skill={id} size={18} />
               </div>
             ))}
           </div>
-          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
-            {skillIds.length} {skillIds.length === 1 ? "skill" : "skills"} — hover to see
-          </span>
+          <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 truncate">{skillNames}</span>
         </div>
       </Link>
 

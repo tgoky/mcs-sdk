@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { RunPinDownPieceButton } from "./run-pin-down-piece-button";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/toast/toast-provider";
 
 const PILLAR_LABELS: Record<string, string> = {
   common_questions: "Common Questions Brief",
@@ -258,6 +259,7 @@ export function DeliverablesPanel({
   conversationIntelligence?: ConversationIntelligenceState;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
   const briefs = adCreativeBriefs?.briefs ?? [];
 
@@ -287,7 +289,9 @@ export function DeliverablesPanel({
       const res = await fetch(`/api/engagements/${engagementId}/regenerate/${path}`, { method: "POST" });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.error ?? "Regeneration failed.");
-      setRegenerateMessage({ kind, ok: true, text: kind === "briefs" ? "Ad creative briefs regenerated." : "Scripts regenerated." });
+      const text = kind === "briefs" ? "Ad creative briefs regenerated." : "Scripts regenerated.";
+      setRegenerateMessage({ kind, ok: true, text });
+      toast.success(text);
       router.refresh();
     } catch (err) {
       setRegenerateMessage({ kind, ok: false, text: err instanceof Error ? err.message : "Regeneration failed." });

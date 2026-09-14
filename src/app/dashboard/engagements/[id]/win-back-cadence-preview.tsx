@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, MessageSquare, ChevronDown, Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/toast/toast-provider";
 
 export interface WinBackCadenceAssetMap {
   windowDays: number;
@@ -36,6 +37,7 @@ export function WinBackCadencePreview({
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const router = useRouter();
+  const toast = useToast();
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -46,6 +48,7 @@ export function WinBackCadencePreview({
       const res = await fetch(`/api/engagements/${engagementId}/win-back/generate-cadence`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to generate cadence.");
+      toast.success("Recovery cadence generated.");
       router.refresh();
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : "Failed to generate cadence.");
@@ -132,7 +135,7 @@ export function WinBackCadencePreview({
                 <ChevronDown size={13} className={cn("text-zinc-500 shrink-0 transition-transform", expanded && "rotate-180")} />
               </button>
               {expanded && (
-                <div className="px-5 pb-4 pl-[3.25rem]">
+                <div className="px-5 pb-4 pl-[3.25rem] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
                   <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3">
                     {t.body}
                   </p>

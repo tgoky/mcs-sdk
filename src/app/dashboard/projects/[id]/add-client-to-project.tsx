@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
 
 interface Client {
   engagementId: string;
@@ -11,18 +12,25 @@ interface Client {
 
 export function AddClientToProject({ projectId, availableClients }: { projectId: string; availableClients: Client[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function addClient(engagementId: string) {
+    const client = availableClients.find((c) => c.engagementId === engagementId);
     startTransition(async () => {
-      await fetch(`/api/projects/${projectId}/members`, {
+      const res = await fetch(`/api/projects/${projectId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ engagementId }),
       });
       setOpen(false);
-      router.refresh();
+      if (res.ok) {
+        toast.success(`${client?.buyer ?? "Client"} added to the project.`);
+        router.refresh();
+      } else {
+        toast.error(`Could not add ${client?.buyer ?? "client"} to the project.`);
+      }
     });
   }
 
@@ -42,7 +50,7 @@ export function AddClientToProject({ projectId, availableClients }: { projectId:
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto surface-glass-3 rounded-lg z-10 py-1">
+        <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto surface-glass-3 rounded-lg z-10 py-1 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150">
           {availableClients.map((client) => (
             <button
               key={client.engagementId}
