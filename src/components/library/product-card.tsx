@@ -68,7 +68,7 @@ export function ProductCard({
   const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
       <Link href={`/dashboard/library/${productId}`} className="space-y-3 block">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -84,7 +84,7 @@ export function ProductCard({
                   {name}
                 </h2>
                 {installed && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-md">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-md">
                     <Download size={10} className="stroke-[2.5]" /> Installed
                   </span>
                 )}

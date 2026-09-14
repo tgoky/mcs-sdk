@@ -8,18 +8,18 @@
 // dashboard/library/showtime/page.tsx): a screenshot gallery, a "how a
 // client moves through it" step flow, then every skill listed vertically
 // underneath each other (not a card grid) — while keeping everything
-// built since then: real Install/Uninstall at the Worker level, and the
-// Status/Categories filter sidebar. Configure swaps only the skill-list
-// card's own content for that skill's form, in the exact same slot —
-// same in-place-swap idea as OverviewStatsPanel's Tasks Completed tile,
-// scoped the same way that tile is scoped to itself. The filter sidebar,
-// gallery, and sequence above never move, so clicking Configure doesn't
-// reflow the whole page or read as a navigation.
+// built since then: real Install/Uninstall at the Worker level. Status/
+// Categories filtering is a SegmentedTabs row above the list (not a
+// sidebar) so the skill list itself gets the page's full width. Configure
+// swaps only that one skill's own row for its config form, in its exact
+// slot in the list — every other row stays put, gallery and sequence
+// above never move, so clicking Configure doesn't reflow the page or
+// read as a navigation.
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronDown, ChevronRight, Search, Download, Trash2, Loader2, X } from "lucide-react";
+import { ChevronLeft, Search, Download, Trash2, Loader2, X } from "lucide-react";
 import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
@@ -27,6 +27,7 @@ import { WorkerCard } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
 import { SkillSequence } from "@/components/library/skill-sequence";
+import { SegmentedTabs } from "@/components/segmented-tabs";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
 import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
@@ -73,9 +74,6 @@ export function ProductDetailClient({
   const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "not_enabled">("all");
   const [selectedCategory, setSelectedCategory] = useState<WorkerCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [openSections, setOpenSections] = useState({ status: true, category: true });
-  const toggleSection = (section: keyof typeof openSections) =>
-    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
 
   const enabledSet = new Set(enabledWorkerIds);
   const statsById = new Map(workerStats.map((s) => [s.workerId, s]));
@@ -103,6 +101,10 @@ export function ProductDetailClient({
 
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
+      // The skill currently being configured stays visible in the list even
+      // if it wouldn't otherwise pass the active filters — its row is mid-
+      // edit, not something that should vanish out from under the user.
+      if (w.id === expandedWorker) return true;
       if (statusFilter === "enabled" && !enabledSet.has(w.id)) return false;
       if (statusFilter === "not_enabled" && enabledSet.has(w.id)) return false;
       if (selectedCategory !== "all" && w.category !== selectedCategory) return false;
@@ -110,7 +112,7 @@ export function ProductDetailClient({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workers, statusFilter, selectedCategory, searchQuery, enabledWorkerIds]);
+  }, [workers, statusFilter, selectedCategory, searchQuery, enabledWorkerIds, expandedWorker]);
 
   async function toggleInstalled() {
     setPending(true);
@@ -180,7 +182,7 @@ export function ProductDetailClient({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-transparent p-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-transparent p-4">
         <div className="flex items-center gap-6">
           <StatChip label="Skills on" value={`${enabledCount}/${workers.length}`} />
           <StatChip label="Runs (7d)" value={String(runsInWindow)} />
@@ -238,163 +240,95 @@ export function ProductDetailClient({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-400">
-          <div className="space-y-2.5 pb-4 border-b border-zinc-200 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={() => toggleSection("status")}
-              className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
-            >
-              <span>Status</span>
-              {openSections.status ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            </button>
-            {openSections.status && (
-              <div className="space-y-1.5 pt-1">
-                {(
-                  [
-                    { id: "all", label: "All", count: workers.length },
-                    { id: "enabled", label: "Enabled", count: enabledCount },
-                    { id: "not_enabled", label: "Not enabled", count: workers.length - enabledCount },
-                  ] as const
-                ).map((opt) => (
-                  <label
-                    key={opt.id}
-                    className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      checked={statusFilter === opt.id}
-                      onChange={() => setStatusFilter(opt.id)}
-                      className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
-                    />
-                    <span>
-                      {opt.label} <span className="text-zinc-400 dark:text-zinc-600 font-mono">({opt.count})</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Skill Execution Guidelines</h2>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {filteredWorkers.length} {filteredWorkers.length === 1 ? "skill" : "skills"}
+            </p>
           </div>
+          <div className="relative w-full sm:w-64">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search skills…"
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+            />
+          </div>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedTabs<"all" | "enabled" | "not_enabled">
+            options={[
+              { key: "all", label: "All", count: workers.length },
+              { key: "enabled", label: "Enabled", count: enabledCount },
+              { key: "not_enabled", label: "Not enabled", count: workers.length - enabledCount },
+            ]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
           {categoriesInUse.length > 1 && (
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={() => toggleSection("category")}
-                className="flex items-center justify-between w-full font-bold text-zinc-900 dark:text-white uppercase tracking-wider text-[11px] cursor-pointer"
-              >
-                <span>Categories</span>
-                {openSections.category ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              </button>
-              {openSections.category && (
-                <div className="space-y-1.5 pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
-                    <input
-                      type="radio"
-                      name="category"
-                      checked={selectedCategory === "all"}
-                      onChange={() => setSelectedCategory("all")}
-                      className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
-                    />
-                    <span>All categories</span>
-                  </label>
-                  {categoriesInUse.map((cat) => (
-                    <label
-                      key={cat}
-                      className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                    >
-                      <input
-                        type="radio"
-                        name="category"
-                        checked={selectedCategory === cat}
-                        onChange={() => setSelectedCategory(cat)}
-                        className="accent-zinc-900 dark:accent-white focus:ring-0 cursor-pointer"
-                      />
-                      <span>{cat}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SegmentedTabs<WorkerCategory | "all">
+              options={[
+                { key: "all", label: "All categories" },
+                ...categoriesInUse.map((cat) => ({ key: cat, label: cat })),
+              ]}
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+            />
           )}
         </div>
 
-        <div className="lg:col-span-9 space-y-4">
-          {/* Configure swaps only this card's own content, in place — the
-              filter sidebar, gallery, and sequence above all stay exactly
-              where they are, so clicking Configure doesn't reflow the
-              whole page or feel like a navigation. Same in-place-swap
-              idea as OverviewStatsPanel's Tasks Completed tile, scoped to
-              this one card the way that tile is scoped to itself. */}
-          {expandedWorker && engagementId ? (
-            <>
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">
-                  Configure {workers.find((w) => w.id === expandedWorker)?.name}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setExpandedWorker(null)}
-                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" /> Close
-                </button>
-              </div>
-              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5">
-                {renderConfigForm(workers.find((w) => w.id === expandedWorker)!)}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Skill Execution Guidelines</h2>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    {filteredWorkers.length} {filteredWorkers.length === 1 ? "skill" : "skills"}
-                  </p>
-                </div>
-                <div className="relative w-full sm:w-64">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search skills…"
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400"
+        {filteredWorkers.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No skills match these filters.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
+            {/* Configure swaps only that one skill's own row for its config
+                form, in the exact same slot in the list — every other row
+                stays put, so clicking Configure never reflows the page or
+                loses the user's scroll position the way swapping the whole
+                list for a single form used to. */}
+            {filteredWorkers.map((worker, i) => (
+              <Fragment key={worker.id}>
+                {expandedWorker === worker.id && engagementId ? (
+                  <div className="py-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {worker.name}</h3>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedWorker(null)}
+                        className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" /> Close
+                      </button>
+                    </div>
+                    {renderConfigForm(worker)}
+                  </div>
+                ) : (
+                  <WorkerCard
+                    variant="row"
+                    index={i + 1}
+                    worker={worker}
+                    enabled={enabledSet.has(worker.id)}
+                    engagementId={engagementId}
+                    buyerName={buyerName}
+                    stats={statsById.get(worker.id)}
+                    isConfiguring={false}
+                    playbook={SKILL_PLAYBOOKS[worker.id]}
+                    onToggleConfigure={
+                      worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                    }
                   />
-                </div>
-              </div>
-
-              {filteredWorkers.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                  No skills match these filters.
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80">
-                  {filteredWorkers.map((worker, i) => (
-                    <WorkerCard
-                      key={worker.id}
-                      variant="row"
-                      index={i + 1}
-                      worker={worker}
-                      enabled={enabledSet.has(worker.id)}
-                      engagementId={engagementId}
-                      buyerName={buyerName}
-                      stats={statsById.get(worker.id)}
-                      isConfiguring={false}
-                      playbook={SKILL_PLAYBOOKS[worker.id]}
-                      onToggleConfigure={
-                        worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                )}
+              </Fragment>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

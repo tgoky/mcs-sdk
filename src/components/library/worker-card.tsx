@@ -201,8 +201,19 @@ export function WorkerCard({
   );
 
   if (variant === "row") {
+    // Every worker's own dedicated page already exists (workerPrimaryHref
+    // covers all of them — its own schedule page, RM's findings page,
+    // the engagement's run history filtered to this skill, etc.), so the
+    // row itself navigates there on click. The action controls (Configure/
+    // Analytics/Enable) and the stats stop that click from bubbling up so
+    // they keep doing their own thing instead of also triggering the
+    // row's navigation.
+    const primaryHref = engagementId ? workerPrimaryHref(worker.id, engagementId) : null;
     return (
-      <div className="relative py-5">
+      <div
+        className={`relative py-5 -mx-5 px-5 transition-colors ${primaryHref ? "cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" : ""}`}
+        onClick={primaryHref ? () => router.push(primaryHref) : undefined}
+      >
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <AnySkillBadge skill={worker.id} size={36} enabled={enabled} />
@@ -247,7 +258,9 @@ export function WorkerCard({
                 )}
               </div>
             )}
-            <div className="flex items-center gap-2">{actionControls}</div>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {actionControls}
+            </div>
           </div>
         </div>
 
@@ -268,26 +281,28 @@ export function WorkerCard({
               </div>
               <div className="space-y-1">
                 <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[10px]">Key Outputs</h4>
-                <ul className="space-y-0.5 list-disc list-inside">
+                <div className="space-y-1">
                   {playbook.deliverables.map((item) => (
-                    <li key={item} className="text-emerald-600 dark:text-emerald-400">
-                      <span className="text-zinc-700 dark:text-zinc-300 font-sans">{item}</span>
-                    </li>
+                    <div key={item} className="flex items-start gap-1.5">
+                      <span className="w-2 h-2 rounded-[2.5px] shrink-0 bg-emerald-400 mt-[3px]" aria-hidden="true" />
+                      <span className="text-zinc-700 dark:text-zinc-300 font-sans leading-relaxed">{item}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             </div>
             <div className="space-y-1">
               <h4 className="font-mono font-bold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider text-[10px]">
                 Automated Workflow Steps
               </h4>
-              <ul className="space-y-0.5 list-disc list-inside">
+              <div className="space-y-1">
                 {playbook.workflow.map((step) => (
-                  <li key={step} className="leading-relaxed">
-                    {step}
-                  </li>
+                  <div key={step} className="flex items-start gap-1.5">
+                    <span className="w-2 h-2 rounded-[2.5px] shrink-0 bg-sky-400 mt-[3px]" aria-hidden="true" />
+                    <span className="leading-relaxed">{step}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           </div>
         )}
@@ -299,7 +314,7 @@ export function WorkerCard({
   }
 
   return (
-    <div className={`relative flex flex-col justify-between rounded-2xl border ${PRODUCT_ACCENT[worker.productId]} bg-white dark:bg-zinc-900/60 p-5 shadow-sm min-h-[200px]`}>
+    <div className={`relative flex flex-col justify-between rounded-lg border ${PRODUCT_ACCENT[worker.productId]} bg-white dark:bg-zinc-900/60 p-5 shadow-sm min-h-[200px]`}>
       <div className="space-y-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>

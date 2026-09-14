@@ -275,7 +275,6 @@ export default async function DashboardPage() {
             <LiveExecutionFeed
               initialRuns={recentRuns}
               storageKey="overview"
-              unseenCount={unseenCount}
             />
           </div>
         </div>
