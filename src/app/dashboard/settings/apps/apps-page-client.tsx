@@ -84,15 +84,16 @@ const LOGO_FILENAME_OVERRIDES: Record<string, string> = {
   convertkit: "kit",
 };
 
-function PlatformLogo({ provider }: { provider: string }) {
+function PlatformLogo({ provider, size = 20 }: { provider: string; size?: number }) {
   const [hasError, setHasError] = useState(false);
-  if (hasError) return <Mail className="w-5 h-5 shrink-0 text-zinc-400" />;
+  if (hasError) return <Mail className="shrink-0 text-zinc-400" style={{ width: size * 0.55, height: size * 0.55 }} />;
   const filename = LOGO_FILENAME_OVERRIDES[provider] ?? provider;
   return (
     <img
       src={`/logos/${filename}.png`}
       alt={`${provider} logo`}
-      className="w-5 h-5 shrink-0 object-contain"
+      className="shrink-0 object-contain"
+      style={{ width: size, height: size }}
       onError={() => setHasError(true)}
     />
   );
@@ -153,7 +154,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
   const grouped = groupBy(PLATFORMS, (p) => p.group);
 
   return (
-    <div className="max-w-4xl space-y-6 font-sans">
+    <div className="max-w-5xl space-y-6 font-sans">
       <div>
         <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
           Apps
@@ -183,26 +184,41 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
       )}
 
       {Object.entries(grouped).map(([group, platforms]) => (
-        <div key={group} className="space-y-2">
+        <div key={group} className="space-y-3">
           <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
             {group}
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {platforms.map((platform) => {
               const saved = items.filter((i) => i.provider === platform.provider);
+              const isConnected = saved.length > 0;
               return (
                 <div
                   key={platform.provider}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg"
+                  className="group relative flex flex-col items-center gap-3 px-5 py-6 rounded-md text-center transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                 >
-                  <PlatformLogo provider={platform.provider} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                  {isConnected && (
+                    <span
+                      className="absolute top-3 right-3 flex items-center justify-center w-5 h-5 rounded-full"
+                      style={{ background: "rgba(34,197,94,0.12)", color: "rgb(21,128,61)" }}
+                      title={`${saved.length} saved`}
+                    >
+                      <CheckCircle2 size={13} />
+                    </span>
+                  )}
+                  <div
+                    className="flex items-center justify-center w-16 h-16 rounded-lg"
+                    style={{ background: "var(--surface-2)" }}
+                  >
+                    <PlatformLogo provider={platform.provider} size={36} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                       {platform.label}
                     </p>
-                    {saved.length > 0 && (
-                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    {isConnected && (
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                         {saved.length} saved
                       </p>
                     )}
@@ -212,16 +228,16 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                       type="button"
                       onClick={() => connect(platform.provider)}
                       disabled={connecting === platform.provider}
-                      className="shrink-0 text-[11px] font-medium px-2 py-1 rounded-md cursor-pointer disabled:opacity-50"
+                      className="w-full text-xs font-semibold px-3 py-2 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
                       style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
                     >
-                      {connecting === platform.provider ? "..." : "Connect"}
+                      {connecting === platform.provider ? "Connecting…" : "Connect"}
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setAddKeyFor(platform)}
-                      className="shrink-0 text-[11px] font-medium px-2 py-1 rounded-md cursor-pointer"
+                      className="w-full text-xs font-semibold px-3 py-2 rounded-md cursor-pointer transition-colors"
                       style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
                     >
                       Add key
