@@ -4,6 +4,7 @@ import { webhookEvents } from "@/models/schema";
 import { getAgentWebhookSecrets } from "@/features/whop-agent/server/webhook-subscription-service";
 import { verifyWhopWebhookSignature } from "@/lib/whop-agent/webhook-verify";
 import { inngest, whopWebhookProcess } from "@/lib/inngest";
+import { isUniqueConstraintViolation } from "@/lib/db-errors";
 
 // Section 7.3: "2xx within 5 seconds. Timeouts, error statuses, and
 // redirects all count as failures." This route does signature
@@ -94,11 +95,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
       eventKind: envelope.type,
     });
   } catch (dedupErr: unknown) {
-    const code = dedupErr && typeof dedupErr === "object" && "code" in dedupErr ? (dedupErr as { code?: string }).code : undefined;
-    const message = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
-    if (code === "23505" || /duplicate key|unique/i.test(message)) {
+    if (isUniqueConstraintViolation(dedupErr)) {
       return NextResponse.json({ success: true, deduplicated: true });
     }
+    const message = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
     console.error("[whop-agent webhook] Idempotency check failed (non-fatal):", message);
   }
 

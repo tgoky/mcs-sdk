@@ -509,63 +509,107 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
  * verification it already does before dispatching here (see that file's
  * header comment for why that has to happen in that specific order).
  */
-export async function decidePendingAction(
+type DecidePendingActionResult =
+  | { ok: true; status: "rejected" }
+  | { ok: true; status: "approved"; executed: true }
+  | { ok: true; status: "approved"; executed: false; error: string }
+  | { ok: false; error: string };
+
+/**
+ * The check-then-act this used to do — a plain SELECT, then later an
+ * UPDATE, with no lock between them — let two concurrent decisions on the
+ * same id (a double-click on Approve, a browser retrying a slow POST) both
+ * read status: "pending" and both go on to run the executor. Confirmed as
+ * a real, reproducible race (not just a theoretical one) against a live
+ * Postgres instance with two connections manually stepped through the
+ * exact same statement sequence: both readers saw "pending" every time.
+ * For an executor whose side effect mints fresh identifiers on every call
+ * — executeBulkPromoCodesConfirm's fresh runId (and therefore fresh
+ * per-code Whop idempotency keys) being the sharpest example — that's not
+ * a harmless double-run, it's a second live batch of promo codes created
+ * on the operator's actual Whop account.
+ *
+ * Fixed the same way run-log.ts's withStepsLock already fixed the
+ * identical class of race in this codebase: the read and the status
+ * transition move inside one transaction holding a `SELECT ... FOR
+ * UPDATE` row lock, so a second concurrent call blocks at the SELECT
+ * until the first transaction commits, then sees the already-decided
+ * status and bails — instead of racing past the same stale read. The
+ * executor call itself stays outside the lock/transaction, same
+ * reasoning withStepsLock gives for keeping its own network call out:
+ * a real side effect (an HTTP call to Whop, in most of these) has no
+ * business holding a database row lock for its duration.
+ */
+async function claimPendingAction(
   id: string,
   decision: "approved" | "rejected",
   decidedBy: string
 ): Promise<
-  | { ok: true; status: "rejected" }
-  | { ok: true; status: "approved"; executed: true }
-  | { ok: true; status: "approved"; executed: false; error: string }
-  | { ok: false; error: string }
+  | { claimed: false }
+  | { claimed: true; action: typeof pendingActions.$inferSelect; terminal: DecidePendingActionResult }
+  | { claimed: true; action: typeof pendingActions.$inferSelect; terminal: null }
 > {
-  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
-  if (!action || action.status !== "pending") {
-    return { ok: false, error: "Pending action not found or already decided." };
-  }
+  return db.transaction(async (tx) => {
+    const [action] = await tx.select().from(pendingActions).where(eq(pendingActions.id, id)).for("update").limit(1);
+    if (!action || action.status !== "pending") {
+      return { claimed: false };
+    }
 
-  if (decision === "rejected") {
-    await db
-      .update(pendingActions)
-      .set({ status: "rejected", decidedAt: new Date(), decidedBy })
-      .where(eq(pendingActions.id, id));
-    return { ok: true, status: "rejected" };
-  }
+    if (decision === "rejected") {
+      await tx.update(pendingActions).set({ status: "rejected", decidedAt: new Date(), decidedBy }).where(eq(pendingActions.id, id));
+      return { claimed: true, action, terminal: { ok: true, status: "rejected" } };
+    }
 
-  // Anti-hasty-response cooling-off period (thresholds.yml.template's
-  // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
-  // minMinutesBeforePublicResponse) — a public response can't be approved
-  // until this many minutes have passed since the incident it responds to
-  // was declared, even with sole-authority approval. Checked here, before
-  // the row flips to "approved", so a too-early click leaves the row
-  // "pending" and simply retryable once the window clears, rather than
-  // landing in a dead execution_failed state.
-  if (decision === "approved" && action.actionType === "rep_response_approval") {
-    const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
-    if (incidentId) {
-      const [incident] = await db.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
-      if (incident) {
-        const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
-        const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
-        if (minutesSinceDeclared < required) {
-          const minutesLeft = Math.ceil(required - minutesSinceDeclared);
-          return {
-            ok: false,
-            error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
-          };
+    // Anti-hasty-response cooling-off period (thresholds.yml.template's
+    // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
+    // minMinutesBeforePublicResponse) — a public response can't be
+    // approved until this many minutes have passed since the incident it
+    // responds to was declared, even with sole-authority approval.
+    // Checked here, before the row flips to "approved", so a too-early
+    // click leaves the row "pending" and simply retryable once the
+    // window clears, rather than landing in a dead execution_failed
+    // state. Still inside the lock so a second concurrent caller can't
+    // slip past this check either.
+    if (decision === "approved" && action.actionType === "rep_response_approval") {
+      const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
+      if (incidentId) {
+        const [incident] = await tx.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
+        if (incident) {
+          const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
+          const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
+          if (minutesSinceDeclared < required) {
+            const minutesLeft = Math.ceil(required - minutesSinceDeclared);
+            return {
+              claimed: true,
+              action,
+              terminal: {
+                ok: false,
+                error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
+              },
+            };
+          }
         }
       }
     }
+
+    // Approved — mark decided first (so a slow/failing executor can't
+    // leave the row looking un-decided and retryable-by-accident), then
+    // attempt execution outside this transaction.
+    await tx.update(pendingActions).set({ status: "approved", decidedAt: new Date(), decidedBy }).where(eq(pendingActions.id, id));
+    return { claimed: true, action, terminal: null };
+  });
+}
+
+export async function decidePendingAction(id: string, decision: "approved" | "rejected", decidedBy: string): Promise<DecidePendingActionResult> {
+  const claim = await claimPendingAction(id, decision, decidedBy);
+  if (!claim.claimed) {
+    return { ok: false, error: "Pending action not found or already decided." };
+  }
+  if (claim.terminal) {
+    return claim.terminal;
   }
 
-  // Approved — mark decided first (so a slow/failing executor can't leave
-  // the row looking un-decided and retryable-by-accident), then attempt
-  // execution, recording failure on the row rather than throwing it away.
-  await db
-    .update(pendingActions)
-    .set({ status: "approved", decidedAt: new Date(), decidedBy })
-    .where(eq(pendingActions.id, id));
-
+  const action = claim.action;
   try {
     const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
     if (!executor) {

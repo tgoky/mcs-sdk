@@ -12,6 +12,7 @@ import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { encryptSecret, decryptSecret } from "@/lib/credentials";
 import { inngest, whopWebhookProcess } from "@/lib/inngest";
 import { duplicateGroupKey } from "./webhook-audit-service";
+import { isUniqueConstraintViolation } from "@/lib/db-errors";
 
 interface CreatedWebhookResponse {
   id: string;
@@ -104,9 +105,7 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
     // catches the loser here — it never gets a row of its own, and instead
     // deletes the now-redundant subscription it just created on Whop's side
     // and defers to whichever call actually won the insert.
-    const code = insertErr && typeof insertErr === "object" && "code" in insertErr ? (insertErr as { code?: string }).code : undefined;
-    const message = insertErr instanceof Error ? insertErr.message : String(insertErr);
-    if (code !== "23505" && !/duplicate key|unique/i.test(message)) throw insertErr;
+    if (!isUniqueConstraintViolation(insertErr)) throw insertErr;
 
     const [winner] = await db
       .select({ whopWebhookId: whopWebhookRegistry.whopWebhookId })

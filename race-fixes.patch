@@ -1,0 +1,660 @@
+diff --git a/src/app/api/webhooks/booking-event/route.ts b/src/app/api/webhooks/booking-event/route.ts
+index e8e2dd1..5d7db84 100644
+--- a/src/app/api/webhooks/booking-event/route.ts
++++ b/src/app/api/webhooks/booking-event/route.ts
+@@ -9,6 +9,7 @@ import { startRun, failRun } from "@/lib/run-log";
+ import { gateOrExecute } from "@/lib/approval-gate";
+ import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+ import { inngest, bookingWebhookProcess } from "@/lib/inngest";
++import { isUniqueConstraintViolation } from "@/lib/db-errors";
+ import crypto from "crypto";
+ 
+ // Reliability fix: this route now only does DB-only work (signature verify,
+@@ -293,12 +294,7 @@ export async function POST(request: Request) {
+         // means we've already accepted this exact event — this is a
+         // retry, not a new booking. Acknowledge with 200 so the platform
+         // stops retrying, but do NOT run enrollment again.
+-        const dedupErrCode =
+-          dedupErr && typeof dedupErr === "object" && "code" in dedupErr
+-            ? (dedupErr as { code?: string }).code
+-            : undefined;
+-        const dedupErrMessage = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
+-        if (dedupErrCode === "23505" || /duplicate key|unique/i.test(dedupErrMessage)) {
++        if (isUniqueConstraintViolation(dedupErr)) {
+           console.log(
+             `[webhook] Duplicate delivery ignored (idempotency key: ${idempotencyKey}) for engagement ${engagementId}`
+           );
+@@ -306,6 +302,7 @@ export async function POST(request: Request) {
+         }
+         // Any other DB error dedup-checking shouldn't block a legitimate
+         // booking from being processed — log and fall through.
++        const dedupErrMessage = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
+         console.error("[webhook] Idempotency check failed (non-fatal):", dedupErrMessage);
+       }
+     } else {
+diff --git a/src/app/api/webhooks/whop-agent/[engagementId]/route.ts b/src/app/api/webhooks/whop-agent/[engagementId]/route.ts
+index b198cd5..bd03d44 100644
+--- a/src/app/api/webhooks/whop-agent/[engagementId]/route.ts
++++ b/src/app/api/webhooks/whop-agent/[engagementId]/route.ts
+@@ -4,6 +4,7 @@ import { webhookEvents } from "@/models/schema";
+ import { getAgentWebhookSecrets } from "@/features/whop-agent/server/webhook-subscription-service";
+ import { verifyWhopWebhookSignature } from "@/lib/whop-agent/webhook-verify";
+ import { inngest, whopWebhookProcess } from "@/lib/inngest";
++import { isUniqueConstraintViolation } from "@/lib/db-errors";
+ 
+ // Section 7.3: "2xx within 5 seconds. Timeouts, error statuses, and
+ // redirects all count as failures." This route does signature
+@@ -94,11 +95,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
+       eventKind: envelope.type,
+     });
+   } catch (dedupErr: unknown) {
+-    const code = dedupErr && typeof dedupErr === "object" && "code" in dedupErr ? (dedupErr as { code?: string }).code : undefined;
+-    const message = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
+-    if (code === "23505" || /duplicate key|unique/i.test(message)) {
++    if (isUniqueConstraintViolation(dedupErr)) {
+       return NextResponse.json({ success: true, deduplicated: true });
+     }
++    const message = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
+     console.error("[whop-agent webhook] Idempotency check failed (non-fatal):", message);
+   }
+ 
+diff --git a/src/features/whop-agent/server/webhook-subscription-service.ts b/src/features/whop-agent/server/webhook-subscription-service.ts
+index 2332d53..eb161eb 100644
+--- a/src/features/whop-agent/server/webhook-subscription-service.ts
++++ b/src/features/whop-agent/server/webhook-subscription-service.ts
+@@ -12,6 +12,7 @@ import { WhopAgentClient } from "@/lib/whop-agent/client";
+ import { encryptSecret, decryptSecret } from "@/lib/credentials";
+ import { inngest, whopWebhookProcess } from "@/lib/inngest";
+ import { duplicateGroupKey } from "./webhook-audit-service";
++import { isUniqueConstraintViolation } from "@/lib/db-errors";
+ 
+ interface CreatedWebhookResponse {
+   id: string;
+@@ -104,9 +105,7 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
+     // catches the loser here — it never gets a row of its own, and instead
+     // deletes the now-redundant subscription it just created on Whop's side
+     // and defers to whichever call actually won the insert.
+-    const code = insertErr && typeof insertErr === "object" && "code" in insertErr ? (insertErr as { code?: string }).code : undefined;
+-    const message = insertErr instanceof Error ? insertErr.message : String(insertErr);
+-    if (code !== "23505" && !/duplicate key|unique/i.test(message)) throw insertErr;
++    if (!isUniqueConstraintViolation(insertErr)) throw insertErr;
+ 
+     const [winner] = await db
+       .select({ whopWebhookId: whopWebhookRegistry.whopWebhookId })
+diff --git a/src/lib/approval-gate.ts b/src/lib/approval-gate.ts
+index 8baf60b..0f65274 100644
+--- a/src/lib/approval-gate.ts
++++ b/src/lib/approval-gate.ts
+@@ -509,63 +509,107 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string,
+  * verification it already does before dispatching here (see that file's
+  * header comment for why that has to happen in that specific order).
+  */
+-export async function decidePendingAction(
++type DecidePendingActionResult =
++  | { ok: true; status: "rejected" }
++  | { ok: true; status: "approved"; executed: true }
++  | { ok: true; status: "approved"; executed: false; error: string }
++  | { ok: false; error: string };
++
++/**
++ * The check-then-act this used to do — a plain SELECT, then later an
++ * UPDATE, with no lock between them — let two concurrent decisions on the
++ * same id (a double-click on Approve, a browser retrying a slow POST) both
++ * read status: "pending" and both go on to run the executor. Confirmed as
++ * a real, reproducible race (not just a theoretical one) against a live
++ * Postgres instance with two connections manually stepped through the
++ * exact same statement sequence: both readers saw "pending" every time.
++ * For an executor whose side effect mints fresh identifiers on every call
++ * — executeBulkPromoCodesConfirm's fresh runId (and therefore fresh
++ * per-code Whop idempotency keys) being the sharpest example — that's not
++ * a harmless double-run, it's a second live batch of promo codes created
++ * on the operator's actual Whop account.
++ *
++ * Fixed the same way run-log.ts's withStepsLock already fixed the
++ * identical class of race in this codebase: the read and the status
++ * transition move inside one transaction holding a `SELECT ... FOR
++ * UPDATE` row lock, so a second concurrent call blocks at the SELECT
++ * until the first transaction commits, then sees the already-decided
++ * status and bails — instead of racing past the same stale read. The
++ * executor call itself stays outside the lock/transaction, same
++ * reasoning withStepsLock gives for keeping its own network call out:
++ * a real side effect (an HTTP call to Whop, in most of these) has no
++ * business holding a database row lock for its duration.
++ */
++async function claimPendingAction(
+   id: string,
+   decision: "approved" | "rejected",
+   decidedBy: string
+ ): Promise<
+-  | { ok: true; status: "rejected" }
+-  | { ok: true; status: "approved"; executed: true }
+-  | { ok: true; status: "approved"; executed: false; error: string }
+-  | { ok: false; error: string }
++  | { claimed: false }
++  | { claimed: true; action: typeof pendingActions.$inferSelect; terminal: DecidePendingActionResult }
++  | { claimed: true; action: typeof pendingActions.$inferSelect; terminal: null }
+ > {
+-  const [action] = await db.select().from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
+-  if (!action || action.status !== "pending") {
+-    return { ok: false, error: "Pending action not found or already decided." };
+-  }
++  return db.transaction(async (tx) => {
++    const [action] = await tx.select().from(pendingActions).where(eq(pendingActions.id, id)).for("update").limit(1);
++    if (!action || action.status !== "pending") {
++      return { claimed: false };
++    }
+ 
+-  if (decision === "rejected") {
+-    await db
+-      .update(pendingActions)
+-      .set({ status: "rejected", decidedAt: new Date(), decidedBy })
+-      .where(eq(pendingActions.id, id));
+-    return { ok: true, status: "rejected" };
+-  }
++    if (decision === "rejected") {
++      await tx.update(pendingActions).set({ status: "rejected", decidedAt: new Date(), decidedBy }).where(eq(pendingActions.id, id));
++      return { claimed: true, action, terminal: { ok: true, status: "rejected" } };
++    }
+ 
+-  // Anti-hasty-response cooling-off period (thresholds.yml.template's
+-  // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
+-  // minMinutesBeforePublicResponse) — a public response can't be approved
+-  // until this many minutes have passed since the incident it responds to
+-  // was declared, even with sole-authority approval. Checked here, before
+-  // the row flips to "approved", so a too-early click leaves the row
+-  // "pending" and simply retryable once the window clears, rather than
+-  // landing in a dead execution_failed state.
+-  if (decision === "approved" && action.actionType === "rep_response_approval") {
+-    const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
+-    if (incidentId) {
+-      const [incident] = await db.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
+-      if (incident) {
+-        const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
+-        const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
+-        if (minutesSinceDeclared < required) {
+-          const minutesLeft = Math.ceil(required - minutesSinceDeclared);
+-          return {
+-            ok: false,
+-            error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
+-          };
++    // Anti-hasty-response cooling-off period (thresholds.yml.template's
++    // response_timing block, ported as REP_THRESHOLD_DEFAULTS.
++    // minMinutesBeforePublicResponse) — a public response can't be
++    // approved until this many minutes have passed since the incident it
++    // responds to was declared, even with sole-authority approval.
++    // Checked here, before the row flips to "approved", so a too-early
++    // click leaves the row "pending" and simply retryable once the
++    // window clears, rather than landing in a dead execution_failed
++    // state. Still inside the lock so a second concurrent caller can't
++    // slip past this check either.
++    if (decision === "approved" && action.actionType === "rep_response_approval") {
++      const incidentId = (action.payload as { incidentId?: string } | null)?.incidentId;
++      if (incidentId) {
++        const [incident] = await tx.select({ declaredAt: repIncidents.declaredAt }).from(repIncidents).where(eq(repIncidents.id, incidentId)).limit(1);
++        if (incident) {
++          const minutesSinceDeclared = (Date.now() - incident.declaredAt.getTime()) / 60_000;
++          const required = REP_THRESHOLD_DEFAULTS.minMinutesBeforePublicResponse;
++          if (minutesSinceDeclared < required) {
++            const minutesLeft = Math.ceil(required - minutesSinceDeclared);
++            return {
++              claimed: true,
++              action,
++              terminal: {
++                ok: false,
++                error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
++              },
++            };
++          }
+         }
+       }
+     }
+-  }
+ 
+-  // Approved — mark decided first (so a slow/failing executor can't leave
+-  // the row looking un-decided and retryable-by-accident), then attempt
+-  // execution, recording failure on the row rather than throwing it away.
+-  await db
+-    .update(pendingActions)
+-    .set({ status: "approved", decidedAt: new Date(), decidedBy })
+-    .where(eq(pendingActions.id, id));
++    // Approved — mark decided first (so a slow/failing executor can't
++    // leave the row looking un-decided and retryable-by-accident), then
++    // attempt execution outside this transaction.
++    await tx.update(pendingActions).set({ status: "approved", decidedAt: new Date(), decidedBy }).where(eq(pendingActions.id, id));
++    return { claimed: true, action, terminal: null };
++  });
++}
++
++export async function decidePendingAction(id: string, decision: "approved" | "rejected", decidedBy: string): Promise<DecidePendingActionResult> {
++  const claim = await claimPendingAction(id, decision, decidedBy);
++  if (!claim.claimed) {
++    return { ok: false, error: "Pending action not found or already decided." };
++  }
++  if (claim.terminal) {
++    return claim.terminal;
++  }
+ 
++  const action = claim.action;
+   try {
+     const executor = ACTION_EXECUTORS[action.actionType as PendingActionType];
+     if (!executor) {
+diff --git a/src/lib/db-errors.ts b/src/lib/db-errors.ts
+new file mode 100644
+index 0000000..ee5b555
+--- /dev/null
++++ b/src/lib/db-errors.ts
+@@ -0,0 +1,38 @@
++// src/lib/db-errors.ts
++//
++// drizzle-orm 0.45.2's postgres-js driver wraps every error the underlying
++// `postgres` package throws in a DrizzleQueryError (see node_modules/
++// drizzle-orm/pg-core/session.cjs's queryWithCache): its own `.message` is
++// always "Failed query: <sql>\nparams: <params>", and the real error —
++// the one with Postgres's actual SQLSTATE `.code` (23505 for a unique-
++// violation) and a message that actually says "duplicate key value
++// violates..." — lives one level down on `.cause`, not on the object
++// `catch` binds.
++//
++// Three call sites in this codebase (booking-event's webhook dedup,
++// whop-agent's webhook dedup, and ensureAgentWebhookSubscription's race
++// recovery) each hand-rolled this exact check against the top-level
++// caught error and never once matched: `"code" in err` is false on a
++// DrizzleQueryError, and its message never contains "duplicate key" or
++// "unique". Caught by a real-database integration test running two
++// genuinely concurrent inserts against the same unique index — the
++// intended recovery path silently never ran; the "loser" always threw
++// instead of gracefully deferring to the winner.
++export function isUniqueConstraintViolation(err: unknown): boolean {
++  let current: unknown = err;
++  // Walk the cause chain rather than assuming exactly one level of
++  // wrapping — cheap insurance against a future driver/ORM version
++  // adding or removing a wrapping layer.
++  for (let depth = 0; current && depth < 5; depth++) {
++    if (typeof current === "object") {
++      const code = (current as { code?: unknown }).code;
++      if (code === "23505") return true;
++      const message = current instanceof Error ? current.message : undefined;
++      if (message && /duplicate key value violates unique constraint/i.test(message)) return true;
++      current = (current as { cause?: unknown }).cause;
++    } else {
++      break;
++    }
++  }
++  return false;
++}
+diff --git a/tests/integration/approval-gate-race.test.ts b/tests/integration/approval-gate-race.test.ts
+new file mode 100644
+index 0000000..91f7b82
+--- /dev/null
++++ b/tests/integration/approval-gate-race.test.ts
+@@ -0,0 +1,78 @@
++// tests/integration/approval-gate-race.test.ts
++//
++// A double-click on "Approve" — the most ordinary real-world interaction
++// there is — sends two concurrent requests for the same pending action id.
++// decidePendingAction's check-then-act (SELECT status, then UPDATE +
++// execute) has no locking between the read and the write, so both requests
++// can see status: "pending" before either commits its update. For a Whop
++// Agent action like whop_bulk_promo_codes_confirm, whose executor
++// (executeBulkPromoCodesConfirm -> runBulkPromoCodes) mints a *fresh*
++// runId — and therefore fresh per-code idempotency keys — on every call,
++// a second execution isn't a harmless no-op: it would create the entire
++// promo-code batch a second time on the live Whop account.
++import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
++import crypto from "crypto";
++
++const hasDb = Boolean(process.env.DATABASE_URL);
++const d = hasDb ? describe : describe.skip;
++
++d("approval-gate — double-click / concurrent-decision race", () => {
++  const engagementId = `test-eng-approval-${crypto.randomUUID()}`;
++  const workspaceId = `test-ws-approval-${crypto.randomUUID()}`;
++  const whopUserId = `test-user-approval-${crypto.randomUUID()}`;
++
++  beforeAll(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces } = await import("@/models/schema");
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++  });
++
++  afterAll(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, pendingActions, skillRuns } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    await db.delete(pendingActions).where(eq(pendingActions.engagementId, engagementId));
++    await db.delete(skillRuns).where(eq(skillRuns.engagementId, engagementId));
++    await db.delete(engagements).where(eq(engagements.engagementId, engagementId));
++    await db.delete(workspaces).where(eq(workspaces.workspaceId, workspaceId));
++  });
++
++  it("two concurrent approvals of the same pending action execute the underlying action exactly once", async () => {
++    const { db } = await import("@/lib/db");
++    const { pendingActions } = await import("@/models/schema");
++    const { inngest } = await import("@/lib/inngest");
++
++    const sendSpy = vi.spyOn(inngest, "send").mockResolvedValue({ ids: [] } as unknown as ReturnType<typeof inngest.send> extends Promise<infer T> ? T : never);
++
++    const [row] = await db
++      .insert(pendingActions)
++      .values({
++        engagementId,
++        actionType: "whop_bulk_promo_codes_confirm",
++        payload: { specs: [{ code: "RACE10", planIds: ["plan_test"], discountPercentage: 10 }] },
++        status: "pending",
++      })
++      .returning();
++
++    const { decidePendingAction } = await import("@/lib/approval-gate");
++
++    const [a, b] = await Promise.all([
++      decidePendingAction(row.id, "approved", "tester-a"),
++      decidePendingAction(row.id, "approved", "tester-b"),
++    ]);
++
++    // Exactly one of the two concurrent callers should have actually
++    // triggered execution; the other must see it as already decided
++    // rather than silently re-running the executor.
++    const outcomes = [a, b];
++    const executedCount = outcomes.filter((o) => "executed" in o && o.executed).length;
++    const alreadyDecidedCount = outcomes.filter((o) => !o.ok).length;
++
++    expect(executedCount).toBe(1);
++    expect(alreadyDecidedCount).toBe(1);
++    expect(sendSpy).toHaveBeenCalledTimes(1);
++
++    sendSpy.mockRestore();
++  });
++});
+diff --git a/tests/integration/whop-agent-runtime.test.ts b/tests/integration/whop-agent-runtime.test.ts
+new file mode 100644
+index 0000000..4a504d1
+--- /dev/null
++++ b/tests/integration/whop-agent-runtime.test.ts
+@@ -0,0 +1,239 @@
++// tests/integration/whop-agent-runtime.test.ts
++//
++// Real-database integration tests for the exact failure modes a live
++// operator can trigger: two skills enabling around the same moment (the
++// webhook-subscription race), a dead credential mid-session (the circuit
++// breaker), and a double-submit on Bulk Promo Codes. These hit a real
++// Postgres instance (DATABASE_URL) with the actual service functions —
++// only the outbound Whop HTTP call itself is mocked, since there is no
++// live Whop account to call in CI. Skipped automatically when no
++// DATABASE_URL is configured (matches this repo's existing DB-dependent
++// test convention).
++import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
++import crypto from "crypto";
++
++const hasDb = Boolean(process.env.DATABASE_URL);
++const d = hasDb ? describe : describe.skip;
++
++vi.mock("@/lib/whop-agent/client", async (importOriginal) => {
++  const actual = await importOriginal<typeof import("@/lib/whop-agent/client")>();
++  let createCallCount = 0;
++  let deleteCallCount = 0;
++  return {
++    ...actual,
++    __getCallCounts: () => ({ createCallCount, deleteCallCount }),
++    WhopAgentClient: {
++      ...actual.WhopAgentClient,
++      forEngagement: vi.fn(async (engagementId: string) => ({
++        engagementId,
++        accountId: "biz_test123",
++        pinnedVersionDate: "2024-01-01",
++        request: vi.fn(async (endpoint: string) => {
++          if (endpoint === "webhooks.create") {
++            createCallCount++;
++            // Widen the race window artificially — a real network round
++            // trip to Whop is exactly this kind of delay in production.
++            await new Promise((r) => setTimeout(r, 30 + Math.random() * 20));
++            return { id: `hook_${crypto.randomUUID()}`, secret: `ws_test_${crypto.randomUUID()}` };
++          }
++          if (endpoint === "webhooks.delete") {
++            deleteCallCount++;
++            return {};
++          }
++          throw new Error(`Unexpected endpoint in test mock: ${endpoint}`);
++        }),
++      })),
++    },
++  };
++});
++
++d("Whop Agent — real-database race and failure-mode checks", () => {
++  const engagementId = `test-eng-${crypto.randomUUID()}`;
++  const workspaceId = `test-ws-${crypto.randomUUID()}`;
++  const whopUserId = `test-user-${crypto.randomUUID()}`;
++
++  beforeAll(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, whopAgentConnections } = await import("@/models/schema");
++
++    await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
++    await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
++    await db.insert(whopAgentConnections).values({
++      engagementId,
++      credentialType: "bot",
++      whopAccountId: "biz_test123",
++      pinnedVersionDate: "2024-01-01",
++      circuitBreakerState: "closed",
++    });
++
++    const { encryptSecret } = await import("@/lib/credentials");
++    const { credentialsRefs } = await import("@/models/schema");
++    const { encryptedValue, iv, keyVersion } = encryptSecret("fake_bot_api_key_for_testing");
++    await db.insert(credentialsRefs).values({
++      engagementId,
++      provider: "whop_bot_api_key",
++      refKey: "whop_bot_api_key",
++      encryptedValue,
++      iv,
++      keyVersion,
++    });
++  });
++
++  afterAll(async () => {
++    const { db } = await import("@/lib/db");
++    const { engagements, workspaces, whopWebhookRegistry, whopAgentConnections, credentialsRefs, skillRuns, pendingActions } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++    await db.delete(whopWebhookRegistry).where(eq(whopWebhookRegistry.engagementId, engagementId));
++    await db.delete(credentialsRefs).where(eq(credentialsRefs.engagementId, engagementId));
++    await db.delete(whopAgentConnections).where(eq(whopAgentConnections.engagementId, engagementId));
++    await db.delete(pendingActions).where(eq(pendingActions.engagementId, engagementId));
++    await db.delete(skillRuns).where(eq(skillRuns.engagementId, engagementId));
++    await db.delete(engagements).where(eq(engagements.engagementId, engagementId));
++    await db.delete(workspaces).where(eq(workspaces.workspaceId, workspaceId));
++  });
++
++  it("two concurrent ensureAgentWebhookSubscription calls for the same event set never leave two live rows", async () => {
++    const { ensureAgentWebhookSubscription } = await import("@/features/whop-agent/server/webhook-subscription-service");
++    const { db } = await import("@/lib/db");
++    const { whopWebhookRegistry } = await import("@/models/schema");
++    const { and, eq } = await import("drizzle-orm");
++
++    const events = ["membership.went_valid", "membership.cancel_at_period_end_changed"];
++
++    // Two "skills enabling at the same time" calls, genuinely concurrent —
++    // not sequential awaits — so both pass the pre-insert SELECT before
++    // either has inserted, the exact race window the fix targets.
++    const [a, b] = await Promise.all([
++      ensureAgentWebhookSubscription(engagementId, events),
++      ensureAgentWebhookSubscription(engagementId, events),
++    ]);
++
++    // Both callers must get back a usable webhook id, and it must be the
++    // SAME one — the loser defers to the winner rather than returning its
++    // own now-deleted subscription.
++    expect(a.whopWebhookId).toBe(b.whopWebhookId);
++
++    const rows = await db
++      .select()
++      .from(whopWebhookRegistry)
++      .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.createdByAgent, true)));
++
++    expect(rows).toHaveLength(1);
++    expect(rows[0].whopWebhookId).toBe(a.whopWebhookId);
++  });
++
++  it("a third call for the SAME event set after the row exists is a no-op read, not a new subscription", async () => {
++    const { ensureAgentWebhookSubscription } = await import("@/features/whop-agent/server/webhook-subscription-service");
++    const { db } = await import("@/lib/db");
++    const { whopWebhookRegistry } = await import("@/models/schema");
++    const { and, eq } = await import("drizzle-orm");
++
++    const events = ["membership.went_valid", "membership.cancel_at_period_end_changed"];
++    const result = await ensureAgentWebhookSubscription(engagementId, events);
++
++    const rows = await db
++      .select()
++      .from(whopWebhookRegistry)
++      .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.createdByAgent, true)));
++
++    expect(rows).toHaveLength(1);
++    expect(result.whopWebhookId).toBe(rows[0].whopWebhookId);
++  });
++
++  it("a credential error trips the circuit breaker, and every subsequent call is refused without hitting Whop again", async () => {
++    const clientModule = await import("@/lib/whop-agent/client");
++    const { db } = await import("@/lib/db");
++    const { whopAgentConnections } = await import("@/models/schema");
++    const { eq } = await import("drizzle-orm");
++
++    // Reset to closed for this test's own engagement — a fresh id so the
++    // previous tests' state can't interfere.
++    const breakerEngagementId = `test-eng-breaker-${crypto.randomUUID()}`;
++    const { engagements } = await import("@/models/schema");
++    await db.insert(engagements).values({ engagementId: breakerEngagementId, whopUserId, workspaceId, buyer: "Breaker Test" });
++    await db.insert(whopAgentConnections).values({
++      engagementId: breakerEngagementId,
++      credentialType: "bot",
++      whopAccountId: "biz_test123",
++      circuitBreakerState: "closed",
++    });
++    const { encryptSecret } = await import("@/lib/credentials");
++    const { credentialsRefs } = await import("@/models/schema");
++    const { encryptedValue, iv, keyVersion } = encryptSecret("fake_bot_api_key_for_testing");
++    await db.insert(credentialsRefs).values({
++      engagementId: breakerEngagementId,
++      provider: "whop_bot_api_key",
++      refKey: "whop_bot_api_key",
++      encryptedValue,
++      iv,
++      keyVersion,
++    });
++
++    // Real client (not the mocked forEngagement above) with a mocked
++    // fetch — exercises the actual request() classification + tripBreaker
++    // logic, not a stand-in.
++    const actualClientModule = await vi.importActual<typeof import("@/lib/whop-agent/client")>("@/lib/whop-agent/client");
++    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ message: "Invalid API key" }), { status: 401 })
++    );
++
++    const client = await actualClientModule.WhopAgentClient.forEngagement(breakerEngagementId);
++    await expect(client.request("accounts.get", "/v1/accounts")).rejects.toThrow();
++
++    const [row] = await db.select().from(whopAgentConnections).where(eq(whopAgentConnections.engagementId, breakerEngagementId));
++    expect(row.circuitBreakerState).toBe("open");
++    expect(row.circuitBreakerReason).toBeTruthy();
++
++    // A brand-new client construction for the same engagement must now
++    // refuse before ever calling fetch again.
++    fetchSpy.mockClear();
++    await expect(actualClientModule.WhopAgentClient.forEngagement(breakerEngagementId)).rejects.toThrow();
++    expect(fetchSpy).not.toHaveBeenCalled();
++
++    fetchSpy.mockRestore();
++    await db.delete(credentialsRefs).where(eq(credentialsRefs.engagementId, breakerEngagementId));
++    await db.delete(whopAgentConnections).where(eq(whopAgentConnections.engagementId, breakerEngagementId));
++    await db.delete(engagements).where(eq(engagements.engagementId, breakerEngagementId));
++
++    void clientModule;
++  });
++
++  it("a batch over the confirmation threshold queues for approval and issues zero live writes", async () => {
++    const { runBulkPromoCodes } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
++    const specs = Array.from({ length: 26 }, (_, i) => ({
++      code: `TEST${i}`,
++      planIds: ["plan_test"],
++      discountPercentage: 10,
++    }));
++
++    const result = await runBulkPromoCodes(engagementId, specs, { dryRun: false });
++    expect(result.status).toBe("queued_for_confirmation");
++    expect(result.pendingActionId).toBeTruthy();
++    expect(result.created).toHaveLength(0);
++  });
++
++  it("double-submitting the same live batch dispatches two independent Inngest runs rather than crashing", async () => {
++    const { inngest } = await import("@/lib/inngest");
++    const sendSpy = vi.spyOn(inngest, "send").mockResolvedValue({ ids: [] } as unknown as ReturnType<typeof inngest.send> extends Promise<infer T> ? T : never);
++
++    const { runBulkPromoCodes } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
++    const specs = [{ code: "DOUBLESUBMIT", planIds: ["plan_test"], discountPercentage: 10 }];
++
++    const [first, second] = await Promise.all([
++      runBulkPromoCodes(engagementId, specs, { dryRun: false }),
++      runBulkPromoCodes(engagementId, specs, { dryRun: false }),
++    ]);
++
++    // Section 8.2 dry-run-by-default only applies once per skill per
++    // engagement (clearDryRunForSkill runs inside the Inngest function,
++    // not this decision step) — both calls here pass `dryRun: false`
++    // explicitly, so both should queue their own run rather than one
++    // silently overwriting the other's runId.
++    expect(first.status).toBe("queued_live");
++    expect(second.status).toBe("queued_live");
++    expect(first.runId).not.toBe(second.runId);
++    expect(sendSpy).toHaveBeenCalledTimes(2);
++
++    sendSpy.mockRestore();
++  });
++});
+diff --git a/tests/unit/db-errors.test.ts b/tests/unit/db-errors.test.ts
+new file mode 100644
+index 0000000..3813b9c
+--- /dev/null
++++ b/tests/unit/db-errors.test.ts
+@@ -0,0 +1,41 @@
++import { describe, it, expect } from "vitest";
++import { isUniqueConstraintViolation } from "@/lib/db-errors";
++
++describe("isUniqueConstraintViolation", () => {
++  it("detects a raw postgres.js unique-violation error (code on the object itself)", () => {
++    const err = Object.assign(new Error('duplicate key value violates unique constraint "foo_unique"'), { code: "23505" });
++    expect(isUniqueConstraintViolation(err)).toBe(true);
++  });
++
++  it("detects a drizzle-orm DrizzleQueryError wrapping the real error in .cause", () => {
++    const cause = Object.assign(new Error('duplicate key value violates unique constraint "foo_unique"'), { code: "23505" });
++    const wrapped = new Error("Failed query: insert into ...\nparams: ...");
++    (wrapped as Error & { cause?: unknown }).cause = cause;
++    expect(isUniqueConstraintViolation(wrapped)).toBe(true);
++  });
++
++  it("does not false-positive on an unrelated foreign-key violation", () => {
++    const err = Object.assign(new Error('update or delete on table "x" violates foreign key constraint "y"'), { code: "23503" });
++    expect(isUniqueConstraintViolation(err)).toBe(false);
++  });
++
++  it("does not false-positive on an unrelated error whose message happens to mention the word 'unique'", () => {
++    const err = new Error("Please choose a unique username.");
++    expect(isUniqueConstraintViolation(err)).toBe(false);
++  });
++
++  it("does not throw or infinite-loop on a circular .cause chain", () => {
++    const a: Error & { cause?: unknown } = new Error("a");
++    const b: Error & { cause?: unknown } = new Error("b");
++    a.cause = b;
++    b.cause = a;
++    expect(() => isUniqueConstraintViolation(a)).not.toThrow();
++  });
++
++  it("returns false for non-error values", () => {
++    expect(isUniqueConstraintViolation(null)).toBe(false);
++    expect(isUniqueConstraintViolation(undefined)).toBe(false);
++    expect(isUniqueConstraintViolation("just a string")).toBe(false);
++    expect(isUniqueConstraintViolation(42)).toBe(false);
++  });
++});

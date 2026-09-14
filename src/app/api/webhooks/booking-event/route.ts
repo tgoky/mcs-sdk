@@ -9,6 +9,7 @@ import { startRun, failRun } from "@/lib/run-log";
 import { gateOrExecute } from "@/lib/approval-gate";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { inngest, bookingWebhookProcess } from "@/lib/inngest";
+import { isUniqueConstraintViolation } from "@/lib/db-errors";
 import crypto from "crypto";
 
 // Reliability fix: this route now only does DB-only work (signature verify,
@@ -293,12 +294,7 @@ export async function POST(request: Request) {
         // means we've already accepted this exact event — this is a
         // retry, not a new booking. Acknowledge with 200 so the platform
         // stops retrying, but do NOT run enrollment again.
-        const dedupErrCode =
-          dedupErr && typeof dedupErr === "object" && "code" in dedupErr
-            ? (dedupErr as { code?: string }).code
-            : undefined;
-        const dedupErrMessage = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
-        if (dedupErrCode === "23505" || /duplicate key|unique/i.test(dedupErrMessage)) {
+        if (isUniqueConstraintViolation(dedupErr)) {
           console.log(
             `[webhook] Duplicate delivery ignored (idempotency key: ${idempotencyKey}) for engagement ${engagementId}`
           );
@@ -306,6 +302,7 @@ export async function POST(request: Request) {
         }
         // Any other DB error dedup-checking shouldn't block a legitimate
         // booking from being processed — log and fall through.
+        const dedupErrMessage = dedupErr instanceof Error ? dedupErr.message : String(dedupErr);
         console.error("[webhook] Idempotency check failed (non-fatal):", dedupErrMessage);
       }
     } else {
