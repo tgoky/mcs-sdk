@@ -5,7 +5,8 @@ import { skillRuns, engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getQueueItems } from "@/lib/queue";
 import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
-import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace, getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
 import { LiveExecutionFeed } from "./live-execution-feed";
 import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
@@ -162,6 +163,16 @@ export default async function DashboardPage() {
     getPrimaryEngagementIdForWorkspace(workspaceId),
   ]);
 
+  // For the welcome modal only — lets it tell a workspace that already
+  // picked products at creation (or already has a worker running) apart
+  // from a genuinely blank one, instead of always pointing at "set up
+  // your first worker" regardless of what's actually true.
+  const [installedPackagesByWorkspace, enabledWorkerIds] = await Promise.all([
+    getInstalledPackagesByWorkspace([workspaceId]),
+    primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
+  ]);
+  const installedProductIds = installedPackagesByWorkspace.get(workspaceId) ?? [];
+
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
   const completedAllTime = Number(totalRunsResult[0]?.count ?? 0);
@@ -237,7 +248,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <TourWelcomeNudge />
+        <TourWelcomeNudge installedProductIds={installedProductIds} hasEnabledAnyWorker={enabledWorkerIds.length > 0} />
 
         {/* Overview stats */}
         <div data-tour="dashboard-overview-stats">
