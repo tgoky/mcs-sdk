@@ -111,24 +111,30 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   return (
     <div className="flex flex-col space-y-3 font-sans antialiased text-zinc-700 dark:text-zinc-300">
       {/* GROUP 1: HOME & REPORTS */}
-      <SidebarNavLinks links={group1Links} />
+      <div data-tour="sidebar-nav-primary">
+        <SidebarNavLinks links={group1Links} />
+      </div>
 
       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
 
       {/* GROUP 2: QUEUE & EXECUTIONS */}
-      <SidebarNavLinks links={group2Links} />
+      <div data-tour="sidebar-nav-queue">
+        <SidebarNavLinks links={group2Links} />
+      </div>
 
       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
 
       {/* INSTALLED SKILLS SECTION — owns its own header (collapse toggle +
           shortcut into the Library), see skills-nav-list.tsx */}
-      <SkillsNavList
-        productIds={installedProductIds}
-        layout="grid"
-        enabledWorkerIds={enabledWorkerIds}
-        needsAttentionWorkerIds={needsAttentionWorkerIds}
-        engagementId={primaryEngagementId}
-      />
+      <div data-tour="sidebar-installed-skills">
+        <SkillsNavList
+          productIds={installedProductIds}
+          layout="grid"
+          enabledWorkerIds={enabledWorkerIds}
+          needsAttentionWorkerIds={needsAttentionWorkerIds}
+          engagementId={primaryEngagementId}
+        />
+      </div>
     </div>
   );
 }

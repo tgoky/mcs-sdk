@@ -171,7 +171,7 @@ export function LibraryMarketplaceClient({
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-3 space-y-4 text-xs text-zinc-700 dark:text-zinc-400">
+          <div className="lg:col-span-3 space-y-4 text-xs text-zinc-700 dark:text-zinc-400" data-tour="library-status-filter">
             <div className="space-y-2 pb-4 border-b border-zinc-200 dark:border-zinc-800">
               <button
                 type="button"
@@ -270,7 +270,7 @@ export function LibraryMarketplaceClient({
                 No workers match these filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch" data-tour="library-grid">
                 {filtered.map((p) => (
                   <ProductCard
                     key={p.id}

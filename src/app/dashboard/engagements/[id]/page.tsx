@@ -367,7 +367,7 @@ export default async function EngagementDetailPage({
                   status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
                 />
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2" data-tour="engagement-pause-control">
                 <EngagementPauseControl
                   engagementId={engagement.engagementId}
                   initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
@@ -406,19 +406,23 @@ export default async function EngagementDetailPage({
             ClientReportCard/RepClientReportCard split, which showed a
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
-        <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
+        <div data-tour="engagement-report">
+          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
+        </div>
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
 
-        <WorkersPanel
-          engagementId={engagement.engagementId}
-          workerIds={workerIds}
-          initialStates={{}}
-          runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
-          isPaused={Boolean(engagement.pausedAt)}
-          productOnboarded={productOnboarded}
-          productOnboardingSkipDismissed={productOnboardingSkipDismissed}
-        />
+        <div data-tour="engagement-workers-panel">
+          <WorkersPanel
+            engagementId={engagement.engagementId}
+            workerIds={workerIds}
+            initialStates={{}}
+            runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
+            isPaused={Boolean(engagement.pausedAt)}
+            productOnboarded={productOnboarded}
+            productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+          />
+        </div>
 
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
 

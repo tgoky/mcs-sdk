@@ -267,7 +267,7 @@ export function ProductDetailClient({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-tour="product-status-tabs">
           <SegmentedTabs<"all" | "enabled" | "not_enabled">
             options={[
               { key: "all", label: "All", count: workers.length },
@@ -294,7 +294,7 @@ export function ProductDetailClient({
             No skills match these filters.
           </div>
         ) : (
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" data-tour="product-skill-list">
             {/* Configure swaps only that one skill's own row for its config
                 form, in the exact same slot in the list — every other row
                 stays put, so clicking Configure never reflows the page or

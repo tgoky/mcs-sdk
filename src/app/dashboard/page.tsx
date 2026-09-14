@@ -16,6 +16,7 @@ import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
+import { TourWelcomeNudge } from "@/components/tours/tour-welcome-nudge";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -236,27 +237,31 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        <TourWelcomeNudge />
+
         {/* Overview stats */}
-        <OverviewStatsPanel
-          completedThisWeek={completedThisWeek}
-          completedAllTime={completedAllTime}
-          weeklyTrend={weeklyTrend}
-          completedThisWeekBySkill={completedThisWeekBySkill}
-          recentCompletions={recentCompletions}
-          issuesCount={issues.count}
-          issuesBreakdown={issues.breakdown ?? null}
-          queueItems={queueItems}
-        />
+        <div data-tour="dashboard-overview-stats">
+          <OverviewStatsPanel
+            completedThisWeek={completedThisWeek}
+            completedAllTime={completedAllTime}
+            weeklyTrend={weeklyTrend}
+            completedThisWeekBySkill={completedThisWeekBySkill}
+            recentCompletions={recentCompletions}
+            issuesCount={issues.count}
+            issuesBreakdown={issues.breakdown ?? null}
+            queueItems={queueItems}
+          />
+        </div>
 
         {/* Queue */}
-        <div className="pt-2">
+        <div className="pt-2" data-tour="dashboard-queue">
           <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
         </div>
 
         {/* Activity feed */}
         {/* CHANGED: id + scroll-mt so the pill's scrollIntoView lands correctly even
             under any future sticky/fixed nav; unseenCount seeds the highlight state */}
-        <div className="pt-2 scroll-mt-20" id="live-executions-section">
+        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-live-executions">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
               {copy.activityLogSectionTitle}

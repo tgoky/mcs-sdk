@@ -494,6 +494,23 @@ export type EngagementStack = {
   // by ProductId rather than one flag per product so a 5th product never
   // needs a new column here, just a new key.
   product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
+
+  // ── Interactive product tours (src/lib/tours) ───────────────────────────
+  // Progress survives a page reload or navigating away mid-tour — a tour
+  // can span several routes (dashboard -> Library -> an engagement's own
+  // skill page), so this can't live in component state or even
+  // sessionStorage alone. Keyed by TourId, one entry per tour this
+  // workspace's primary engagement has ever started. "completed" is only
+  // set once every step actually reached its real target element (see
+  // tour-provider.tsx) — not just "the user clicked next" — so a step
+  // skipped because a product isn't onboarded yet doesn't retroactively
+  // count as seen.
+  tour_state?: Partial<
+    Record<
+      string,
+      { status: "in_progress" | "completed"; currentStepId: string; completedStepIds: string[]; updatedAt: string }
+    >
+  >;
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────

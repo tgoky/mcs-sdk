@@ -1,0 +1,1443 @@
+diff --git a/package.json b/package.json
+index 4a2ca28..4bc169d 100644
+--- a/package.json
++++ b/package.json
+@@ -16,6 +16,7 @@
+     "@composio/core": "^0.16.0",
+     "@dicebear/collection": "^9.4.2",
+     "@dicebear/core": "^9.4.3",
++    "@floating-ui/react": "^0.27.20",
+     "@t3-oss/env-nextjs": "^0.13.11",
+     "@vercel/functions": "^3.7.3",
+     "@whop/checkout": "^0.6.0",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index f878c3a..da5728c 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -20,6 +20,9 @@ importers:
+       '@dicebear/core':
+         specifier: ^9.4.3
+         version: 9.4.3
++      '@floating-ui/react':
++        specifier: ^0.27.20
++        version: 0.27.20(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+       '@t3-oss/env-nextjs':
+         specifier: ^0.13.11
+         version: 0.13.11(typescript@5.9.3)(zod@4.4.3)
+@@ -1137,6 +1140,12 @@ packages:
+       react: '>=16.8.0'
+       react-dom: '>=16.8.0'
+ 
++  '@floating-ui/react@0.27.20':
++    resolution: {integrity: sha512-CMqMy7OaXl9W0eq1Uy7L7i2Y/anPvHmFmESd2CEw0t5YvZhcVCeo4MBevAmswRllX7Y2dEidA4ozGPunLSTQpw==}
++    peerDependencies:
++      react: '>=17.0.0'
++      react-dom: '>=17.0.0'
++
+   '@floating-ui/utils@0.2.12':
+     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+ 
+@@ -5902,6 +5911,9 @@ packages:
+     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
+     hasBin: true
+ 
++  tabbable@6.5.0:
++    resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
++
+   tailwind-merge@3.6.0:
+     resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
+ 
+@@ -7176,6 +7188,14 @@ snapshots:
+       react: 19.2.4
+       react-dom: 19.2.4(react@19.2.4)
+ 
++  '@floating-ui/react@0.27.20(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
++    dependencies:
++      '@floating-ui/react-dom': 2.1.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
++      '@floating-ui/utils': 0.2.12
++      react: 19.2.4
++      react-dom: 19.2.4(react@19.2.4)
++      tabbable: 6.5.0
++
+   '@floating-ui/utils@0.2.12': {}
+ 
+   '@grpc/grpc-js@1.14.4':
+@@ -12316,6 +12336,8 @@ snapshots:
+ 
+   systeminformation@5.32.0: {}
+ 
++  tabbable@6.5.0: {}
++
+   tailwind-merge@3.6.0: {}
+ 
+   tailwindcss@4.3.3: {}
+diff --git a/src/app/api/engagements/[id]/tours/route.ts b/src/app/api/engagements/[id]/tours/route.ts
+new file mode 100644
+index 0000000..696940e
+--- /dev/null
++++ b/src/app/api/engagements/[id]/tours/route.ts
+@@ -0,0 +1,73 @@
++// src/app/api/engagements/[id]/tours/route.ts
++//
++// Persists interactive-tour progress into stack.tour_state (see
++// src/models/schema.ts's own comment on that field, and
++// tour-provider.tsx, the only caller). Called on every step the tour
++// actually reaches — not on every click — so a step skipped because its
++// target never appeared (product not onboarded, no client yet, whatever
++// the real reason) never gets recorded as seen.
++
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements, type EngagementStack } from "@/models/schema";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { and, eq } from "drizzle-orm";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++
++    const body = await req.json().catch(() => ({}));
++    const { tourId, status, currentStepId, completedStepIds, updatedAt } = body ?? {};
++    if (typeof tourId !== "string" || typeof currentStepId !== "string" || (status !== "in_progress" && status !== "completed")) {
++      return NextResponse.json({ error: "tourId, status, and currentStepId are required." }, { status: 400 });
++    }
++
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [row] = await db
++      .select({ engagementId: engagements.engagementId, stack: engagements.stack })
++      .from(engagements)
++      .where(
++        and(
++          eq(engagements.engagementId, id),
++          eq(engagements.whopUserId, session.whopUserId),
++          eq(engagements.workspaceId, activeWorkspace.workspaceId)
++        )
++      )
++      .limit(1);
++
++    if (!row) {
++      return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
++    }
++
++    const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
++    const nextStack: EngagementStack = {
++      ...stack,
++      tour_state: {
++        ...stack.tour_state,
++        [tourId]: {
++          status,
++          currentStepId,
++          completedStepIds: Array.isArray(completedStepIds) ? completedStepIds : [],
++          updatedAt: typeof updatedAt === "string" ? updatedAt : new Date().toISOString(),
++        },
++      },
++    };
++
++    await db.update(engagements).set({ stack: nextStack, updatedAt: new Date() }).where(eq(engagements.engagementId, id));
++
++    return NextResponse.json({ ok: true });
++  } catch (err) {
++    console.error("[engagements/[id]/tours PATCH]", err);
++    return NextResponse.json({ error: "Failed to save tour progress." }, { status: 500 });
++  }
++}
+diff --git a/src/app/dashboard/engagements/[id]/page.tsx b/src/app/dashboard/engagements/[id]/page.tsx
+index 4a5e445..f745df1 100644
+--- a/src/app/dashboard/engagements/[id]/page.tsx
++++ b/src/app/dashboard/engagements/[id]/page.tsx
+@@ -367,7 +367,7 @@ export default async function EngagementDetailPage({
+                   status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
+                 />
+               )}
+-              <div className="flex items-center gap-2">
++              <div className="flex items-center gap-2" data-tour="engagement-pause-control">
+                 <EngagementPauseControl
+                   engagementId={engagement.engagementId}
+                   initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
+@@ -406,19 +406,23 @@ export default async function EngagementDetailPage({
+             ClientReportCard/RepClientReportCard split, which showed a
+             real, correctly-zeroed Showtime card even for a client with no
+             Showtime setup at all. */}
+-        <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
++        <div data-tour="engagement-report">
++          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
++        </div>
+ 
+         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
+ 
+-        <WorkersPanel
+-          engagementId={engagement.engagementId}
+-          workerIds={workerIds}
+-          initialStates={{}}
+-          runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
+-          isPaused={Boolean(engagement.pausedAt)}
+-          productOnboarded={productOnboarded}
+-          productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+-        />
++        <div data-tour="engagement-workers-panel">
++          <WorkersPanel
++            engagementId={engagement.engagementId}
++            workerIds={workerIds}
++            initialStates={{}}
++            runsByWorker={{ ...runsBySkill, ...repRunsBySkill }}
++            isPaused={Boolean(engagement.pausedAt)}
++            productOnboarded={productOnboarded}
++            productOnboardingSkipDismissed={productOnboardingSkipDismissed}
++          />
++        </div>
+ 
+         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
+ 
+diff --git a/src/app/dashboard/layout.tsx b/src/app/dashboard/layout.tsx
+index 1d47060..2162f40 100644
+--- a/src/app/dashboard/layout.tsx
++++ b/src/app/dashboard/layout.tsx
+@@ -5,9 +5,14 @@ import { ShellLayout } from "@/components/shell-layout";
+ import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context";
+ import { BookingToast } from "./booking-toast";
+ import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
+-import { getActiveWorkspace, listWorkspaces } from "@/lib/workspace";
++import { getActiveWorkspace, listWorkspaces, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+ import { getUserAvatar } from "@/lib/user-avatar";
+ import { MobileNavPill } from "@/components/mobile-nav-pill";
++import { TourProvider } from "@/components/tours/tour-provider";
++import { TourOverlay } from "@/components/tours/tour-overlay";
++import { db } from "@/lib/db";
++import { engagements, type EngagementStack } from "@/models/schema";
++import { eq } from "drizzle-orm";
+ 
+ export const dynamic = "force-dynamic";
+ export const revalidate = 0;
+@@ -41,36 +46,56 @@ export default async function DashboardLayout({
+     getUserAvatar(whopUserId),
+   ]);
+ 
++  // Interactive tours (src/lib/tours) are scoped to this workspace's
++  // primary engagement — same convention the Library and WorkersPanel
++  // already use for anything product-related that isn't tied to a
++  // specific engagement page in the URL. Mounted here, above `{children}`,
++  // so the provider survives every route change under /dashboard instead
++  // of resetting mid-tour on each navigation.
++  const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(activeWorkspace.workspaceId);
++  const tourStack = primaryEngagementId
++    ? await db
++        .select({ stack: engagements.stack })
++        .from(engagements)
++        .where(eq(engagements.engagementId, primaryEngagementId))
++        .limit(1)
++        .then((r) => (r[0]?.stack as EngagementStack | null) ?? null)
++    : null;
++
+   return (
+     <BreadcrumbProvider>
+-      {/* Real-time booking toast listener */}
+-      <BookingToast />
++      <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
++        {/* Real-time booking toast listener */}
++        <BookingToast />
++
++        {/* 3-Region Asana Layout Shell. One Work sidebar, generic across
++            every worker in the unified registry regardless of product (its
++            own Capabilities grid already spans both) — this used to also
++            carry a separate ShowtimeSidebar/ReputationManagerSidebar pair
++            plus two more Reports variants with their own client pickers,
++            the same "different menu depending on product context" problem
++            the worker-registry restructure exists to remove, still standing
++            here through every phase of it until now. */}
++        <ShellLayout
++          displayName={displayName}
++          userEmail={userEmail}
++          workspaces={workspaceList}
++          activeWorkspaceId={activeWorkspace.workspaceId}
++          avatar={avatar}
++          work={
++            <Suspense fallback={<WorkSidebarSkeleton />}>
++              <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
++            </Suspense>
++          }
++        >
++          {children}
++        </ShellLayout>
+ 
+-      {/* 3-Region Asana Layout Shell. One Work sidebar, generic across
+-          every worker in the unified registry regardless of product (its
+-          own Capabilities grid already spans both) — this used to also
+-          carry a separate ShowtimeSidebar/ReputationManagerSidebar pair
+-          plus two more Reports variants with their own client pickers,
+-          the same "different menu depending on product context" problem
+-          the worker-registry restructure exists to remove, still standing
+-          here through every phase of it until now. */}
+-      <ShellLayout
+-        displayName={displayName}
+-        userEmail={userEmail}
+-        workspaces={workspaceList}
+-        activeWorkspaceId={activeWorkspace.workspaceId}
+-        avatar={avatar}
+-        work={
+-          <Suspense fallback={<WorkSidebarSkeleton />}>
+-            <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />
+-          </Suspense>
+-        }
+-      >
+-        {children}
+-      </ShellLayout>
++        {/* Floating Mobile Nav Pill & Accordion Navigation */}
++        <MobileNavPill />
+ 
+-      {/* Floating Mobile Nav Pill & Accordion Navigation */}
+-      <MobileNavPill />
++        <TourOverlay />
++      </TourProvider>
+     </BreadcrumbProvider>
+   );
+ }
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+index 2adc538..83b528c 100644
+--- a/src/app/dashboard/page.tsx
++++ b/src/app/dashboard/page.tsx
+@@ -16,6 +16,7 @@ import { DASHBOARD_COPY as copy } from "@/lib/copy";
+ import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
+ import Link from "next/link";
+ import { Calendar } from "lucide-react";
++import { TourWelcomeNudge } from "@/components/tours/tour-welcome-nudge";
+ 
+ export const dynamic = "force-dynamic";
+ export const revalidate = 0;
+@@ -236,27 +237,31 @@ export default async function DashboardPage() {
+           </div>
+         </div>
+ 
++        <TourWelcomeNudge />
++
+         {/* Overview stats */}
+-        <OverviewStatsPanel
+-          completedThisWeek={completedThisWeek}
+-          completedAllTime={completedAllTime}
+-          weeklyTrend={weeklyTrend}
+-          completedThisWeekBySkill={completedThisWeekBySkill}
+-          recentCompletions={recentCompletions}
+-          issuesCount={issues.count}
+-          issuesBreakdown={issues.breakdown ?? null}
+-          queueItems={queueItems}
+-        />
++        <div data-tour="dashboard-overview-stats">
++          <OverviewStatsPanel
++            completedThisWeek={completedThisWeek}
++            completedAllTime={completedAllTime}
++            weeklyTrend={weeklyTrend}
++            completedThisWeekBySkill={completedThisWeekBySkill}
++            recentCompletions={recentCompletions}
++            issuesCount={issues.count}
++            issuesBreakdown={issues.breakdown ?? null}
++            queueItems={queueItems}
++          />
++        </div>
+ 
+         {/* Queue */}
+-        <div className="pt-2">
++        <div className="pt-2" data-tour="dashboard-queue">
+           <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
+         </div>
+ 
+         {/* Activity feed */}
+         {/* CHANGED: id + scroll-mt so the pill's scrollIntoView lands correctly even
+             under any future sticky/fixed nav; unseenCount seeds the highlight state */}
+-        <div className="pt-2 scroll-mt-20" id="live-executions-section">
++        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-live-executions">
+           <div className="flex items-center justify-between mb-3">
+             <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+               {copy.activityLogSectionTitle}
+diff --git a/src/app/dashboard/work-sidebar.tsx b/src/app/dashboard/work-sidebar.tsx
+index 2ffa171..0e97a65 100644
+--- a/src/app/dashboard/work-sidebar.tsx
++++ b/src/app/dashboard/work-sidebar.tsx
+@@ -111,24 +111,30 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
+   return (
+     <div className="flex flex-col space-y-3 font-sans antialiased text-zinc-700 dark:text-zinc-300">
+       {/* GROUP 1: HOME & REPORTS */}
+-      <SidebarNavLinks links={group1Links} />
++      <div data-tour="sidebar-nav-primary">
++        <SidebarNavLinks links={group1Links} />
++      </div>
+ 
+       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
+ 
+       {/* GROUP 2: QUEUE & EXECUTIONS */}
+-      <SidebarNavLinks links={group2Links} />
++      <div data-tour="sidebar-nav-queue">
++        <SidebarNavLinks links={group2Links} />
++      </div>
+ 
+       <div className="h-px bg-zinc-200/80 dark:bg-zinc-800/80 my-1 mx-1" />
+ 
+       {/* INSTALLED SKILLS SECTION — owns its own header (collapse toggle +
+           shortcut into the Library), see skills-nav-list.tsx */}
+-      <SkillsNavList
+-        productIds={installedProductIds}
+-        layout="grid"
+-        enabledWorkerIds={enabledWorkerIds}
+-        needsAttentionWorkerIds={needsAttentionWorkerIds}
+-        engagementId={primaryEngagementId}
+-      />
++      <div data-tour="sidebar-installed-skills">
++        <SkillsNavList
++          productIds={installedProductIds}
++          layout="grid"
++          enabledWorkerIds={enabledWorkerIds}
++          needsAttentionWorkerIds={needsAttentionWorkerIds}
++          engagementId={primaryEngagementId}
++        />
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/components/library/library-marketplace-client.tsx b/src/components/library/library-marketplace-client.tsx
+index 480b0b3..4217802 100644
+--- a/src/components/library/library-marketplace-client.tsx
++++ b/src/components/library/library-marketplace-client.tsx
+@@ -171,7 +171,7 @@ export function LibraryMarketplaceClient({
+         )}
+ 
+         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+-          <div className="lg:col-span-3 space-y-4 text-xs text-zinc-700 dark:text-zinc-400">
++          <div className="lg:col-span-3 space-y-4 text-xs text-zinc-700 dark:text-zinc-400" data-tour="library-status-filter">
+             <div className="space-y-2 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+               <button
+                 type="button"
+@@ -270,7 +270,7 @@ export function LibraryMarketplaceClient({
+                 No workers match these filters.
+               </div>
+             ) : (
+-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch">
++              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch" data-tour="library-grid">
+                 {filtered.map((p) => (
+                   <ProductCard
+                     key={p.id}
+diff --git a/src/components/library/product-card.tsx b/src/components/library/product-card.tsx
+index 920fad0..2c28ee9 100644
+--- a/src/components/library/product-card.tsx
++++ b/src/components/library/product-card.tsx
+@@ -131,6 +131,7 @@ export function ProductCard({
+           type="button"
+           onClick={toggleInstalled}
+           disabled={pending}
++          data-tour="product-card-install"
+           className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+             installed
+               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
+diff --git a/src/components/library/product-detail-client.tsx b/src/components/library/product-detail-client.tsx
+index 48fdcdc..9237bb8 100644
+--- a/src/components/library/product-detail-client.tsx
++++ b/src/components/library/product-detail-client.tsx
+@@ -267,7 +267,7 @@ export function ProductDetailClient({
+           </div>
+         </div>
+ 
+-        <div className="flex flex-wrap items-center gap-2">
++        <div className="flex flex-wrap items-center gap-2" data-tour="product-status-tabs">
+           <SegmentedTabs<"all" | "enabled" | "not_enabled">
+             options={[
+               { key: "all", label: "All", count: workers.length },
+@@ -294,7 +294,7 @@ export function ProductDetailClient({
+             No skills match these filters.
+           </div>
+         ) : (
+-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
++          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" data-tour="product-skill-list">
+             {/* Configure swaps only that one skill's own row for its config
+                 form, in the exact same slot in the list — every other row
+                 stays put, so clicking Configure never reflows the page or
+diff --git a/src/components/library/worker-card.tsx b/src/components/library/worker-card.tsx
+index 1ab4732..4ce0ed6 100644
+--- a/src/components/library/worker-card.tsx
++++ b/src/components/library/worker-card.tsx
+@@ -284,6 +284,7 @@ export function WorkerCard({
+       <div
+         className={`relative py-5 -mx-5 px-5 transition-colors ${primaryHref ? "cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" : ""}`}
+         onClick={primaryHref ? () => router.push(primaryHref) : undefined}
++        data-tour={`worker-row-${worker.id}`}
+       >
+         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+           <div className="flex items-start gap-3 min-w-0 flex-1">
+diff --git a/src/components/top-nav.tsx b/src/components/top-nav.tsx
+index a8f692b..5e30893 100644
+--- a/src/components/top-nav.tsx
++++ b/src/components/top-nav.tsx
+@@ -15,6 +15,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
+ import { GlobalSearch } from "@/components/global-search";
+ import { RightUtilityRail } from "@/components/right-utility-rail";
+ import type { RightPanelKey } from "@/components/right-utility-panel";
++import { TourLauncher } from "@/components/tours/tour-launcher";
+ 
+ interface TopNavProps {
+   onToggleSidebar: () => void;
+@@ -45,6 +46,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
+           <button
+             type="button"
+             onClick={() => setCreateOpen((prev) => !prev)}
++            data-tour="top-nav-create"
+             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#e40014] hover:bg-[#e40014]/90 dark:bg-rose-600 dark:hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
+           >
+             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+@@ -111,9 +113,11 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
+         </div>
+       </div>
+ 
+-      {/* Middle-left: Breadcrumbs */}
+-      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%]">
++      {/* Middle-left: Breadcrumbs + the persistent way back into a tour
++          for anyone who skipped it — see tour-launcher.tsx's own header. */}
++      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
+         <Breadcrumbs />
++        <TourLauncher />
+       </div>
+ 
+       {/* True center: Search. Only the trigger button is hidden below the
+@@ -126,7 +130,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
+ 
+       {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /
+           Autopilot / Upcoming / Plan) — each opens right-utility-panel.tsx */}
+-      <div className="flex items-center gap-2 ml-auto shrink-0">
++      <div className="flex items-center gap-2 ml-auto shrink-0" data-tour="top-nav-utility-rail">
+         <RightUtilityRail activePanel={activePanel} onSelect={onSelectPanel} unreadCount={unreadNotifications} />
+       </div>
+     </header>
+diff --git a/src/components/tours/tour-launcher.tsx b/src/components/tours/tour-launcher.tsx
+new file mode 100644
+index 0000000..bd454b4
+--- /dev/null
++++ b/src/components/tours/tour-launcher.tsx
+@@ -0,0 +1,113 @@
++"use client";
++
++// The persistent way back into a tour once someone's skipped it —
++// lives right next to the breadcrumb trail (top-nav.tsx) on every
++// dashboard page, not just the ones a tour happens to cover, so it's
++// always in the same spot regardless of where the click actually came
++// from.
++
++import { useState } from "react";
++import { Compass, Check, PlayCircle, Sparkles } from "lucide-react";
++import { useTour } from "./tour-provider";
++
++export function TourLauncher() {
++  const { tours, progressByTour, activeTourId, start } = useTour();
++  const [open, setOpen] = useState(false);
++
++  const namedTours = tours.filter((t) => t.id !== "full-walkthrough");
++  const fullWalkthrough = tours.find((t) => t.id === "full-walkthrough");
++  const anyInProgress = tours.some((t) => progressByTour[t.id]?.status === "in_progress");
++
++  function pick(tourId: string) {
++    const resume = progressByTour[tourId]?.status === "in_progress";
++    start(tourId, { resume });
++    setOpen(false);
++  }
++
++  return (
++    <div className="relative shrink-0">
++      <button
++        type="button"
++        onClick={() => setOpen((v) => !v)}
++        title="Take a tour"
++        aria-label="Take a tour"
++        data-tour="tour-launcher"
++        className={`relative flex items-center justify-center h-6 w-6 rounded-lg transition-colors cursor-pointer ${
++          activeTourId
++            ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40"
++            : "text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
++        }`}
++      >
++        <Compass size={13} />
++        {anyInProgress && !activeTourId && (
++          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-background" />
++        )}
++      </button>
++
++      {open && (
++        <>
++          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
++          <div className="absolute left-0 top-full mt-1.5 w-72 bg-background border border-border rounded-lg shadow-xl z-50 py-1.5 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-100">
++            <p className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
++              Take a tour
++            </p>
++            <div className="space-y-0.5 px-1">
++              {namedTours.map((tour) => {
++                const progress = progressByTour[tour.id];
++                return (
++                  <button
++                    key={tour.id}
++                    type="button"
++                    onClick={() => pick(tour.id)}
++                    className="w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
++                  >
++                    <span className="mt-0.5 shrink-0">
++                      {progress?.status === "completed" ? (
++                        <Check size={13} className="text-emerald-600 dark:text-emerald-400" />
++                      ) : progress?.status === "in_progress" ? (
++                        <PlayCircle size={13} className="text-amber-500" />
++                      ) : (
++                        <span className="block w-[13px] h-[13px] rounded-full border border-zinc-300 dark:border-zinc-700" />
++                      )}
++                    </span>
++                    <span className="min-w-0">
++                      <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
++                        {tour.label}
++                        {progress?.status === "in_progress" && <span className="ml-1.5 text-[10px] font-mono text-amber-600 dark:text-amber-400">resume</span>}
++                      </span>
++                      <span className="block text-[10.5px] text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-2">{tour.description}</span>
++                    </span>
++                  </button>
++                );
++              })}
++            </div>
++
++            {fullWalkthrough && (
++              <>
++                <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1.5 mx-2" />
++                <div className="px-1">
++                  <button
++                    type="button"
++                    onClick={() => pick(fullWalkthrough.id)}
++                    className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors cursor-pointer"
++                  >
++                    <Sparkles size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
++                    <span className="min-w-0">
++                      <span className="block text-xs font-bold text-amber-800 dark:text-amber-300">
++                        {fullWalkthrough.label}
++                        {progressByTour[fullWalkthrough.id]?.status === "in_progress" && (
++                          <span className="ml-1.5 text-[10px] font-mono font-normal">resume</span>
++                        )}
++                      </span>
++                      <span className="block text-[10.5px] text-amber-700/80 dark:text-amber-400/80 leading-snug">{fullWalkthrough.description}</span>
++                    </span>
++                  </button>
++                </div>
++              </>
++            )}
++          </div>
++        </>
++      )}
++    </div>
++  );
++}
+diff --git a/src/components/tours/tour-overlay.tsx b/src/components/tours/tour-overlay.tsx
+new file mode 100644
+index 0000000..7eb6e99
+--- /dev/null
++++ b/src/components/tours/tour-overlay.tsx
+@@ -0,0 +1,170 @@
++"use client";
++
++// The visible half of a tour — a dimmed backdrop with a spotlight cutout
++// around the current step's real element, plus a Floating UI tooltip
++// anchored to it. Same visual language as the app's own Modal (bg-
++// background/border-border tokens, rounded-lg, shadow-2xl, motion-safe
++// animate-in fade-in/zoom-in-95) so this reads as one system in both
++// themes automatically — it inherits whatever those tokens resolve to,
++// nothing here hardcodes a light or dark color.
++//
++// The spotlight rect glides (CSS transition, not a snap) to each new
++// target and gets a brief pulse ring on arrival — the "someone's
++// pointing this out to you" motion touch, without a recorded video.
++
++import { useEffect, useRef, useState } from "react";
++import { createPortal } from "react-dom";
++import { useFloating, offset, flip, shift, arrow, autoUpdate, FloatingArrow, FloatingPortal } from "@floating-ui/react";
++import { ArrowRight, ArrowLeft, X, Sparkles } from "lucide-react";
++import { useTour } from "./tour-provider";
++
++const SPOTLIGHT_PADDING = 8;
++
++export function TourOverlay() {
++  const { activeTourId, tours, activeStepIndex, activeStepTotal, targetEl, isWaiting, next, back, close } = useTour();
++  const activeTour = tours.find((t) => t.id === activeTourId) ?? null;
++  const activeStep = activeTour?.steps[activeStepIndex] ?? null;
++
++  const arrowRef = useRef<SVGSVGElement>(null);
++  const { refs, floatingStyles, context, placement } = useFloating({
++    open: Boolean(targetEl),
++    elements: { reference: targetEl },
++    placement: activeStep?.placement ?? "bottom",
++    whileElementsMounted: autoUpdate,
++    middleware: [offset(14), flip({ padding: 16 }), shift({ padding: 16 }), arrow({ element: arrowRef, padding: 8 })],
++  });
++
++  // Tracks the target's own rect separately from the tooltip's floating
++  // position — the spotlight cutout needs to move/resize with it too,
++  // and autoUpdate above only drives refs.setFloating's positioning.
++  const [rect, setRect] = useState<DOMRect | null>(null);
++  useEffect(() => {
++    if (!targetEl) {
++      setRect(null);
++      return;
++    }
++    const update = () => setRect(targetEl.getBoundingClientRect());
++    update();
++    window.addEventListener("scroll", update, true);
++    window.addEventListener("resize", update);
++    const ro = new ResizeObserver(update);
++    ro.observe(targetEl);
++    return () => {
++      window.removeEventListener("scroll", update, true);
++      window.removeEventListener("resize", update);
++      ro.disconnect();
++    };
++  }, [targetEl]);
++
++  useEffect(() => {
++    refs.setReference(targetEl);
++  }, [targetEl, refs]);
++
++  useEffect(() => {
++    function onKeyDown(e: KeyboardEvent) {
++      if (!activeTourId) return;
++      if (e.key === "Escape") close();
++      if (e.key === "ArrowRight") next();
++      if (e.key === "ArrowLeft") back();
++    }
++    document.addEventListener("keydown", onKeyDown);
++    return () => document.removeEventListener("keydown", onKeyDown);
++  }, [activeTourId, close, next, back]);
++
++  if (!activeTour || !activeStep || typeof document === "undefined") return null;
++
++  const isFirst = activeStepIndex === 0;
++  const isLast = activeStepIndex === activeStepTotal - 1;
++
++  return createPortal(
++    <div className="fixed inset-0 z-[9997] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" aria-live="polite">
++      {/* Backdrop with the spotlight punched out via a huge box-shadow on
++          the cutout rect itself — no SVG mask needed, and it glides
++          between targets via the transition below instead of snapping. */}
++      {rect ? (
++        <div
++          className="absolute rounded-xl ring-2 ring-amber-400/80 pointer-events-none transition-all duration-300 ease-out"
++          style={{
++            top: rect.top - SPOTLIGHT_PADDING,
++            left: rect.left - SPOTLIGHT_PADDING,
++            width: rect.width + SPOTLIGHT_PADDING * 2,
++            height: rect.height + SPOTLIGHT_PADDING * 2,
++            boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
++          }}
++        >
++          <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 motion-safe:animate-ping" />
++        </div>
++      ) : (
++        <div className="absolute inset-0 bg-black/40 dark:bg-black/55 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" />
++      )}
++
++      {isWaiting && !rect && (
++        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-background border border-border px-3 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 shadow-lg motion-safe:animate-in motion-safe:fade-in">
++          <Sparkles size={13} className="animate-pulse" />
++          Finding the next step…
++        </div>
++      )}
++
++      {targetEl && (
++        <FloatingPortal>
++          <div
++            ref={refs.setFloating}
++            style={floatingStyles}
++            className="z-[9998] w-[300px] rounded-lg border border-border bg-background shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
++          >
++            <FloatingArrow ref={arrowRef} context={context} className="fill-background [&>path:first-child]:stroke-border [&>path:first-child]:stroke-1" />
++            <div className="p-4 space-y-3">
++              <div className="flex items-center justify-between gap-2">
++                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
++                  {activeTour.label} · {activeStepIndex + 1}/{activeStepTotal}
++                </span>
++                <button
++                  type="button"
++                  onClick={close}
++                  aria-label="Close tour"
++                  className="text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer p-0.5 -m-0.5 rounded"
++                >
++                  <X size={14} />
++                </button>
++              </div>
++
++              <div>
++                <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{activeStep.title}</h3>
++                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mt-1">{activeStep.body}</p>
++              </div>
++
++              <div className="flex items-center justify-between gap-2 pt-1">
++                <button
++                  type="button"
++                  onClick={back}
++                  disabled={isFirst}
++                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-0 disabled:pointer-events-none transition-colors cursor-pointer"
++                >
++                  <ArrowLeft size={12} /> Back
++                </button>
++                <div className="flex items-center gap-1">
++                  {Array.from({ length: activeStepTotal }).map((_, i) => (
++                    <span
++                      key={i}
++                      className={`h-1 rounded-full transition-all duration-200 ${
++                        i === activeStepIndex ? "w-4 bg-amber-500" : "w-1 bg-zinc-200 dark:bg-zinc-700"
++                      }`}
++                    />
++                  ))}
++                </div>
++                <button
++                  type="button"
++                  onClick={next}
++                  className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-3 py-1.5 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
++                >
++                  {isLast ? "Finish" : "Next"} <ArrowRight size={12} />
++                </button>
++              </div>
++            </div>
++          </div>
++        </FloatingPortal>
++      )}
++    </div>,
++    document.body
++  );
++}
+diff --git a/src/components/tours/tour-provider.tsx b/src/components/tours/tour-provider.tsx
+new file mode 100644
+index 0000000..cf4ce0c
+--- /dev/null
++++ b/src/components/tours/tour-provider.tsx
+@@ -0,0 +1,224 @@
++"use client";
++
++// The state machine behind every interactive tour. Mounted once, in
++// src/app/dashboard/layout.tsx, above `{children}` — that's what lets a
++// tour survive a route change (dashboard -> Library -> an engagement's
++// own skill page): the provider itself never unmounts, only the page
++// content underneath it does.
++//
++// Branching and async waits are both handled the same, deliberately
++// simple way instead of a bespoke DSL: a step names a route and a
++// `[data-tour="..."]` target. On each step this provider (1) navigates
++// there if we're not already on it, then (2) polls for that selector to
++// exist in the DOM. If it appears, the step shows. If it never does
++// within a few seconds — because a product isn't onboarded yet, a
++// workspace has no client, a panel is conditionally hidden, whatever the
++// real reason is — the step is skipped automatically and the tour moves
++// on. The app's own render logic is the only source of truth for what's
++// "reachable" right now; this provider never duplicates it.
++
++import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import { usePathname, useRouter } from "next/navigation";
++import { TOURS, resolveTourRoute } from "@/lib/tours/tour-definitions";
++import type { TourProgressMap } from "@/lib/tours/types";
++
++const TARGET_POLL_MS = 150;
++const TARGET_WAIT_TIMEOUT_MS = 4000;
++
++interface TourContextValue {
++  tours: typeof TOURS;
++  progressByTour: TourProgressMap;
++  activeTourId: string | null;
++  activeStepIndex: number;
++  activeStepTotal: number;
++  /** The live DOM node the current step is anchored to — null while
++   * still navigating/waiting for it to appear. */
++  targetEl: HTMLElement | null;
++  isWaiting: boolean;
++  start: (tourId: string, opts?: { resume?: boolean }) => void;
++  next: () => void;
++  back: () => void;
++  close: () => void;
++  dismissWelcome: () => void;
++  /** True once this workspace has ever started any tour OR explicitly
++   * dismissed the welcome nudge — tour-welcome-nudge.tsx uses this to
++   * show itself exactly once, ever, per workspace. */
++  hasSeenWelcome: boolean;
++}
++
++const TourContext = createContext<TourContextValue | null>(null);
++
++export function useTour() {
++  const ctx = useContext(TourContext);
++  if (!ctx) throw new Error("useTour must be used within TourProvider");
++  return ctx;
++}
++
++export function TourProvider({
++  engagementId,
++  initialProgress,
++  children,
++}: {
++  /** The workspace's primary engagement — every tour is scoped to it,
++   * same convention the Library and WorkersPanel already use for
++   * anything product-related that isn't tied to a specific engagement
++   * page in the URL. Tours are unusable (start() no-ops) without one —
++   * there's nothing to point at yet for a brand-new workspace. */
++  engagementId: string | null;
++  initialProgress: TourProgressMap;
++  children: ReactNode;
++}) {
++  const router = useRouter();
++  const pathname = usePathname();
++
++  const [progressByTour, setProgressByTour] = useState<TourProgressMap>(initialProgress);
++  const [activeTourId, setActiveTourId] = useState<string | null>(null);
++  const [activeStepIndex, setActiveStepIndex] = useState(0);
++  const [targetEl, setTargetEl] = useState<HTMLElement | null>(null);
++  const [isWaiting, setIsWaiting] = useState(false);
++
++  const activeTour = activeTourId ? TOURS.find((t) => t.id === activeTourId) ?? null : null;
++  const activeStep = activeTour?.steps[activeStepIndex] ?? null;
++
++  // Guards the poll loop below against a stale closure advancing a step
++  // that's no longer current (e.g. the user hit Skip mid-wait).
++  const stepTokenRef = useRef(0);
++
++  const persist = useCallback(
++    (tourId: string, status: "in_progress" | "completed", currentStepId: string, completedStepIds: string[]) => {
++      if (!engagementId) return;
++      const entry = { status, currentStepId, completedStepIds, updatedAt: new Date().toISOString() };
++      setProgressByTour((prev) => ({ ...prev, [tourId]: entry }));
++      fetch(`/api/engagements/${engagementId}/tours`, {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ tourId, ...entry }),
++      }).catch(() => {
++        // Best-effort — a failed save just means resume falls back to
++        // step 0 next time, not a broken tour right now.
++      });
++    },
++    [engagementId]
++  );
++
++  const advanceOrEnd = useCallback(
++    (fromIndex: number) => {
++      if (!activeTour) return;
++      const nextIndex = fromIndex + 1;
++      if (nextIndex >= activeTour.steps.length) {
++        const allStepIds = activeTour.steps.map((s) => s.id);
++        persist(activeTour.id, "completed", activeTour.steps[activeTour.steps.length - 1].id, allStepIds);
++        setActiveTourId(null);
++        setTargetEl(null);
++        return;
++      }
++      setActiveStepIndex(nextIndex);
++    },
++    [activeTour, persist]
++  );
++
++  // The wait/branch loop: run whenever the active step changes.
++  useEffect(() => {
++    if (!activeTour || !activeStep) {
++      setTargetEl(null);
++      setIsWaiting(false);
++      return;
++    }
++
++    const myToken = ++stepTokenRef.current;
++    setTargetEl(null);
++
++    if (activeStep.enabled && !activeStep.enabled()) {
++      advanceOrEnd(activeStepIndex);
++      return;
++    }
++
++    const resolvedRoute = resolveTourRoute(activeStep.route, engagementId);
++    if (resolvedRoute && pathname !== resolvedRoute) {
++      router.push(resolvedRoute);
++      // The poll below still runs — it just won't find anything until
++      // the new route's content mounts, which is exactly the "async
++      // element" case this loop already handles.
++    }
++
++    setIsWaiting(true);
++    const startedAt = Date.now();
++    const interval = setInterval(() => {
++      if (stepTokenRef.current !== myToken) {
++        clearInterval(interval);
++        return;
++      }
++      const el = document.querySelector<HTMLElement>(activeStep.target);
++      if (el) {
++        clearInterval(interval);
++        setIsWaiting(false);
++        setTargetEl(el);
++        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
++        // Progress is "reached this step," not "clicked Next" — a step
++        // the tour skipped never lands in completedStepIds.
++        const completedSoFar = activeTour.steps.slice(0, activeStepIndex).map((s) => s.id);
++        persist(activeTour.id, "in_progress", activeStep.id, [...completedSoFar, activeStep.id]);
++        return;
++      }
++      if (Date.now() - startedAt > TARGET_WAIT_TIMEOUT_MS) {
++        clearInterval(interval);
++        setIsWaiting(false);
++        advanceOrEnd(activeStepIndex);
++      }
++    }, TARGET_POLL_MS);
++
++    return () => clearInterval(interval);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [activeTourId, activeStepIndex, pathname]);
++
++  const start = useCallback(
++    (tourId: string, opts?: { resume?: boolean }) => {
++      if (!engagementId) return;
++      const tour = TOURS.find((t) => t.id === tourId);
++      if (!tour) return;
++      const resumeStepId = opts?.resume ? progressByTour[tourId]?.currentStepId : undefined;
++      const resumeIndex = resumeStepId ? tour.steps.findIndex((s) => s.id === resumeStepId) : -1;
++      setActiveTourId(tourId);
++      setActiveStepIndex(resumeIndex >= 0 ? resumeIndex : 0);
++    },
++    [engagementId, progressByTour]
++  );
++
++  const next = useCallback(() => advanceOrEnd(activeStepIndex), [advanceOrEnd, activeStepIndex]);
++  const back = useCallback(() => setActiveStepIndex((i) => Math.max(0, i - 1)), []);
++  const close = useCallback(() => {
++    stepTokenRef.current++;
++    setActiveTourId(null);
++    setTargetEl(null);
++    setIsWaiting(false);
++  }, []);
++
++  // The first-visit nudge banner (tour-welcome-nudge.tsx) needs its own
++  // one-time dismissal that survives a reload, same as real tour
++  // progress — reusing this exact persistence path under a reserved id
++  // instead of a second endpoint for what's functionally the same fact
++  // ("this workspace has seen the tours and made a choice about them").
++  const dismissWelcome = useCallback(() => persist("welcome-nudge", "completed", "dismissed", []), [persist]);
++  const hasSeenWelcome = Boolean(progressByTour["welcome-nudge"]) || Object.keys(progressByTour).length > 0;
++
++  const value = useMemo<TourContextValue>(
++    () => ({
++      tours: TOURS,
++      progressByTour,
++      activeTourId,
++      activeStepIndex,
++      activeStepTotal: activeTour?.steps.length ?? 0,
++      targetEl,
++      isWaiting,
++      start,
++      next,
++      back,
++      close,
++      dismissWelcome,
++      hasSeenWelcome,
++    }),
++    [progressByTour, activeTourId, activeStepIndex, activeTour, targetEl, isWaiting, start, next, back, close, dismissWelcome, hasSeenWelcome]
++  );
++
++  return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
++}
+diff --git a/src/components/tours/tour-welcome-nudge.tsx b/src/components/tours/tour-welcome-nudge.tsx
+new file mode 100644
+index 0000000..7c9a3ab
+--- /dev/null
++++ b/src/components/tours/tour-welcome-nudge.tsx
+@@ -0,0 +1,52 @@
++"use client";
++
++// The proactive half of onboarding — first-time users don't reliably
++// notice a small icon next to the breadcrumb trail, so this shows once,
++// unprompted, on the dashboard home for a workspace that's never touched
++// a tour. Dismissing it (without starting a tour) is remembered the same
++// way real tour progress is — see tour-provider.tsx's dismissWelcome —
++// so it never nags twice. The breadcrumb launcher (tour-launcher.tsx)
++// stays there permanently either way, for anyone who skips this and
++// wants it later.
++
++import { Compass, X, Sparkles } from "lucide-react";
++import { useTour } from "./tour-provider";
++
++export function TourWelcomeNudge() {
++  const { tours, hasSeenWelcome, start, dismissWelcome } = useTour();
++  const fullWalkthrough = tours.find((t) => t.id === "full-walkthrough");
++
++  if (hasSeenWelcome || !fullWalkthrough) return null;
++
++  return (
++    <div className="relative flex items-center gap-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 px-4 py-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-300">
++      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 shrink-0">
++        <Compass size={16} />
++      </div>
++      <div className="min-w-0 flex-1">
++        <p className="text-xs font-bold text-amber-900 dark:text-amber-200">New here? Take the tour.</p>
++        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/70 leading-snug mt-0.5">
++          A quick, real walkthrough of the dashboard, the Library, and every worker — or pick just the piece you need
++          from the compass icon next to the breadcrumbs, any time.
++        </p>
++      </div>
++      <div className="flex items-center gap-1.5 shrink-0">
++        <button
++          type="button"
++          onClick={() => start(fullWalkthrough.id)}
++          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition-colors cursor-pointer whitespace-nowrap"
++        >
++          <Sparkles size={12} /> Start
++        </button>
++        <button
++          type="button"
++          onClick={dismissWelcome}
++          aria-label="Dismiss"
++          className="p-1.5 text-amber-600/70 dark:text-amber-400/60 hover:text-amber-900 dark:hover:text-amber-200 transition-colors cursor-pointer"
++        >
++          <X size={14} />
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/lib/tours/tour-definitions.ts b/src/lib/tours/tour-definitions.ts
+new file mode 100644
+index 0000000..4fcf942
+--- /dev/null
++++ b/src/lib/tours/tour-definitions.ts
+@@ -0,0 +1,253 @@
++// src/lib/tours/tour-definitions.ts
++//
++// The actual tour content. One tour per product (Showtime, Reputation
++// Manager, Cold Open, Whop Agent) plus "dashboard-basics" and
++// "engagement-detail" for the pages that aren't product-scoped, and a
++// "full-walkthrough" that's just all of them concatenated — so a first-
++// time user can either pick exactly what they need or take the whole
++// thing in one pass (both options live in the tour picker, see
++// tour-launcher.tsx).
++//
++// Every product tour is generated by buildProductTour() rather than
++// hand-written 4 times — the Library's per-skill mechanics (Configure/
++// Analytics/status filters/the onboarding gate) are the literally same
++// UI across all 4 products (see worker-card.tsx), so 4 near-duplicate
++// step lists would just be 4 places to forget to update together.
++
++import type { TourDefinition, TourStep } from "./types";
++
++/** Substitutes `{engagementId}` into a step's route template. Returns
++ * null (meaning "can't resolve this route yet") when the route needs an
++ * engagement and there isn't a primary one for this workspace — the
++ * provider treats that the same as any other step whose target never
++ * appears: skip it. */
++export function resolveTourRoute(route: string, engagementId: string | null): string | null {
++  if (!route.includes("{engagementId}")) return route;
++  if (!engagementId) return null;
++  return route.replace("{engagementId}", engagementId);
++}
++
++const DASHBOARD_BASICS: TourStep[] = [
++  {
++    id: "create-button",
++    route: "/dashboard",
++    target: '[data-tour="top-nav-create"]',
++    title: "Start anything from here",
++    body: "New client, trigger a skill run, add a manual Queue task, or export a report — one button for every way to start something.",
++    placement: "bottom-start",
++  },
++  {
++    id: "overview-stats",
++    route: "/dashboard",
++    target: '[data-tour="dashboard-overview-stats"]',
++    title: "Your week at a glance",
++    body: "Completed runs, open issues, and the weekly trend — the numbers that actually change day to day, not a vanity total.",
++    placement: "bottom",
++  },
++  {
++    id: "queue",
++    route: "/dashboard",
++    target: '[data-tour="dashboard-queue"]',
++    title: "The Queue — what needs you",
++    body: "Every pending approval, blocker, and alert across every client and skill lands here. If nothing's in it, nothing's waiting on a human right now.",
++    placement: "top",
++  },
++  {
++    id: "live-executions",
++    route: "/dashboard",
++    target: '[data-tour="dashboard-live-executions"]',
++    title: "Live Executions",
++    body: "Every skill run, past and present, with real-time status. This is the same feed you'll see filtered down on a client's own page.",
++    placement: "top",
++  },
++  {
++    id: "sidebar-primary",
++    route: "/dashboard",
++    target: '[data-tour="sidebar-nav-primary"]',
++    title: "Home, client profile, reports",
++    body: "This workspace's one client's own page is always one click away here — no roster to dig through.",
++    placement: "right",
++  },
++  {
++    id: "sidebar-installed-skills",
++    route: "/dashboard",
++    target: '[data-tour="sidebar-installed-skills"]',
++    title: "What's already running",
++    body: "Every skill currently enabled for this client, with a quick on/off switch. To turn on something new, that's the Library — next tour.",
++    placement: "right",
++  },
++  {
++    id: "utility-rail",
++    route: "/dashboard",
++    target: '[data-tour="top-nav-utility-rail"]',
++    title: "Calendar, Teammates, notifications, Autopilot",
++    body: "The 6 icons on the right cover everything that isn't a specific client or skill — including Autopilot, where approval requirements live.",
++    placement: "bottom-end",
++  },
++];
++
++const LIBRARY_BASICS: TourStep[] = [
++  {
++    id: "library-grid",
++    route: "/dashboard/library",
++    target: '[data-tour="library-grid"]',
++    title: "Every worker you can install",
++    body: "A worker (Showtime, Reputation Manager, Cold Open, Whop Agent) is the thing you install. The individual skills inside it get enabled once it's installed.",
++    placement: "top",
++  },
++  {
++    id: "library-install",
++    route: "/dashboard/library",
++    target: '[data-tour="product-card-install"]',
++    title: "Install for this client",
++    body: "Installing a worker doesn't turn anything on by itself — it just makes its skills available to enable, one at a time, on its own page.",
++    placement: "top",
++  },
++  {
++    id: "product-status-tabs",
++    route: "/dashboard/library/showtime",
++    target: '[data-tour="product-status-tabs"]',
++    title: "Filter by status or category",
++    body: "Once you're inside a worker's own page, these tabs narrow the skill list down to just what's enabled, not enabled, or in a specific category.",
++    placement: "bottom",
++  },
++  {
++    id: "product-skill-list",
++    route: "/dashboard/library/showtime",
++    target: '[data-tour="product-skill-list"]',
++    title: "Enable, Configure, Analytics",
++    body: "Every skill lives in this list. Click a row to open its own page, or use Configure/Analytics directly — same pattern on every worker's page.",
++    placement: "top",
++  },
++];
++
++const ENGAGEMENT_DETAIL: TourStep[] = [
++  {
++    id: "pause-control",
++    route: "/dashboard/engagements/{engagementId}",
++    target: '[data-tour="engagement-pause-control"]',
++    title: "Pause this client",
++    body: "Pausing stops every automated run for this client without disabling anything — flip it back on and every skill resumes exactly as configured.",
++    placement: "bottom-end",
++  },
++  {
++    id: "report",
++    route: "/dashboard/engagements/{engagementId}",
++    target: '[data-tour="engagement-report"]',
++    title: "One report, every enabled skill",
++    body: "This merges output from whichever skills are actually on for this client — Showtime and Reputation Manager together when both apply, not two separate cards.",
++    placement: "top",
++  },
++  {
++    id: "workers-panel",
++    route: "/dashboard/engagements/{engagementId}",
++    target: '[data-tour="engagement-workers-panel"]',
++    title: "Every skill, live status",
++    body: "The same on/off switches, Configure, and Analytics as the Library — but scoped to this one client, with its actual latest run right on the card.",
++    placement: "top",
++  },
++];
++
++interface ProductTourSpec {
++  id: string;
++  label: string;
++  description: string;
++  productPath: string;
++  onboardingWorkerId: string;
++  onboardingWorkerName: string;
++}
++
++const PRODUCT_TOUR_SPECS: ProductTourSpec[] = [
++  {
++    id: "showtime",
++    label: "Showtime",
++    description: "Booking-to-close automation — confirmation pages, pre-call sequences, call briefs, win-back.",
++    productPath: "/dashboard/library/showtime",
++    onboardingWorkerId: "pin-down",
++    onboardingWorkerName: "Show Rate Setup",
++  },
++  {
++    id: "reputation-manager",
++    label: "Reputation Manager",
++    description: "Review and mention monitoring across every platform this client is watched on.",
++    productPath: "/dashboard/library/reputation-manager",
++    onboardingWorkerId: "rep-onboarding",
++    onboardingWorkerName: "Identity Setup",
++  },
++  {
++    id: "cold-open",
++    label: "Cold Open",
++    description: "Outbound lead sourcing, sending, and reply sorting.",
++    productPath: "/dashboard/library/cold-open",
++    onboardingWorkerId: "icp-lock",
++    onboardingWorkerName: "ICP Lock",
++  },
++  {
++    id: "whop-agent",
++    label: "Whop Agent",
++    description: "Whop store operations — payouts, disputes, promos, ads.",
++    productPath: "/dashboard/library/whop-agent",
++    onboardingWorkerId: "whop-connect",
++    onboardingWorkerName: "Connect Whop Account",
++  },
++];
++
++/** Same 3-step shape for every product — the mechanics (status tabs, the
++ * onboarding-gate concept, the skill list) are identical across all 4;
++ * only the copy and which row to point at change. See this file's own
++ * header for why this is generated instead of 4 hand-written tours. */
++function buildProductTour(spec: ProductTourSpec): TourDefinition {
++  return {
++    id: spec.id,
++    label: spec.label,
++    description: spec.description,
++    steps: [
++      {
++        id: "status-tabs",
++        route: spec.productPath,
++        target: '[data-tour="product-status-tabs"]',
++        title: `${spec.label}'s skills`,
++        body: `Filter this worker's own skill list by what's already enabled — everything here belongs to ${spec.label} specifically.`,
++        placement: "bottom",
++      },
++      {
++        id: "onboarding-worker",
++        route: spec.productPath,
++        target: `[data-tour="worker-row-${spec.onboardingWorkerId}"]`,
++        title: spec.onboardingWorkerName,
++        body: `This is where ${spec.label} starts. Every other skill in it stays locked until this one actually runs for this client — not just switched on, actually completed.`,
++        placement: "top",
++      },
++      {
++        id: "skill-list",
++        route: spec.productPath,
++        target: '[data-tour="product-skill-list"]',
++        title: "Enable the rest",
++        body: `Once ${spec.onboardingWorkerName} has run, every other ${spec.label} skill enables normally from this same list.`,
++        placement: "top",
++      },
++    ],
++  };
++}
++
++export const TOURS: TourDefinition[] = [
++  { id: "dashboard-basics", label: "Dashboard Basics", description: "Orient yourself — Queue, Live Executions, sidebar, and the Create button.", steps: DASHBOARD_BASICS },
++  { id: "library", label: "The Library", description: "Install a worker, then enable and configure the skills inside it.", steps: LIBRARY_BASICS },
++  { id: "engagement-detail", label: "Your Client's Page", description: "Pause, reports, and every skill running for this one client.", steps: ENGAGEMENT_DETAIL },
++  ...PRODUCT_TOUR_SPECS.map(buildProductTour),
++  {
++    id: "full-walkthrough",
++    label: "Full Walkthrough",
++    description: "Everything above, back to back — the whole app in one pass.",
++    steps: [
++      { source: "dashboard-basics", steps: DASHBOARD_BASICS },
++      { source: "library", steps: LIBRARY_BASICS },
++      { source: "engagement-detail", steps: ENGAGEMENT_DETAIL },
++      ...PRODUCT_TOUR_SPECS.map((spec) => ({ source: spec.id, steps: buildProductTour(spec).steps })),
++    ].flatMap(({ source, steps }) => steps.map((s) => ({ ...s, id: `${source}__${s.id}` }))),
++  },
++];
++
++export function getTour(tourId: string): TourDefinition | undefined {
++  return TOURS.find((t) => t.id === tourId);
++}
+diff --git a/src/lib/tours/types.ts b/src/lib/tours/types.ts
+new file mode 100644
+index 0000000..afb6ed5
+--- /dev/null
++++ b/src/lib/tours/types.ts
+@@ -0,0 +1,54 @@
++// src/lib/tours/types.ts
++//
++// One tour = an ordered list of steps, each anchored to a real element on
++// a real page via a `data-tour="..."` attribute — not a hand-maintained
++// pixel coordinate or a parallel copy of the UI. This is what makes
++// branching and async waits free instead of a bespoke DSL: a step's
++// target either exists in the DOM right now or it doesn't, and "doesn't"
++// already means exactly what it should (a product that isn't onboarded
++// yet has no Configure button to point at, so that step is skipped —
++// see tour-provider.tsx's own header for how that wait/skip loop works).
++
++import type { Placement } from "@floating-ui/react";
++
++export interface TourStep {
++  /** Unique within its own tour (and, once folded into the full
++   * walkthrough, prefixed with the source tour's id — see
++   * build-full-walkthrough.ts — so ids stay globally unique there too). */
++  id: string;
++  /** The route this step's target lives on. `{engagementId}` is
++   * substituted with the workspace's primary engagement at render time —
++   * every tour is scoped to that one engagement, same as the Library and
++   * WorkersPanel already are when no specific engagement is in the URL. */
++  route: string;
++  /** CSS selector for the element to spotlight — always a
++   * `[data-tour="..."]` attribute selector in practice, kept as a plain
++   * string rather than a typed id registry so a step can target anything
++   * without this file needing to know every page's markup. */
++  target: string;
++  title: string;
++  body: string;
++  placement?: Placement;
++  /** Skips this step's DOM wait entirely when false — for a step whose
++   * relevance depends on something no selector can express (e.g. "only
++   * show this on desktop widths"). Rare; most branching is handled by
++   * the target simply not existing. */
++  enabled?: () => boolean;
++}
++
++export interface TourDefinition {
++  id: string;
++  label: string;
++  /** One line shown in the tour picker. */
++  description: string;
++  steps: TourStep[];
++}
++
++export interface TourProgress {
++  status: "in_progress" | "completed";
++  currentStepId: string;
++  completedStepIds: string[];
++  updatedAt: string;
++}
++
++export type TourProgressMap = Partial<Record<string, TourProgress>>;
+diff --git a/src/models/schema.ts b/src/models/schema.ts
+index 4d78f23..c7c4fc2 100644
+--- a/src/models/schema.ts
++++ b/src/models/schema.ts
+@@ -494,6 +494,23 @@ export type EngagementStack = {
+   // by ProductId rather than one flag per product so a 5th product never
+   // needs a new column here, just a new key.
+   product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
++
++  // ── Interactive product tours (src/lib/tours) ───────────────────────────
++  // Progress survives a page reload or navigating away mid-tour — a tour
++  // can span several routes (dashboard -> Library -> an engagement's own
++  // skill page), so this can't live in component state or even
++  // sessionStorage alone. Keyed by TourId, one entry per tour this
++  // workspace's primary engagement has ever started. "completed" is only
++  // set once every step actually reached its real target element (see
++  // tour-provider.tsx) — not just "the user clicked next" — so a step
++  // skipped because a product isn't onboarded yet doesn't retroactively
++  // count as seen.
++  tour_state?: Partial<
++    Record<
++      string,
++      { status: "in_progress" | "completed"; currentStepId: string; completedStepIds: string[]; updatedAt: string }
++    >
++  >;
+ };
+ 
+ // ── Users ─────────────────────────────────────────────────────────────────

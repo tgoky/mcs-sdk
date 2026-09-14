@@ -131,6 +131,7 @@ export function ProductCard({
           type="button"
           onClick={toggleInstalled}
           disabled={pending}
+          data-tour="product-card-install"
           className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
             installed
               ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"

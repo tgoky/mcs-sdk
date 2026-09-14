@@ -284,6 +284,7 @@ export function WorkerCard({
       <div
         className={`relative py-5 -mx-5 px-5 transition-colors ${primaryHref ? "cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" : ""}`}
         onClick={primaryHref ? () => router.push(primaryHref) : undefined}
+        data-tour={`worker-row-${worker.id}`}
       >
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">

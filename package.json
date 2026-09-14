@@ -16,6 +16,7 @@
     "@composio/core": "^0.16.0",
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.3",
+    "@floating-ui/react": "^0.27.20",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@vercel/functions": "^3.7.3",
     "@whop/checkout": "^0.6.0",

@@ -15,6 +15,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
 import { GlobalSearch } from "@/components/global-search";
 import { RightUtilityRail } from "@/components/right-utility-rail";
 import type { RightPanelKey } from "@/components/right-utility-panel";
+import { TourLauncher } from "@/components/tours/tour-launcher";
 
 interface TopNavProps {
   onToggleSidebar: () => void;
@@ -45,6 +46,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
+            data-tour="top-nav-create"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#e40014] hover:bg-[#e40014]/90 dark:bg-rose-600 dark:hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -111,9 +113,11 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
         </div>
       </div>
 
-      {/* Middle-left: Breadcrumbs */}
-      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%]">
+      {/* Middle-left: Breadcrumbs + the persistent way back into a tour
+          for anyone who skipped it — see tour-launcher.tsx's own header. */}
+      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
         <Breadcrumbs />
+        <TourLauncher />
       </div>
 
       {/* True center: Search. Only the trigger button is hidden below the
@@ -126,7 +130,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
 
       {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /
           Autopilot / Upcoming / Plan) — each opens right-utility-panel.tsx */}
-      <div className="flex items-center gap-2 ml-auto shrink-0">
+      <div className="flex items-center gap-2 ml-auto shrink-0" data-tour="top-nav-utility-rail">
         <RightUtilityRail activePanel={activePanel} onSelect={onSelectPanel} unreadCount={unreadNotifications} />
       </div>
     </header>
