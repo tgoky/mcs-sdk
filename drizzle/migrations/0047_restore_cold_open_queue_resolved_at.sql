@@ -1,1 +1,1 @@
-ALTER TABLE "cold_open_replies" ADD COLUMN "queue_resolved_at" timestamp;
+ALTER TABLE "cold_open_replies" ADD COLUMN IF NOT EXISTS "queue_resolved_at" timestamp;
