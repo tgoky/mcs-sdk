@@ -15,6 +15,7 @@ import { inngest, skillRunExecute } from "@/lib/inngest";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { SKILL_REGISTRY } from "@/lib/skill-registry";
 import { isRepSkillId } from "@/lib/rep-skill-manifest";
+import { isColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import crypto from "crypto";
 
 export type TriggerSkillRunResult =
@@ -102,6 +103,23 @@ export async function triggerSkillRunForEngagement(
       ok: false,
       status: 422,
       error: "This runs automatically on its own schedule once Identity Setup is complete — there's no manual run yet.",
+    };
+  }
+  // Same real gap as Reputation Manager's above, for the same reason:
+  // Cold Open has no case here at all, so clicking "Run" on any of its 7
+  // skills from WorkersPanel's generic grid (its TriggerSkillButton is
+  // rendered unconditionally for every worker id, cold-open included)
+  // fell through to "Unknown skill" — a confusing, wrong-sounding error
+  // for a real skill that's simply dispatched differently. icp-lock/
+  // voice-capture/source-connect/send-connect run when their own setup
+  // form is saved; daily-send/reply-sort run on their own cron
+  // (coldOpenDailySendCron/coldOpenReplySortCron); send-report has no
+  // trigger of its own yet.
+  if (isColdOpenSkillId(skillName)) {
+    return {
+      ok: false,
+      status: 422,
+      error: "This runs from its own setup form or on its configured schedule — there's no generic manual run for Cold Open skills yet.",
     };
   }
   return { ok: false, status: 400, error: `Unknown skill: ${skillName}` };

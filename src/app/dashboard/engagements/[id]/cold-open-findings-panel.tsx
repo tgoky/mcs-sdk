@@ -69,7 +69,6 @@ type ColdOpenReplyRow = {
   classificationSource: "heuristic" | "model" | "error" | "none";
   rawBody: string;
   routedToQueue: boolean;
-  queueResolvedAt: string | null;
   classifiedAt: string;
   createdAt: string;
 };
@@ -113,6 +112,10 @@ const LEAD_STATUS_META: Record<ColdOpenLeadStatus, { label: string; tone: Tone }
   skipped_filtered: { label: "Skipped — filtered", tone: "neutral" },
   error: { label: "Error", tone: "danger" },
   discarded: { label: "Discarded", tone: "neutral" },
+  // Transient — a lead sits here only for the duration of one approve
+  // request (see held-leads.ts's releaseHeldLead); never expected to be
+  // visible for more than an instant, but rendered honestly if it is.
+  claiming: { label: "Processing…", tone: "info" },
 };
 
 const REPLY_DISPOSITION_META: Record<ColdOpenReplyDisposition, { label: string; tone: Tone }> = {
@@ -233,6 +236,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
       skipped_filtered: 0,
       error: 0,
       discarded: 0,
+      claiming: 0,
     };
     for (const l of data?.leads ?? []) c[l.status]++;
     return c;
@@ -605,7 +609,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{r.leadEmail}</span>
                             <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
-                            {r.routedToQueue && !r.queueResolvedAt && <StatusPill tone="info">Routed to Queue</StatusPill>}
+                            {r.routedToQueue && <StatusPill tone="info">Routed to Queue</StatusPill>}
                           </div>
                           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{r.rawBody}</p>
                         </div>
@@ -631,7 +635,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusPill tone={REPLY_DISPOSITION_META[selectedReply.disposition].tone}>{REPLY_DISPOSITION_META[selectedReply.disposition].label}</StatusPill>
-                    {selectedReply.routedToQueue && !selectedReply.queueResolvedAt && (
+                    {selectedReply.routedToQueue && (
                       <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                         View in Queue <ExternalLink size={10} />
                       </a>

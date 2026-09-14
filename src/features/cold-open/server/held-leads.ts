@@ -33,31 +33,53 @@ export type ReleaseHeldLeadResult = { ok: true; status: "pushed" | "dry_run" | "
  * live/dry-run setting) or discard a single held lead. Only ever acts on
  * a row that's still "held" and belongs to this engagement — an
  * already-resolved row (approved/discarded/superseded) is left alone
- * rather than double-pushed. */
+ * rather than double-pushed.
+ *
+ * Fix: this used to SELECT the row, check status === "held" in JS, and
+ * only later UPDATE it — a real check-then-act gap with no lock between
+ * the read and the write. Two concurrent calls for the same leadId (a
+ * double-click on Approve, the single most ordinary real-world UI
+ * interaction there is) could both read status: "held" before either
+ * committed, and both go on to call adapter.pushLead — actually emailing
+ * the same prospect twice from one click. Fixed with a plain conditional
+ * UPDATE ... WHERE status = 'held' as the atomic claim: Postgres
+ * re-evaluates that WHERE clause against the row's real committed value
+ * at UPDATE time, so the loser of two concurrent claims matches zero rows
+ * instead of also proceeding — no explicit transaction/row lock needed
+ * for a single-row compare-and-swap like this one. The ESP push itself
+ * stays outside any lock, same reasoning this codebase already applies
+ * elsewhere (run-log.ts's withStepsLock, approval-gate.ts's
+ * decidePendingAction) to keep a real network call from holding one. */
 export async function releaseHeldLead(engagementId: string, leadId: string, action: "approve" | "discard"): Promise<ReleaseHeldLeadResult> {
-  const [lead] = await db
-    .select()
-    .from(coldOpenLeads)
+  const [claimed] = await db
+    .update(coldOpenLeads)
+    .set({ status: action === "discard" ? "discarded" : "claiming" })
     .where(and(eq(coldOpenLeads.id, leadId), eq(coldOpenLeads.engagementId, engagementId), eq(coldOpenLeads.status, "held")))
-    .limit(1);
-  if (!lead) {
+    .returning();
+
+  if (!claimed) {
     return { error: "This lead is no longer in the held queue — it may have already been reviewed." };
   }
+  // statusDetail on `claimed` is the pre-claim value — the claim UPDATE
+  // above only touched `status`.
+  const lead = claimed;
 
   if (action === "discard") {
     await db
       .update(coldOpenLeads)
-      .set({ status: "discarded", statusDetail: { ...(lead.statusDetail as Record<string, unknown> | null), discardedAt: new Date().toISOString() } })
+      .set({ statusDetail: { ...(lead.statusDetail as Record<string, unknown> | null), discardedAt: new Date().toISOString() } })
       .where(eq(coldOpenLeads.id, leadId));
     return { ok: true, status: "discarded" };
   }
 
   const config = await getColdOpenConfig(engagementId);
   if (!config?.sendPlatform) {
+    await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
     return { error: "No sending platform configured for this engagement anymore — reconnect Send Connect first." };
   }
   const copy = (lead.statusDetail as { copy?: AssembledCopy } | null)?.copy;
   if (!copy) {
+    await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
     return { error: "This held lead has no saved copy to send — it was likely created before a code update. Discard it and let it re-fetch on the next run." };
   }
 

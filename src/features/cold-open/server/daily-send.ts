@@ -21,7 +21,7 @@
 import { db } from "@/lib/db";
 import { coldOpenLeads, type ColdOpenRunSummary } from "@/models/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { getColdOpenConfig, upsertColdOpenConfig, preconditionCheck, setColdOpenPhaseState } from "./config";
+import { getColdOpenConfig, upsertColdOpenConfig, preconditionCheck, setColdOpenPhaseState, type ColdOpenConfigRow } from "./config";
 import { CsvFetcher } from "./fetchers/csv";
 import type { LeadRow } from "./fetchers/base";
 import { verifyDomains } from "./business-status";
@@ -52,6 +52,121 @@ export async function saveDailySendSettings(engagementId: string, input: DailySe
   return { ok: true };
 }
 
+const CSV_SOURCE_FETCH_CEILING = 10_000;
+
+export interface LeadSelection {
+  fetched: number;
+  mapped: number;
+  campaignMapMisses: number;
+  fetchErrors: string[];
+  deduped: { lead: LeadRow; campaignId: string }[];
+}
+
+/**
+ * Fetch every configured lead source, map to a campaign, exclude anyone
+ * already contacted, then cap to this run's volume/per-source dailyLimit
+ * budget — in that order.
+ *
+ * Fix: csv sources used to be fetched with the fetch-time `limit` capped
+ * to this run's remaining volume budget, meaning every run parsed only
+ * the file's first `volume` rows, in file order, every single time. Once
+ * those rows were marked contacted (pushed/dry_run/held/discarded), the
+ * historical dedupe excluded all of them and nothing later in the file
+ * was ever reached: a CSV bigger than one day's volume could never be
+ * worked through past day one, silently, forever. csv sources are now
+ * fetched in full (cheap — see CsvFetcher's own note that a lead list
+ * this size costs nothing extra to parse whole) and the volume/dailyLimit
+ * cap is applied after historical dedupe, to genuinely-new leads only —
+ * that's what actually lets later rows surface as earlier ones get
+ * exhausted day over day.
+ */
+export async function fetchAndSelectNewLeads(
+  runId: string,
+  engagementId: string,
+  // Narrowed to the two fields actually read here — accepting the full
+  // ColdOpenConfigRow would reject the Jsonify<ColdOpenConfigRow> shape
+  // step.run() returns its Date fields as (see this file's own inngest
+  // import comment elsewhere in this codebase for the same quirk); these
+  // two fields are plain JSON already, so there's nothing to jsonify away.
+  config: Pick<ColdOpenConfigRow, "leadSources" | "campaignMap">,
+  volume: number
+): Promise<LeadSelection> {
+  // ── FETCH ────────────────────────────────────────────────────────────
+  const fetched: LeadRow[] = [];
+  const fetchErrors: string[] = [];
+  for (const source of config.leadSources) {
+    if (source.fetcherType === "csv") {
+      try {
+        const rows = await new CsvFetcher(source).fetch(CSV_SOURCE_FETCH_CEILING);
+        fetched.push(...rows);
+        await logStep(runId, { phase: "fetch", label: source.icp, status: "success", detail: `csv: fetched ${rows.length} lead(s).` });
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        await logStep(runId, { phase: "fetch", label: source.icp, status: "failed", detail });
+        fetchErrors.push(`fetch[${source.icp}]: ${detail}`);
+      }
+    } else {
+      await logStep(runId, { phase: "fetch", label: source.icp, status: "skipped", detail: `${source.fetcherType} live fetch not yet built — connect-only today.` });
+    }
+  }
+
+  // ── CAMPAIGN MAP ─────────────────────────────────────────────────────
+  const mapped: { lead: LeadRow; campaignId: string }[] = [];
+  let campaignMapMisses = 0;
+  for (const lead of fetched) {
+    const campaignId = config.campaignMap[lead.icp];
+    if (!campaignId) {
+      campaignMapMisses++;
+      continue;
+    }
+    mapped.push({ lead, campaignId });
+  }
+
+  // ── HISTORICAL DEDUPE ────────────────────────────────────────────────
+  const candidateEmails = Array.from(new Set(mapped.map((m) => m.lead.email.toLowerCase())));
+  const alreadyContacted = candidateEmails.length
+    ? new Set(
+        (
+          await db
+            .select({ email: coldOpenLeads.email })
+            .from(coldOpenLeads)
+            // "held" and "discarded" both belong here too: a held lead is
+            // already sitting in the review queue (see held-leads.ts) and
+            // must not be re-fetched/re-personalized on every subsequent
+            // run, and a discarded one was already decided against — this
+            // used to only exclude "pushed"/"dry_run", so a lead awaiting
+            // review got refetched and re-assembled (a real LLM call in
+            // "generate" copy mode) on every single Daily Send run for as
+            // long as it stayed unreviewed.
+            // "claiming" too — held-leads.ts's releaseHeldLead briefly
+            // parks a lead there mid-approval; even more "already
+            // handled" than "held" itself, so it must not be re-fetched
+            // out from under an in-flight approve/discard.
+            .where(and(eq(coldOpenLeads.engagementId, engagementId), inArray(coldOpenLeads.email, candidateEmails), inArray(coldOpenLeads.status, ["pushed", "dry_run", "held", "discarded", "claiming"])))
+        ).map((r) => r.email.toLowerCase())
+      )
+    : new Set<string>();
+
+  const newLeads = mapped.filter(({ lead }) => !alreadyContacted.has(lead.email.toLowerCase()));
+
+  // ── VOLUME CAP ───────────────────────────────────────────────────────
+  // Respects each source's own dailyLimit and the engagement's overall
+  // volume, applied to new leads only, in source order (first-configured
+  // source gets priority on the shared volume budget).
+  const perSourceUsed = new Map<string, number>();
+  const deduped: typeof newLeads = [];
+  for (const item of newLeads) {
+    if (deduped.length >= volume) break;
+    const source = config.leadSources.find((s) => s.icp === item.lead.icp);
+    const used = perSourceUsed.get(item.lead.icp) ?? 0;
+    if (source?.dailyLimit !== undefined && used >= source.dailyLimit) continue;
+    deduped.push(item);
+    perSourceUsed.set(item.lead.icp, used + 1);
+  }
+
+  return { fetched: fetched.length, mapped: mapped.length, campaignMapMisses, fetchErrors, deduped };
+}
+
 export async function runDailySend(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
   const summary = emptySummary();
   const engagementId: string = tenant.engagementId;
@@ -72,63 +187,12 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
     const volume = config.dailySendSettings.volume;
     summary.whatWasAttempted.push(`Fetching up to ${volume} lead(s) across ${config.leadSources.length} source(s).`);
 
-    // ── FETCH ──────────────────────────────────────────────────────────
-    const fetched: LeadRow[] = [];
-    for (const source of config.leadSources) {
-      if (fetched.length >= volume) break;
-      const remaining = volume - fetched.length;
-      const limit = Math.min(source.dailyLimit ?? remaining, remaining);
-
-      if (source.fetcherType === "csv") {
-        try {
-          const rows = await new CsvFetcher(source).fetch(limit);
-          fetched.push(...rows);
-          await logStep(runId, { phase: "fetch", label: source.icp, status: "success", detail: `csv: fetched ${rows.length} lead(s).` });
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : String(err);
-          await logStep(runId, { phase: "fetch", label: source.icp, status: "failed", detail });
-          runSummary.errors.push(`fetch[${source.icp}]: ${detail}`);
-        }
-      } else {
-        await logStep(runId, { phase: "fetch", label: source.icp, status: "skipped", detail: `${source.fetcherType} live fetch not yet built — connect-only today.` });
-      }
-    }
-    runSummary.fetched = fetched.length;
-
-    // ── CAMPAIGN MAP ───────────────────────────────────────────────────
-    const mapped: { lead: LeadRow; campaignId: string }[] = [];
-    for (const lead of fetched) {
-      const campaignId = config.campaignMap[lead.icp];
-      if (!campaignId) {
-        runSummary.skippedFiltered++;
-        continue;
-      }
-      mapped.push({ lead, campaignId });
-    }
-
-    // ── HISTORICAL DEDUPE ──────────────────────────────────────────────
-    const candidateEmails = Array.from(new Set(mapped.map((m) => m.lead.email.toLowerCase())));
-    const alreadyContacted = candidateEmails.length
-      ? new Set(
-          (
-            await db
-              .select({ email: coldOpenLeads.email })
-              .from(coldOpenLeads)
-              // "held" and "discarded" both belong here too: a held lead is
-              // already sitting in the review queue (see held-leads.ts) and
-              // must not be re-fetched/re-personalized on every subsequent
-              // run, and a discarded one was already decided against — this
-              // used to only exclude "pushed"/"dry_run", so a lead awaiting
-              // review got refetched and re-assembled (a real LLM call in
-              // "generate" copy mode) on every single Daily Send run for as
-              // long as it stayed unreviewed.
-              .where(and(eq(coldOpenLeads.engagementId, engagementId), inArray(coldOpenLeads.email, candidateEmails), inArray(coldOpenLeads.status, ["pushed", "dry_run", "held", "discarded"])))
-          ).map((r) => r.email.toLowerCase())
-        )
-      : new Set<string>();
-
-    const deduped = mapped.filter(({ lead }) => !alreadyContacted.has(lead.email.toLowerCase()));
-    runSummary.duplicate = mapped.length - deduped.length;
+    const selection = await fetchAndSelectNewLeads(runId, engagementId, config, volume);
+    runSummary.fetched = selection.fetched;
+    runSummary.skippedFiltered += selection.campaignMapMisses;
+    runSummary.duplicate = selection.mapped - selection.deduped.length;
+    runSummary.errors.push(...selection.fetchErrors);
+    const { deduped } = selection;
 
     // ── LIVENESS ───────────────────────────────────────────────────────
     const liveness = await verifyDomains(deduped.map(({ lead }) => lead.domain));
@@ -148,7 +212,7 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
     await logStep(runId, {
       phase: "dedupe_liveness",
       status: "success",
-      detail: `${mapped.length} mapped, ${runSummary.duplicate} already contacted, ${runSummary.skippedDead} dead domain(s) — ${live.length} remain.`,
+      detail: `${selection.mapped} mapped, ${runSummary.duplicate} already contacted, ${runSummary.skippedDead} dead domain(s) — ${live.length} remain.`,
     });
 
     // ── ASSEMBLE + PUSH ────────────────────────────────────────────────

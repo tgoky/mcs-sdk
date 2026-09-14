@@ -2701,7 +2701,16 @@ export const coldOpenConfig = pgTable(
 // terminal, same as "pushed"/"dry_run", so the historical-dedupe check in
 // daily-send.ts excludes it (a discarded lead is a decision, not a gap to
 // re-fetch and re-personalize on the next run).
-export type ColdOpenLeadStatus = "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error" | "discarded";
+// "claiming": transient — held-leads.ts's releaseHeldLead atomically
+// flips a row out of "held" into this state before its ESP push, so a
+// second concurrent approve/discard on the same lead (a double-click)
+// sees it's no longer "held" and bails instead of also pushing it. Never
+// persists: it's replaced by the real outcome (pushed/dry_run/error) or
+// released back to "held" within the same request. Excluded from
+// daily-send.ts's historical dedupe the same as "held" — a lead
+// mid-approval is even more "already handled" than one just sitting in
+// the queue.
+export type ColdOpenLeadStatus = "held" | "duplicate" | "dry_run" | "pushed" | "skipped_dead" | "skipped_filtered" | "error" | "discarded" | "claiming";
 
 export const coldOpenLeads = pgTable(
   "cold_open_leads",
@@ -2773,15 +2782,6 @@ export const coldOpenReplies = pgTable(
     // deal; a queue visit costs a click" reasoning reply_classifier.py's
     // own header states.
     routedToQueue: boolean("routed_to_queue").notNull().default(false),
-    // Set once a human has seen and dealt with this reply from the Queue
-    // panel — mirrors humanBlockers' resolved state, but as a timestamp
-    // (like repIncidents.resolvedAt) rather than a status enum, since
-    // there's exactly one real transition here (queued -> handled), not a
-    // multi-state lifecycle. Null forever for a reply that was never
-    // routedToQueue in the first place. queue.ts filters on this being
-    // null (alongside routedToQueue = true) to decide what's still
-    // outstanding.
-    queueResolvedAt: timestamp("queue_resolved_at"),
 
     classifiedAt: timestamp("classified_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
