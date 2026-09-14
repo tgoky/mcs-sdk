@@ -46,10 +46,12 @@ describe("WorkspaceHomePage", () => {
     expect(screen.getByRole("button", { name: /Open Reputation Manager/ })).not.toBeDisabled();
   });
 
-  it("provides a sign-out link", async () => {
+  it("provides a sign-out control that posts to the logout route", async () => {
     vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
     await renderHomePage();
-    expect(screen.getByText("Sign out").closest("a")).toHaveAttribute("href", "/api/auth/logout");
+    const form = screen.getByText("Sign out").closest("form");
+    expect(form).toHaveAttribute("action", "/api/auth/logout");
+    expect(form).toHaveAttribute("method", "POST");
   });
 
   it("never reintroduces the old animated/pulsing decorative elements", async () => {

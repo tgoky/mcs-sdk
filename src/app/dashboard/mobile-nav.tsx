@@ -69,13 +69,14 @@ export function MobileNav({ links, displayName }: { links: NavLink[]; displayNam
                 <span className="text-sm text-zinc-800 dark:text-zinc-300 font-bold font-mono truncate max-w-[160px]">
                   {displayName}
                 </span>
-                <a
-                  href="/api/auth/logout"
-             
-                  className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-                >
-                  Sign out
-                </a>
+                <form action="/api/auth/logout" method="POST">
+                  <button
+                    type="submit"
+                    className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    Sign out
+                  </button>
+                </form>
               </div>
             )}
           </div>

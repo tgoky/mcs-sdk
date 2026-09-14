@@ -37,11 +37,13 @@ describe("MobileNav", () => {
     }
   });
 
-  it("shows the display name and a sign-out link when provided", () => {
+  it("shows the display name and a sign-out control that posts to the logout route", () => {
     render(<MobileNav links={links} displayName="alex" />);
     fireEvent.click(screen.getByLabelText("Toggle menu"));
     expect(screen.getByText("alex")).toBeInTheDocument();
-    expect(screen.getByText("Sign out").closest("a")).toHaveAttribute("href", "/api/auth/logout");
+    const form = screen.getByText("Sign out").closest("form");
+    expect(form).toHaveAttribute("action", "/api/auth/logout");
+    expect(form).toHaveAttribute("method", "POST");
   });
 
   it("omits the user footer entirely when no displayName is given", () => {

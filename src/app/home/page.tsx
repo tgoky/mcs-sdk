@@ -1,5 +1,4 @@
 import { getSession } from "@/lib/session";
-import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
 import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
@@ -82,13 +81,14 @@ export default async function WorkspaceHomePage() {
             </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              <Link
-                href="/api/auth/logout"
-                prefetch={false}
-                className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
-                {HOME_COPY.signOut}
-              </Link>
+              <form action="/api/auth/logout" method="POST">
+                <button
+                  type="submit"
+                  className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent border-none cursor-pointer"
+                >
+                  {HOME_COPY.signOut}
+                </button>
+              </form>
             </div>
           </header>
 
