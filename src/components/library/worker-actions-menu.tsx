@@ -21,19 +21,27 @@
 // checkbox list survives even though the two floating panels aren't
 // adjacent DOM siblings CSS :hover chains could otherwise cover.
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
+import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate, FloatingPortal } from "@floating-ui/react";
 import type { WorkerId } from "@/lib/worker-registry";
+import type { ProductId } from "@/lib/product-catalog";
 
 const CLOSE_DELAY_MS = 180;
 
 interface EnabledWorkerOption {
   workerId: WorkerId;
   name: string;
-  productId: string;
+  productId: ProductId;
 }
+
+const PRODUCT_LABELS: Record<ProductId, string> = {
+  showtime: "Showtime",
+  "reputation-manager": "Reputation Manager",
+  "cold-open": "Cold Open",
+  "whop-agent": "Whop Agent",
+};
 
 const MENU_ITEM_CLASS =
   "w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer";
@@ -63,6 +71,23 @@ export function WorkerActionsMenu({
   const [options, setOptions] = useState<EnabledWorkerOption[] | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [selected, setSelected] = useState<Set<WorkerId>>(() => new Set([workerId]));
+  // Which product's own skill list is currently expanded in the picker —
+  // grouped by worker/product first (4 rows, always short) rather than
+  // one flat list of every enabled skill across every product, which
+  // stops making sense once a client has more than a couple installed.
+  // Defaults open on this card's own product so its sibling skills are
+  // visible without an extra click.
+  const [expandedProduct, setExpandedProduct] = useState<ProductId | null>(null);
+
+  const groupedOptions = useMemo(() => {
+    const groups = new Map<ProductId, EnabledWorkerOption[]>();
+    for (const opt of options ?? []) {
+      const list = groups.get(opt.productId) ?? [];
+      list.push(opt);
+      groups.set(opt.productId, list);
+    }
+    return Array.from(groups.entries());
+  }, [options]);
 
   const menuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const compareCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,7 +132,12 @@ export function WorkerActionsMenu({
     setLoadingOptions(true);
     fetch(`/api/engagements/${engagementId}/enabled-workers`)
       .then((res) => res.json().catch(() => ({})))
-      .then((data) => setOptions(Array.isArray(data.workers) ? data.workers : []))
+      .then((data) => {
+        const workers: EnabledWorkerOption[] = Array.isArray(data.workers) ? data.workers : [];
+        setOptions(workers);
+        const ownProduct = workers.find((w) => w.workerId === workerId)?.productId;
+        if (ownProduct) setExpandedProduct(ownProduct);
+      })
       .finally(() => setLoadingOptions(false));
   }
 
@@ -234,31 +264,60 @@ export function WorkerActionsMenu({
                 <Loader2 size={14} className="animate-spin text-zinc-400" />
               </div>
             ) : (
-              <div className="space-y-0.5 max-h-56 overflow-y-auto">
-                {(options ?? []).map((opt) => {
-                  const isSelf = opt.workerId === workerId;
+              <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                {groupedOptions.map(([productId, skills]) => {
+                  const isExpanded = expandedProduct === productId;
+                  const selectedInProduct = skills.filter((s) => selected.has(s.workerId)).length;
                   return (
-                    <label
-                      key={opt.workerId}
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
-                        isSelf
-                          ? "text-zinc-400 dark:text-zinc-600 cursor-default"
-                          : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 cursor-pointer"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(opt.workerId)}
-                        disabled={isSelf}
-                        onChange={() => toggleOption(opt.workerId)}
-                        className="accent-amber-500"
-                      />
-                      {opt.name}
-                      {isSelf && <span className="text-[10px] text-zinc-400 dark:text-zinc-600">(this skill)</span>}
-                    </label>
+                    <div key={productId}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedProduct(isExpanded ? null : productId)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {PRODUCT_LABELS[productId]}
+                          {selectedInProduct > 0 && (
+                            <span className="text-[10px] font-mono font-normal text-amber-600 dark:text-amber-400">{selectedInProduct} picked</span>
+                          )}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />
+                        ) : (
+                          <ChevronRight size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />
+                        )}
+                      </button>
+                      {isExpanded && (
+                        <div className="pl-2 space-y-0.5 py-0.5">
+                          {skills.map((opt) => {
+                            const isSelf = opt.workerId === workerId;
+                            return (
+                              <label
+                                key={opt.workerId}
+                                className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                                  isSelf
+                                    ? "text-zinc-400 dark:text-zinc-600 cursor-default"
+                                    : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 cursor-pointer"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(opt.workerId)}
+                                  disabled={isSelf}
+                                  onChange={() => toggleOption(opt.workerId)}
+                                  className="accent-amber-500"
+                                />
+                                {opt.name}
+                                {isSelf && <span className="text-[10px] text-zinc-400 dark:text-zinc-600">(this skill)</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
-                {options?.length === 0 && (
+                {groupedOptions.length === 0 && (
                   <p className="text-xs text-zinc-400 dark:text-zinc-600 px-2 py-1.5">No other enabled skills yet.</p>
                 )}
               </div>

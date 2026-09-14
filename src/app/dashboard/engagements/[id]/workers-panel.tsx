@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Settings2, ExternalLink, PauseCircle, X } from "lucide-react";
+import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -322,7 +322,7 @@ export function WorkersPanel({
           return (
             <div
               key={workerId}
-              className={`rounded-xl border p-3 flex flex-col justify-between min-h-[168px] transition-all shadow-2xs ${
+              className={`rounded-lg border p-3 flex flex-col justify-between min-h-[168px] transition-all shadow-2xs ${
                 isPausedActive
                   ? "border-amber-300/70 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/[0.04] backdrop-blur-xs"
                   : isEnabled
@@ -408,63 +408,64 @@ export function WorkersPanel({
                     <button
                       type="button"
                       onClick={() => setExpandedWorker((prev) => (prev === workerId ? null : workerId))}
-                      className={`inline-flex items-center gap-1 font-semibold transition-colors cursor-pointer ${
+                      title={expandedWorker === workerId ? "Close" : "Configure"}
+                      className={`transition-colors cursor-pointer ${
                         expandedWorker === workerId
                           ? "text-zinc-900 dark:text-zinc-100"
                           : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                       }`}
                     >
-                      {expandedWorker === workerId ? <X size={12} /> : <Settings2 size={12} />}
-                      <span>{expandedWorker === workerId ? "Close" : "Configure"}</span>
+                      {expandedWorker === workerId ? <X size={13} /> : <Settings2 size={13} />}
                     </button>
                   ) : (
                     <span />
                   )}
 
-                  <div className="ml-auto flex items-center gap-3">
-                    {/* Gap fix: Library's worker-card.tsx has always linked
-                        to each worker's Phase 8 analytics page — this card
-                        never did, the only place a worker's real run stats
-                        weren't reachable from. */}
+                  {/* Icon-only, no background — a bare glyph + tooltip
+                      reads cleaner in a row this dense than a repeated
+                      text+icon link, and distinct icons per destination
+                      (rather than one ExternalLink reused everywhere)
+                      keep them tellable apart without the label. */}
+                  <div className="ml-auto flex items-center gap-2.5">
                     <Link
                       href={`/dashboard/analytics/${workerId}`}
-                      className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                      title="Analytics"
+                      className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                     >
-                      <span>Analytics</span>
-                      <ExternalLink size={11} />
+                      <TrendingUp size={13} />
                     </Link>
 
                     {SKILLS_WITH_OWN_PAGE.includes(workerId) && (
                       <Link
                         href={workerPrimaryHref(workerId, engagementId)}
-                        className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                        title="Pipeline"
+                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
-                        <span>Pipeline</span>
-                        <ExternalLink size={11} />
+                        <Workflow size={13} />
                       </Link>
                     )}
 
-                    {/* rep-crisis-response gets its own label here since its
-                        real destination is now the incident tracker, not
-                        the shared findings feed — workerPrimaryHref already
-                        routes it there (see worker-registry.ts). */}
+                    {/* rep-crisis-response's real destination is the
+                        incident tracker, not the shared findings feed —
+                        workerPrimaryHref already routes it there (see
+                        worker-registry.ts) — so it gets its own icon. */}
                     {(REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) || workerId === "rep-crisis-response") && (
                       <Link
                         href={workerPrimaryHref(workerId, engagementId)}
-                        className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                        title={workerId === "rep-crisis-response" ? "Incidents" : "Findings"}
+                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
-                        <span>{workerId === "rep-crisis-response" ? "Incidents" : "Findings"}</span>
-                        <ExternalLink size={11} />
+                        {workerId === "rep-crisis-response" ? <ShieldAlert size={13} /> : <Search size={13} />}
                       </Link>
                     )}
 
                     {COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
                       <Link
                         href={workerPrimaryHref(workerId, engagementId)}
-                        className="inline-flex items-center gap-1 font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                        title="Pipeline"
+                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                       >
-                        <span>Pipeline</span>
-                        <ExternalLink size={11} />
+                        <Workflow size={13} />
                       </Link>
                     )}
                   </div>

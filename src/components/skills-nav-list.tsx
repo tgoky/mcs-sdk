@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown, Loader2, Plus } from "lucide-react";
 import type { ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
@@ -83,6 +84,7 @@ function InstalledSkillsList({
   engagementId: string | null;
   needsAttentionWorkerIds?: Set<string>;
 }) {
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<WorkerId>>(new Set());
   const [busyIds, setBusyIds] = useState<Set<WorkerId>>(new Set());
@@ -157,6 +159,12 @@ function InstalledSkillsList({
                 const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
                 const busy = busyIds.has(entry.skillId);
                 const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
+                // Persists the same "icon takes over" zoom primary-rail's
+                // own items get from :hover even after the pointer
+                // leaves, for whichever tile is the page you're actually
+                // on right now — a plain CSS :hover can't express "stays
+                // zoomed because this one's selected."
+                const isViewingThisSkill = Boolean(viewHref) && pathname.startsWith(viewHref!);
 
                 return (
                   <div
@@ -164,7 +172,7 @@ function InstalledSkillsList({
                     className="group flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] backdrop-blur-md border border-black/5 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/[0.07] transition-colors"
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <div className="relative shrink-0">
+                      <div className={`liquid-icon shrink-0 ${isViewingThisSkill ? "is-active" : ""}`}>
                         <AnySkillBadge skill={entry.skillId} size={18} />
                         {needsAttention && (
                           <span

@@ -653,9 +653,9 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     // module-load invariant) — a real product, not just the connect flow
     // + webhook subsystem.
     status: "available",
-    // Simple placeholder icon in the same style as cold-open.svg — real
-    // artwork not produced yet.
-    image: "/images/whop-agent.svg",
+    // Real logo, not the placeholder svg the earlier availability pass
+    // shipped with.
+    image: "/logos/whop.png",
   },
 ];
 

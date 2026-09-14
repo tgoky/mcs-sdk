@@ -467,6 +467,44 @@
   box-shadow: var(--shadow-elevation-1);
 }
 
+/* The "icon takes over" feel primary-rail.tsx's own labeled items
+   already have (scale up on hover, stay scaled when that route is
+   active), given a liquid/droplet read for anywhere it's applied
+   generically via class rather than baked into one component's own
+   markup: the icon scales up AND its border-radius morphs from a
+   circle into a soft, irregular blob (an actual liquid surface doesn't
+   stay a perfect circle under tension), plus a glossy highlight fades
+   in top-left like light catching a droplet's surface. `.is-active`
+   is the persistent equivalent of `:hover` for whichever tile
+   represents the current route, applied by the consuming component
+   (a pure CSS :hover can't express "stay zoomed after the pointer
+   leaves because this is the selected one"). */
+.liquid-icon {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+  transition: transform 320ms var(--ease-spring), border-radius 320ms var(--ease-spring);
+}
+.liquid-icon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.6), transparent 58%);
+  opacity: 0;
+  transition: opacity 320ms ease-out, border-radius 320ms var(--ease-spring);
+  pointer-events: none;
+}
+.group:hover .liquid-icon,
+.liquid-icon.is-active {
+  transform: scale(1.22);
+  border-radius: 38% 62% 60% 40% / 45% 40% 60% 55%;
+}
+.group:hover .liquid-icon::after,
+.liquid-icon.is-active::after {
+  opacity: 1;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
