@@ -222,7 +222,7 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
         onClick={() => setOpen(true)}
         aria-label="Open global search"
         data-global-search-trigger
-        className={`${triggerClassName ?? "flex"} items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-border rounded-md transition-colors w-72 md:w-96 cursor-pointer`}
+        className={`${triggerClassName ?? "flex"} items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/80 border border-border rounded-md transition-colors w-full min-w-0 max-w-72 md:max-w-96 cursor-pointer`}
       >
         <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
         <span className="flex-1 text-left truncate">Search...</span>

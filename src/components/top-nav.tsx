@@ -120,13 +120,26 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
         <TourLauncher />
       </div>
 
-      {/* True center: Search. Only the trigger button is hidden below the
-          sm breakpoint (the mobile nav pill's "Find" button opens the same
-          palette instead — see global-search.tsx's open-global-search
-          listener) — the palette itself must NOT be nested inside any
-          hidden ancestor, or it silently fails to render on mobile even
-          when open. */}
-      <GlobalSearch triggerClassName="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+      {/* Search — a normal flex sibling between breadcrumbs and the
+          utility rail, not `absolute left-1/2` true-page-center like it
+          used to be. That positioning was blind to how much room the
+          breadcrumb trail actually needed: on a real MacBook-width
+          screen with a long trail (client name + Skills + a worker), its
+          right edge routinely passed the page's literal center point
+          and sat directly under the search box's fixed w-72/w-96 width.
+          As a normal flex-1 sibling it only ever gets whatever space is
+          left after breadcrumbs and the rail take theirs, so overlap
+          isn't possible regardless of viewport width or trail length —
+          min-w-0 lets it shrink instead of forcing overflow, and
+          GlobalSearch's own width is now a max, not a fixed size. Only
+          the trigger button is hidden below the sm breakpoint (the
+          mobile nav pill's "Find" button opens the same palette instead
+          — see global-search.tsx's open-global-search listener) — the
+          palette itself must NOT be nested inside any hidden ancestor,
+          or it silently fails to render on mobile even when open. */}
+      <div className="hidden sm:flex flex-1 min-w-0 justify-center">
+        <GlobalSearch triggerClassName="flex" />
+      </div>
 
       {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /
           Autopilot / Upcoming / Plan) — each opens right-utility-panel.tsx */}

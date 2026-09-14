@@ -13,6 +13,7 @@ import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
 import { RunRowActions } from "./run-row-actions";
+import { RunHistoryDatePicker } from "./run-history-date-picker";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getRecentAuditEvents } from "@/features/reputation-manager/server/audit-log";
 import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
@@ -83,11 +84,11 @@ export default async function EngagementDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ skill?: string; month?: string }>;
+  searchParams: Promise<{ skill?: string; month?: string; date?: string }>;
 }) {
   const session = await getSession();
   const { id } = await params;
-  const { skill: activeSkillFilter, month: activeMonthFilter } = await searchParams;
+  const { skill: activeSkillFilter, month: activeMonthFilter, date: activeDateFilter } = await searchParams;
   const activeWorkspace = await getActiveWorkspace(session.whopUserId!);
 
   const [engagement] = await db
@@ -234,9 +235,21 @@ export default async function EngagementDetailPage({
     const d = new Date(startedAt);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
+  // yyyy-mm-dd in the SAME local timezone new Date().toLocaleDateString
+  // would use — matches exactly what a native <input type="date"> both
+  // displays and emits, so the picker and this filter never disagree
+  // about which calendar day a given run actually falls on.
+  const runDateKey = (startedAt: (typeof runs)[number]["startedAt"]) => {
+    const d = new Date(startedAt);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
   const monthLabel = (monthKey: string) => {
     const [year, month] = monthKey.split("-").map(Number);
     return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  };
+  const dateLabel = (dateKey: string) => {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   };
   const availableMonths = Array.from(new Set(runs.map((r) => runMonthKey(r.startedAt)))).sort((a, b) => (a < b ? 1 : -1));
   const activeMonthIndex = activeMonthFilter ? availableMonths.indexOf(activeMonthFilter) : -1;
@@ -248,12 +261,21 @@ export default async function EngagementDetailPage({
   const nextMonth = activeMonthIndex > 0 ? availableMonths[activeMonthIndex - 1] : null;
 
   const skillFilteredRuns = activeSkillFilter ? runs.filter((r) => r.skillName === activeSkillFilter) : runs;
-  const filteredRuns = activeMonthFilter ? skillFilteredRuns.filter((r) => runMonthKey(r.startedAt) === activeMonthFilter) : skillFilteredRuns;
+  // A specific date is strictly more precise than a month, so it takes
+  // over filtering entirely when both are somehow present (shouldn't
+  // happen — every href below drops `month` whenever it sets `date` —
+  // but a hand-typed URL could still combine them).
+  const filteredRuns = activeDateFilter
+    ? skillFilteredRuns.filter((r) => runDateKey(r.startedAt) === activeDateFilter)
+    : activeMonthFilter
+      ? skillFilteredRuns.filter((r) => runMonthKey(r.startedAt) === activeMonthFilter)
+      : skillFilteredRuns;
 
-  const runHistoryHref = (next: { skill?: string; month?: string }) => {
+  const runHistoryHref = (next: { skill?: string; month?: string; date?: string }) => {
     const params = new URLSearchParams();
     if (next.skill) params.set("skill", next.skill);
     if (next.month) params.set("month", next.month);
+    if (next.date) params.set("date", next.date);
     const qs = params.toString();
     return `/dashboard/engagements/${id}${qs ? `?${qs}` : ""}#run-history`;
   };
@@ -541,7 +563,7 @@ export default async function EngagementDetailPage({
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </Link>
                   <span className="text-[11px] font-mono font-semibold text-zinc-600 dark:text-zinc-300 min-w-[110px] text-center">
-                    {activeMonthFilter ? monthLabel(activeMonthFilter) : "All time"}
+                    {activeDateFilter ? dateLabel(activeDateFilter) : activeMonthFilter ? monthLabel(activeMonthFilter) : "All time"}
                   </span>
                   <Link
                     href={nextMonth ? runHistoryHref({ skill: activeSkillFilter, month: nextMonth }) : "#"}
@@ -554,7 +576,11 @@ export default async function EngagementDetailPage({
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </Link>
-                  {activeMonthFilter && (
+                  {/* Jump to one specific day — strictly more precise
+                      than the month stepper beside it, see
+                      run-history-date-picker.tsx's own header. */}
+                  <RunHistoryDatePicker engagementId={id} skill={activeSkillFilter} value={activeDateFilter} />
+                  {(activeMonthFilter || activeDateFilter) && (
                     <Link
                       href={runHistoryHref({ skill: activeSkillFilter })}
                       scroll={false}
@@ -577,7 +603,7 @@ export default async function EngagementDetailPage({
             {skillsWithRunsAnyProduct.length > 1 && (
               <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
                 <Link
-                  href={runHistoryHref({ month: activeMonthFilter })}
+                  href={runHistoryHref({ month: activeMonthFilter, date: activeDateFilter })}
                   scroll={false}
                   role="tab"
                   aria-selected={!activeSkillFilter}
@@ -591,7 +617,7 @@ export default async function EngagementDetailPage({
                 {skillsWithRunsAnyProduct.map((skill) => (
                   <Link
                     key={skill}
-                    href={runHistoryHref({ skill, month: activeMonthFilter })}
+                    href={runHistoryHref({ skill, month: activeMonthFilter, date: activeDateFilter })}
                     scroll={false}
                     role="tab"
                     aria-selected={activeSkillFilter === skill}
@@ -676,7 +702,7 @@ export default async function EngagementDetailPage({
             ) : (
               <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors">
                 <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500 text-center px-4">
-                  No{activeSkillFilter ? <> <span className="font-medium text-zinc-500 dark:text-zinc-400">{anySkillDisplayName(activeSkillFilter)}</span></> : ""} runs{activeMonthFilter ? ` in ${monthLabel(activeMonthFilter)}` : " yet"}.
+                  No{activeSkillFilter ? <> <span className="font-medium text-zinc-500 dark:text-zinc-400">{anySkillDisplayName(activeSkillFilter)}</span></> : ""} runs{activeDateFilter ? ` on ${dateLabel(activeDateFilter)}` : activeMonthFilter ? ` in ${monthLabel(activeMonthFilter)}` : " yet"}.
                 </p>
                 <div className="flex items-center gap-3">
                   {activeMonthFilter && (
@@ -690,7 +716,7 @@ export default async function EngagementDetailPage({
                   )}
                   {activeSkillFilter && (
                     <Link
-                      href={runHistoryHref({ month: activeMonthFilter })}
+                      href={runHistoryHref({ month: activeMonthFilter, date: activeDateFilter })}
                       scroll={false}
                       className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition-colors"
                     >

@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { SelectField } from "@/app/dashboard/engagements/new/form-fields";
-import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
+import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS, skillName } from "@/lib/copy";
 
 const SMS_OPTIONS = Object.entries(SMS_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
 const AD_DATA_OPTIONS = Object.entries(AD_DATA_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
@@ -60,7 +60,7 @@ export function PileOnConfigForm({
   return (
     <div className="space-y-4 w-full max-w-sm">
       <div className="pb-2.5 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Configure Pile-On</h2>
+        <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {skillName("pile-on")}</h2>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
           Selecting &quot;none&quot; turns that channel back off. Finer setup continues from Edit Stack Settings.
         </p>

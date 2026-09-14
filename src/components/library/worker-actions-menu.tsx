@@ -4,19 +4,30 @@
 // per-worker page — one destination, no way to act without leaving the
 // card. This is the real context menu that replaces it: Compare (with a
 // true flyout submenu for picking which other skills to compare
-// against — same interaction shape as Windows' own "Send to", click-
-// triggered rather than hover-triggered so picking multiple checkboxes
-// doesn't fight the menu closing under your cursor), Run analysis and
-// Inspect performance (both render inline via onOpenPanel, same
-// accordion spot Configure already uses — no navigation), and Visit
-// analysis (the one destination that still leaves the card, for the
-// full rebuilt per-worker page).
+// against — same interaction shape as Windows' own "Send to"), Run
+// analysis and Inspect performance (both render inline via onOpenPanel,
+// same accordion spot Configure already uses — no navigation), and
+// Visit analysis (the one destination that still leaves the card, for
+// the full rebuilt per-worker page).
+//
+// Hover-driven, not click-driven — opens the instant the pointer lands
+// on the trigger, no fade/zoom entrance, so it reads as "the menu was
+// already there" rather than something loading in. The tradeoff hover
+// menus normally have — moving the pointer from a parent row into its
+// flyout submenu closes it before you get there — is handled with a
+// short shared close-delay timer between the Compare row and its
+// submenu panel: leaving one starts a ~180ms countdown, entering the
+// other cancels it, so the diagonal move from "Compare" into the
+// checkbox list survives even though the two floating panels aren't
+// adjacent DOM siblings CSS :hover chains could otherwise cover.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate, FloatingPortal } from "@floating-ui/react";
 import type { WorkerId } from "@/lib/worker-registry";
+
+const CLOSE_DELAY_MS = 180;
 
 interface EnabledWorkerOption {
   workerId: WorkerId;
@@ -53,6 +64,9 @@ export function WorkerActionsMenu({
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [selected, setSelected] = useState<Set<WorkerId>>(() => new Set([workerId]));
 
+  const menuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const compareCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { refs, floatingStyles } = useFloating({
     open,
     onOpenChange: (next) => {
@@ -76,17 +90,34 @@ export function WorkerActionsMenu({
     setCompareOpen(false);
   }
 
-  async function toggleCompareFlyout() {
-    setCompareOpen((v) => !v);
+  function openMenu() {
+    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    setOpen(true);
+  }
+
+  function scheduleMenuClose() {
+    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    menuCloseTimer.current = setTimeout(closeAll, CLOSE_DELAY_MS);
+  }
+
+  function openCompareFlyout() {
+    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
+    setCompareOpen(true);
     if (options || !engagementId) return;
     setLoadingOptions(true);
-    try {
-      const res = await fetch(`/api/engagements/${engagementId}/enabled-workers`);
-      const data = await res.json().catch(() => ({}));
-      setOptions(Array.isArray(data.workers) ? data.workers : []);
-    } finally {
-      setLoadingOptions(false);
-    }
+    fetch(`/api/engagements/${engagementId}/enabled-workers`)
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => setOptions(Array.isArray(data.workers) ? data.workers : []))
+      .finally(() => setLoadingOptions(false));
+  }
+
+  function scheduleCompareClose() {
+    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
+    compareCloseTimer.current = setTimeout(() => setCompareOpen(false), CLOSE_DELAY_MS);
+  }
+
+  function cancelCompareClose() {
+    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
   }
 
   function toggleOption(id: WorkerId) {
@@ -110,7 +141,9 @@ export function WorkerActionsMenu({
       <button
         ref={refs.setReference}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleMenuClose}
+        onClick={() => (open ? closeAll() : openMenu())}
         title="Analytics"
         className={triggerClassName}
       >
@@ -123,15 +156,16 @@ export function WorkerActionsMenu({
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="z-[9991] w-56 rounded-lg border border-border bg-background shadow-2xl py-1.5 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150"
+            onMouseEnter={openMenu}
+            onMouseLeave={scheduleMenuClose}
+            className="z-[9991] w-56 rounded-lg border border-border bg-background shadow-2xl py-1.5 font-sans antialiased"
           >
             <button
               ref={subRefs.setReference}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCompareFlyout();
-              }}
+              onMouseEnter={openCompareFlyout}
+              onMouseLeave={scheduleCompareClose}
+              onClick={(e) => e.stopPropagation()}
               className={MENU_ITEM_CLASS}
             >
               <span className="flex items-center gap-2">
@@ -188,7 +222,9 @@ export function WorkerActionsMenu({
             ref={subRefs.setFloating}
             style={subFloatingStyles}
             onClick={(e) => e.stopPropagation()}
-            className="z-[9992] w-64 rounded-lg border border-border bg-background shadow-2xl p-3 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150"
+            onMouseEnter={cancelCompareClose}
+            onMouseLeave={scheduleCompareClose}
+            className="z-[9992] w-64 rounded-lg border border-border bg-background shadow-2xl p-3 font-sans antialiased"
           >
             <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-2">
               Compare {workerName} with

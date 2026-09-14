@@ -144,16 +144,18 @@ export function EngagementPauseControl({
     );
   }
 
-  // 3. Prominent Default Action Button
+  // 3. Prominent Default Action Button — icon-only, its tooltip carries
+  // the label instead of an inline text span.
   return (
     <div className="inline-flex items-center gap-2">
       <button
         type="button"
         onClick={() => setShowReasonInput(true)}
-        className="group inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-border bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 text-zinc-800 dark:text-zinc-200 hover:text-amber-600 dark:hover:text-amber-400 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
+        aria-label="Pause automation"
+        title="Pause automation"
+        className="group inline-flex items-center justify-center w-9 h-9 rounded-md border border-border bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/90 hover:border-amber-500/40 shadow-xs transition-all active:scale-95 cursor-pointer"
       >
         <PauseCircle className="w-4.5 h-4.5 text-zinc-500 dark:text-zinc-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
-        <span>Pause automation</span>
       </button>
 
       {error && <span className="text-xs font-medium text-rose-600 dark:text-rose-400">{error}</span>}
