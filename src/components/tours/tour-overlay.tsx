@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFloating, offset, flip, shift, arrow, autoUpdate, FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import { ArrowRight, ArrowLeft, X, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, X, Loader2 } from "lucide-react";
 import { useTour } from "./tour-provider";
 
 const SPOTLIGHT_PADDING = 8;
@@ -77,7 +77,17 @@ export function TourOverlay() {
   const isLast = activeStepIndex === activeStepTotal - 1;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9997] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" aria-live="polite">
+    // pointer-events-none on the whole overlay is deliberate and load-
+    // bearing, not decorative: this div is `fixed inset-0` at a high
+    // z-index for the entire time a tour is active — including every
+    // second spent waiting for a step's target to appear. Without this,
+    // it silently swallows every click on the real page underneath it
+    // (the spotlight ring's own pointer-events-none only passes clicks
+    // through to whatever's behind IT, which is this same wrapper) — the
+    // exact "page just hangs, nothing responds to clicks" symptom. The
+    // floating tooltip's buttons live in their own FloatingPortal, a
+    // separate DOM subtree, so they stay fully clickable regardless.
+    <div className="fixed inset-0 z-[9997] pointer-events-none font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" aria-live="polite">
       {/* Backdrop with the spotlight punched out via a huge box-shadow on
           the cutout rect itself — no SVG mask needed, and it glides
           between targets via the transition below instead of snapping. */}
@@ -100,7 +110,7 @@ export function TourOverlay() {
 
       {isWaiting && !rect && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-background border border-border px-3 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 shadow-lg motion-safe:animate-in motion-safe:fade-in">
-          <Sparkles size={13} className="animate-pulse" />
+          <Loader2 size={13} className="animate-spin" />
           Finding the next step…
         </div>
       )}
@@ -110,7 +120,7 @@ export function TourOverlay() {
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="z-[9998] w-[300px] rounded-lg border border-border bg-background shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
+            className="z-[9998] w-[300px] rounded-lg border border-border bg-background shadow-2xl font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
           >
             <FloatingArrow ref={arrowRef} context={context} className="fill-background [&>path:first-child]:stroke-border [&>path:first-child]:stroke-1" />
             <div className="p-4 space-y-3">

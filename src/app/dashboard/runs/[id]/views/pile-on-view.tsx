@@ -8,7 +8,7 @@ import {
   Copy,
   Check,
   AlertCircle,
-  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import {
   emailPlatformLabel,
@@ -311,7 +311,7 @@ export function PileOnView({
           // Fix: was emerald green — matches the same lavender-slate used
           // for every other "good outcome" state now (see status-pill.tsx).
           <div className="flex items-start gap-2.5 rounded-lg border border-[#424d77]/25 dark:border-[#c5b7ea]/30 bg-[#424d77]/[0.04] dark:bg-[#c5b7ea]/10 px-3 py-2.5">
-            <Sparkles size={14} className="shrink-0 mt-0.5 text-[#424d77] dark:text-[#c5b7ea]" />
+            <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-[#424d77] dark:text-[#c5b7ea]" />
             <div className="space-y-0.5">
               <p className="text-xs font-bold text-[#424d77] dark:text-[#c5b7ea]">
                 Recovered a lost lead

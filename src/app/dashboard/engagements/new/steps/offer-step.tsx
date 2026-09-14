@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Wand2 } from "lucide-react";
 import { InputField, SelectField } from "../form-fields";
 import { PrefillLoader } from "@/components/prefill-loader";
 import type { FormData } from "../types";
@@ -38,7 +38,7 @@ export function OfferStep({
             className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
             style={{ background: "color-mix(in oklch, var(--text-prefill-accent) 16%, transparent)", color: "var(--text-prefill-accent)" }}
           >
-            <Sparkles size={13} />
+            <Wand2 size={13} />
           </span>
           <label className="text-xs font-bold block" style={{ color: "var(--text-prefill-accent)" }}>
             Smart pre-fill (optional)

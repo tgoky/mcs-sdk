@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Plus, Trash2, Sparkles, Copy, Check } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Wand2, Copy, Check } from "lucide-react";
 import { OffensiveChecklist } from "@/features/reputation-manager/offensive-checklist";
 
 type PitchHistoryEntry = { type: string; note: string | null; occurredAt: string };
@@ -215,7 +215,7 @@ export default function PitchPackagePage({ params }: { params: Promise<{ id: str
                     disabled={draftingFor === t.id}
                     className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
                   >
-                    <Sparkles size={11} />
+                    <Wand2 size={11} />
                     {draftingFor === t.id ? "Drafting…" : `Draft (${a.label})`}
                   </button>
                 ))}

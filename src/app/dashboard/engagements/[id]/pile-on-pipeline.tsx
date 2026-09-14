@@ -14,8 +14,8 @@ import {
   TrendingUp, 
   TrendingDown, 
   Minus, 
-  ChevronDown, 
-  Sparkles,
+  ChevronDown,
+  Wand2,
   Calendar as CalendarIcon,
   List as ListIcon,
   Copy,
@@ -693,7 +693,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   {selected.sentVia === "hybrid" && selected.personalizedIntro && (
                     <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
                       <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
-                        <Sparkles size={11} /> AI-personalized intro
+                        <Wand2 size={11} /> AI-personalized intro
                       </span>
                       <p className="text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{selected.personalizedIntro}</p>
                     </div>
@@ -1093,7 +1093,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 {selected.sentVia === "hybrid" && selected.personalizedIntro && (
                   <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
                     <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
-                      <Sparkles size={11} /> AI-personalized intro
+                      <Wand2 size={11} /> AI-personalized intro
                     </span>
                     <p className="text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{selected.personalizedIntro}</p>
                   </div>

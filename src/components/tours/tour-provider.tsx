@@ -169,7 +169,7 @@ export function TourProvider({
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTourId, activeStepIndex, pathname]);
+  }, [activeTourId, activeStepIndex]);
 
   const start = useCallback(
     (tourId: string, opts?: { resume?: boolean }) => {

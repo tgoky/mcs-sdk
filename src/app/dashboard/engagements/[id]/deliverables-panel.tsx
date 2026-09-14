@@ -13,7 +13,6 @@ import {
   HelpCircle,
   Award,
   ShieldAlert,
-  Sparkles,
   CheckCircle2,
   AlertCircle,
   Wrench,
@@ -579,7 +578,7 @@ export function DeliverablesPanel({
         {/* INDIVIDUAL AD BRIEFS */}
         {briefs.map((b) => {
           const cfg = PILLAR_CONFIGS[b.pillar] ?? {
-            icon: Sparkles,
+            icon: FileText,
             squircleClass: "bg-teal-200 text-teal-950 dark:bg-teal-900/60 dark:text-teal-200",
           };
           const PillarIcon = cfg.icon;

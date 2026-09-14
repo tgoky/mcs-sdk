@@ -7,7 +7,7 @@
 // from.
 
 import { useState } from "react";
-import { Compass, Check, PlayCircle, Sparkles } from "lucide-react";
+import { Compass, Check, PlayCircle, Rocket } from "lucide-react";
 import { useTour } from "./tour-provider";
 
 export function TourLauncher() {
@@ -91,7 +91,7 @@ export function TourLauncher() {
                     onClick={() => pick(fullWalkthrough.id)}
                     className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors cursor-pointer"
                   >
-                    <Sparkles size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <Rocket size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
                     <span className="min-w-0">
                       <span className="block text-xs font-bold text-amber-800 dark:text-amber-300">
                         {fullWalkthrough.label}

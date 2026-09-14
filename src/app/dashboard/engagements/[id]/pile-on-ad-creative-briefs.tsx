@@ -3,7 +3,7 @@
 // src/app/dashboard/engagements/[id]/pile-on-ad-creative-briefs.tsx
 
 import { useState } from "react";
-import { Megaphone, ChevronDown, Sparkles } from "lucide-react";
+import { Megaphone, ChevronDown, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adCreativePillarLabel } from "@/lib/copy";
 
@@ -46,7 +46,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
         </div>
         {pack.objectionsLastRegeneratedAt && (
           <span className="flex items-center gap-1 text-[10px] font-mono font-semibold text-amber-600 dark:text-amber-400 shrink-0">
-            <Sparkles size={10} /> Objections brief refreshed from a recent call
+            <RotateCw size={10} /> Objections brief refreshed from a recent call
           </span>
         )}
       </div>

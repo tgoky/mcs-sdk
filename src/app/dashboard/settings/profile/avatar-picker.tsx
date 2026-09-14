@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Upload, Sparkles, Check, Loader2, ChevronLeft } from "lucide-react";
+import { Upload, UserCircle2, Check, Loader2, ChevronLeft } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { DEFAULT_AVATAR_STYLE, seedsForStyle, defaultSeedForIdentifier, generateAvatarDataUri } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
@@ -228,7 +228,7 @@ export function AvatarPicker({
                 onClick={() => setStep("avatar")}
                 className="flex flex-col items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
               >
-                <Sparkles size={18} className="text-zinc-500 dark:text-zinc-400" />
+                <UserCircle2 size={18} className="text-zinc-500 dark:text-zinc-400" />
                 <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Choose an avatar</span>
               </button>
             </div>

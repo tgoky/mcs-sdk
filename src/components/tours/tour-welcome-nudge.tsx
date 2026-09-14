@@ -9,7 +9,7 @@
 // stays there permanently either way, for anyone who skips this and
 // wants it later.
 
-import { Compass, X, Sparkles } from "lucide-react";
+import { Compass, X, PlayCircle } from "lucide-react";
 import { useTour } from "./tour-provider";
 
 export function TourWelcomeNudge() {
@@ -19,7 +19,7 @@ export function TourWelcomeNudge() {
   if (hasSeenWelcome || !fullWalkthrough) return null;
 
   return (
-    <div className="relative flex items-center gap-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 px-4 py-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-300">
+    <div className="relative flex items-center gap-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 px-4 py-3 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-300">
       <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 shrink-0">
         <Compass size={16} />
       </div>
@@ -36,7 +36,7 @@ export function TourWelcomeNudge() {
           onClick={() => start(fullWalkthrough.id)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition-colors cursor-pointer whitespace-nowrap"
         >
-          <Sparkles size={12} /> Start
+          <PlayCircle size={12} /> Start
         </button>
         <button
           type="button"

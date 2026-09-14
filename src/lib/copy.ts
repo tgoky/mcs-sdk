@@ -627,7 +627,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     id: "reputation-manager",
     name: "Reputation Manager",
     description:
-      "Monitors what AI engines, Trustpilot, and Reddit say about your business, and pages you the moment something crosses into crisis territory.",
+      "Watches what AI engines, Trustpilot, Reddit, and Twitter/X say about your business, pages you the moment something crosses into crisis territory, and rolls everything up into a daily digest.",
     href: "/dashboard/reputation-manager",
     status: "available",
     image: "/images/repm.png",

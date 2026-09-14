@@ -87,7 +87,16 @@ function InstalledSkillsList({
   const [removedIds, setRemovedIds] = useState<Set<WorkerId>>(new Set());
   const [busyIds, setBusyIds] = useState<Set<WorkerId>>(new Set());
   const [errorId, setErrorId] = useState<WorkerId | null>(null);
-  const visible = entries.filter((entry) => !removedIds.has(entry.skillId));
+  // A client with everything on across all 4 products can have 20+
+  // enabled skills here — capped so this stays a quick-access shortlist
+  // (its actual job, see this component's own header) instead of a grid
+  // that keeps growing past the fold. "+N more" expands it inline rather
+  // than hiding the rest behind a navigation.
+  const [showAll, setShowAll] = useState(false);
+  const VISIBLE_CAP = 8;
+  const allVisible = entries.filter((entry) => !removedIds.has(entry.skillId));
+  const visible = showAll ? allVisible : allVisible.slice(0, VISIBLE_CAP);
+  const hiddenCount = allVisible.length - visible.length;
 
   async function disable(workerId: WorkerId) {
     if (!engagementId) return;
@@ -210,6 +219,25 @@ function InstalledSkillsList({
                   </div>
                 );
               })}
+              {hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] border border-dashed border-black/10 dark:border-white/15 hover:bg-white/10 dark:hover:bg-white/[0.07] hover:border-black/20 dark:hover:border-white/25 transition-colors cursor-pointer"
+                >
+                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">+{hiddenCount}</span>
+                  <span className="text-[9.5px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">more</span>
+                </button>
+              )}
+              {showAll && allVisible.length > VISIBLE_CAP && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(false)}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] border border-dashed border-black/10 dark:border-white/15 hover:bg-white/10 dark:hover:bg-white/[0.07] hover:border-black/20 dark:hover:border-white/25 transition-colors cursor-pointer"
+                >
+                  <span className="text-[9.5px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight">Show less</span>
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -65,8 +65,6 @@ export function ProductCard({
     }
   }
 
-  const skillNames = skillIds.map((id) => getWorkerDefinition(id).name).join(", ");
-
   return (
     <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
       <Link href={`/dashboard/library/${productId}`} className="space-y-3 block">
@@ -109,19 +107,25 @@ export function ProductCard({
           />
         </div>
 
-        <div className="flex items-start gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
-          <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0 pt-0.5">
+        <div className="flex items-center gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
+          <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0">
             Inside
           </span>
+          {/* Icons only, hover for the name — a worker (Showtime, Cold
+              Open, ...) is the real top-level thing; its skills (Call
+              Brief, Booking Recovery, ...) live one level down and
+              reading them all out as inline text next to the worker's
+              own name made every skill look like a peer of the worker
+              itself, not something inside it. */}
           <div className="flex items-center -space-x-1.5 shrink-0">
             {skillIds.map((id) => (
-              <div key={id} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
+              <div key={id} title={getWorkerDefinition(id).name} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
                 <AnySkillBadge skill={id} size={18} />
               </div>
             ))}
           </div>
-          <span className="text-[10.5px] text-zinc-700 dark:text-zinc-300 ml-1 font-mono font-medium leading-snug line-clamp-1">
-            {skillNames}
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
+            {skillIds.length} {skillIds.length === 1 ? "skill" : "skills"} — hover to see
           </span>
         </div>
       </Link>

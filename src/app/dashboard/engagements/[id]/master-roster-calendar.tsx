@@ -21,7 +21,6 @@ import {
   Building2,
   CalendarDays,
   ChevronDown,
-  Sparkles,
   CalendarX2,
   UserCheck,
   UserX,

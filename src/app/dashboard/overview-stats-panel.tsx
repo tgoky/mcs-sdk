@@ -59,6 +59,13 @@ export function OverviewStatsPanel({
 }) {
   const [expandedSection, setExpandedSection] = useState<"tasks" | "issues" | null>(null);
   const maxSkillCount = Math.max(1, ...completedThisWeekBySkill.map((s) => s.count));
+  // A client with a lot enabled across all 4 products can rack up a row
+  // per skill here every single week — capped so this stays a quick
+  // breakdown instead of a bar list that keeps growing past the fold.
+  const [showAllSkills, setShowAllSkills] = useState(false);
+  const SKILL_BREAKDOWN_CAP = 7;
+  const visibleSkillBreakdown = showAllSkills ? completedThisWeekBySkill : completedThisWeekBySkill.slice(0, SKILL_BREAKDOWN_CAP);
+  const hiddenSkillBreakdownCount = completedThisWeekBySkill.length - visibleSkillBreakdown.length;
 
   // Real, actionable mutations for the issues list below — the same hook
   // queue-panel.tsx uses, so "Needs attention" offers the actual fix
@@ -120,7 +127,7 @@ export function OverviewStatsPanel({
 
             {completedThisWeekBySkill.length > 0 && (
               <div className="space-y-1.5">
-                {completedThisWeekBySkill.map((s) => (
+                {visibleSkillBreakdown.map((s) => (
                   <div key={s.skillName} className="space-y-0.5">
                     <div className="flex items-center justify-between text-[11px] font-mono">
                       <span className="text-zinc-600 dark:text-zinc-400">{skillName(s.skillName)}</span>
@@ -134,6 +141,26 @@ export function OverviewStatsPanel({
                     </div>
                   </div>
                 ))}
+                {hiddenSkillBreakdownCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSkills(true)}
+                    className="text-[10.5px] font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                  >
+                    +{hiddenSkillBreakdownCount} more
+                  </button>
+                ) : (
+                  showAllSkills &&
+                  completedThisWeekBySkill.length > SKILL_BREAKDOWN_CAP && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSkills(false)}
+                      className="text-[10.5px] font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      Show less
+                    </button>
+                  )
+                )}
               </div>
             )}
           </div>

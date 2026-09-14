@@ -6,7 +6,7 @@ import {
   Mail,
   MessageSquare,
   Link2,
-  Sparkles,
+  Wand2,
   UserCheck,
   Clock3,
   Search,
@@ -369,7 +369,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         // not tied to a specific prospect yet — that only happens once
         // someone actually enrolls. Said plainly instead.
         <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-3.5 text-xs text-amber-950 dark:text-amber-200 font-sans">
-          <Sparkles size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <Wand2 size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
             <strong className="font-semibold text-amber-800 dark:text-amber-300">This is real, generated content — not a mock.</strong>{" "}
             No prospect has been enrolled in this cadence yet, so it&apos;s showing the standard 30-day sequence this run generated, unattached to anyone. It&apos;ll show a specific prospect once Win-Back actually enrolls one.
@@ -572,7 +572,7 @@ function CadenceTimeline({
                       {tp.offsetDays === 0 && dayZeroLog?.personalizedOpening && (
                         <div className="space-y-1.5 font-sans">
                           <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                            <Sparkles size={11} /> AI-personalized opening actually delivered
+                            <Wand2 size={11} /> AI-personalized opening actually delivered
                           </span>
                           <div className="rounded-lg border border-amber-300 dark:border-amber-900/40 bg-transparent p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
                             {dayZeroLog.personalizedOpening}
