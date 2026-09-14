@@ -150,7 +150,7 @@ function WorkspaceCard({
   const { available, enabled, enabledSet } = workspaceSkills(packageIds, enabledSkillIds);
 
   return (
-    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-2xl p-6 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
+    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-xl p-5 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
       <form
         action={`/api/workspaces/${workspace.workspaceId}/switch`}
         method="POST"
@@ -161,10 +161,10 @@ function WorkspaceCard({
           type="submit"
           disabled={isSwitching}
           aria-label={`Open ${workspace.name}`}
-          className="absolute inset-0 z-10 cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
         />
       </form>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             {packageIds.length > 0 ? (
@@ -182,7 +182,7 @@ function WorkspaceCard({
             <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
           </div>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
             {workspace.name}
           </h2>
@@ -193,16 +193,16 @@ function WorkspaceCard({
           </p>
         </div>
         {available.length > 0 && (
-          <div className="pt-1 space-y-2">
+          <div className="space-y-1.5">
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
                 Available skills
               </p>
               <SkillBadgeStrip skills={available} enabledIds={null} size={20} />
             </div>
             {enabled.length > 0 && (
               <div>
-                <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
                   Enabled skills
                 </p>
                 <SkillBadgeStrip skills={enabled} enabledIds={enabledSet} size={20} />
@@ -211,7 +211,7 @@ function WorkspaceCard({
           </div>
         )}
       </div>
-      <div className="pt-6">
+      <div className="pt-4">
         {isSwitching ? (
           <div className="flex h-8 w-full items-center justify-center">
             <SegmentedBarLoader count={10} />
@@ -410,7 +410,7 @@ export function WorkspaceHomeClient({
           ))}
         </div>
       ) : (
-        <div className="surface-glass-3 rounded-2xl overflow-hidden">
+        <div className="surface-glass-3 rounded-xl overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
