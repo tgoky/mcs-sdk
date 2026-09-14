@@ -3,14 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, BarChart3, X, AlertTriangle, ArrowRight } from "lucide-react";
-import type { WorkerDefinition } from "@/lib/worker-registry";
+import { Settings, X, AlertTriangle, ArrowRight } from "lucide-react";
+import type { WorkerDefinition, WorkerId } from "@/lib/worker-registry";
 import { workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { EnablePileOnModal } from "./enable-worker-modal";
 import { ProductOnboardingGateModal } from "./product-onboarding-gate-modal";
+import { WorkerActionsMenu } from "./worker-actions-menu";
+import { ComparePanel } from "./compare-panel";
+import { RunAnalysisPanel } from "./run-analysis-panel";
+import { InspectPerformancePanel } from "./inspect-performance-panel";
 import { useToast } from "@/components/toast/toast-provider";
 
 const PRODUCT_LABELS: Record<WorkerDefinition["productId"], string> = {
@@ -105,6 +109,8 @@ export function WorkerCard({
   const [showEnableModal, setShowEnableModal] = useState(false);
   const [skipDismissed, setSkipDismissed] = useState(productOnboardingSkipDismissed);
   const [gateModalOpen, setGateModalOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<"compare" | "run-analysis" | "inspect" | null>(null);
+  const [compareWorkerIds, setCompareWorkerIds] = useState<WorkerId[]>([]);
 
   const needsOwnSetup = worker.runOnSetup;
   // Every OTHER skill in a not-yet-onboarded product — not this worker's
@@ -134,12 +140,6 @@ export function WorkerCard({
   // primary page instead, same as every other "go manage this skill"
   // link in the app already does.
   const plainConfigureHref = !worker.hasHingesPanel && engagementId ? workerPrimaryHref(worker.id, engagementId) : null;
-  // Phase 8 — one destination shape for every worker's analytics,
-  // regardless of product, instead of the old per-product lookup table
-  // that routed Showtime and Reputation Manager workers to two
-  // completely different pages.
-  const analyticsHref = `/dashboard/analytics/${worker.id}`;
-
   async function enable() {
     if (!engagementId) return;
     setPending(true);
@@ -213,9 +213,17 @@ export function WorkerCard({
           </Link>
         )
       )}
-      <Link href={analyticsHref} title="Analytics" className={configureAnalyticsClass}>
-        <BarChart3 className={iconSize} />
-      </Link>
+      <WorkerActionsMenu
+        workerId={worker.id}
+        workerName={worker.name}
+        engagementId={engagementId}
+        triggerClassName={configureAnalyticsClass}
+        onOpenPanel={(panel) => setActivePanel((prev) => (prev === panel ? null : panel))}
+        onCompare={(ids) => {
+          setCompareWorkerIds(ids);
+          setActivePanel("compare");
+        }}
+      />
     </>
   ) : needsOwnSetup ? (
     bridgeHref ? (
@@ -385,6 +393,21 @@ export function WorkerCard({
         {error && <p className="mt-2 pl-[3rem] text-xs text-rose-600 dark:text-rose-400">{error}</p>}
         {enableModal}
         {gateModal}
+        {engagementId && activePanel === "compare" && compareWorkerIds.length >= 2 && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ComparePanel engagementId={engagementId} workerIds={compareWorkerIds} onClose={() => setActivePanel(null)} />
+          </div>
+        )}
+        {engagementId && activePanel === "run-analysis" && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <RunAnalysisPanel engagementId={engagementId} workerId={worker.id} workerName={worker.name} onClose={() => setActivePanel(null)} />
+          </div>
+        )}
+        {engagementId && activePanel === "inspect" && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <InspectPerformancePanel engagementId={engagementId} workerId={worker.id} workerName={worker.name} onClose={() => setActivePanel(null)} />
+          </div>
+        )}
       </div>
     );
   }
@@ -434,6 +457,15 @@ export function WorkerCard({
       {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
       {enableModal}
       {gateModal}
+      {engagementId && activePanel === "compare" && compareWorkerIds.length >= 2 && (
+        <ComparePanel engagementId={engagementId} workerIds={compareWorkerIds} onClose={() => setActivePanel(null)} />
+      )}
+      {engagementId && activePanel === "run-analysis" && (
+        <RunAnalysisPanel engagementId={engagementId} workerId={worker.id} workerName={worker.name} onClose={() => setActivePanel(null)} />
+      )}
+      {engagementId && activePanel === "inspect" && (
+        <InspectPerformancePanel engagementId={engagementId} workerId={worker.id} workerName={worker.name} onClose={() => setActivePanel(null)} />
+      )}
     </div>
   );
 }

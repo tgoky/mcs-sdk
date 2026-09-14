@@ -40,8 +40,15 @@ export function Modal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
+    // font-sans antialiased here isn't strictly required — this portal
+    // renders into document.body, which already carries both classes
+    // from the root layout, and font-family inherits down the real DOM
+    // tree regardless of the portal — but every other portal-rendered
+    // surface in this app (tour overlay, tour launcher, toast stack)
+    // re-applies it defensively anyway, so a future body-level change
+    // can't silently drop every modal in the app to a system font.
     <div
-      className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[2px] p-4 overflow-y-auto motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
+      className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[2px] p-4 overflow-y-auto font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

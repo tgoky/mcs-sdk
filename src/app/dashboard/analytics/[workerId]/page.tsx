@@ -1,26 +1,35 @@
 // src/app/dashboard/analytics/[workerId]/page.tsx
 //
-// Phase 8 — the "one per-worker view parameterized by workerId over
-// skillRuns" this app's roadmap named as Phase 8, replacing the old
-// per-product routing (worker-card.tsx used to send every Showtime
-// worker's Analytics button to /dashboard/analytics and every
-// Reputation Manager worker's to a separate, hand-built page with no
-// skillRuns data at all) with one destination shape for any worker in
-// the unified registry, regardless of product.
+// Phase 8's "one per-worker view parameterized by workerId over
+// skillRuns" page, rebuilt around real business outcomes instead of a
+// StatCard grid + raw run log — the owner's own words: "right now its
+// full of cards and gabbage", wanted "more on outcomes, beneficial
+// stuff". This is what the Library's "Visit analysis" menu item routes
+// to.
 //
-// For a Reputation Manager worker, the three watch skills' own signal
-// tables (rep_engine_findings, rep_trustpilot_reviews, rep_reddit_mentions)
-// are folded in below the generic run stats — the exact same rollup the
-// old standalone /dashboard/reputation-manager/analytics page rendered,
-// now reachable from every RM worker's own page instead of one page
-// nothing else in the app linked to directly.
+// The headline is the worker's real business-outcome block
+// (worker-report-blocks.ts) for the workspace's primary engagement —
+// Show rate, Win-Back recovery, mention counts, etc. — where one exists,
+// with its real week-over-week trend. A worker with no resolver (Cold
+// Open/Whop Agent workers today) gets an honest "no tracked outcome yet"
+// state instead of a fabricated number, same discipline as the Library's
+// Inspect Performance panel (skill-inspect.ts, shared by both).
+//
+// Below that: a real day-by-day trend chart (run-trend-chart.tsx) over
+// skillRuns — the one genuinely real, chartable signal that exists for
+// every worker regardless of whether it has an outcome resolver — then
+// Reputation Manager's sentiment rollup where relevant, then a compact
+// recent-activity strip (5-6 entries, not the old unbounded log).
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import { getSession } from "@/lib/session";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
 import { isWorkerId } from "@/lib/worker-registry";
-import { getWorkerAnalyticsDetail } from "@/lib/worker-analytics";
+import { getWorkerAnalyticsDetail, getWorkerRunTrend } from "@/lib/worker-analytics";
+import { getSkillInspectData, type SkillInspectData } from "@/features/reports/server/skill-inspect";
+import { RunTrendChart } from "./run-trend-chart";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -39,12 +48,25 @@ const STATUS_STYLES: Record<string, string> = {
   running: "text-amber-600 dark:text-amber-400",
 };
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+const TONE_CLASS: Record<string, string> = {
+  positive: "text-emerald-600 dark:text-emerald-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  negative: "text-rose-600 dark:text-rose-400",
+  neutral: "text-zinc-800 dark:text-zinc-200",
+};
+
+function TrendIcon({ trendLabel }: { trendLabel: string | null }) {
+  if (!trendLabel) return <Minus size={13} className="text-zinc-400 dark:text-zinc-600" />;
+  if (trendLabel.startsWith("+")) return <TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" />;
+  if (trendLabel.startsWith("-")) return <TrendingDown size={13} className="text-rose-600 dark:text-rose-400" />;
+  return <Minus size={13} className="text-zinc-400 dark:text-zinc-600" />;
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="surface-glass-1 rounded-xl p-4">
-      <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
-      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">{value}</p>
-      {sub && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{sub}</p>}
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</span>
+      <span className={`text-sm font-bold tabular-nums ${tone ?? "text-zinc-800 dark:text-zinc-200"}`}>{value}</span>
     </div>
   );
 }
@@ -79,7 +101,24 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
   const whopUserId = session.whopUserId!;
   const activeWorkspace = await getActiveWorkspace(whopUserId);
 
-  const detail = await getWorkerAnalyticsDetail(whopUserId, activeWorkspace.workspaceId, workerId);
+  // The real per-client outcome blocks (worker-report-blocks.ts) are
+  // scoped to one engagement — the same "workspace = one client" primary
+  // engagement the Library page and its per-worker panels already use
+  // (see workspace.ts's getPrimaryEngagementIdForWorkspace). Null for a
+  // brand-new workspace with no client created yet, in which case the
+  // headline honestly falls back rather than pretending an outcome exists.
+  const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(activeWorkspace.workspaceId);
+
+  const [detail, trend, inspect] = await Promise.all([
+    getWorkerAnalyticsDetail(whopUserId, activeWorkspace.workspaceId, workerId),
+    getWorkerRunTrend(whopUserId, activeWorkspace.workspaceId, workerId),
+    primaryEngagementId ? getSkillInspectData(primaryEngagementId, workerId) : Promise.resolve(null as SkillInspectData | null),
+  ]);
+
+  const weekBlock = inspect?.outcome.week ?? null;
+  const monthBlock = inspect?.outcome.month ?? null;
+  const hasOutcome = Boolean(weekBlock || monthBlock);
+  const recentActivity = detail.recentRuns.slice(0, 6);
 
   return (
     <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
@@ -96,48 +135,110 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label={`Runs (last ${detail.windowDays}d)`} value={detail.runsInWindow} />
-        <StatCard label="Success rate" value={detail.successRate !== null ? `${detail.successRate}%` : "—"} />
-        <StatCard label="Active clients" value={detail.activeClients} />
-        <StatCard
-          label="Needs attention"
-          value={detail.needsAttention}
-          sub={detail.needsAttention > 0 ? "failing on most recent run" : undefined}
+      {/* Headline — the real business outcome, not one tile among four
+          identical ones. */}
+      <div className="mt-5">
+        {hasOutcome ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {weekBlock && (
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+                <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{weekBlock.label} &middot; this week</p>
+                <p className={`text-5xl font-bold mt-1.5 tabular-nums ${TONE_CLASS[weekBlock.tone ?? "neutral"]}`}>{weekBlock.displayValue}</p>
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <TrendIcon trendLabel={weekBlock.trendLabel} />
+                  {weekBlock.trendLabel ?? "no baseline yet to compare against"}
+                </div>
+              </div>
+            )}
+            {monthBlock && (
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+                <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{monthBlock.label} &middot; this month</p>
+                <p className={`text-5xl font-bold mt-1.5 tabular-nums ${TONE_CLASS[monthBlock.tone ?? "neutral"]}`}>{monthBlock.displayValue}</p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-2">month-to-date</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-6">
+            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">No tracked business outcome yet for this skill.</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1">
+              This worker has no outcome resolver yet, or its client hasn&apos;t produced one. Run volume and success rate below are real, in the meantime.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Operational signal — real, but secondary now: a compact row, not
+          a grid of same-sized cards competing with the headline above. */}
+      <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <MiniStat label={`Runs / ${detail.windowDays}d`} value={String(detail.runsInWindow)} />
+        <MiniStat
+          label="Success rate"
+          value={detail.successRate !== null ? `${detail.successRate}%` : "—"}
+          tone={detail.successRate !== null && detail.successRate < 50 ? "text-rose-600 dark:text-rose-400" : undefined}
         />
+        <MiniStat label="Active clients" value={String(detail.activeClients)} />
+        {detail.needsAttention > 0 && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+            <AlertTriangle size={13} /> {detail.needsAttention} failing on most recent run
+          </span>
+        )}
+      </div>
+
+      {/* The real trend chart — day-by-day, not a static number. */}
+      <div className="mt-6">
+        <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
+          Run volume &amp; success rate — last 30 days, every client
+        </p>
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-4">
+          <RunTrendChart data={trend} />
+        </div>
       </div>
 
       {detail.repSignals && (
         <div className="mt-6 space-y-3">
           <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Reputation Manager signals (every enrolled client, last {detail.windowDays}d)
+            Reputation Manager signals &middot; every enrolled client, last {detail.windowDays}d
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="AI engine checks" value={detail.repSignals.engineChecks} />
-            <StatCard
-              label="Trustpilot reviews"
-              value={detail.repSignals.trustpilotReviews}
-              sub={detail.repSignals.trustpilotAvgRating ? `avg rating ${detail.repSignals.trustpilotAvgRating}` : undefined}
-            />
-            <StatCard label="Reddit mentions" value={detail.repSignals.redditMentions} />
-            <StatCard label="Flagged signals" value={detail.repSignals.flaggedSignals} />
-          </div>
-          <div className="surface-glass-1 rounded-xl p-4">
-            <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">Sentiment across every signal</p>
-            <SentimentBar {...detail.repSignals.sentiment} />
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-5 space-y-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <MiniStat
+                label="AI engine checks"
+                value={String(detail.repSignals.engineChecks)}
+              />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Trustpilot reviews</span>
+                <span className="text-sm font-bold tabular-nums text-zinc-800 dark:text-zinc-200">
+                  {detail.repSignals.trustpilotReviews}
+                  {detail.repSignals.trustpilotAvgRating && (
+                    <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-600">avg {detail.repSignals.trustpilotAvgRating}</span>
+                  )}
+                </span>
+              </div>
+              <MiniStat label="Reddit mentions" value={String(detail.repSignals.redditMentions)} />
+              <MiniStat
+                label="Flagged signals"
+                value={String(detail.repSignals.flaggedSignals)}
+                tone={detail.repSignals.flaggedSignals > 0 ? "text-rose-600 dark:text-rose-400" : undefined}
+              />
+            </div>
+            <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/60">
+              <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">Sentiment across every signal</p>
+              <SentimentBar {...detail.repSignals.sentiment} />
+            </div>
           </div>
         </div>
       )}
 
-      <div className="mt-6">
-        <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-          Recent runs (last {detail.windowDays}d)
-        </p>
-        {detail.recentRuns.length === 0 ? (
+      {/* Compact recent-activity strip — not the focus of the page
+          anymore, so capped short instead of an unbounded log. */}
+      <div className="mt-6 mb-4">
+        <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">Recent activity</p>
+        {recentActivity.length === 0 ? (
           <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">No runs recorded in this window.</p>
         ) : (
-          <div className="surface-glass-1 rounded-xl divide-y divide-zinc-100 dark:divide-zinc-800 overflow-hidden">
-            {detail.recentRuns.map((run) => (
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 divide-y divide-zinc-100 dark:divide-zinc-800 overflow-hidden">
+            {recentActivity.map((run) => (
               <Link
                 key={run.id}
                 href={`/dashboard/runs/${run.id}`}

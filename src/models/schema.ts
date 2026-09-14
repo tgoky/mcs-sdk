@@ -1912,6 +1912,41 @@ export const accountReviews = pgTable("account_reviews", {
   generatedAt: timestamp("generated_at").defaultNow().notNull(),
 });
 
+// Same "kept as real history, not overwritten" convention as
+// accountReviews above, for the Library's "Compare" flyout — one row
+// per on-demand comparison across 2+ skills. See
+// src/features/reports/server/skill-compare.ts.
+export const skillCompareRuns = pgTable("skill_compare_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  workerIds: jsonb("worker_ids").notNull().$type<string[]>(),
+  // The exact CompareSkillStat[] the narrative was grounded in — same
+  // "let a later reader see precisely what the model saw" reasoning as
+  // accountReviews.blocksSnapshot.
+  statsSnapshot: jsonb("stats_snapshot").notNull(),
+  narrative: text("narrative").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
+// Same "kept as real history" convention as skillCompareRuns above, for
+// the Library's "Run analysis" action — one row per on-demand, single-
+// skill synthesis. See src/features/reports/server/skill-run-analysis.ts.
+export const skillRunAnalyses = pgTable("skill_run_analyses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  engagementId: text("engagement_id")
+    .notNull()
+    .references(() => engagements.engagementId),
+  workerId: text("worker_id").notNull(),
+  // The exact operational + outcome numbers the narrative was grounded
+  // in — same "let a later reader see precisely what the model saw"
+  // reasoning as skillCompareRuns.statsSnapshot.
+  statsSnapshot: jsonb("stats_snapshot").notNull(),
+  narrative: text("narrative").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
 // ── Conversation Intelligence Sessions (recovery gap 24) ───────────────────
 // One row per Recall.ai bot dispatched to a call. See
 // src/lib/platforms/conversation-intelligence.ts. Deliberately scoped to

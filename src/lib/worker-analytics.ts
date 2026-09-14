@@ -308,6 +308,67 @@ export async function getWorkerAnalyticsDetail(
   };
 }
 
+const TREND_WINDOW_DAYS = 30;
+
+export interface WorkerRunTrendPoint {
+  /** YYYY-MM-DD, UTC — one point per calendar day, oldest first. */
+  date: string;
+  runs: number;
+  successRate: number | null;
+}
+
+/** Day-by-day run count + success rate for one worker across every
+ * engagement in the workspace, over the last 30 days — the real trend
+ * line the rebuilt analytics page charts. Per-skill outcome buckets
+ * (Show rate, Win-Back recovery, ...) don't exist as a day-by-day query
+ * anywhere in this codebase yet, so this uses skillRuns itself: genuinely
+ * real data, not fabricated, even for a worker with no outcome resolver.
+ * Every day in the window is seeded with a zero-runs point (successRate
+ * null) so the chart has a continuous 30-day x-axis instead of gaps on
+ * days nothing ran. */
+export async function getWorkerRunTrend(
+  whopUserId: string,
+  workspaceId: string,
+  workerId: WorkerId
+): Promise<WorkerRunTrendPoint[]> {
+  const since = daysAgo(TREND_WINDOW_DAYS - 1);
+  since.setUTCHours(0, 0, 0, 0);
+
+  const buckets = new Map<string, { total: number; success: number }>();
+  for (let i = 0; i < TREND_WINDOW_DAYS; i++) {
+    const d = new Date(since);
+    d.setUTCDate(d.getUTCDate() + i);
+    buckets.set(d.toISOString().slice(0, 10), { total: 0, success: 0 });
+  }
+
+  const allEngagements = await db
+    .select({ engagementId: engagements.engagementId })
+    .from(engagements)
+    .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)));
+  const engagementIds = allEngagements.map((e) => e.engagementId);
+
+  if (engagementIds.length > 0) {
+    const runs = await db
+      .select({ status: skillRuns.status, startedAt: skillRuns.startedAt })
+      .from(skillRuns)
+      .where(and(eq(skillRuns.skillName, workerId), gte(skillRuns.startedAt, since), inArray(skillRuns.engagementId, engagementIds)));
+
+    for (const run of runs) {
+      const key = run.startedAt.toISOString().slice(0, 10);
+      const bucket = buckets.get(key);
+      if (!bucket) continue; // outside the seeded window — shouldn't happen given the gte(since) filter, but never crash the chart over it
+      bucket.total++;
+      if (run.status === "success") bucket.success++;
+    }
+  }
+
+  return Array.from(buckets.entries()).map(([date, b]) => ({
+    date,
+    runs: b.total,
+    successRate: b.total > 0 ? Math.round((b.success / b.total) * 100) : null,
+  }));
+}
+
 // Perf-audit fix: the old standalone RM analytics page this rollup came
 // from queried every signal ever recorded, with no window — tolerable
 // when it was one page nothing linked to, not once this same rollup

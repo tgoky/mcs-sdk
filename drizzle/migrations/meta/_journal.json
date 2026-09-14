@@ -337,6 +337,20 @@
       "when": 1789389589066,
       "tag": "0047_restore_cold_open_queue_resolved_at",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789394499445,
+      "tag": "0048_skill_compare_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789394894847,
+      "tag": "0049_skill_run_analyses",
+      "breakpoints": true
     }
   ]
 }
