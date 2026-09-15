@@ -182,7 +182,6 @@ export function WorkerActionsMenu({
 
       {open && (
         <FloatingPortal>
-          <div className="fixed inset-0 z-[9990]" onClick={closeAll} />
           <div
             ref={refs.setFloating}
             style={floatingStyles}

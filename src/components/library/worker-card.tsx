@@ -265,6 +265,7 @@ export function WorkerCard({
       onClose={() => setShowEnableModal(false)}
       onEnabled={() => {
         setShowEnableModal(false);
+        toast.success(`${worker.name} enabled.`);
         router.refresh();
       }}
     />

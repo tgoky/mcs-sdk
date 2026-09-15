@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, Loader2, Plus } from "lucide-react";
 import type { ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
+import { useToast } from "@/components/toast/toast-provider";
 
 interface SkillEntry {
   skillId: WorkerId;
@@ -85,6 +86,8 @@ function InstalledSkillsList({
   needsAttentionWorkerIds?: Set<string>;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const toast = useToast();
   const [collapsed, setCollapsed] = useState(false);
   const [removedIds, setRemovedIds] = useState<Set<WorkerId>>(new Set());
   const [busyIds, setBusyIds] = useState<Set<WorkerId>>(new Set());
@@ -103,6 +106,15 @@ function InstalledSkillsList({
       });
       if (!res.ok) throw new Error("Failed to turn off");
       setRemovedIds((prev) => new Set(prev).add(workerId));
+      toast.success(`${WORKER_REGISTRY[workerId].name} disabled.`);
+      // This list's `entries` prop is a snapshot the parent server
+      // component computed at its own last render — removedIds only
+      // hides the row for THIS mounted instance. Without invalidating
+      // that snapshot, a later remount (switching engagements, a layout
+      // re-render elsewhere) falls back to the stale prop and the just-
+      // disabled skill reappears as "enabled" even though the server
+      // already has it off.
+      router.refresh();
     } catch {
       setErrorId(workerId);
     } finally {
