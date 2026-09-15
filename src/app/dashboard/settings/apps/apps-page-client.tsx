@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, CheckCircle2, AlertCircle, X, RotateCw, Trash2 } from "lucide-react";
+import { Mail, CheckCircle2, AlertCircle, X, RotateCw, Trash2, LayoutGrid } from "lucide-react";
 
 interface VaultItem {
   id: string;
@@ -18,6 +18,10 @@ interface PlatformDef {
   label: string;
   group: string;
   composioManaged: boolean;
+  /** Short, factual one-liner — what connecting this actually does inside
+   * the app, not marketing copy. Shown on the card where a marketplace
+   * listing would put install count / pricing. */
+  description: string;
   placeholder?: string;
   howTo?: string;
 }
@@ -27,40 +31,74 @@ interface PlatformDef {
 // same vault those already read from, just at the workspace level instead of
 // per-engagement.
 const PLATFORMS: PlatformDef[] = [
-  { provider: "calendly", label: "Calendly", group: "Booking platforms", composioManaged: true },
+  {
+    provider: "calendly",
+    label: "Calendly",
+    group: "Booking platforms",
+    composioManaged: true,
+    description: "Pulls booked calls, invitee answers, and reschedules into every engagement automatically.",
+  },
   {
     provider: "cal_com",
     label: "Cal.com",
     group: "Booking platforms",
     composioManaged: false,
+    description: "Pulls booked calls and invitee details from your Cal.com account.",
     placeholder: "cal_live_...",
     howTo: "Cal.com → Settings → Developer → API Keys → Add",
   },
-  { provider: "ghl_calendar", label: "GoHighLevel", group: "Booking platforms", composioManaged: true },
+  {
+    provider: "ghl_calendar",
+    label: "GoHighLevel",
+    group: "Booking platforms",
+    composioManaged: true,
+    description: "Pulls booked appointments straight from your GoHighLevel calendar.",
+  },
   {
     provider: "oncehub",
     label: "OnceHub",
     group: "Booking platforms",
     composioManaged: false,
+    description: "Pulls booked calls and confirmations from OnceHub.",
     placeholder: "1.eyJh... (Client Secret)",
     howTo: "OnceHub → Admin → Integrations → API keys → Create OAuth client (or use your account API key)",
   },
-  { provider: "klaviyo", label: "Klaviyo", group: "Email & CRM", composioManaged: true },
-  { provider: "hubspot", label: "HubSpot", group: "Email & CRM", composioManaged: true },
+  {
+    provider: "klaviyo",
+    label: "Klaviyo",
+    group: "Email & CRM",
+    composioManaged: true,
+    description: "Sends follow-up and win-back sequences through Klaviyo.",
+  },
+  {
+    provider: "hubspot",
+    label: "HubSpot",
+    group: "Email & CRM",
+    composioManaged: true,
+    description: "Sends follow-up sequences and syncs contacts through HubSpot.",
+  },
   {
     provider: "activecampaign",
     label: "ActiveCampaign",
     group: "Email & CRM",
     composioManaged: false,
+    description: "Sends follow-up and win-back sequences through ActiveCampaign.",
     placeholder: "abc123...",
     howTo: "ActiveCampaign → Settings → Developer → API Access → Copy key",
   },
-  { provider: "mailchimp", label: "Mailchimp", group: "Email & CRM", composioManaged: true },
+  {
+    provider: "mailchimp",
+    label: "Mailchimp",
+    group: "Email & CRM",
+    composioManaged: true,
+    description: "Sends follow-up and win-back sequences through Mailchimp.",
+  },
   {
     provider: "convertkit",
     label: "ConvertKit",
     group: "Email & CRM",
     composioManaged: false,
+    description: "Sends follow-up and win-back sequences through ConvertKit.",
     placeholder: "ck_...",
     howTo: "ConvertKit → Settings → Advanced → API → Copy API Secret",
   },
@@ -69,6 +107,7 @@ const PLATFORMS: PlatformDef[] = [
     label: "SMTP",
     group: "Email & CRM",
     composioManaged: false,
+    description: "Sends emails directly through your own mail server — no CRM required.",
     placeholder: "smtp://user:pass@host:587",
     howTo: "Your email provider's SMTP credentials, as one connection string.",
   },
@@ -84,6 +123,12 @@ const LOGO_FILENAME_OVERRIDES: Record<string, string> = {
   convertkit: "kit",
 };
 
+// No boxed/tinted background behind the mark — a marketplace listing's
+// logo sits directly on the card, not inside its own little tile, and
+// wrapping it in a `--surface-2` square is what was shrinking every logo
+// down to fit a fixed box. Rendered at its natural size with just
+// object-contain so non-square marks (wordmarks like Klaviyo/Mailchimp)
+// don't get squashed.
 function PlatformLogo({ provider, size = 20 }: { provider: string; size?: number }) {
   const [hasError, setHasError] = useState(false);
   if (hasError) return <Mail className="shrink-0 text-zinc-400" style={{ width: size * 0.55, height: size * 0.55 }} />;
@@ -93,7 +138,7 @@ function PlatformLogo({ provider, size = 20 }: { provider: string; size?: number
       src={`/logos/${filename}.png`}
       alt={`${provider} logo`}
       className="shrink-0 object-contain"
-      style={{ width: size, height: size }}
+      style={{ maxWidth: size, maxHeight: size }}
       onError={() => setHasError(true)}
     />
   );
@@ -112,6 +157,11 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
   const [items, setItems] = useState(initialItems);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [addKeyFor, setAddKeyFor] = useState<PlatformDef | null>(null);
+  // Derived from PLATFORMS' own `group` field rather than a second
+  // hardcoded list — adding a new group to PLATFORMS is enough for it to
+  // show up as its own filter here too.
+  const categories = useMemo(() => Array.from(new Set(PLATFORMS.map((p) => p.group))), []);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: "ok" | "error"; message: string } | null>(() => {
     const connected = searchParams.get("composio_connected");
     const error = searchParams.get("composio_error");
@@ -151,10 +201,15 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
     }
   }
 
-  const grouped = groupBy(PLATFORMS, (p) => p.group);
+  // "All apps" groups by product area with its own heading, same as
+  // before; picking one category flattens to a single grid under that
+  // category's own heading instead — the sidebar is the group picker now,
+  // so a repeated heading right below it would be redundant.
+  const visiblePlatforms = activeCategory ? PLATFORMS.filter((p) => p.group === activeCategory) : PLATFORMS;
+  const grouped = groupBy(visiblePlatforms, (p) => p.group);
 
   return (
-    <div className="max-w-5xl space-y-6 font-sans">
+    <div className="max-w-6xl space-y-6 font-sans">
       <div>
         <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
           Apps
@@ -183,72 +238,127 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
         </div>
       )}
 
-      {Object.entries(grouped).map(([group, platforms]) => (
-        <div key={group} className="space-y-3">
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-            {group}
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {platforms.map((platform) => {
-              const saved = items.filter((i) => i.provider === platform.provider);
-              const isConnected = saved.length > 0;
-              return (
-                <div
-                  key={platform.provider}
-                  className="group relative flex flex-col items-center gap-3 px-5 py-6 rounded-md text-center transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-                >
-                  {isConnected && (
-                    <span
-                      className="absolute top-3 right-3 flex items-center justify-center w-5 h-5 rounded-full"
-                      style={{ background: "rgba(34,197,94,0.12)", color: "rgb(21,128,61)" }}
-                      title={`${saved.length} saved`}
-                    >
-                      <CheckCircle2 size={13} />
-                    </span>
-                  )}
-                  <div
-                    className="flex items-center justify-center w-16 h-16 rounded-lg"
-                    style={{ background: "var(--surface-2)" }}
-                  >
-                    <PlatformLogo provider={platform.provider} size={36} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                      {platform.label}
-                    </p>
-                    {isConnected && (
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {saved.length} saved
-                      </p>
-                    )}
-                  </div>
-                  {platform.composioManaged ? (
-                    <button
-                      type="button"
-                      onClick={() => connect(platform.provider)}
-                      disabled={connecting === platform.provider}
-                      className="w-full text-xs font-semibold px-3 py-2 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
-                      style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
-                    >
-                      {connecting === platform.provider ? "Connecting…" : "Connect"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setAddKeyFor(platform)}
-                      className="w-full text-xs font-semibold px-3 py-2 rounded-md cursor-pointer transition-colors"
-                      style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
-                    >
-                      Add key
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+      <div className="flex items-start gap-6">
+        <aside className="w-44 shrink-0 sticky top-4 space-y-4">
+          <div>
+            <p className="px-2.5 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Browse
+            </p>
+            <nav className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left cursor-pointer transition-colors"
+                style={
+                  activeCategory === null
+                    ? { background: "var(--surface-2)", color: "var(--text-primary)" }
+                    : { color: "var(--text-muted)" }
+                }
+              >
+                <LayoutGrid size={13} className="shrink-0" />
+                All apps
+                <span className="ml-auto text-[10px] tabular-nums opacity-70">{PLATFORMS.length}</span>
+              </button>
+            </nav>
           </div>
+          <div>
+            <p className="px-2.5 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Categories
+            </p>
+            <nav className="space-y-0.5">
+              {categories.map((category) => {
+                const count = PLATFORMS.filter((p) => p.group === category).length;
+                const isActive = activeCategory === category;
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setActiveCategory(category)}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left cursor-pointer transition-colors"
+                    style={isActive ? { background: "var(--surface-2)", color: "var(--text-primary)" } : { color: "var(--text-muted)" }}
+                  >
+                    <span className="truncate">{category}</span>
+                    <span className="ml-auto text-[10px] tabular-nums opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        <div className="flex-1 min-w-0 space-y-6">
+          {Object.entries(grouped).map(([group, platforms]) => (
+            <div key={group} className="space-y-3">
+              {activeCategory === null && (
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  {group}
+                </h2>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {platforms.map((platform) => {
+                  const saved = items.filter((i) => i.provider === platform.provider);
+                  const isConnected = saved.length > 0;
+                  return (
+                    <div
+                      key={platform.provider}
+                      className="flex flex-col gap-3 p-4 rounded-lg transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <PlatformLogo provider={platform.provider} size={40} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                              {platform.label}
+                            </p>
+                            {isConnected && (
+                              <CheckCircle2 size={13} className="shrink-0" style={{ color: "rgb(21,128,61)" }} />
+                            )}
+                          </div>
+                          <p className="text-xs mt-0.5 leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
+                            {platform.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Where a marketplace listing would show install count / pricing — here it's
+                          real connection status on the left and the actual action on the right. */}
+                      <div
+                        className="flex items-center justify-between gap-2 pt-3 mt-auto"
+                        style={{ borderTop: "1px solid var(--border)" }}
+                      >
+                        <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                          {isConnected ? `${saved.length} saved` : "Not connected"}
+                        </span>
+                        {platform.composioManaged ? (
+                          <button
+                            type="button"
+                            onClick={() => connect(platform.provider)}
+                            disabled={connecting === platform.provider}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
+                            style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+                          >
+                            {connecting === platform.provider ? "Connecting…" : "Connect"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setAddKeyFor(platform)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+                            style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+                          >
+                            Add key
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
 
       <div className="space-y-2 pt-2">
         <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
