@@ -1,0 +1,23 @@
+diff --git a/src/lib/primary-nav.ts b/src/lib/primary-nav.ts
+index 5b5483e..405aa90 100644
+--- a/src/lib/primary-nav.ts
++++ b/src/lib/primary-nav.ts
+@@ -8,7 +8,7 @@
+ // that survived every phase of the worker-registry restructure
+ // untouched — the badges and PRODUCT_RAIL_CHILDREN below were the single
+ // most visible leftover of the old "different menu per product" model.
+-import { BarChart3, BookOpen, LayoutGrid, Plug, Settings, type LucideIcon } from "lucide-react";
++import { BarChart3, BookOpen, LayoutGrid, Settings, Store, type LucideIcon } from "lucide-react";
+ 
+ export interface PrimaryNavSection {
+   title: string;
+@@ -28,8 +28,8 @@ export interface PrimaryNavSection {
+ export const PRIMARY_NAV_SECTIONS: PrimaryNavSection[] = [
+   { title: "Work", href: "/dashboard", icon: LayoutGrid },
+   { title: "Library", href: "/dashboard/library", icon: BookOpen },
++  { title: "Apps", href: "/dashboard/settings/apps", icon: Store },
+   { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+-  { title: "Apps", href: "/dashboard/settings/apps", icon: Plug },
+ ];
+ 
+ export const SETTINGS_NAV = { label: "Settings", href: "/dashboard/settings", icon: Settings };
