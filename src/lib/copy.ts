@@ -344,6 +344,17 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   cohort_membership_remove: "Remove prospect from cohort",
   confirmation_page_deploy: "Confirmation page ready — approve to publish",
   rep_response_approval: "Reputation response draft — review before posting",
+  whop_webhook_pin: "Pin a Whop webhook subscription",
+  whop_webhook_dedupe_delete: "Delete a duplicate Whop webhook subscription",
+  whop_webhook_reenable: "Re-enable a disabled Whop webhook subscription",
+  whop_product_launch_bulk_confirm: "Confirm a bulk Whop product launch",
+  whop_cancel_discount_configure: "Configure a Whop cancellation-save discount",
+  whop_cancellation_offer_create: "Create a Whop cancellation offer",
+  whop_drift_fingerprint_adopt: "Adopt a drifted Whop config fingerprint",
+  whop_bulk_promo_codes_confirm: "Confirm bulk Whop promo codes",
+  whop_promo_code_remove: "Remove a Whop promo code",
+  whop_dispute_evidence_submit: "Submit Whop dispute evidence",
+  whop_ads_flip_to_active: "Flip a Whop ad to active",
 };
 
 export const BLOCKER_TYPE_LABELS: Record<string, string> = {

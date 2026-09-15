@@ -23,7 +23,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
+import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, ChevronLeft, ChevronDown, Loader2 } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate, FloatingPortal } from "@floating-ui/react";
 import type { WorkerId } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
@@ -103,12 +103,21 @@ export function WorkerActionsMenu({
     middleware: [offset(6), flip({ padding: 12 }), shift({ padding: 12 })],
   });
 
-  const { refs: subRefs, floatingStyles: subFloatingStyles } = useFloating({
+  const {
+    refs: subRefs,
+    floatingStyles: subFloatingStyles,
+    placement: comparePlacement,
+  } = useFloating({
     open: compareOpen,
     placement: "right-start",
     whileElementsMounted: autoUpdate,
     middleware: [offset(6), flip({ padding: 12 }), shift({ padding: 12 })],
   });
+  // flip() can resolve to "left-start" when there's no room on the right
+  // (a card near the viewport's right edge) — the trigger row's chevron
+  // needs to point the same direction the flyout actually lands in, or it
+  // reads as a UI bug (arrow says right, panel appears on the left).
+  const compareOpensLeft = comparePlacement.startsWith("left");
 
   function closeAll() {
     setOpen(false);
@@ -126,6 +135,17 @@ export function WorkerActionsMenu({
   }
 
   function openCompareFlyout() {
+    // Also pin the parent menu open — without this, the diagonal mouse
+    // move from the "Compare" row across the gap into its flyout panel
+    // crosses through space neither element covers, which independently
+    // trips the PARENT menu's own close timer (started the instant the
+    // pointer left the Compare row) even though openCompareFlyout only
+    // ever cancelled the flyout's own timer. That's the exact "vanishes
+    // when I try to compare, it's on and off" bug — the two floating
+    // panels had two independent close timers racing each other during
+    // that one transit instead of one shared "still using this widget"
+    // signal.
+    openMenu();
     if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
     setCompareOpen(true);
     if (options || !engagementId) return;
@@ -147,6 +167,10 @@ export function WorkerActionsMenu({
   }
 
   function cancelCompareClose() {
+    // Same reasoning as openCompareFlyout above — hovering the flyout
+    // itself must also keep the parent menu pinned open, not just cancel
+    // the flyout's own close timer.
+    openMenu();
     if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
   }
 
@@ -200,7 +224,11 @@ export function WorkerActionsMenu({
               <span className="flex items-center gap-2">
                 <GitCompareArrows size={13} className="text-zinc-400 dark:text-zinc-500" /> Compare
               </span>
-              <ChevronRight size={12} className="text-zinc-400 dark:text-zinc-600" />
+              {compareOpensLeft ? (
+                <ChevronLeft size={12} className="text-zinc-400 dark:text-zinc-600" />
+              ) : (
+                <ChevronRight size={12} className="text-zinc-400 dark:text-zinc-600" />
+              )}
             </button>
 
             <button

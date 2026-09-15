@@ -6,8 +6,8 @@
 // at side by side, same as any real "compare" UI — nothing renders that
 // wasn't asked for.
 
-import { useState } from "react";
-import { Dropdown } from "@/components/ui/dropdown";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 export interface SkillStat {
   id: string;
@@ -42,7 +42,26 @@ function Bar({ value, max, className }: { value: number; max: number; className:
   );
 }
 
-function SkillPicker({
+// Abbreviations already on SkillStat (see PRODUCT_LABEL in analytics/
+// page.tsx) — grouping by that same short code rather than re-deriving a
+// product name from the skill id, so this can never drift out of sync
+// with the label already shown next to each skill everywhere else on
+// this page.
+const PRODUCT_GROUP_LABELS: Record<string, string> = {
+  ST: "Showtime",
+  RM: "Reputation Manager",
+  CO: "Cold Open",
+};
+
+// A plain flat list of every skill across every installed product ("Call
+// Brief (ST)" truncating to unreadable mush in a narrow dropdown) stopped
+// making sense once an account has more than a couple skills — same fix
+// already shipped for the Library's own Compare picker (worker-actions-
+// menu.tsx): group by product first (a handful of rows, always short),
+// expand one to see its actual skills. Click-driven, not hover — this is
+// a real filter control someone deliberately opens, not a hover-preview
+// menu.
+function GroupedSkillPicker({
   label,
   skills,
   value,
@@ -53,18 +72,84 @@ function SkillPicker({
   value: string;
   onChange: (id: string) => void;
 }) {
-  const items = skills.map((s) => ({ key: s.id, label: `${s.name} (${s.productLabel})` }));
+  const [open, setOpen] = useState(false);
+  const selected = skills.find((s) => s.id === value);
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(selected?.productLabel ?? null);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, SkillStat[]>();
+    for (const s of skills) {
+      const list = groups.get(s.productLabel) ?? [];
+      list.push(s);
+      groups.set(s.productLabel, list);
+    }
+    return Array.from(groups.entries());
+  }, [skills]);
+
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600 shrink-0">{label}</span>
-      <Dropdown
-        items={items}
-        selectedKey={value}
-        onSelect={onChange}
-        placeholder="Select skill…"
-        triggerClassName="min-w-0 flex-1 sm:flex-initial bg-white dark:bg-zinc-900 border border-border px-2.5 py-1.5 text-sm text-zinc-900 dark:text-white hover:bg-white dark:hover:bg-zinc-900"
-        panelClassName="bg-white dark:bg-zinc-900 border border-border"
-      />
+      <div className="relative min-w-0 flex-1 sm:flex-initial">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((p) => !p);
+            if (!open) setExpandedProduct(selected?.productLabel ?? grouped[0]?.[0] ?? null);
+          }}
+          className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-900 dark:text-white cursor-pointer"
+        >
+          <span className="truncate">{selected ? `${selected.name} (${selected.productLabel})` : "Select skill…"}</span>
+          <ChevronDown size={13} className="shrink-0 text-zinc-400 dark:text-zinc-600" />
+        </button>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute z-50 top-full mt-1 left-0 w-56 max-h-72 overflow-y-auto rounded-xl border border-border bg-white dark:bg-zinc-900 shadow-2xl p-1.5 space-y-0.5 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150">
+              {grouped.map(([productLabel, groupSkills]) => {
+                const isExpanded = expandedProduct === productLabel;
+                return (
+                  <div key={productLabel}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedProduct(isExpanded ? null : productLabel)}
+                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+                    >
+                      {PRODUCT_GROUP_LABELS[productLabel] ?? productLabel}
+                      {isExpanded ? (
+                        <ChevronDown size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />
+                      ) : (
+                        <ChevronRight size={12} className="text-zinc-400 dark:text-zinc-600 shrink-0" />
+                      )}
+                    </button>
+                    {isExpanded && (
+                      <div className="pl-2 space-y-0.5 py-0.5">
+                        {groupSkills.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              onChange(s.id);
+                              setOpen(false);
+                            }}
+                            className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                              s.id === value
+                                ? "bg-zinc-100 dark:bg-zinc-800 font-semibold text-zinc-900 dark:text-white"
+                                : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/70"
+                            }`}
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -127,9 +212,9 @@ export function SkillComparisonSection({ skills }: { skills: SkillStat[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <SkillPicker label="Compare" skills={sorted} value={a.id} onChange={setAId} />
+        <GroupedSkillPicker label="Compare" skills={sorted} value={a.id} onChange={setAId} />
         <span className="text-xs text-zinc-400 dark:text-zinc-600">vs</span>
-        <SkillPicker label="With" skills={sorted} value={b.id} onChange={setBId} />
+        <GroupedSkillPicker label="With" skills={sorted} value={b.id} onChange={setBId} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 dark:divide-zinc-900">
         <div className="pb-4 sm:pb-0">

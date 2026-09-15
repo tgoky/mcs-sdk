@@ -11,6 +11,7 @@ import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outco
 import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
 import { CategorySignalsSection } from "@/components/analytics/category-signals-section";
 import { SkillComparisonSection, type SkillStat } from "@/components/analytics/skill-comparison-section";
+import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS } from "@/lib/copy";
 
 // Fix: this used to be a plain reputation-manager-or-not ternary, which
 // meant every Cold Open skill's own comparison row silently mislabeled
@@ -457,15 +458,15 @@ export default async function AnalyticsPage() {
                   {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
                     <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
                       {[...actionTypeMedians.entries()].map(([type, arr]) => (
-                        <div key={`a-${type}`} className="flex items-center justify-between text-xs">
-                          <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
-                          <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                        <div key={`a-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{ACTION_TYPE_LABELS[type] ?? type}</span>
+                          <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
                         </div>
                       ))}
                       {[...blockerTypeMedians.entries()].map(([type, arr]) => (
-                        <div key={`b-${type}`} className="flex items-center justify-between text-xs">
-                          <span className="text-zinc-400 dark:text-zinc-600 font-mono">{type}</span>
-                          <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                        <div key={`b-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{BLOCKER_TYPE_LABELS[type] ?? type}</span>
+                          <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
                         </div>
                       ))}
                     </div>

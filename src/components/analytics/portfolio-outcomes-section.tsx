@@ -30,7 +30,8 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
             Portfolio — all clear
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Nothing needs attention this week across {accounts.length} engagement{accounts.length !== 1 ? "s" : ""}.
+            Checked every one of {accounts.length} engagement{accounts.length !== 1 ? "s" : ""} for stalled steps, missed
+            follow-ups, and blockers waiting on you — none found this week.
           </p>
         </div>
       </div>

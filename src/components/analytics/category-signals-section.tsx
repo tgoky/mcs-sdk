@@ -18,7 +18,8 @@ export function CategorySignalsSection({ signals }: { signals: CategorySignal[] 
           By category
         </h2>
         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-          Every worker across the portfolio, grouped by what it does — not one section per skill.
+          Anything flagged across every client, grouped by what kind of work it is — a category stays quiet until one
+          of its workers actually has something real to flag.
         </p>
       </div>
 
