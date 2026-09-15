@@ -1,0 +1,67 @@
+diff --git a/src/features/pin-down/server/onboarding-service.ts b/src/features/pin-down/server/onboarding-service.ts
+index 0931ea3..e77f10c 100644
+--- a/src/features/pin-down/server/onboarding-service.ts
++++ b/src/features/pin-down/server/onboarding-service.ts
+@@ -402,17 +402,43 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
+     }
+ 
+     // ── Voice extraction ───────────────────────────────────────────────────
++    // The real bug this closes: extractVoiceProfile's own internal
++    // try/catch only covers a bad JSON parse of an LLM response that DID
++    // come back — it does nothing for callClaudeWithRetry itself throwing
++    // (exhausted retries on a rate limit, timeout, or outage), which this
++    // step used to let escape uncaught. Every other step in this whole
++    // pipeline is wrapped so a non-critical failure can't take down the
++    // run — this was the one gap, and it's a bad one: an unrelated LLM
++    // hiccup here aborted the ENTIRE onboarding run before it ever reached
++    // confirmation-deploy, so engagements.confirmationPageUrl never got
++    // written — which is exactly what isProductOnboarded() reads to decide
++    // whether ANY other Showtime skill (Call Brief included) is allowed to
++    // enable, with zero relation to voice extraction. A transient LLM
++    // failure here could permanently wedge a client behind "Setup needed"
++    // until someone happened to re-run onboarding on a luckier attempt.
+     const voiceProfile = await run("voice-extraction", async () => {
+       await logStep(runId, { phase: "voice_extraction", status: "running" });
+-      const profile = await extractVoiceProfile(combinedVoiceCorpus, runId);
+-      
+-      const isAiExtracted = profile?.source_path === "ai_extracted";
+-      await logStep(runId, {
+-        phase: "voice_extraction",
+-        status: "success",
+-        detail: isAiExtracted ? "Tone profile extracted from corpus" : "Neutral default tone applied",
+-      });
+-      return profile;
++      try {
++        const profile = await extractVoiceProfile(combinedVoiceCorpus, runId);
++        const isAiExtracted = profile?.source_path === "ai_extracted";
++        await logStep(runId, {
++          phase: "voice_extraction",
++          status: "success",
++          detail: isAiExtracted ? "Tone profile extracted from corpus" : "Neutral default tone applied",
++        });
++        return profile;
++      } catch (e: unknown) {
++        const message = e instanceof Error ? e.message : String(e);
++        console.error("[pin-down onboarding] Voice extraction failed (non-fatal):", message);
++        await logStep(runId, { phase: "voice_extraction", status: "failed", detail: message });
++        return {
++          source_path: "default",
++          fallback_reason: "extraction_call_failed",
++          corpus_word_count: combinedVoiceCorpus.trim().split(/\s+/).filter(Boolean).length,
++          extracted_at: new Date().toISOString(),
++          ...NEUTRAL_DEFAULT_VOICE_PROFILE,
++        };
++      }
+     });
+ 
+     const isAiExtracted = voiceProfile?.source_path === "ai_extracted";
+@@ -420,6 +446,9 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
+     summary.whatWasAttempted.push(`Extracted brand voice profile from a ${corpusWordCount}-word corpus.`);
+     if (isAiExtracted) {
+       summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
++    } else if (voiceProfile?.fallback_reason === "extraction_call_failed") {
++      summary.whatWorked.push("Brand voice profile set to neutral default (extraction call failed).");
++      summary.openItems.push("Voice extraction call failed — using the operator-grade default tone. Re-run setup to try a real extraction again.");
+     } else {
+       summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
+       summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
