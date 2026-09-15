@@ -10,6 +10,7 @@ import {
   AtSign,
   Pencil,
   Check,
+  ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { PrefillLoader } from "@/components/prefill-loader";
@@ -18,6 +19,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { generateAvatarDataUri, DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
+import { allWorkers, type WorkerDefinition } from "@/lib/worker-registry";
 
 const NO_AVATAR: UserAvatarPrefs = { avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null };
 
@@ -65,65 +67,41 @@ function writeStoredThreadId(id: string | null) {
   }
 }
 
-export const MENTIONABLE_SKILLS = [
-  {
-    token: "pin-down",
-    label: "Pin-Down",
-    pillStyle: "bg-amber-400/20 text-amber-700 dark:text-amber-300 border-amber-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "pile-on",
-    label: "Pile-On",
-    pillStyle: "bg-purple-400/20 text-purple-700 dark:text-purple-300 border-purple-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "pre-call-read",
-    label: "Pre-Call Read",
-    pillStyle: "bg-pink-400/20 text-pink-700 dark:text-pink-300 border-pink-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "win-back",
-    label: "Win-Back",
-    pillStyle: "bg-rose-400/20 text-rose-700 dark:text-rose-300 border-rose-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "leak-map",
-    label: "Leak Map",
-    pillStyle: "bg-sky-400/20 text-sky-700 dark:text-sky-300 border-sky-500/30 backdrop-blur-xs",
-  },
-  // Reputation Manager's 6 — distinct hues from the 5 above so a mention
-  // pill's color alone tells you which product it's from.
-  {
-    token: "rep-onboarding",
-    label: "Identity Setup",
-    pillStyle: "bg-teal-400/20 text-teal-700 dark:text-teal-300 border-teal-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "rep-engine-panel",
-    label: "AI Engine Watch",
-    pillStyle: "bg-indigo-400/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "rep-trustpilot-watch",
-    label: "Trustpilot Watch",
-    pillStyle: "bg-lime-400/20 text-lime-700 dark:text-lime-300 border-lime-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "rep-reddit-watch",
-    label: "Reddit Watch",
-    pillStyle: "bg-orange-400/20 text-orange-700 dark:text-orange-300 border-orange-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "rep-twitter-watch",
-    label: "Twitter/X Watch",
-    pillStyle: "bg-fuchsia-400/20 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30 backdrop-blur-xs",
-  },
-  {
-    token: "rep-crisis-response",
-    label: "Crisis Response",
-    pillStyle: "bg-red-400/20 text-red-700 dark:text-red-300 border-red-500/30 backdrop-blur-xs",
-  },
-];
+// Same 4-color product accent worker-card.tsx's own PRODUCT_ACCENT already
+// uses (showtime/reputation-manager/cold-open/whop-agent), reused here
+// instead of inventing a second palette — a mention pill's color still
+// tells you which product it's from, just at the product level rather
+// than a bespoke hue per individual skill (impractical to hand-author and
+// keep in sync as the registry grows).
+const PRODUCT_PILL_STYLE: Record<WorkerDefinition["productId"], string> = {
+  showtime: "bg-amber-400/20 text-amber-700 dark:text-amber-300 border-amber-500/30 backdrop-blur-xs",
+  "reputation-manager": "bg-indigo-400/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 backdrop-blur-xs",
+  "cold-open": "bg-rose-400/20 text-rose-700 dark:text-rose-300 border-rose-500/30 backdrop-blur-xs",
+  "whop-agent": "bg-sky-400/20 text-sky-700 dark:text-sky-300 border-sky-500/30 backdrop-blur-xs",
+};
+
+// Was a hand-maintained list of exactly Showtime's 5 + Reputation
+// Manager's 6 — Cold Open and Whop Agent were never added, so those
+// skills could never be @-mentioned, pinned (pinned-skills-bar.tsx reads
+// this same list), or shown with a badge anywhere in Teammates at all,
+// not a rendering gap. Derived from the real worker registry now, so a
+// new skill in ANY product shows up here automatically. productId is
+// kept on each entry (not just baked into pillStyle) so the @ picker
+// below can group by it the same way worker-actions-menu.tsx's Compare
+// flyout groups the Library's own skill list.
+export const MENTIONABLE_SKILLS = allWorkers().map((w) => ({
+  token: w.id,
+  label: w.name,
+  productId: w.productId,
+  pillStyle: PRODUCT_PILL_STYLE[w.productId],
+}));
+
+const PRODUCT_GROUP_LABELS: Record<WorkerDefinition["productId"], string> = {
+  showtime: "Showtime",
+  "reputation-manager": "Reputation Manager",
+  "cold-open": "Cold Open",
+  "whop-agent": "Whop Agent",
+};
 
 function FormattedMessage({ content, mentionPillTextSize }: { content: string; mentionPillTextSize: string }) {
   const parts = content.split(/(@[\w-]+)/g);
@@ -197,6 +175,13 @@ export function TeammatesChat({
   );
   const [error, setError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  // Which product's own skill list is expanded in the @ picker while
+  // browsing (empty query) — same accordion shape worker-actions-menu.tsx
+  // uses for the Library's Compare flyout, since a flat 30-skill list is
+  // exactly the "long list, makes no sense" complaint that pattern was
+  // already built to fix once. Reset to null each time the picker closes
+  // so it doesn't reopen mid-way through on the next @.
+  const [mentionExpandedProduct, setMentionExpandedProduct] = useState<WorkerDefinition["productId"] | null>(null);
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
@@ -284,7 +269,12 @@ export function TeammatesChat({
   function handleInputChange(value: string) {
     setInput(value);
     const match = value.match(/@(\w*)$/);
-    setMentionQuery(match ? match[1] : null);
+    const next = match ? match[1] : null;
+    // Fresh "@" with nothing typed yet — reset which product row is
+    // expanded so the browse view starts collapsed every time, not stuck
+    // on whatever was open the last time this popover was used.
+    if (next === "" && mentionQuery === null) setMentionExpandedProduct(null);
+    setMentionQuery(next);
   }
 
   const filteredMentions =
@@ -293,6 +283,20 @@ export function TeammatesChat({
       : MENTIONABLE_SKILLS.filter((s) => s.token.toLowerCase().startsWith(mentionQuery.toLowerCase()));
 
   const showMentions = mentionQuery !== null && filteredMentions.length > 0;
+  // Group by product only while actively browsing (bare "@", nothing
+  // typed yet) — once there's real search text, a flat relevance list of
+  // whatever matched is more useful than making the user first find and
+  // expand the right product group.
+  const groupedMentions = useMemo(() => {
+    if (mentionQuery !== "") return [];
+    const groups = new Map<WorkerDefinition["productId"], typeof MENTIONABLE_SKILLS>();
+    for (const s of filteredMentions) {
+      const list = groups.get(s.productId) ?? [];
+      list.push(s);
+      groups.set(s.productId, list);
+    }
+    return Array.from(groups.entries());
+  }, [mentionQuery, filteredMentions]);
 
   function addSkillTag(token: string) {
     if (!taggedSkills.includes(token)) {
@@ -553,18 +557,56 @@ export function TeammatesChat({
       <div className={`relative shrink-0 ${composerPadding}`}>
         <div className={composerColumn}>
           {showMentions && (
-            <div className="absolute bottom-full left-2 mb-2 w-52 rounded-2xl bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 shadow-lg overflow-hidden z-50">
-              {filteredMentions.map((s) => (
-                <button
-                  key={s.token}
-                  type="button"
-                  onClick={() => addSkillTag(s.token)}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
-                >
-                  <AnySkillBadge skill={s.token} size={16} />
-                  <span>@{s.token}</span>
-                </button>
-              ))}
+            <div className="absolute bottom-full left-2 mb-2 w-64 max-h-72 overflow-y-auto rounded-lg bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 shadow-lg overflow-hidden z-50">
+              {mentionQuery === "" ? (
+                // Browsing (bare "@") — grouped by product, collapsed by
+                // default, same shape as the Library's Compare flyout.
+                <div className="p-1">
+                  {groupedMentions.map(([productId, skills]) => {
+                    const isExpanded = mentionExpandedProduct === productId;
+                    return (
+                      <div key={productId}>
+                        <button
+                          type="button"
+                          onClick={() => setMentionExpandedProduct(isExpanded ? null : productId)}
+                          className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/[0.07] transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                        >
+                          <span>{PRODUCT_GROUP_LABELS[productId]}</span>
+                          <ChevronRight size={12} className={`text-zinc-400 dark:text-zinc-600 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                        </button>
+                        {isExpanded && (
+                          <div className="pl-2 space-y-0.5 py-0.5">
+                            {skills.map((s) => (
+                              <button
+                                key={s.token}
+                                type="button"
+                                onClick={() => addSkillTag(s.token)}
+                                className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                              >
+                                <AnySkillBadge skill={s.token} size={16} />
+                                <span className="truncate">{s.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                // Actively typing a search after "@" — flat relevance list.
+                filteredMentions.map((s) => (
+                  <button
+                    key={s.token}
+                    type="button"
+                    onClick={() => addSkillTag(s.token)}
+                    className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                  >
+                    <AnySkillBadge skill={s.token} size={16} />
+                    <span>@{s.token}</span>
+                  </button>
+                ))
+              )}
             </div>
           )}
 
@@ -572,7 +614,7 @@ export function TeammatesChat({
               "Enabled Skills" tiles use in the secondary sidebar
               (bg-[#f8f7fa]/bg-sidebar + backdrop-blur + a faint border),
               not plain gray and not a saturated color. */}
-          <div className={`flex flex-col gap-2 rounded-2xl bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 ${inputCardPadding} shadow-sm focus-within:border-black/10 dark:focus-within:border-white/20 transition-colors duration-200`}>
+          <div className={`flex flex-col gap-2 rounded-lg bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 ${inputCardPadding} shadow-sm focus-within:border-black/10 dark:focus-within:border-white/20 transition-colors duration-200`}>
             <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
               {taggedSkills.map((token) => {
                 const skill = MENTIONABLE_SKILLS.find((s) => s.token === token);

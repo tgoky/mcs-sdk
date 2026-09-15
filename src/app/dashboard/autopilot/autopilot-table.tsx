@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { PauseCircle, PlayCircle, Loader2, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { SKILL_IDS, SKILL_MANIFEST, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, REP_SKILL_MANIFEST, type RepSkillId } from "@/lib/rep-skill-manifest";
+import { COLD_OPEN_SKILL_IDS, COLD_OPEN_SKILL_MANIFEST, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS, WHOP_AGENT_SKILL_MANIFEST, type WhopAgentSkillId } from "@/lib/whop-agent-skill-manifest";
 import { SKILL_INFO, ACTION_TYPE_LABELS } from "@/lib/copy";
 import type { PendingActionType } from "@/lib/approval-gate";
 import type { AutopilotClientDTO } from "@/lib/autopilot-clients";
@@ -200,6 +202,62 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
     }
   }
 
+  async function toggleColdOpenSkill(row: AutopilotClientRow, skill: ColdOpenSkillId) {
+    const nextEnabled = !row.coldOpenSkills[skill];
+    if (nextEnabled && COLD_OPEN_SKILL_MANIFEST[skill].runOnSetup) {
+      router.push(`/dashboard/engagements/${row.engagementId}/bridges/${skill}`);
+      return;
+    }
+
+    const key = `${row.engagementId}:cold-open-skill:${skill}`;
+    const previous = row.coldOpenSkills[skill];
+    patchClient(row.engagementId, { coldOpenSkills: { ...row.coldOpenSkills, [skill]: nextEnabled } });
+    setBusy(key, true);
+    try {
+      const res = await fetch(`/api/engagements/${row.engagementId}/skills/cold-open/${skill}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      if (!res.ok) throw new Error("request failed");
+      toast.success(`${COLD_OPEN_SKILL_MANIFEST[skill].name} ${nextEnabled ? "enabled" : "disabled"}.`);
+      router.refresh();
+    } catch {
+      patchClient(row.engagementId, { coldOpenSkills: { ...row.coldOpenSkills, [skill]: previous } });
+      toast.error(`Could not update ${COLD_OPEN_SKILL_MANIFEST[skill].name}.`);
+    } finally {
+      setBusy(key, false);
+    }
+  }
+
+  async function toggleWhopAgentSkill(row: AutopilotClientRow, skill: WhopAgentSkillId) {
+    const nextEnabled = !row.whopAgentSkills[skill];
+    if (nextEnabled && WHOP_AGENT_SKILL_MANIFEST[skill].runOnSetup) {
+      router.push(`/dashboard/engagements/${row.engagementId}/bridges/${skill}`);
+      return;
+    }
+
+    const key = `${row.engagementId}:whop-agent-skill:${skill}`;
+    const previous = row.whopAgentSkills[skill];
+    patchClient(row.engagementId, { whopAgentSkills: { ...row.whopAgentSkills, [skill]: nextEnabled } });
+    setBusy(key, true);
+    try {
+      const res = await fetch(`/api/engagements/${row.engagementId}/skills/whop-agent/${skill}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      if (!res.ok) throw new Error("request failed");
+      toast.success(`${WHOP_AGENT_SKILL_MANIFEST[skill].name} ${nextEnabled ? "enabled" : "disabled"}.`);
+      router.refresh();
+    } catch {
+      patchClient(row.engagementId, { whopAgentSkills: { ...row.whopAgentSkills, [skill]: previous } });
+      toast.error(`Could not update ${WHOP_AGENT_SKILL_MANIFEST[skill].name}.`);
+    } finally {
+      setBusy(key, false);
+    }
+  }
+
   return (
     <div className="space-y-1.5 p-1">
       {clients.map((row) => {
@@ -216,8 +274,14 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
         // actually configured for this client.
         const showtimeEnabledCount = row.showtimeConfigured ? Object.values(row.showtimeSkills).filter(Boolean).length : 0;
         const repEnabledCount = row.repConfigured ? Object.values(row.repSkills).filter(Boolean).length : 0;
-        const totalSkillCount = (row.showtimeConfigured ? SKILL_IDS.length : 0) + (row.repConfigured ? REP_SKILL_IDS.length : 0);
-        const enabledSkillsCount = showtimeEnabledCount + repEnabledCount;
+        const coldOpenEnabledCount = row.coldOpenConfigured ? Object.values(row.coldOpenSkills).filter(Boolean).length : 0;
+        const whopAgentEnabledCount = row.whopAgentConfigured ? Object.values(row.whopAgentSkills).filter(Boolean).length : 0;
+        const totalSkillCount =
+          (row.showtimeConfigured ? SKILL_IDS.length : 0) +
+          (row.repConfigured ? REP_SKILL_IDS.length : 0) +
+          (row.coldOpenConfigured ? COLD_OPEN_SKILL_IDS.length : 0) +
+          (row.whopAgentConfigured ? WHOP_AGENT_SKILL_IDS.length : 0);
+        const enabledSkillsCount = showtimeEnabledCount + repEnabledCount + coldOpenEnabledCount + whopAgentEnabledCount;
         const gatedActionsCount = row.requireApprovalActionTypes.length;
 
         return (
@@ -408,9 +472,81 @@ export function AutopilotTable({ clients: initialClients }: { clients: Autopilot
                   </div>
                 )}
 
-                {!row.showtimeConfigured && !row.repConfigured && (
+                {/* Cold Open Skill Toggles */}
+                {row.coldOpenConfigured && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                      Cold Open Skills:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {COLD_OPEN_SKILL_IDS.map((skill) => {
+                        const enabled = row.coldOpenSkills[skill];
+                        const skillBusy = busyKeys.has(`${row.engagementId}:cold-open-skill:${skill}`);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => !skillBusy && toggleColdOpenSkill(row, skill)}
+                            disabled={skillBusy}
+                            title={COLD_OPEN_SKILL_MANIFEST[skill].description}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
+                              enabled
+                                ? "bg-rose-400/15 text-rose-800 dark:text-rose-300 border border-rose-500/30"
+                                : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
+                            }`}
+                          >
+                            {COLD_OPEN_SKILL_MANIFEST[skill].name}
+                            <span
+                              className={`w-1 h-1 rounded-full ${
+                                enabled ? "bg-rose-500" : "bg-zinc-300 dark:bg-zinc-600"
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Whop Agent Skill Toggles */}
+                {row.whopAgentConfigured && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                      Whop Agent Skills:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {WHOP_AGENT_SKILL_IDS.map((skill) => {
+                        const enabled = row.whopAgentSkills[skill];
+                        const skillBusy = busyKeys.has(`${row.engagementId}:whop-agent-skill:${skill}`);
+                        return (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => !skillBusy && toggleWhopAgentSkill(row, skill)}
+                            disabled={skillBusy}
+                            title={WHOP_AGENT_SKILL_MANIFEST[skill].description}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded-full transition-colors ${
+                              enabled
+                                ? "bg-sky-400/15 text-sky-800 dark:text-sky-300 border border-sky-500/30"
+                                : "bg-zinc-100/80 dark:bg-zinc-800/30 text-zinc-400 border border-zinc-200/50 dark:border-white/5"
+                            }`}
+                          >
+                            {WHOP_AGENT_SKILL_MANIFEST[skill].name}
+                            <span
+                              className={`w-1 h-1 rounded-full ${
+                                enabled ? "bg-sky-500" : "bg-zinc-300 dark:bg-zinc-600"
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!row.showtimeConfigured && !row.repConfigured && !row.coldOpenConfigured && !row.whopAgentConfigured && (
                   <p className="text-[9px] text-zinc-400 dark:text-zinc-600 italic">
-                    Not set up under Showtime or Reputation Manager yet — nothing to control here.
+                    Not set up under any product yet — nothing to control here.
                   </p>
                 )}
               </div>
