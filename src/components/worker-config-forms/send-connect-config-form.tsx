@@ -6,6 +6,14 @@ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fi
 import type { ColdOpenSendPlatformId } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
+import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+
+const SEND_PLATFORM_LABELS: Record<ColdOpenSendPlatformId, string> = {
+  instantly: "Instantly",
+  smartlead: "SmartLead",
+  lemlist: "Lemlist",
+  reply_io: "Reply.io",
+};
 
 type MapRow = { icp: string; campaignId: string };
 
@@ -17,15 +25,12 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
   const [buyer, setBuyer] = useState("");
 
   const [platform, setPlatform] = useState<ColdOpenSendPlatformId>("instantly");
-  const [credentialValue, setCredentialValue] = useState("");
   const [mapRows, setMapRows] = useState<MapRow[]>([{ icp: "", campaignId: "" }]);
   const [autoPushIcps, setAutoPushIcps] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [savingCredential, setSavingCredential] = useState(false);
-  const [credentialSaved, setCredentialSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,25 +55,6 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
       cancelled = true;
     };
   }, [engagementId]);
-
-  async function saveCredential() {
-    setSavingCredential(true);
-    setCredentialSaved(false);
-    try {
-      const res = await fetch("/api/credentials", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ engagementId, provider: `cold_open_${platform}`, value: credentialValue }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Failed to save credential");
-      setCredentialSaved(true);
-      setCredentialValue("");
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save credential");
-    } finally {
-      setSavingCredential(false);
-    }
-  }
 
   function updateRow(i: number, patch: Partial<MapRow>) {
     setMapRows((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -127,14 +113,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
         ]}
       />
 
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <InputField label={`${platform} API key`} value={credentialValue} onChange={setCredentialValue} placeholder="paste your key" />
-        </div>
-        <button type="button" onClick={saveCredential} disabled={savingCredential || !credentialValue.trim()} className="mb-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 disabled:opacity-40 cursor-pointer">
-          {savingCredential ? "Saving…" : credentialSaved ? "Saved ✓" : "Save key"}
-        </button>
-      </div>
+      <CredentialRow engagementId={engagementId} provider={`cold_open_${platform}`} label={`${SEND_PLATFORM_LABELS[platform]} key`} />
 
       <div className="space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICP → campaign map</h2>

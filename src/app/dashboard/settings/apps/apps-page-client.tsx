@@ -111,7 +111,140 @@ const PLATFORMS: PlatformDef[] = [
     placeholder: "smtp://user:pass@host:587",
     howTo: "Your email provider's SMTP credentials, as one connection string.",
   },
+  {
+    provider: "ghl",
+    label: "GoHighLevel (CRM & Email)",
+    group: "Email & CRM",
+    composioManaged: true,
+    description: "Sends follow-ups and reads CRM activity through GoHighLevel — a separate connection from GoHighLevel Calendar above, since this app stores them as two distinct credentials even on the same GHL account.",
+  },
+  // Cold Open's own sending/reply platforms — audited against every
+  // resolveCredential() call site in the codebase (send-connect-config-
+  // form.tsx, source-connect-config-form.tsx, cold-open/server/esp/*.ts)
+  // rather than guessed; these had no Apps entry at all before, so there
+  // was no reusable-vault path for any Cold Open client.
+  {
+    provider: "cold_open_instantly",
+    label: "Instantly",
+    group: "Outreach & Cold Email",
+    composioManaged: false,
+    description: "Sends and tracks Cold Open's cold email sequences through Instantly.",
+    placeholder: "your Instantly API key",
+    howTo: "Instantly → Settings → Integrations → API Key",
+  },
+  {
+    provider: "cold_open_smartlead",
+    label: "Smartlead",
+    group: "Outreach & Cold Email",
+    composioManaged: false,
+    description: "Sends and tracks Cold Open's cold email sequences through Smartlead.",
+    placeholder: "your Smartlead API key",
+    howTo: "Smartlead → Settings → API Keys → Generate",
+  },
+  {
+    provider: "cold_open_lemlist",
+    label: "Lemlist",
+    group: "Outreach & Cold Email",
+    composioManaged: false,
+    description: "Sends and tracks Cold Open's cold email sequences through Lemlist.",
+    placeholder: "your Lemlist API key",
+    howTo: "Lemlist → Settings → Integrations → API Key",
+  },
+  {
+    provider: "cold_open_reply_io",
+    label: "Reply.io",
+    group: "Outreach & Cold Email",
+    composioManaged: false,
+    description: "Sends and tracks Cold Open's cold email sequences through Reply.io.",
+    placeholder: "your Reply.io API key",
+    howTo: "Reply.io → Settings → API → Generate key",
+  },
+  {
+    provider: "cold_open_apify",
+    label: "Apify",
+    group: "Outreach & Cold Email",
+    composioManaged: false,
+    description: "Pulls lead lists for Cold Open's outreach sources.",
+    placeholder: "apify_api_...",
+    howTo: "Apify Console → Settings → Integrations → API token",
+  },
+  {
+    provider: "recall_ai",
+    label: "Recall.ai",
+    group: "Call Intelligence",
+    composioManaged: false,
+    description: "Records and transcribes calls for conversation intelligence in Pre-Call Read.",
+    placeholder: "your Recall.ai API key",
+    howTo: "Recall.ai dashboard → API Keys → Create key",
+  },
+  {
+    provider: "apollo",
+    label: "Apollo",
+    group: "Prospect Research",
+    composioManaged: false,
+    description: "Optional prospect enrichment source for Pre-Call Read's briefs.",
+    placeholder: "your Apollo API key",
+    howTo: "Apollo.io → Settings → Integrations → API → Create key",
+  },
+  {
+    provider: "pdl",
+    label: "People Data Labs",
+    group: "Prospect Research",
+    composioManaged: false,
+    description: "Optional prospect enrichment source for Pre-Call Read's briefs.",
+    placeholder: "your PDL API key",
+    howTo: "PDL dashboard → API Keys → Create key",
+  },
+  {
+    provider: "vidalytics",
+    label: "Vidalytics",
+    group: "Video Engagement",
+    composioManaged: false,
+    description: "Pulls confirmation-page video watch data into Pre-Call Read's briefs.",
+    placeholder: "your Vidalytics API key",
+    howTo: "Vidalytics → Account → API → Copy key",
+  },
+  {
+    provider: "wistia",
+    label: "Wistia",
+    group: "Video Engagement",
+    composioManaged: false,
+    description: "Pulls confirmation-page video watch data into Pre-Call Read's briefs.",
+    placeholder: "your Wistia API key",
+    howTo: "Wistia → Account Settings → API Access → Create token",
+  },
+  {
+    provider: "youtube_analytics",
+    label: "YouTube Analytics",
+    group: "Video Engagement",
+    composioManaged: false,
+    description: "Pulls confirmation-page video watch data into Pre-Call Read's briefs.",
+    placeholder: "your Google API key",
+    howTo: "Google Cloud Console → YouTube Data API → credentials",
+  },
 ];
+
+// Real vector brand marks from Simple Icons (MIT-licensed, cdn.jsdelivr.net)
+// — true alpha transparency, no baked-in white sticker square around the
+// mark the way several of the local PNGs had, and crisp at any size. Only
+// listed where the slug is confirmed to exist AND is actually the right
+// brand (simple-icons' "apollo" slug is Apollo GraphQL, not Apollo.io the
+// prospecting tool — deliberately left off rather than show the wrong
+// logo). Everything else falls back to the local PNG, then the plain Mail
+// glyph — both already-established, honest fallbacks, never a guess.
+const SIMPLE_ICON_SLUGS: Record<string, string> = {
+  calendly: "calendly",
+  ghl_calendar: "gohighlevel",
+  ghl: "gohighlevel",
+  klaviyo: "klaviyo",
+  hubspot: "hubspot",
+  activecampaign: "activecampaign",
+  mailchimp: "mailchimp",
+  convertkit: "kit",
+  cold_open_apify: "apify",
+  wistia: "wistia",
+  youtube_analytics: "youtube",
+};
 
 // Fixes the real bug: the connections page's <img src={`/logos/${provider}.png`}>
 // silently fell back to a generic mail icon for cal_com and convertkit because
@@ -128,10 +261,24 @@ const LOGO_FILENAME_OVERRIDES: Record<string, string> = {
 // wrapping it in a `--surface-2` square is what was shrinking every logo
 // down to fit a fixed box. Rendered at its natural size with just
 // object-contain so non-square marks (wordmarks like Klaviyo/Mailchimp)
-// don't get squashed.
+// don't get squashed. Tries the real vector mark first, then the local
+// PNG, then the plain icon — three honest fallback tiers, never a 404
+// glyph or a fabricated logo.
 function PlatformLogo({ provider, size = 20 }: { provider: string; size?: number }) {
-  const [hasError, setHasError] = useState(false);
-  if (hasError) return <Mail className="shrink-0 text-zinc-400" style={{ width: size * 0.55, height: size * 0.55 }} />;
+  const simpleIconSlug = SIMPLE_ICON_SLUGS[provider];
+  const [tier, setTier] = useState<"svg" | "png" | "fallback">(simpleIconSlug ? "svg" : "png");
+  if (tier === "fallback") return <Mail className="shrink-0 text-zinc-400" style={{ width: size * 0.55, height: size * 0.55 }} />;
+  if (tier === "svg" && simpleIconSlug) {
+    return (
+      <img
+        src={`https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${simpleIconSlug}.svg`}
+        alt={`${provider} logo`}
+        className="shrink-0 object-contain"
+        style={{ maxWidth: size, maxHeight: size }}
+        onError={() => setTier("png")}
+      />
+    );
+  }
   const filename = LOGO_FILENAME_OVERRIDES[provider] ?? provider;
   return (
     <img
@@ -139,7 +286,7 @@ function PlatformLogo({ provider, size = 20 }: { provider: string; size?: number
       alt={`${provider} logo`}
       className="shrink-0 object-contain"
       style={{ maxWidth: size, maxHeight: size }}
-      onError={() => setHasError(true)}
+      onError={() => setTier("fallback")}
     />
   );
 }
@@ -301,8 +448,12 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                   return (
                     <div
                       key={platform.provider}
-                      className="flex flex-col gap-3 p-4 rounded-lg transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
-                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                      // Dark mode: match the secondary sidebar's own --sidebar
+                      // token instead of --surface — richer/darker, same
+                      // background already sitting behind this page's own
+                      // Settings nav a moment ago. Light mode unchanged.
+                      className="flex flex-col gap-3 p-4 rounded-lg transition-colors bg-[var(--surface)] dark:bg-sidebar hover:border-zinc-300 dark:hover:border-zinc-700"
+                      style={{ border: "1px solid var(--border)" }}
                     >
                       <div className="flex items-start gap-3">
                         <PlatformLogo provider={platform.provider} size={40} />

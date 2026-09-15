@@ -8,7 +8,7 @@
 // that survived every phase of the worker-registry restructure
 // untouched — the badges and PRODUCT_RAIL_CHILDREN below were the single
 // most visible leftover of the old "different menu per product" model.
-import { BarChart3, BookOpen, LayoutGrid, Settings, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, LayoutGrid, Plug, Settings, type LucideIcon } from "lucide-react";
 
 export interface PrimaryNavSection {
   title: string;
@@ -19,13 +19,17 @@ export interface PrimaryNavSection {
 /** The whole rail. Work is this client's home; Library is every worker
  * (enabled or not) for this client; Analytics is the unified,
  * registry-driven overview (Phase 8) with drill-in to any worker's own
- * page. No per-product variants — a client running only Showtime
- * workers and a client running only Reputation Manager workers see the
- * exact same four items. */
+ * page; Apps is the workspace's reusable credential vault (still the
+ * same /dashboard/settings/apps route and API — this just gives it its
+ * own rail entry instead of being buried three levels deep in Settings'
+ * nested nav, where it was easy to never notice). No per-product
+ * variants — a client running only Showtime workers and a client
+ * running only Reputation Manager workers see the exact same rail. */
 export const PRIMARY_NAV_SECTIONS: PrimaryNavSection[] = [
   { title: "Work", href: "/dashboard", icon: LayoutGrid },
   { title: "Library", href: "/dashboard/library", icon: BookOpen },
   { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { title: "Apps", href: "/dashboard/settings/apps", icon: Plug },
 ];
 
 export const SETTINGS_NAV = { label: "Settings", href: "/dashboard/settings", icon: Settings };

@@ -15,7 +15,15 @@ interface VaultCredential {
 }
 
 // FIXED: Added embedded and onRequestClose to CredentialRow props
-function CredentialRow({
+// Exported — pre-call-read-config-form.tsx and send-connect-config-form.tsx
+// both used to collect Apollo/PDL/video-engagement/Cold-Open-ESP keys via a
+// bare password input with no way to reuse an already-saved workspace
+// credential, meaning a user who'd connected one before had to paste it
+// again for every new client. This component already solved that exact
+// problem generically (any provider string, paste-new vs. reuse-from-vault)
+// — reusing it there instead of duplicating the paste/reuse logic a third
+// and fourth time.
+export function CredentialRow({
   engagementId,
   provider,
   label,

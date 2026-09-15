@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
 
 export function PreCallReadConfigForm({
   engagementId,
@@ -23,13 +24,10 @@ export function PreCallReadConfigForm({
 
   const [briefTriggerType, setBriefTriggerType] = useState<"nightly" | "dynamic_webhook">("nightly");
   const [videoEngagementPlatform, setVideoEngagementPlatform] = useState("none");
-  const [videoEngagementApiKey, setVideoEngagementApiKey] = useState("");
   const [heroVideoId, setHeroVideoId] = useState("");
   const [videoEngagementWistiaVideoId, setVideoEngagementWistiaVideoId] = useState("");
   const [videoEngagementYoutubeChannelId, setVideoEngagementYoutubeChannelId] = useState("");
   const [prospectResearchSourcesUsed, setProspectResearchSourcesUsed] = useState<string[]>([]);
-  const [apolloApiKey, setApolloApiKey] = useState("");
-  const [pdlApiKey, setPdlApiKey] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -77,13 +75,10 @@ export function PreCallReadConfigForm({
         body: JSON.stringify({
           briefTriggerType,
           videoEngagementPlatform,
-          videoEngagementApiKey,
           heroVideoId,
           videoEngagementWistiaVideoId,
           videoEngagementYoutubeChannelId,
           prospectResearchSourcesUsed,
-          apolloApiKey,
-          pdlApiKey,
         }),
       });
       const data = await res.json();
@@ -92,12 +87,6 @@ export function PreCallReadConfigForm({
         setSaving(false);
         return;
       }
-      // Credential fields never round-trip back from GET — clear them
-      // locally after a successful save so the password inputs don't
-      // imply a stale value is still pending.
-      setVideoEngagementApiKey("");
-      setApolloApiKey("");
-      setPdlApiKey("");
       setSaving(false);
       setSaved(true);
     } catch (e: unknown) {
@@ -159,12 +148,10 @@ export function PreCallReadConfigForm({
           helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
         />
         {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
-          <InputField
-            label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} API Key`}
-            value={videoEngagementApiKey}
-            onChange={setVideoEngagementApiKey}
-            type="password"
-            helpText="Leave blank to keep whatever's already saved."
+          <CredentialRow
+            engagementId={engagementId}
+            provider={videoEngagementPlatform}
+            label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} key`}
           />
         )}
         {videoEngagementPlatform === "vidalytics" && (
@@ -208,10 +195,10 @@ export function PreCallReadConfigForm({
           </label>
         </div>
         {prospectResearchSourcesUsed.includes("apollo") && (
-          <InputField label="Apollo API Key" value={apolloApiKey} onChange={setApolloApiKey} type="password" helpText="Leave blank to keep whatever's already saved." />
+          <CredentialRow engagementId={engagementId} provider="apollo" label="Apollo key" />
         )}
         {prospectResearchSourcesUsed.includes("pdl") && (
-          <InputField label="PDL API Key" value={pdlApiKey} onChange={setPdlApiKey} type="password" helpText="Leave blank to keep whatever's already saved." />
+          <CredentialRow engagementId={engagementId} provider="pdl" label="PDL key" />
         )}
       </div>
 

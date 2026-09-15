@@ -38,19 +38,26 @@ export function SecondarySidebar({ work, settings }: SecondarySidebarProps) {
   // rail + chat, see teammates-workspace.tsx). Analytics is one
   // self-contained overview page with nothing to navigate between within
   // it (its own AnalyticsSidebar went unused for exactly that reason —
-  // see that file's header). The generic Work sidebar (Home/Reports/
-  // Queue/Executions/Capabilities) was showing up to the left of all
-  // three for no reason, wasting width and duplicating a "list of
-  // things" role each page either doesn't need or already has its own
-  // version of. Hiding this column for all three lets their own content
-  // use the full width instead.
+  // see that file's header). Apps got its own rail entry (primary-nav.ts)
+  // and already renders its own Browse/Categories filter aside inline
+  // (apps-page-client.tsx) — showing the generic Settings nested list
+  // (Account/Billing/etc.) here too would just stack two sidebars doing
+  // the same job. The generic Work sidebar (Home/Reports/Queue/
+  // Executions/Capabilities) was showing up to the left of all four for
+  // no reason, wasting width and duplicating a "list of things" role
+  // each page either doesn't need or already has its own version of.
+  // Hiding this column for all four lets their own content use the full
+  // width instead. Every other /dashboard/settings/* page (Account,
+  // Billing, Timezones, etc.) is unaffected and still gets this nested
+  // list as its way to navigate between them.
   if (
     pathname === "/dashboard/library" ||
     pathname.startsWith("/dashboard/library/") ||
     pathname === "/dashboard/teammates" ||
     pathname.startsWith("/dashboard/teammates/") ||
     pathname === "/dashboard/analytics" ||
-    pathname.startsWith("/dashboard/analytics/")
+    pathname.startsWith("/dashboard/analytics/") ||
+    pathname === "/dashboard/settings/apps"
   ) {
     return null;
   }
