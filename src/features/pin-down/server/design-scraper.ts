@@ -134,7 +134,13 @@ function extractFontFamilyMentions(html: string): string[] {
     families.push(decodeURIComponent(googleFontsMatch[1]).replace(/\+/g, " ").split(":")[0]);
   }
 
-  const ffRe = /font-family:\s*["']?([^;"'}]+)/gi;
+  // Stops at `<`/`>` too, not just `;`/`"`/`'`/`}` — a "font-family:" match
+  // anywhere in raw HTML (not necessarily inside a real CSS declaration)
+  // could otherwise capture arbitrary markup up to the next one of the
+  // original stop characters, and this value ends up in a <style> block
+  // downstream (tokens.ts's classifyTypePairing, which also allowlist-
+  // validates it — this is the other half of that defense).
+  const ffRe = /font-family:\s*["']?([^;"'}<>]+)/gi;
   let fm: RegExpExecArray | null;
   while ((fm = ffRe.exec(html)) && families.length < 10) {
     const first = fm[1].split(",")[0].trim().replace(/["']/g, "");

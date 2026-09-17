@@ -8,11 +8,11 @@ import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
 import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace, getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
-import { LiveExecutionFeed } from "./live-execution-feed";
 import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
 import { latestStepLabel } from "@/lib/run-display";
-import { QueuePanel } from "./queue-panel";
 import { OverviewStatsPanel } from "./overview-stats-panel";
+import { UnifiedActivityPanel } from "./unified-activity-panel";
+import { mergeUnifiedActivity } from "@/lib/unified-activity";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
@@ -117,7 +117,11 @@ export default async function DashboardPage() {
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
       .orderBy(desc(skillRuns.startedAt))
-      .limit(8),
+      // Bumped from 8: this now backs the merged Queue+Activity panel
+      // below (mergeUnifiedActivity), not just an 8-row feed preview —
+      // needs enough recent runs for its own status/product filters to
+      // have something to filter.
+      .limit(50),
 
     getQueueItems(whopUserId, workspaceId),
 
@@ -202,6 +206,8 @@ export default async function DashboardPage() {
     subjectLabel: latestStepLabel(steps),
   }));
 
+  const { items: activityItems, counts: activityCounts } = mergeUnifiedActivity(queueItems, recentRuns);
+
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -264,35 +270,15 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* Queue */}
-        <div className="pt-2" data-tour="dashboard-queue">
-          <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
-        </div>
-
-        {/* Activity feed */}
-        {/* CHANGED: id + scroll-mt so the pill's scrollIntoView lands correctly even
-            under any future sticky/fixed nav; unseenCount seeds the highlight state */}
-        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-live-executions">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
-              {copy.activityLogSectionTitle}
-            </p>
-            {recentRuns.length > 0 && (
-              <Link
-                href="/dashboard/runs"
-                className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
-              >
-                View all
-              </Link>
-            )}
-          </div>
-
-          <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
-            <LiveExecutionFeed
-              initialRuns={recentRuns}
-              storageKey="overview"
-            />
-          </div>
+        {/* Queue + Live Activity — merged into one filterable panel
+            (mergeUnifiedActivity) instead of two stacked sections a user
+            had to scroll past each other to see. id + scroll-mt kept from
+            the old Activity Feed section so UnreadExecutionsPill's
+            scrollIntoView target still resolves; data-tour consolidated
+            from dashboard-queue + dashboard-live-executions into one step
+            (see tour-definitions.ts) since they're now the same element. */}
+        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-activity">
+          <UnifiedActivityPanel items={activityItems} counts={activityCounts} clients={clients} title={copy.activityLogSectionTitle} />
         </div>
 
         {/* Shortcuts */}

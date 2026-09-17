@@ -25,9 +25,9 @@ import {
   CalendarClock,
   Loader2,
 } from "lucide-react";
-import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, SKILLS } from "@/lib/copy";
+import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy } from "@/lib/copy";
 import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
-import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
+import { PRODUCT_IDS, PRODUCT_SKILL_IDS } from "@/lib/product-catalog";
 import { useQueueItemActions } from "./use-queue-item-actions";
 import type { StackSection } from "@/lib/error-classification";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
@@ -201,7 +201,7 @@ function queueSignature(item: QueueItemDTO): string {
   ].join("|");
 }
 
-function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
+export function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   const isGold = category !== "fyi";
   const icon =
     category === "approve" ? <ClipboardCheck size={11} /> :
@@ -223,7 +223,7 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
   );
 }
 
-function QueueItemPreview({ item }: { item: QueueItemDTO }) {
+export function QueueItemPreview({ item }: { item: QueueItemDTO }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
@@ -1162,7 +1162,12 @@ export function QueuePanel({
 
   const skillTargetLabels: Record<string, string> = {
     all: "Any Skill",
-    ...Object.fromEntries([...SKILLS, ...REP_SKILL_IDS].map((id) => [id, skillDisplayName(id)])),
+    // All four products (Showtime, Reputation Manager, Cold Open, Whop
+    // Agent) — this used to only cover Showtime + Reputation Manager,
+    // leaving Cold Open and Whop Agent runs with no proper label here.
+    ...Object.fromEntries(
+      PRODUCT_IDS.flatMap((productId) => PRODUCT_SKILL_IDS[productId]).map((id) => [id, skillDisplayName(id)])
+    ),
   };
 
   const categoryTargetLabels: Record<string, string> = {

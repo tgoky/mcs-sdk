@@ -132,7 +132,26 @@ function classifyRadiusScale(tokens: string[]): DesignTokens["radius"] {
   return DEFAULT_TOKENS.radius;
 }
 
-function classifyTypePairing(fontFamilyMentions: string[]): { pairing: TypePairing; family: string; weight: 500 | 600 | 700 | 800 } {
+/**
+ * `fontFamily` is the one field in this file that carries a real scraped
+ * string all the way into a template's `<style>` block (every other
+ * classifier here only ever picks from a small enum) — see the file
+ * header's "the bound is the whole point" claim. A real font name is
+ * letters/digits/spaces/hyphens; extractFontFamilyMentions's regex
+ * (design-scraper.ts) stops at `;`/`"`/`'`/`}` but not at `<`/`>` or
+ * newlines, so a crafted "font-family:" match anywhere in a scraped
+ * page's raw HTML could otherwise carry `</style><script>...` straight
+ * into the published confirmation page. Reject anything that isn't a
+ * plausible font name instead of trusting the scraper's regex alone.
+ */
+function sanitizeFontFamilyName(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  return /^[A-Za-z0-9 \-]{1,60}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function classifyTypePairing(rawFontFamilyMentions: string[]): { pairing: TypePairing; family: string; weight: 500 | 600 | 700 | 800 } {
+  const fontFamilyMentions = rawFontFamilyMentions.map(sanitizeFontFamilyName).filter((f): f is string => !!f);
   const joined = fontFamilyMentions.join(" ").toLowerCase();
   if (/georgia|times|garamond|playfair|merriweather|lora|source serif/.test(joined)) {
     return { pairing: "editorial-serif", family: `${fontFamilyMentions[0] ?? "Georgia"}, Georgia, serif`, weight: 600 };

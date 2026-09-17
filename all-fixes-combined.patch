@@ -1,0 +1,2186 @@
+From b6fe2b769d9b7f69ad38587ec4e494e388eb9156 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 16 Sep 2026 23:55:08 +0000
+Subject: [PATCH 1/3] Fix mobile-responsiveness bugs across shell nav, tables,
+ and calendars
+
+Critical: clamp FloatingPanel width to viewport (worker config panels
+overflowed off-screen on phones), add workspace switching and sign-out
+to the mobile nav menu (previously desktop-only via PrimaryRail), give
+the Teammates page a single-pane mobile layout with a back button
+instead of a fixed-width rail squeezing the chat, and make the home
+workspace table scroll horizontally instead of clipping columns.
+
+High: wrap tables that were missing overflow-x-auto (client rosters,
+leak-map/pre-call-read run views, module-view lists), scroll the
+hardcoded 7-column month calendars horizontally instead of crushing
+cell content, stack the Settings > Apps sidebar and SMTP form fields
+on mobile, and let queue-row action buttons wrap instead of overflowing.
+
+Medium: make hover-only controls (tag delete, roster row menu) visible
+below md since touch has no hover state, and enlarge several sub-40px
+tap targets (toggle switch, icon dropdown trigger, tour launcher,
+workspace card menu). Also fixes Sheet's hardcoded dark-mode-only text
+colors, which made client-details-drawer's title invisible in light mode.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Lv1Fc4mc6LHrFpMHiHajTt
+---
+ .../dashboard/autopilot/autopilot-table.tsx   |  2 +-
+ .../[id]/master-roster-calendar.tsx           |  9 ++
+ .../engagements/[id]/pile-on-pipeline.tsx     |  7 ++
+ .../[id]/pre-call-read-pipeline.tsx           |  7 ++
+ .../engagements/client-roster-table.tsx       |  4 +-
+ src/app/dashboard/layout.tsx                  |  7 +-
+ src/app/dashboard/queue-panel.tsx             | 10 +-
+ .../runs/[id]/views/leak-map-view.tsx         |  4 +-
+ .../runs/[id]/views/pre-call-read-view.tsx    |  4 +-
+ .../settings/apps/apps-page-client.tsx        | 10 +-
+ .../dashboard/settings/connections/page.tsx   |  6 +-
+ .../dashboard/teammates/teammates-chat.tsx    | 18 +++-
+ .../teammates/teammates-workspace.tsx         | 26 ++++-
+ src/app/home/workspace-card-menu.tsx          |  2 +-
+ src/app/home/workspace-home-client.tsx        | 52 +++++-----
+ src/components/floating-panel.tsx             | 14 ++-
+ src/components/leak-map-module-views.tsx      |  4 +-
+ src/components/master-client-roster.tsx       |  4 +-
+ src/components/mobile-nav-pill.tsx            | 97 ++++++++++++++++++-
+ src/components/module-client-roster.tsx       |  4 +-
+ src/components/pile-on-module-view.tsx        |  4 +-
+ src/components/pin-down-module-view.tsx       |  4 +-
+ src/components/pre-call-read-module-view.tsx  |  4 +-
+ src/components/tours/tour-launcher.tsx        |  2 +-
+ src/components/ui/dropdown.tsx                |  6 +-
+ src/components/ui/sheet.tsx                   |  8 +-
+ src/components/win-back-module-view.tsx       |  4 +-
+ 27 files changed, 254 insertions(+), 69 deletions(-)
+
+diff --git a/src/app/dashboard/autopilot/autopilot-table.tsx b/src/app/dashboard/autopilot/autopilot-table.tsx
+index 16ae923..d80b98a 100644
+--- a/src/app/dashboard/autopilot/autopilot-table.tsx
++++ b/src/app/dashboard/autopilot/autopilot-table.tsx
+@@ -26,7 +26,7 @@ function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean
+       disabled={busy}
+       aria-label={label}
+       aria-pressed={on}
+-      className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none ${
++      className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none before:content-[''] before:absolute before:-inset-[10px] ${
+         on
+           ? "bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)]"
+           : "bg-zinc-300 dark:bg-zinc-700/80 border border-zinc-400/30 dark:border-zinc-600/50"
+diff --git a/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx b/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
+index fcbfd11..b81645c 100644
+--- a/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
++++ b/src/app/dashboard/engagements/[id]/master-roster-calendar.tsx
+@@ -566,6 +566,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+       {/* 1. Month View */}
+       {mode === "month" && !roster.loading && (
+         <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
++          {/* 7 fixed columns don't fit a phone width without the day
++              content (skill badges + labels) getting crushed illegible —
++              scroll horizontally instead of shrinking cells below a
++              legible minimum, same pattern as the data tables elsewhere
++              in the app (client-rail.tsx etc). */}
++          <div className="overflow-x-auto">
++          <div className="min-w-[630px]">
+           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+@@ -667,6 +674,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
+               );
+             })}
+           </div>
++          </div>
++          </div>
+         </div>
+       )}
+ 
+diff --git a/src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx b/src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
+index b699818..af6d25f 100644
+--- a/src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
++++ b/src/app/dashboard/engagements/[id]/pile-on-pipeline.tsx
+@@ -414,6 +414,11 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
+       {/* 1. MONTH VIEW */}
+       {mode === "month" && !loading && (
+         <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg font-sans">
++          {/* 7 fixed columns don't fit a phone width without cell content
++              getting crushed illegible — scroll horizontally instead,
++              same pattern as master-roster-calendar.tsx's month view. */}
++          <div className="overflow-x-auto">
++          <div className="min-w-[630px]">
+           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+@@ -492,6 +497,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
+               );
+             })}
+           </div>
++          </div>
++          </div>
+         </div>
+       )}
+ 
+diff --git a/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx b/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
+index cc2370e..20bc13d 100644
+--- a/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
++++ b/src/app/dashboard/engagements/[id]/pre-call-read-pipeline.tsx
+@@ -379,6 +379,11 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string })
+       {/* 1. MONTH VIEW */}
+       {mode === "month" && !loading && (
+         <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
++          {/* 7 fixed columns don't fit a phone width without cell content
++              getting crushed illegible — scroll horizontally instead,
++              same pattern as master-roster-calendar.tsx's month view. */}
++          <div className="overflow-x-auto">
++          <div className="min-w-[630px]">
+           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
+@@ -457,6 +462,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string })
+               );
+             })}
+           </div>
++          </div>
++          </div>
+         </div>
+       )}
+ 
+diff --git a/src/app/dashboard/engagements/client-roster-table.tsx b/src/app/dashboard/engagements/client-roster-table.tsx
+index 190369a..b2d8067 100644
+--- a/src/app/dashboard/engagements/client-roster-table.tsx
++++ b/src/app/dashboard/engagements/client-roster-table.tsx
+@@ -337,8 +337,8 @@ export function ClientRosterTable({
+                           type="button"
+                           title="More options"
+                           className={cn(
+-                            "hover-lift press-settle shrink-0 p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
+-                            "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-zinc-200 dark:data-[state=open]:bg-zinc-700/60 data-[state=open]:text-zinc-900 dark:data-[state=open]:text-white"
++                            "hover-lift press-settle shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
++                            "opacity-100 md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-zinc-200 dark:data-[state=open]:bg-zinc-700/60 data-[state=open]:text-zinc-900 dark:data-[state=open]:text-white"
+                           )}
+                         >
+                           <MoreHorizontal className="w-3.5 h-3.5" />
+diff --git a/src/app/dashboard/layout.tsx b/src/app/dashboard/layout.tsx
+index 68901d2..ec2ed31 100644
+--- a/src/app/dashboard/layout.tsx
++++ b/src/app/dashboard/layout.tsx
+@@ -94,7 +94,12 @@ export default async function DashboardLayout({
+         </ShellLayout>
+ 
+         {/* Floating Mobile Nav Pill & Accordion Navigation */}
+-        <MobileNavPill />
++        <MobileNavPill
++          displayName={displayName}
++          userEmail={userEmail}
++          workspaces={workspaceList}
++          activeWorkspaceId={activeWorkspace.workspaceId}
++        />
+ 
+         <TourOverlay />
+       </TourProvider>
+diff --git a/src/app/dashboard/queue-panel.tsx b/src/app/dashboard/queue-panel.tsx
+index 0f64c2f..dda5359 100644
+--- a/src/app/dashboard/queue-panel.tsx
++++ b/src/app/dashboard/queue-panel.tsx
+@@ -375,7 +375,7 @@ function QueueRow({
+   };
+ 
+   return (
+-    <div className={`group flex items-center gap-3 py-3 px-3.5 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-50/40 dark:bg-zinc-900/20" : "bg-white dark:bg-transparent"}`}>
++    <div className={`group flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3.5 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-50/40 dark:bg-zinc-900/20" : "bg-white dark:bg-transparent"}`}>
+       <div className="min-w-0 flex-1 space-y-1">
+         <div className="flex items-center gap-2 flex-wrap">
+           <CategoryBadge category={item.category} />
+@@ -405,7 +405,7 @@ function QueueRow({
+         )}
+       </div>
+ 
+-      <div className="flex items-center gap-1.5 shrink-0">
++      <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+         {item.category === "approve" && item.sweepNoShowReview ? (
+           // Fix: a plain Approve/Reject was the wrong shape for "did this
+           // person actually no-show" — see QueueItem.sweepNoShowReview's
+@@ -414,8 +414,8 @@ function QueueRow({
+           // three map directly to the real outcomes a reviewer is
+           // actually choosing between, and each one (besides "not sure")
+           // logs the real outcome, not just a status flip.
+-          <div className="flex flex-col items-end gap-1">
+-            <div className="flex items-center gap-1.5">
++          <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
++            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+               <button
+                 disabled={isBusy}
+                 onClick={() => onDecide("approved")}
+@@ -1531,7 +1531,7 @@ export function QueuePanel({
+                       <button
+                         type="button"
+                         onClick={() => handleDeleteTag(tag.id)}
+-                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity cursor-pointer"
++                        className="absolute right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity cursor-pointer"
+                         title="Delete tag"
+                       >
+                         <Trash2 size={11} />
+diff --git a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+index 2cf954e..82923d0 100644
+--- a/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/leak-map-view.tsx
+@@ -327,7 +327,8 @@ export function LeakMapView({
+                     : "No funnel metrics match your search filter."}
+                 </div>
+               ) : (
+-                <table className="w-full text-left text-xs">
++                <div className="overflow-x-auto">
++                <table className="w-full min-w-[640px] text-left text-xs">
+                   <thead>
+                     <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 bg-white/50 dark:bg-zinc-900/50">
+                       <th className="px-4 py-2 font-semibold">Funnel Metric</th>
+@@ -385,6 +386,7 @@ export function LeakMapView({
+                     })}
+                   </tbody>
+                 </table>
++                </div>
+               )}
+             </>
+           );
+diff --git a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+index 6111fff..54ec1a9 100644
+--- a/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
++++ b/src/app/dashboard/runs/[id]/views/pre-call-read-view.tsx
+@@ -237,7 +237,8 @@ export function PreCallReadView({
+                     day: "numeric",
+                   })}
+                 </div>
+-                <table className="w-full text-left text-xs font-sans">
++                <div className="overflow-x-auto">
++                <table className="w-full min-w-[560px] text-left text-xs font-sans">
+                   <thead>
+                     <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 font-sans">
+                       <th className="px-4 py-2 font-semibold">Prospect</th>
+@@ -296,6 +297,7 @@ export function PreCallReadView({
+                     })}
+                   </tbody>
+                 </table>
++                </div>
+               </div>
+             ))
+           )}
+diff --git a/src/app/dashboard/settings/apps/apps-page-client.tsx b/src/app/dashboard/settings/apps/apps-page-client.tsx
+index 04a5865..9e2c288 100644
+--- a/src/app/dashboard/settings/apps/apps-page-client.tsx
++++ b/src/app/dashboard/settings/apps/apps-page-client.tsx
+@@ -446,8 +446,8 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] })
+         </div>
+       )}
+ 
+-      <div className="flex items-start gap-6">
+-        <aside className="w-44 shrink-0 sticky top-4 space-y-4">
++      <div className="flex flex-col md:flex-row md:items-start gap-6">
++        <aside className="w-full md:w-44 md:shrink-0 md:sticky md:top-4 space-y-4">
+           <div>
+             <p className="px-2.5 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+               Browse
+@@ -658,13 +658,13 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void
+             )}
+           </p>
+         </div>
+-        <div className="flex items-center gap-1 shrink-0">
++        <div className="flex items-center gap-2 shrink-0">
+           {!item.isComposioManaged && (
+             <button
+               type="button"
+               onClick={() => setRotating((r) => !r)}
+               title="Rotate key"
+-              className="p-1.5 rounded-md cursor-pointer"
++              className="p-2 rounded-md cursor-pointer"
+               style={{ color: "var(--text-muted)" }}
+             >
+               <RotateCw size={14} />
+@@ -675,7 +675,7 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void
+             onClick={del}
+             disabled={busy}
+             title="Delete"
+-            className="p-1.5 rounded-md cursor-pointer disabled:opacity-50"
++            className="p-2 rounded-md cursor-pointer disabled:opacity-50"
+             style={{ color: "var(--text-muted)" }}
+           >
+             <Trash2 size={14} />
+diff --git a/src/app/dashboard/settings/connections/page.tsx b/src/app/dashboard/settings/connections/page.tsx
+index df33ff4..c3060d6 100644
+--- a/src/app/dashboard/settings/connections/page.tsx
++++ b/src/app/dashboard/settings/connections/page.tsx
+@@ -550,7 +550,7 @@ function SmtpCredentialCard() {
+             />
+           </div>
+ 
+-          <div className="grid grid-cols-2 gap-3">
++          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+             <div>
+               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
+                 Host
+@@ -572,7 +572,7 @@ function SmtpCredentialCard() {
+             </label>
+           </div>
+ 
+-          <div className="grid grid-cols-2 gap-3">
++          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+             <div>
+               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
+                 Username
+@@ -587,7 +587,7 @@ function SmtpCredentialCard() {
+             </div>
+           </div>
+ 
+-          <div className="grid grid-cols-2 gap-3">
++          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+             <div>
+               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
+                 From address
+diff --git a/src/app/dashboard/teammates/teammates-chat.tsx b/src/app/dashboard/teammates/teammates-chat.tsx
+index 1742787..2c60b61 100644
+--- a/src/app/dashboard/teammates/teammates-chat.tsx
++++ b/src/app/dashboard/teammates/teammates-chat.tsx
+@@ -11,6 +11,7 @@ import {
+   Pencil,
+   Check,
+   ChevronRight,
++  ChevronLeft,
+ } from "lucide-react";
+ import { useTheme } from "next-themes";
+ import { PrefillLoader } from "@/components/prefill-loader";
+@@ -135,6 +136,7 @@ export function TeammatesChat({
+   onRenamed,
+   initialPendingMessage,
+   size = "compact",
++  onBack,
+ }: {
+   initialThreadId?: string | null;
+   onThreadEvent?: (thread: { id: string; title: string }) => void;
+@@ -145,6 +147,10 @@ export function TeammatesChat({
+   onRenamed?: (id: string, title: string) => void;
+   initialPendingMessage?: string;
+   size?: "compact" | "full";
++  /** Mobile-only "back to thread list" affordance (teammates-workspace.tsx's
++   * two-pane layout collapses to one pane below `md`) — omitted entirely
++   * when the caller has nowhere to go back to (the compact panel variant). */
++  onBack?: () => void;
+ } = {}) {
+   const isFull = size === "full";
+   const textSize = isFull ? "text-sm" : "text-xs";
+@@ -409,7 +415,17 @@ export function TeammatesChat({
+           this thread's own real title (or "Workers" before one exists,
+           never invented), no icon, no separate background — just the
+           name, so it doesn't cost the page its own visual "area." */}
+-      <div className={`flex items-center justify-center shrink-0 px-3 ${isFull ? "py-1.5" : "py-1"}`}>
++      <div className={`relative flex items-center justify-center shrink-0 px-3 ${isFull ? "py-1.5" : "py-1"}`}>
++        {onBack && (
++          <button
++            type="button"
++            onClick={onBack}
++            aria-label="Back to conversations"
++            className="md:hidden absolute left-1 flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
++          >
++            <ChevronLeft size={18} />
++          </button>
++        )}
+         {isEditingTitle ? (
+           <div className="flex items-center gap-1 w-full max-w-xs">
+             <input
+diff --git a/src/app/dashboard/teammates/teammates-workspace.tsx b/src/app/dashboard/teammates/teammates-workspace.tsx
+index e8e77f8..675d430 100644
+--- a/src/app/dashboard/teammates/teammates-workspace.tsx
++++ b/src/app/dashboard/teammates/teammates-workspace.tsx
+@@ -42,7 +42,7 @@
+ // against each other, divided only by the draggable line rendered
+ // between them, matching how Claude's own chat sidebar and message pane
+ // are one continuous surface instead of two floating panels.
+-import { useCallback, useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+ import { TeammatesChat, readStoredThreadId } from "./teammates-chat";
+ import { TeammatesThreadRail, type ThreadSummary } from "./teammates-thread-rail";
+ 
+@@ -63,6 +63,12 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+   const [selected, setSelected] = useState<string | null>(() => readStoredThreadId());
+   const [epoch, setEpoch] = useState(0);
+   const [railWidth, setRailWidth] = useState(readStoredRailWidth);
++  // Below `md` there's no room for the rail and the chat side by side (the
++  // rail alone is 200-400px wide — most of a phone screen), so mobile gets
++  // one pane at a time instead: the thread list, or the open chat with a
++  // back button. This only ever matters below `md` — at `md`+ both panes
++  // render together regardless of this flag (see the className below).
++  const [mobileShowList, setMobileShowList] = useState(() => readStoredThreadId() === null);
+ 
+   const containerRef = useRef<HTMLDivElement>(null);
+   const draggingRef = useRef(false);
+@@ -127,6 +133,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+   }, []);
+ 
+   function selectThread(id: string) {
++    setMobileShowList(false);
+     // Re-clicking the already-active thread shouldn't reload it — that'd
+     // just be a pointless remount + spinner for content already on screen.
+     if (id === selected) return;
+@@ -135,6 +142,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+   }
+ 
+   function startNewChat() {
++    setMobileShowList(false);
+     // Same guard: clicking "New conversation" while already on a blank
+     // one shouldn't wipe whatever's been typed but not sent yet.
+     if (selected === null) return;
+@@ -178,7 +186,12 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+ 
+   return (
+     <div ref={containerRef} className="relative flex h-full min-h-0">
+-      <div style={{ width: railWidth }} className="h-full min-h-0 shrink-0">
++      <div
++        style={{ "--rail-width": `${railWidth}px` } as CSSProperties}
++        className={`h-full min-h-0 shrink-0 w-full md:w-[var(--rail-width)] ${
++          mobileShowList ? "block" : "hidden md:block"
++        }`}
++      >
+         <TeammatesThreadRail
+           threads={threads}
+           selectedId={selected}
+@@ -191,13 +204,15 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+ 
+       {/* The "single vertical line" divider — draggable, no boxed panels
+          on either side of it. Wider invisible hit target than the visible
+-         line itself, same trick as right-utility-panel.tsx's own handle. */}
+-      <div onMouseDown={onDragStart} className="relative w-px shrink-0 cursor-col-resize group" title="Drag to resize">
++         line itself, same trick as right-utility-panel.tsx's own handle.
++         Hidden below `md`: only one pane shows at a time there (see
++         mobileShowList above), so there's nothing to divide/resize. */}
++      <div onMouseDown={onDragStart} className="hidden md:block relative w-px shrink-0 cursor-col-resize group" title="Drag to resize">
+         <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+         <div className="absolute inset-y-0 left-0 w-px bg-zinc-200 dark:bg-zinc-800 group-hover:bg-zinc-400 dark:group-hover:bg-zinc-600 transition-colors" />
+       </div>
+ 
+-      <div className="flex-1 min-w-0 h-full min-h-0">
++      <div className={`flex-1 min-w-0 h-full min-h-0 ${mobileShowList ? "hidden md:block" : "block"}`}>
+         <TeammatesChat
+           key={epoch}
+           initialThreadId={selected}
+@@ -205,6 +220,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
+           onRenamed={handleRenamed}
+           initialPendingMessage={epoch === 0 ? pendingMessage : undefined}
+           size="full"
++          onBack={() => setMobileShowList(true)}
+         />
+       </div>
+     </div>
+diff --git a/src/app/home/workspace-card-menu.tsx b/src/app/home/workspace-card-menu.tsx
+index 874f4d5..fa010b5 100644
+--- a/src/app/home/workspace-card-menu.tsx
++++ b/src/app/home/workspace-card-menu.tsx
+@@ -46,7 +46,7 @@ export function WorkspaceCardMenu({
+             aria-expanded={open}
+             aria-haspopup="menu"
+             aria-label={`Actions for ${workspace.name}`}
+-            className="relative z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
++            className="relative z-20 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+           >
+             <MoreHorizontal className="w-4 h-4" />
+           </button>
+diff --git a/src/app/home/workspace-home-client.tsx b/src/app/home/workspace-home-client.tsx
+index 53d1aac..aaa5e53 100644
+--- a/src/app/home/workspace-home-client.tsx
++++ b/src/app/home/workspace-home-client.tsx
+@@ -411,31 +411,33 @@ export function WorkspaceHomeClient({
+         </div>
+       ) : (
+         <div className="surface-glass-3 rounded-xl overflow-hidden">
+-          <table className="w-full text-left border-collapse">
+-            <thead>
+-              <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+-                <th className="py-3 pl-4 pr-3">Workspace Name</th>
+-                <th className="py-3 px-3">Package & Skills</th>
+-                <th className="py-3 px-3">Status</th>
+-                <th className="py-3 px-3">Created</th>
+-                <th className="py-3 pr-4 pl-3 text-right">Action</th>
+-              </tr>
+-            </thead>
+-            <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+-              {workspaceList.map((workspace, idx) => (
+-                <WorkspaceRow
+-                  key={workspace.workspaceId}
+-                  workspace={workspace}
+-                  packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
+-                  enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
+-                  index={idx}
+-                  workspaceCount={workspaceList.length}
+-                  isSwitching={switchingId === workspace.workspaceId}
+-                  onSwitch={(id) => setSwitchingId(id)}
+-                />
+-              ))}
+-            </tbody>
+-          </table>
++          <div className="overflow-x-auto">
++            <table className="w-full min-w-[640px] text-left border-collapse">
++              <thead>
++                <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
++                  <th className="py-3 pl-4 pr-3">Workspace Name</th>
++                  <th className="py-3 px-3">Package & Skills</th>
++                  <th className="py-3 px-3">Status</th>
++                  <th className="py-3 px-3">Created</th>
++                  <th className="py-3 pr-4 pl-3 text-right">Action</th>
++                </tr>
++              </thead>
++              <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
++                {workspaceList.map((workspace, idx) => (
++                  <WorkspaceRow
++                    key={workspace.workspaceId}
++                    workspace={workspace}
++                    packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
++                    enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
++                    index={idx}
++                    workspaceCount={workspaceList.length}
++                    isSwitching={switchingId === workspace.workspaceId}
++                    onSwitch={(id) => setSwitchingId(id)}
++                  />
++                ))}
++              </tbody>
++            </table>
++          </div>
+         </div>
+       )}
+     </main>
+diff --git a/src/components/floating-panel.tsx b/src/components/floating-panel.tsx
+index 115b30a..739e6a3 100644
+--- a/src/components/floating-panel.tsx
++++ b/src/components/floating-panel.tsx
+@@ -44,14 +44,22 @@ export function FloatingPanel({
+     setOpen(false);
+   }
+ 
++  const [resolvedWidth, setResolvedWidth] = useState(panelWidth);
++
+   useEffect(() => {
+     if (!open) return;
+     const el = anchorRef.current;
+     if (!el) return;
+     const rect = el.getBoundingClientRect();
++    // On a narrow viewport (phones), the panel can't be wider than the
++    // screen minus margin on both sides — clamping only `left` and not
++    // the width left it rendering full-width off the left edge of any
++    // phone screen, unreachable and unclosable by normal means.
++    const width = Math.min(panelWidth, window.innerWidth - VIEWPORT_MARGIN * 2);
+     const top = Math.min(rect.bottom + 8, window.innerHeight - VIEWPORT_MARGIN);
+-    let left = align === "end" ? rect.right - panelWidth : rect.left;
+-    left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - panelWidth - VIEWPORT_MARGIN);
++    let left = align === "end" ? rect.right - width : rect.left;
++    left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - width - VIEWPORT_MARGIN);
++    setResolvedWidth(width);
+     setCoords({ top, left });
+   }, [open, align, panelWidth]);
+ 
+@@ -87,7 +95,7 @@ export function FloatingPanel({
+           <>
+             <div className="fixed inset-0 z-40" onClick={close} />
+             <div
+-              style={{ position: "fixed", top: coords.top, left: coords.left, width: panelWidth }}
++              style={{ position: "fixed", top: coords.top, left: coords.left, width: resolvedWidth }}
+               className="z-50 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 motion-safe:origin-top-right"
+             >
+               <div
+diff --git a/src/components/leak-map-module-views.tsx b/src/components/leak-map-module-views.tsx
+index 84b8eb4..54865b4 100644
+--- a/src/components/leak-map-module-views.tsx
++++ b/src/components/leak-map-module-views.tsx
+@@ -430,7 +430,8 @@ export function LeakMapModuleView({
+       {/* ----------------------------------------------------------------- */}
+       {mode === "list" && (
+         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+-          <table className="w-full text-left text-xs font-sans">
++          <div className="overflow-x-auto">
++          <table className="w-full min-w-[520px] text-left text-xs font-sans">
+             <thead>
+               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+@@ -551,6 +552,7 @@ export function LeakMapModuleView({
+               )}
+             </tbody>
+           </table>
++          </div>
+ 
+           {/* Bottom Pagination Controls */}
+           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+diff --git a/src/components/master-client-roster.tsx b/src/components/master-client-roster.tsx
+index e9f215d..fe1fe91 100644
+--- a/src/components/master-client-roster.tsx
++++ b/src/components/master-client-roster.tsx
+@@ -89,7 +89,8 @@ export function ModuleClientRoster({
+ 
+   return (
+     <div className="rounded-2xl border border-zinc-800/80 overflow-hidden font-sans">
+-      <table className="w-full text-sm">
++      <div className="overflow-x-auto">
++      <table className="w-full min-w-[560px] text-sm">
+         <thead>
+           <tr className="border-b border-zinc-800/80 bg-zinc-900/40 text-left text-[10.5px] font-mono uppercase tracking-wide text-zinc-500">
+             <th className="px-4 py-2.5 font-medium">Client</th>
+@@ -152,6 +153,7 @@ export function ModuleClientRoster({
+           ))}
+         </tbody>
+       </table>
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/components/mobile-nav-pill.tsx b/src/components/mobile-nav-pill.tsx
+index bb8b21d..64efa46 100644
+--- a/src/components/mobile-nav-pill.tsx
++++ b/src/components/mobile-nav-pill.tsx
+@@ -4,8 +4,9 @@
+ import { useState, useEffect } from "react";
+ import Link from "next/link";
+ import { usePathname } from "next/navigation";
+-import { Search, Menu, X } from "lucide-react";
++import { Search, Menu, X, Check, Loader2, LogOut, Plus } from "lucide-react";
+ import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
++import type { Workspace } from "@/lib/workspace";
+ 
+ // Fix: this file used to hardcode its own NAVIGATION_SECTIONS — a second,
+ // independently-authored guess at the app's structure that didn't match
+@@ -20,9 +21,20 @@ import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
+ // two product badges it mirrored — this is a flat list now, same shape
+ // on mobile as on desktop.
+ 
+-export function MobileNavPill() {
++export function MobileNavPill({
++  displayName,
++  userEmail,
++  workspaces = [],
++  activeWorkspaceId,
++}: {
++  displayName?: string;
++  userEmail?: string;
++  workspaces?: Workspace[];
++  activeWorkspaceId?: string;
++}) {
+   const pathname = usePathname();
+   const [isMenuOpen, setIsMenuOpen] = useState(false);
++  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
+ 
+   useEffect(() => {
+     setIsMenuOpen(false);
+@@ -132,6 +144,87 @@ export function MobileNavPill() {
+               <SETTINGS_NAV.icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+               <span>{SETTINGS_NAV.label}</span>
+             </Link>
++
++            {/* Fix: desktop's only client switcher and only sign-out control
++                both live in PrimaryRail, which is `hidden md:flex` — mobile
++                had no way to switch clients or log out from inside the
++                dashboard at all. Reusing the same
++                /api/workspaces/:id/switch POST + /api/auth/logout POST
++                pattern primary-rail.tsx uses, just laid out for a full-bleed
++                mobile list instead of a popover. */}
++            {workspaces.length > 0 && (
++              <div className="px-5 py-4">
++                <p className="text-xs font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
++                  Workspaces
++                </p>
++                <div className="space-y-1">
++                  {workspaces.map((workspace) => {
++                    const isActive = workspace.workspaceId === activeWorkspaceId;
++                    const isSwitching = switchingWorkspaceId === workspace.workspaceId;
++                    return (
++                      <form
++                        key={workspace.workspaceId}
++                        action={`/api/workspaces/${workspace.workspaceId}/switch`}
++                        method="POST"
++                        onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
++                      >
++                        <button
++                          type="submit"
++                          disabled={isActive || switchingWorkspaceId !== null}
++                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl min-w-0 text-sm transition-colors disabled:cursor-not-allowed ${
++                            isActive
++                              ? "bg-zinc-100 dark:bg-zinc-900 font-semibold cursor-default"
++                              : switchingWorkspaceId !== null
++                              ? "opacity-50"
++                              : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
++                          }`}
++                        >
++                          <span className="w-7 h-7 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-[11px] flex items-center justify-center shrink-0 font-mono">
++                            {workspace.name.slice(0, 2).toUpperCase()}
++                          </span>
++                          <span className="truncate min-w-0">{workspace.name}</span>
++                          {isSwitching ? (
++                            <Loader2 className="w-4 h-4 shrink-0 ml-auto animate-spin" />
++                          ) : (
++                            isActive && <Check className="w-4 h-4 shrink-0 ml-auto" />
++                          )}
++                        </button>
++                      </form>
++                    );
++                  })}
++                </div>
++                <Link
++                  href="/home/new"
++                  onClick={() => setIsMenuOpen(false)}
++                  className="flex items-center gap-3 px-3 py-2.5 mt-1 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
++                >
++                  <Plus className="w-4 h-4 shrink-0" />
++                  <span>New workspace</span>
++                </Link>
++              </div>
++            )}
++
++            <div className="px-5 py-4">
++              {displayName && (
++                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate mb-3">
++                  {displayName}
++                  {userEmail && (
++                    <span className="block text-xs font-normal text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
++                      {userEmail}
++                    </span>
++                  )}
++                </p>
++              )}
++              <form action="/api/auth/logout" method="POST">
++                <button
++                  type="submit"
++                  className="flex items-center gap-3 px-3 py-2.5 -mx-3 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors cursor-pointer bg-transparent border-none w-full"
++                >
++                  <LogOut className="w-4 h-4 shrink-0" />
++                  <span>Sign out</span>
++                </button>
++              </form>
++            </div>
+           </div>
+         </div>
+       )}
+diff --git a/src/components/module-client-roster.tsx b/src/components/module-client-roster.tsx
+index baad819..54c8110 100644
+--- a/src/components/module-client-roster.tsx
++++ b/src/components/module-client-roster.tsx
+@@ -357,7 +357,8 @@ export function ModuleClientRoster({
+           {/* LIST VIEW */}
+           {mode === "list" && (
+             <div className="w-full font-sans border-t border-b border-zinc-200/80 dark:border-zinc-800/80 pt-1">
+-              <table className="w-full text-left text-xs font-sans">
++              <div className="overflow-x-auto">
++              <table className="w-full min-w-[480px] text-left text-xs font-sans">
+                 <thead>
+                   <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 text-[11px] text-zinc-600 dark:text-zinc-400">
+                     <th className="px-4 py-3 font-normal">Client & Execution Summary</th>
+@@ -466,6 +467,7 @@ export function ModuleClientRoster({
+                   )}
+                 </tbody>
+               </table>
++              </div>
+ 
+               {/* Pagination */}
+               <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200/80 dark:border-zinc-800/80">
+diff --git a/src/components/pile-on-module-view.tsx b/src/components/pile-on-module-view.tsx
+index 15a7358..bfc3474 100644
+--- a/src/components/pile-on-module-view.tsx
++++ b/src/components/pile-on-module-view.tsx
+@@ -398,7 +398,8 @@ export function PileOnModuleView({
+       {/* LIST VIEW */}
+       {mode === "list" && (
+         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+-          <table className="w-full text-left text-xs font-sans">
++          <div className="overflow-x-auto">
++          <table className="w-full min-w-[520px] text-left text-xs font-sans">
+             <thead>
+               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+@@ -514,6 +515,7 @@ export function PileOnModuleView({
+               )}
+             </tbody>
+           </table>
++          </div>
+ 
+           {/* Pagination */}
+           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+diff --git a/src/components/pin-down-module-view.tsx b/src/components/pin-down-module-view.tsx
+index 88c7094..31753c7 100644
+--- a/src/components/pin-down-module-view.tsx
++++ b/src/components/pin-down-module-view.tsx
+@@ -390,7 +390,8 @@ export function PinDownModuleView({
+       {/* TABLE / LIST VIEW */}
+       {mode === "list" && (
+         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+-          <table className="w-full text-left text-xs font-sans">
++          <div className="overflow-x-auto">
++          <table className="w-full min-w-[520px] text-left text-xs font-sans">
+             <thead>
+               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+@@ -506,6 +507,7 @@ export function PinDownModuleView({
+               )}
+             </tbody>
+           </table>
++          </div>
+ 
+           {/* Pagination */}
+           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+diff --git a/src/components/pre-call-read-module-view.tsx b/src/components/pre-call-read-module-view.tsx
+index 622ae87..a6646d4 100644
+--- a/src/components/pre-call-read-module-view.tsx
++++ b/src/components/pre-call-read-module-view.tsx
+@@ -430,7 +430,8 @@ export function PreCallReadModuleView({
+       {/* ----------------------------------------------------------------- */}
+       {mode === "list" && (
+         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+-          <table className="w-full text-left text-xs font-sans">
++          <div className="overflow-x-auto">
++          <table className="w-full min-w-[520px] text-left text-xs font-sans">
+             <thead>
+               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+@@ -551,6 +552,7 @@ export function PreCallReadModuleView({
+               )}
+             </tbody>
+           </table>
++          </div>
+ 
+           {/* Bottom Pagination Controls */}
+           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+diff --git a/src/components/tours/tour-launcher.tsx b/src/components/tours/tour-launcher.tsx
+index 3fa77d1..0f2b99f 100644
+--- a/src/components/tours/tour-launcher.tsx
++++ b/src/components/tours/tour-launcher.tsx
+@@ -32,7 +32,7 @@ export function TourLauncher() {
+         title="Take a tour"
+         aria-label="Take a tour"
+         data-tour="tour-launcher"
+-        className={`relative flex items-center justify-center h-6 w-6 rounded-lg transition-colors cursor-pointer ${
++        className={`relative flex items-center justify-center h-6 w-6 rounded-lg transition-colors cursor-pointer before:content-[''] before:absolute before:-inset-2 ${
+           activeTourId
+             ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40"
+             : "text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+diff --git a/src/components/ui/dropdown.tsx b/src/components/ui/dropdown.tsx
+index 98bbe91..be1961b 100644
+--- a/src/components/ui/dropdown.tsx
++++ b/src/components/ui/dropdown.tsx
+@@ -62,7 +62,11 @@ export function Dropdown<T extends string>({
+           disabled={disabled}
+           onClick={() => setOpen((p) => !p)}
+           className={cn(
+-            "inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors cursor-pointer hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40",
++            // h-6 w-6 (24px) is below the ~40px touch-target guideline —
++            // the `before` pseudo-element pads the hit area out to ~40px
++            // without changing the icon's visual footprint or this
++            // component's density anywhere it's already in use.
++            "relative inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors cursor-pointer hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 before:content-[''] before:absolute before:-inset-2",
+             open && "bg-zinc-800 text-white",
+             triggerClassName
+           )}
+diff --git a/src/components/ui/sheet.tsx b/src/components/ui/sheet.tsx
+index db4c14d..e6a96b7 100644
+--- a/src/components/ui/sheet.tsx
++++ b/src/components/ui/sheet.tsx
+@@ -81,7 +81,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
+   return (
+     <div
+       data-slot="sheet-header"
+-      className={cn("shrink-0 border-b border-zinc-800 px-5 py-4", className)}
++      className={cn("shrink-0 border-b border-zinc-200 dark:border-zinc-800 px-5 py-4", className)}
+       {...props}
+     />
+   );
+@@ -101,7 +101,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
+   return (
+     <div
+       data-slot="sheet-footer"
+-      className={cn("shrink-0 border-t border-zinc-800 px-5 py-4", className)}
++      className={cn("shrink-0 border-t border-zinc-200 dark:border-zinc-800 px-5 py-4", className)}
+       {...props}
+     />
+   );
+@@ -111,7 +111,7 @@ function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPr
+   return (
+     <SheetPrimitive.Title
+       data-slot="sheet-title"
+-      className={cn("text-base font-semibold text-white leading-tight", className)}
++      className={cn("text-base font-semibold text-zinc-900 dark:text-white leading-tight", className)}
+       {...props}
+     />
+   );
+@@ -121,7 +121,7 @@ function SheetDescription({ className, ...props }: React.ComponentProps<typeof S
+   return (
+     <SheetPrimitive.Description
+       data-slot="sheet-description"
+-      className={cn("mt-1 text-xs text-zinc-400", className)}
++      className={cn("mt-1 text-xs text-zinc-500 dark:text-zinc-400", className)}
+       {...props}
+     />
+   );
+diff --git a/src/components/win-back-module-view.tsx b/src/components/win-back-module-view.tsx
+index 401ec76..edd199f 100644
+--- a/src/components/win-back-module-view.tsx
++++ b/src/components/win-back-module-view.tsx
+@@ -430,7 +430,8 @@ export function WinBackModuleView({
+       {/* ----------------------------------------------------------------- */}
+       {mode === "list" && (
+         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
+-          <table className="w-full text-left text-xs font-sans">
++          <div className="overflow-x-auto">
++          <table className="w-full min-w-[520px] text-left text-xs font-sans">
+             <thead>
+               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
+@@ -551,6 +552,7 @@ export function WinBackModuleView({
+               )}
+             </tbody>
+           </table>
++          </div>
+ 
+           {/* Bottom Pagination Controls */}
+           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">
+-- 
+2.43.0
+
+
+From 318e11fd44a004793d6f944c218c7a6bef547929 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 17 Sep 2026 19:08:09 +0000
+Subject: [PATCH 2/3] Merge dashboard Queue and Live Activity into one
+ filterable panel
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The dashboard used to stack the Queue and Live Execution Feed as two
+separate full-width sections, so seeing both meant scrolling past a
+tall stats panel and a tall Queue just to reach the feed. It also had a
+real data-duplication bug: a failed run with a confident auto-diagnosis
+renders as an actionable Queue card (queue.ts's run_failure path) *and*
+as a second, plainer row in the feed's own unfiltered runs query — same
+skillRuns.id, shown twice on the same page.
+
+mergeUnifiedActivity (src/lib/unified-activity.ts) combines both into
+one sorted, de-duplicated list (needs-action first, then running, then
+completed) and drops the feed-side duplicate whenever a queue item
+already covers that run. UnifiedActivityPanel renders it as a fixed
+client/product rail on the left, the filtered list in the middle, and
+a detail pane that opens on the right as a real flex sibling (same
+mechanics as right-utility-panel.tsx) that narrows the list column
+instead of covering it — so switching between an overview and a
+specific item's detail no longer means losing your place or leaving
+the page.
+
+Row actions reuse the exact mutations queue-panel.tsx and
+overview-stats-panel.tsx already call (useQueueItemActions,
+getRepairAction) rather than re-deriving them. queue-panel.tsx and
+live-execution-feed.tsx are untouched behind their own full pages
+(/dashboard/queue, /dashboard/runs) for anyone who needs the deeper
+tag/grouping/pagination features — this is additive, not a rewrite.
+
+Also fixes a real, separate gap while touching this code: both
+components' module/skill filter chips only covered Showtime and
+Reputation Manager, so Cold Open and Whop Agent runs displayed
+correctly but had no chip to filter by. Both now build their chip
+list from all four registered products (product-catalog.ts).
+
+Consolidated the two now-redundant "Queue" and "Live Executions" tour
+steps into one, since they point at the same element now.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Lv1Fc4mc6LHrFpMHiHajTt
+---
+ src/app/dashboard/live-execution-feed.tsx    |  32 +-
+ src/app/dashboard/page.tsx                   |  50 +-
+ src/app/dashboard/queue-panel.tsx            |  15 +-
+ src/app/dashboard/unified-activity-panel.tsx | 586 +++++++++++++++++++
+ src/lib/tours/tour-definitions.ts            |  16 +-
+ src/lib/unified-activity.ts                  | 176 ++++++
+ tests/unit/unified-activity.test.ts          | 107 ++++
+ 7 files changed, 916 insertions(+), 66 deletions(-)
+ create mode 100644 src/app/dashboard/unified-activity-panel.tsx
+ create mode 100644 src/lib/unified-activity.ts
+ create mode 100644 tests/unit/unified-activity.test.ts
+
+diff --git a/src/app/dashboard/live-execution-feed.tsx b/src/app/dashboard/live-execution-feed.tsx
+index eb3ade6..d10c9d1 100644
+--- a/src/app/dashboard/live-execution-feed.tsx
++++ b/src/app/dashboard/live-execution-feed.tsx
+@@ -18,9 +18,9 @@ import {
+   Copy,
+   SkipForward,
+ } from "lucide-react";
+-import { phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
++import { phaseLabel, SKILL_INFO, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+ import { anySkillDisplayName } from "@/lib/any-skill";
+-import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
++import { PRODUCT_IDS, PRODUCT_SKILL_IDS } from "@/lib/product-catalog";
+ import { classifyRunError } from "@/lib/error-classification";
+ import type { RunSummary } from "@/models/schema";
+ import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+@@ -79,25 +79,23 @@ interface ExecutionsChipDef {
+   predicate: (run: SkillRun) => boolean;
+ }
+ 
+-const MODULE_CHIP_DEFS: ExecutionsChipDef[] = [
+-  ...SKILLS.map((skill) => ({
++// One chip per skill across ALL FOUR products (Showtime, Reputation
++// Manager, Cold Open, Whop Agent) — this used to only cover Showtime's
++// SKILLS plus Reputation Manager's, so a Cold Open or Whop Agent run had
++// no module chip to filter by at all on this page (it still showed up
++// under "All", just unfilterable, same gap RM's own fix comment above
++// used to describe). anySkillDisplayName already resolves every
++// product's manifest correctly, so one map covers all of them instead of
++// a growing list of per-product spreads.
++const MODULE_CHIP_DEFS: ExecutionsChipDef[] = PRODUCT_IDS.flatMap((productId) =>
++  PRODUCT_SKILL_IDS[productId].map((skill) => ({
+     id: `module-${skill}`,
+-    label: SKILL_INFO[skill].name,
++    label: anySkillDisplayName(skill),
+     section: toolbarCopy.chipSections.module,
+     group: "module",
+     predicate: (run: SkillRun) => run.skillName === skill,
+-  })),
+-  // Reputation Manager's 5 skills, same shape — this used to only cover
+-  // Showtime's SKILLS, so an RM run had no module chip to filter by at all
+-  // on this page (it still showed up under "All", just unfilterable).
+-  ...REP_SKILL_IDS.map((skill) => ({
+-    id: `module-${skill}`,
+-    label: REP_SKILL_MANIFEST[skill].name,
+-    section: toolbarCopy.chipSections.module,
+-    group: "module",
+-    predicate: (run: SkillRun) => run.skillName === skill,
+-  })),
+-];
++  }))
++);
+ 
+ const STATUS_ACCOUNT_CHIP_DEFS: ExecutionsChipDef[] = [
+   {
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+index 73be33a..f56634b 100644
+--- a/src/app/dashboard/page.tsx
++++ b/src/app/dashboard/page.tsx
+@@ -8,11 +8,11 @@ import { eq, desc, sql, and, isNull, gte, lt } from "drizzle-orm";
+ import { getActiveWorkspace, getPrimaryEngagementIdForWorkspace, getInstalledPackagesByWorkspace } from "@/lib/workspace";
+ import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+ import { getUnseenCompletedExecutionCount } from "@/lib/run-log"; // CHANGED: new import
+-import { LiveExecutionFeed } from "./live-execution-feed";
+ import { UnreadExecutionsPill } from "./unread-executions-pill"; // CHANGED: new import
+ import { latestStepLabel } from "@/lib/run-display";
+-import { QueuePanel } from "./queue-panel";
+ import { OverviewStatsPanel } from "./overview-stats-panel";
++import { UnifiedActivityPanel } from "./unified-activity-panel";
++import { mergeUnifiedActivity } from "@/lib/unified-activity";
+ import { DASHBOARD_COPY as copy } from "@/lib/copy";
+ import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
+ import Link from "next/link";
+@@ -117,7 +117,11 @@ export default async function DashboardPage() {
+       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
+       .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId)))
+       .orderBy(desc(skillRuns.startedAt))
+-      .limit(8),
++      // Bumped from 8: this now backs the merged Queue+Activity panel
++      // below (mergeUnifiedActivity), not just an 8-row feed preview —
++      // needs enough recent runs for its own status/product filters to
++      // have something to filter.
++      .limit(50),
+ 
+     getQueueItems(whopUserId, workspaceId),
+ 
+@@ -202,6 +206,8 @@ export default async function DashboardPage() {
+     subjectLabel: latestStepLabel(steps),
+   }));
+ 
++  const { items: activityItems, counts: activityCounts } = mergeUnifiedActivity(queueItems, recentRuns);
++
+   const formattedDate = new Date().toLocaleDateString("en-US", {
+     weekday: "long",
+     month: "long",
+@@ -264,35 +270,15 @@ export default async function DashboardPage() {
+           />
+         </div>
+ 
+-        {/* Queue */}
+-        <div className="pt-2" data-tour="dashboard-queue">
+-          <QueuePanel initialItems={queueItems} clients={clients} title="Queue" viewAllHref="/dashboard/queue" />
+-        </div>
+-
+-        {/* Activity feed */}
+-        {/* CHANGED: id + scroll-mt so the pill's scrollIntoView lands correctly even
+-            under any future sticky/fixed nav; unseenCount seeds the highlight state */}
+-        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-live-executions">
+-          <div className="flex items-center justify-between mb-3">
+-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+-              {copy.activityLogSectionTitle}
+-            </p>
+-            {recentRuns.length > 0 && (
+-              <Link
+-                href="/dashboard/runs"
+-                className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 transition-colors"
+-              >
+-                View all
+-              </Link>
+-            )}
+-          </div>
+-
+-          <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-900/20">
+-            <LiveExecutionFeed
+-              initialRuns={recentRuns}
+-              storageKey="overview"
+-            />
+-          </div>
++        {/* Queue + Live Activity — merged into one filterable panel
++            (mergeUnifiedActivity) instead of two stacked sections a user
++            had to scroll past each other to see. id + scroll-mt kept from
++            the old Activity Feed section so UnreadExecutionsPill's
++            scrollIntoView target still resolves; data-tour consolidated
++            from dashboard-queue + dashboard-live-executions into one step
++            (see tour-definitions.ts) since they're now the same element. */}
++        <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-activity">
++          <UnifiedActivityPanel items={activityItems} counts={activityCounts} clients={clients} title={copy.activityLogSectionTitle} />
+         </div>
+ 
+         {/* Shortcuts */}
+diff --git a/src/app/dashboard/queue-panel.tsx b/src/app/dashboard/queue-panel.tsx
+index dda5359..ea84045 100644
+--- a/src/app/dashboard/queue-panel.tsx
++++ b/src/app/dashboard/queue-panel.tsx
+@@ -25,9 +25,9 @@ import {
+   CalendarClock,
+   Loader2,
+ } from "lucide-react";
+-import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, SKILLS } from "@/lib/copy";
++import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy } from "@/lib/copy";
+ import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
+-import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
++import { PRODUCT_IDS, PRODUCT_SKILL_IDS } from "@/lib/product-catalog";
+ import { useQueueItemActions } from "./use-queue-item-actions";
+ import type { StackSection } from "@/lib/error-classification";
+ import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
+@@ -201,7 +201,7 @@ function queueSignature(item: QueueItemDTO): string {
+   ].join("|");
+ }
+ 
+-function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
++export function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
+   const isGold = category !== "fyi";
+   const icon =
+     category === "approve" ? <ClipboardCheck size={11} /> :
+@@ -223,7 +223,7 @@ function CategoryBadge({ category }: { category: QueueItemDTO["category"] }) {
+   );
+ }
+ 
+-function QueueItemPreview({ item }: { item: QueueItemDTO }) {
++export function QueueItemPreview({ item }: { item: QueueItemDTO }) {
+   return (
+     <div className="space-y-2">
+       <div className="flex items-center gap-2 flex-wrap">
+@@ -1162,7 +1162,12 @@ export function QueuePanel({
+ 
+   const skillTargetLabels: Record<string, string> = {
+     all: "Any Skill",
+-    ...Object.fromEntries([...SKILLS, ...REP_SKILL_IDS].map((id) => [id, skillDisplayName(id)])),
++    // All four products (Showtime, Reputation Manager, Cold Open, Whop
++    // Agent) — this used to only cover Showtime + Reputation Manager,
++    // leaving Cold Open and Whop Agent runs with no proper label here.
++    ...Object.fromEntries(
++      PRODUCT_IDS.flatMap((productId) => PRODUCT_SKILL_IDS[productId]).map((id) => [id, skillDisplayName(id)])
++    ),
+   };
+ 
+   const categoryTargetLabels: Record<string, string> = {
+diff --git a/src/app/dashboard/unified-activity-panel.tsx b/src/app/dashboard/unified-activity-panel.tsx
+new file mode 100644
+index 0000000..0fd5471
+--- /dev/null
++++ b/src/app/dashboard/unified-activity-panel.tsx
+@@ -0,0 +1,586 @@
++"use client";
++
++// src/app/dashboard/unified-activity-panel.tsx
++//
++// Replaces the dashboard's separate, stacked Queue + Live Execution Feed
++// sections with one panel: a fixed client/product rail on the left, one
++// sorted+filterable list in the middle (needs-action items pinned first,
++// then running, then completed), and a detail pane that opens on the
++// right when a row is clicked — a real flex sibling that narrows the
++// list column, not an overlay that covers it (same mechanics as
++// right-utility-panel.tsx, which already does this correctly for
++// Calendar/Teammates/etc.).
++//
++// Deliberately NOT a rewrite of queue-panel.tsx/live-execution-feed.tsx —
++// those stay exactly as they are behind their own full pages
++// (/dashboard/queue, /dashboard/runs) for anyone who needs the deeper
++// tag-management/grouping/pagination features. This is the fast, unified
++// overview for the dashboard home specifically. Row actions reuse the
++// same real mutations those pages call (useQueueItemActions,
++// getRepairAction) rather than re-deriving them — same pattern
++// overview-stats-panel.tsx already established for its own "second
++// surface showing Queue items" tile.
++
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import Link from "next/link";
++import {
++  Search,
++  X,
++  Check,
++  Loader2,
++  ArrowUpRight,
++  RotateCcw,
++  UserX,
++  UserCheck,
++  CalendarClock,
++  Ban,
++  List,
++} from "lucide-react";
++import { useQueueItemActions } from "./use-queue-item-actions";
++import { QueueItemPreview, type ClientOption } from "./queue-panel";
++import { getRepairAction } from "@/lib/queue-repair-action";
++import { triggerSkillRun } from "@/lib/quick-actions";
++import { useQuickActions } from "@/components/action-panel";
++import { cancelSkillRun } from "@/lib/quick-actions";
++import { AnySkillBadge } from "@/components/any-skill-badge";
++import { VerboseTime } from "@/components/relative-time";
++import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
++import { QUEUE_COPY as queueCopy } from "@/lib/copy";
++import { cn } from "@/lib/utils";
++import type { UnifiedActivityItem, UnifiedActivityCounts, UnifiedActivityStatus } from "@/lib/unified-activity";
++
++const PRODUCT_LABELS: Record<ProductId, string> = {
++  showtime: "Showtime",
++  "reputation-manager": "Reputation Manager",
++  "cold-open": "Cold Open",
++  "whop-agent": "Whop Agent",
++};
++
++type StatusFilter = UnifiedActivityStatus | "all";
++
++const DETAIL_WIDTH_KEY = "mcs-unified-activity-detail-width";
++const MIN_DETAIL_WIDTH = 320;
++const MAX_DETAIL_WIDTH = 640;
++const DEFAULT_DETAIL_WIDTH = 380;
++
++function readStoredDetailWidth(): number {
++  if (typeof window === "undefined") return DEFAULT_DETAIL_WIDTH;
++  try {
++    const stored = window.localStorage.getItem(DETAIL_WIDTH_KEY);
++    const n = stored ? Number(stored) : NaN;
++    return Number.isFinite(n) && n > 0 ? Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, n)) : DEFAULT_DETAIL_WIDTH;
++  } catch {
++    return DEFAULT_DETAIL_WIDTH;
++  }
++}
++
++const STATUS_DOT: Record<UnifiedActivityStatus, string> = {
++  needs_action: "bg-rose-500 dark:bg-rose-400",
++  running: "bg-sky-500 dark:bg-sky-400 animate-pulse",
++  completed: "bg-emerald-500 dark:bg-emerald-400",
++  other: "bg-zinc-400 dark:bg-zinc-600",
++};
++
++const btnBase =
++  "hover-lift press-settle inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60";
++const btnGhost =
++  "hover-lift press-settle inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer disabled:opacity-60";
++
++export function UnifiedActivityPanel({
++  items,
++  counts,
++  clients,
++  title = "Activity",
++  viewQueueHref = "/dashboard/queue",
++  viewRunsHref = "/dashboard/runs",
++}: {
++  items: UnifiedActivityItem[];
++  counts: UnifiedActivityCounts;
++  clients: ClientOption[];
++  title?: string;
++  viewQueueHref?: string;
++  viewRunsHref?: string;
++}) {
++  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
++  const { busyId, errorId, errorText, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
++    useQueueItemActions((id) => setResolvedIds((prev) => new Set(prev).add(id)));
++  const { busyKey: cancellingRunId, run: runQuickAction } = useQuickActions();
++
++  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
++  const [productFilter, setProductFilter] = useState<ProductId | "all">("all");
++  const [clientFilter, setClientFilter] = useState<string>("all");
++  const [search, setSearch] = useState("");
++  const [selectedId, setSelectedId] = useState<string | null>(null);
++  const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
++  const [triggeringId, setTriggeringId] = useState<string | null>(null);
++  const [triggerErrorId, setTriggerErrorId] = useState<string | null>(null);
++
++  const containerRef = useRef<HTMLDivElement>(null);
++  const draggingRef = useRef(false);
++
++  async function runRepairTrigger(item: NonNullable<UnifiedActivityItem["queueItem"]>, engagementId: string, skillName: string) {
++    setTriggeringId(item.id);
++    setTriggerErrorId(null);
++    const result = await triggerSkillRun(engagementId, skillName);
++    setTriggeringId(null);
++    if (!result.ok) setTriggerErrorId(item.id);
++  }
++
++  const visibleItems = useMemo(() => {
++    return items.filter((item) => {
++      if (item.queueItem && resolvedIds.has(item.queueItem.id)) return false;
++      if (statusFilter !== "all" && item.status !== statusFilter) return false;
++      if (productFilter !== "all") {
++        const skillIds = PRODUCT_SKILL_IDS[productFilter] as readonly string[];
++        if (!item.skillName || !skillIds.includes(item.skillName)) return false;
++      }
++      if (clientFilter !== "all" && item.engagementId !== clientFilter) return false;
++      if (search.trim()) {
++        const q = search.trim().toLowerCase();
++        const haystack = `${item.title} ${item.subtitle} ${item.buyer ?? ""}`.toLowerCase();
++        if (!haystack.includes(q)) return false;
++      }
++      return true;
++    });
++  }, [items, resolvedIds, statusFilter, productFilter, clientFilter, search]);
++
++  // Derived, not synced via effect: an item that scrolls out of the
++  // current filter just stops being "selected" for rendering purposes —
++  // no need to also null out the raw selectedId state to get that.
++  const selectedItem = useMemo(() => visibleItems.find((i) => i.id === selectedId) ?? null, [visibleItems, selectedId]);
++
++  const handleDetailWidthChange = useCallback((w: number) => {
++    setDetailWidth(w);
++    try {
++      window.localStorage.setItem(DETAIL_WIDTH_KEY, String(w));
++    } catch {
++      // Best-effort persistence — a blocked/private-mode localStorage just
++      // means the width resets next visit, nothing else depends on it.
++    }
++  }, []);
++
++  const onDragStart = useCallback((e: React.MouseEvent) => {
++    e.preventDefault();
++    draggingRef.current = true;
++    document.body.style.cursor = "col-resize";
++    document.body.style.userSelect = "none";
++  }, []);
++
++  useEffect(() => {
++    function onMove(e: MouseEvent) {
++      if (!draggingRef.current || !containerRef.current) return;
++      const right = containerRef.current.getBoundingClientRect().right;
++      const next = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, right - e.clientX));
++      handleDetailWidthChange(next);
++    }
++    function onUp() {
++      if (!draggingRef.current) return;
++      draggingRef.current = false;
++      document.body.style.cursor = "";
++      document.body.style.userSelect = "";
++    }
++    window.addEventListener("mousemove", onMove);
++    window.addEventListener("mouseup", onUp);
++    return () => {
++      window.removeEventListener("mousemove", onMove);
++      window.removeEventListener("mouseup", onUp);
++    };
++  }, [handleDetailWidthChange]);
++
++  const statusChips: { key: StatusFilter; label: string; count: number }[] = [
++    { key: "needs_action", label: "Needs action", count: counts.needsAction },
++    { key: "running", label: "Running", count: counts.running },
++    { key: "completed", label: "Completed", count: counts.completed },
++    { key: "all", label: "All", count: counts.total },
++  ];
++
++  return (
++    <div className="space-y-3 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
++      <div className="flex flex-wrap items-center justify-between gap-3">
++        <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
++        <div className="flex items-center gap-3 text-xs font-mono">
++          <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
++            Full Queue
++          </Link>
++          <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
++            All Runs
++          </Link>
++        </div>
++      </div>
++
++      <div className="flex items-center gap-1.5 flex-wrap">
++        {statusChips.map((chip) => (
++          <button
++            key={chip.key}
++            type="button"
++            onClick={() => setStatusFilter(chip.key)}
++            className={cn(
++              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer border",
++              statusFilter === chip.key
++                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
++                : "bg-white dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800"
++            )}
++          >
++            {chip.label}
++            <span className="tabular-nums opacity-70">{chip.count}</span>
++          </button>
++        ))}
++      </div>
++
++      <div ref={containerRef} className="surface-glass-2 rounded-2xl overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
++        {/* LEFT RAIL — client + product filters. Fixed width; this doesn't
++            shrink when the detail panel opens (see file header). */}
++        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-200/80 dark:border-sidebar-border bg-[#f8f7fa] dark:bg-sidebar p-3 flex flex-col shrink-0 gap-3 rounded-t-2xl md:rounded-tr-none md:rounded-l-2xl">
++          <div className="relative">
++            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
++            <input
++              type="text"
++              value={search}
++              onChange={(e) => setSearch(e.target.value)}
++              placeholder="Search activity..."
++              className="w-full pl-7 pr-2.5 py-1.5 text-xs bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
++            />
++          </div>
++
++          <div className="space-y-1">
++            <p className="px-1 text-[10.5px] font-bold text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">Clients</p>
++            <button
++              type="button"
++              onClick={() => setClientFilter("all")}
++              className={cn(
++                "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
++                clientFilter === "all"
++                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
++                  : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
++              )}
++            >
++              <List size={13} className="shrink-0" />
++              <span className="truncate">All clients</span>
++            </button>
++            <div className="max-h-[140px] overflow-y-auto space-y-0.5 [scrollbar-width:none]">
++              {clients.map((client) => (
++                <button
++                  key={client.engagementId}
++                  type="button"
++                  onClick={() => setClientFilter(client.engagementId)}
++                  className={cn(
++                    "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
++                    clientFilter === client.engagementId
++                      ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
++                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
++                  )}
++                >
++                  <span className="truncate">{client.buyer}</span>
++                  {client.pausedAt && <span className="text-[9px] font-mono text-amber-600 dark:text-amber-400 shrink-0">paused</span>}
++                </button>
++              ))}
++            </div>
++          </div>
++
++          <div className="space-y-1">
++            <p className="px-1 text-[10.5px] font-bold text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">Products</p>
++            <button
++              type="button"
++              onClick={() => setProductFilter("all")}
++              className={cn(
++                "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
++                productFilter === "all"
++                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
++                  : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
++              )}
++            >
++              <span className="truncate">Any product</span>
++            </button>
++            {PRODUCT_IDS.map((productId) => (
++              <button
++                key={productId}
++                type="button"
++                onClick={() => setProductFilter(productId)}
++                className={cn(
++                  "w-full flex items-center justify-between px-2.5 py-1.5 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
++                  productFilter === productId
++                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
++                    : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
++                )}
++              >
++                <span className="truncate">{PRODUCT_LABELS[productId]}</span>
++                <span className={cn("text-[11px] font-mono tabular-nums font-bold", productFilter === productId ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
++                  {counts.byProduct[productId]}
++                </span>
++              </button>
++            ))}
++          </div>
++        </div>
++
++        {/* MIDDLE — the unified, filtered list. flex-1: this is what
++            actually narrows when the detail panel opens, not the rail. */}
++        <div className="flex-1 min-w-0 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900 max-h-[640px]">
++          {visibleItems.length === 0 ? (
++            <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
++              {items.length === 0 ? "Nothing to show yet." : "No activity matches your filters."}
++            </div>
++          ) : (
++            visibleItems.map((item) => {
++              const isBusy = busyId === item.queueItem?.id;
++              const isTriggering = triggeringId === item.id;
++              const isCancelling = cancellingRunId === `cancel-${item.runId}`;
++              const repair = item.queueItem ? getRepairAction(item.queueItem) : null;
++
++              return (
++                <div
++                  key={item.id}
++                  className={cn(
++                    "group px-4 py-3 space-y-1.5 transition-colors cursor-pointer",
++                    selectedId === item.id ? "bg-zinc-100/80 dark:bg-zinc-900/60" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
++                  )}
++                  onClick={() => setSelectedId(item.id)}
++                >
++                  <div className="flex items-start gap-2.5">
++                    <span className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", STATUS_DOT[item.status])} />
++                    {item.skillName && <AnySkillBadge skill={item.skillName} size={18} />}
++                    <div className="min-w-0 flex-1">
++                      <div className="flex items-center gap-2 flex-wrap">
++                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
++                        {item.buyer && <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 truncate">· {item.buyer}</span>}
++                      </div>
++                      {item.subtitle && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</p>}
++                    </div>
++                    <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-[11px] shrink-0 whitespace-nowrap text-zinc-400 dark:text-zinc-500" />
++                  </div>
++
++                  {item.status === "needs_action" && (
++                    <div className="flex items-center gap-1.5 flex-wrap pl-6" onClick={(e) => e.stopPropagation()}>
++                      {item.queueItem ? (
++                        <QueueItemQuickActions
++                          item={item.queueItem}
++                          repair={repair}
++                          isBusy={isBusy}
++                          isTriggering={isTriggering}
++                          triggerErrorId={triggerErrorId}
++                          errorId={errorId}
++                          errorText={errorText}
++                          decide={decide}
++                          resolveSweepNoShow={resolveSweepNoShow}
++                          dismissSyncSetup={dismissSyncSetup}
++                          dismissRunFailure={dismissRunFailure}
++                          onRunRepairTrigger={runRepairTrigger}
++                        />
++                      ) : (
++                        <Link href={item.href} className={btnGhost}>
++                          <ArrowUpRight size={11} /> View run
++                        </Link>
++                      )}
++                    </div>
++                  )}
++
++                  {item.status === "running" && item.runId && (
++                    <div className="pl-6" onClick={(e) => e.stopPropagation()}>
++                      <button
++                        type="button"
++                        disabled={isCancelling}
++                        onClick={() =>
++                          runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => {
++                            /* list re-fetches on next server nav; nothing to do client-side for a one-shot dashboard tile */
++                          })
++                        }
++                        className={btnGhost}
++                      >
++                        {isCancelling ? <Loader2 size={11} className="animate-spin" /> : <Ban size={11} />} Cancel run
++                      </button>
++                    </div>
++                  )}
++                </div>
++              );
++            })
++          )}
++        </div>
++
++        {/* RIGHT — detail panel. Real flex sibling, opens/closes by width
++            (0 when closed), same mechanics as right-utility-panel.tsx. */}
++        <div
++          className="hidden md:flex relative shrink-0 flex-col border-l border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden transition-[width,opacity] duration-150 ease-out"
++          style={{ width: selectedItem ? detailWidth : 0, opacity: selectedItem ? 1 : 0 }}
++          aria-hidden={!selectedItem}
++        >
++          {selectedItem && (
++            <>
++              <div
++                onMouseDown={onDragStart}
++                className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
++                title="Drag to resize"
++              />
++              <div className="flex items-center justify-between px-3 h-11 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
++                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Details</span>
++                <button
++                  type="button"
++                  onClick={() => setSelectedId(null)}
++                  className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
++                  aria-label="Close detail panel"
++                >
++                  <X size={14} />
++                </button>
++              </div>
++              <div className="flex-1 min-h-0 overflow-y-auto p-4 text-xs">
++                {selectedItem.queueItem ? (
++                  <div className="space-y-4">
++                    <QueueItemPreview item={selectedItem.queueItem} />
++                    <div className="flex items-center gap-1.5 flex-wrap">
++                      <QueueItemQuickActions
++                        item={selectedItem.queueItem}
++                        repair={selectedItem.queueItem ? getRepairAction(selectedItem.queueItem) : null}
++                        isBusy={busyId === selectedItem.queueItem.id}
++                        isTriggering={triggeringId === selectedItem.id}
++                        triggerErrorId={triggerErrorId}
++                        errorId={errorId}
++                        errorText={errorText}
++                        decide={decide}
++                        resolveSweepNoShow={resolveSweepNoShow}
++                        dismissSyncSetup={dismissSyncSetup}
++                        dismissRunFailure={dismissRunFailure}
++                        onRunRepairTrigger={runRepairTrigger}
++                      />
++                    </div>
++                  </div>
++                ) : (
++                  <div className="space-y-3">
++                    <div className="flex items-center gap-2">
++                      {selectedItem.skillName && <AnySkillBadge skill={selectedItem.skillName} size={22} />}
++                      <div className="min-w-0">
++                        <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{selectedItem.title}</p>
++                        {selectedItem.buyer && <p className="text-zinc-500 dark:text-zinc-400 truncate">{selectedItem.buyer}</p>}
++                      </div>
++                    </div>
++                    {selectedItem.run?.subjectLabel && (
++                      <p className="text-zinc-600 dark:text-zinc-300 whitespace-pre-line">{selectedItem.run.subjectLabel}</p>
++                    )}
++                    {selectedItem.run?.errorMessage && (
++                      <p className="text-rose-600 dark:text-rose-400 font-mono whitespace-pre-line">{selectedItem.run.errorMessage}</p>
++                    )}
++                    <VerboseTime isoString={selectedItem.timestamp} className="text-zinc-400 dark:text-zinc-500" />
++                    <Link
++                      href={selectedItem.href}
++                      className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
++                    >
++                      View full run <ArrowUpRight className="w-3 h-3" />
++                    </Link>
++                  </div>
++                )}
++              </div>
++            </>
++          )}
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/**
++ * The same branch-per-category/source action set overview-stats-panel.tsx
++ * already established for a "second surface" reusing Queue's real
++ * mutations (useQueueItemActions/getRepairAction) instead of just linking
++ * away — kept as its own component here since it's now rendered from two
++ * places in this file (inline in the row, and again in the detail panel).
++ */
++function QueueItemQuickActions({
++  item,
++  repair,
++  isBusy,
++  isTriggering,
++  triggerErrorId,
++  errorId,
++  errorText,
++  decide,
++  resolveSweepNoShow,
++  dismissSyncSetup,
++  dismissRunFailure,
++  onRunRepairTrigger,
++}: {
++  item: NonNullable<UnifiedActivityItem["queueItem"]>;
++  repair: ReturnType<typeof getRepairAction>;
++  isBusy: boolean;
++  isTriggering: boolean;
++  triggerErrorId: string | null;
++  errorId: string | null;
++  errorText: string;
++  decide: ReturnType<typeof useQueueItemActions>["decide"];
++  resolveSweepNoShow: ReturnType<typeof useQueueItemActions>["resolveSweepNoShow"];
++  dismissSyncSetup: ReturnType<typeof useQueueItemActions>["dismissSyncSetup"];
++  dismissRunFailure: ReturnType<typeof useQueueItemActions>["dismissRunFailure"];
++  onRunRepairTrigger: (item: NonNullable<UnifiedActivityItem["queueItem"]>, engagementId: string, skillName: string) => void;
++}) {
++  const itemHref = item.fixHref ?? (item.engagementId ? `/dashboard/engagements/${item.engagementId}` : "/dashboard/queue");
++
++  return (
++    <>
++      {item.category === "approve" && item.sweepNoShowReview ? (
++        <>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400`} title="Confirm no-show and start Win-Back recovery">
++            <UserX size={11} /> Confirm no-show
++          </button>
++          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "showed")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`} title="Log that they actually showed — no Win-Back">
++            <UserCheck size={11} /> Showed
++          </button>
++          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "rescheduled")} className={`${btnBase} bg-amber-500 text-zinc-950 hover:bg-amber-400`} title="Log that they rescheduled — no Win-Back">
++            <CalendarClock size={11} /> Rescheduled
++          </button>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer disabled:opacity-60">
++            Not sure — dismiss
++          </button>
++        </>
++      ) : item.category === "approve" ? (
++        <>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
++            <Check size={11} /> {queueCopy.actions.approve}
++          </button>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className={btnGhost}>
++            <X size={11} /> {queueCopy.actions.reject}
++          </button>
++        </>
++      ) : item.category === "action_needed" && item.source === "sync_setup" ? (
++        <>
++          {(repair?.kind === "link" ? repair.href : itemHref) && (
++            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
++              <ArrowUpRight size={11} /> {repair?.label ?? "Review"}
++            </Link>
++          )}
++          <button type="button" disabled={isBusy} onClick={() => dismissSyncSetup(item)} className={btnGhost}>
++            <X size={11} /> Not now
++          </button>
++        </>
++      ) : item.category === "action_needed" && item.source === "run_failure" ? (
++        <>
++          {repair?.kind === "trigger" ? (
++            <button type="button" disabled={isBusy || isTriggering} onClick={() => onRunRepairTrigger(item, repair.engagementId, repair.skillName)} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
++              <RotateCcw size={11} /> {isTriggering ? "Running…" : repair.label}
++            </button>
++          ) : (repair?.kind === "link" ? repair.href : itemHref) ? (
++            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
++              <ArrowUpRight size={11} /> {repair?.label ?? "Fix now"}
++            </Link>
++          ) : null}
++          <button type="button" disabled={isBusy} onClick={() => dismissRunFailure(item)} className={btnGhost}>
++            <X size={11} /> Not now
++          </button>
++          {triggerErrorId === item.id && (
++            <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">Couldn&apos;t start the run — try again from the Queue.</p>
++          )}
++        </>
++      ) : item.category === "action_needed" ? (
++        <>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
++            <Check size={11} /> {queueCopy.actions.resolve}
++          </button>
++          <button type="button" disabled={isBusy} onClick={() => decide(item, "abandoned")} className={btnGhost}>
++            <X size={11} /> {queueCopy.actions.dismiss}
++          </button>
++        </>
++      ) : (
++        <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className={btnGhost}>
++          <X size={11} /> {queueCopy.actions.dismiss}
++        </button>
++      )}
++
++      {errorId === item.id && errorText && <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">{errorText}</p>}
++    </>
++  );
++}
+diff --git a/src/lib/tours/tour-definitions.ts b/src/lib/tours/tour-definitions.ts
+index 4fcf942..601e019 100644
+--- a/src/lib/tours/tour-definitions.ts
++++ b/src/lib/tours/tour-definitions.ts
+@@ -45,19 +45,11 @@ const DASHBOARD_BASICS: TourStep[] = [
+     placement: "bottom",
+   },
+   {
+-    id: "queue",
++    id: "activity",
+     route: "/dashboard",
+-    target: '[data-tour="dashboard-queue"]',
+-    title: "The Queue — what needs you",
+-    body: "Every pending approval, blocker, and alert across every client and skill lands here. If nothing's in it, nothing's waiting on a human right now.",
+-    placement: "top",
+-  },
+-  {
+-    id: "live-executions",
+-    route: "/dashboard",
+-    target: '[data-tour="dashboard-live-executions"]',
+-    title: "Live Executions",
+-    body: "Every skill run, past and present, with real-time status. This is the same feed you'll see filtered down on a client's own page.",
++    target: '[data-tour="dashboard-activity"]',
++    title: "Queue and Live Activity, in one place",
++    body: "Every pending approval, blocker, alert, and skill run — past and present, across every client and product — lands in this one filterable list. Needs-action items float to the top; click any row to see the full detail on the right without losing your place in the list.",
+     placement: "top",
+   },
+   {
+diff --git a/src/lib/unified-activity.ts b/src/lib/unified-activity.ts
+new file mode 100644
+index 0000000..5c5737c
+--- /dev/null
++++ b/src/lib/unified-activity.ts
+@@ -0,0 +1,176 @@
++// src/lib/unified-activity.ts
++//
++// Merges the two things dashboard/page.tsx used to render as separate,
++// stacked sections — the Queue (pending approvals/action items from
++// getQueueItems) and the Live Execution Feed (recent skillRuns) — into
++// one sorted, de-duplicated list. See UnifiedActivityPanel for the UI
++// this feeds.
++//
++// Pure merge, no DB access of its own: both inputs are already fetched by
++// the caller (dashboard/page.tsx already needs queueItems for
++// OverviewStatsPanel, and already needs a recent-runs query for what used
++// to be the feed), so this only combines and sorts what it's handed.
++//
++// The one real bug this fixes, not just a layout change: a failed run
++// that got a confident auto-diagnosis becomes a "run_failure" queue item
++// (see queue.ts's failedRunQueueItems) — id'd as `run-failure:${run.id}`
++// but carrying that same run's id in its own `runId` field. That same run
++// was ALSO showing up as a second, plainer row in the Live Execution Feed
++// (the feed's dashboard query has no status filter). Same event, twice,
++// on the same page. dedupe() below drops the feed-side duplicate and
++// keeps only the richer, actionable queue-item version.
++
++import type { QueueItem } from "@/lib/queue";
++import { anySkillDisplayName } from "@/lib/any-skill";
++import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
++
++export type UnifiedActivityStatus = "needs_action" | "running" | "completed" | "other";
++
++/** Matches dashboard/page.tsx's `recentRuns` shape after its own mapping
++ * (steps -> subjectLabel, dates -> ISO strings) — kept as a local type
++ * rather than importing live-execution-feed.tsx's unexported SkillRun so
++ * this file has no UI-layer dependency. */
++export interface UnifiedRunInput {
++  id: string;
++  skillName: string;
++  status: string;
++  phase: string | null;
++  startedAt: string;
++  engagementId: string | null;
++  buyerName: string | null;
++  engagementPausedAt: string | null;
++  errorMessage: string | null;
++  subjectLabel: string | null;
++}
++
++export interface UnifiedActivityItem {
++  id: string;
++  kind: "queue" | "run";
++  status: UnifiedActivityStatus;
++  title: string;
++  subtitle: string;
++  engagementId: string | null;
++  buyer: string | null;
++  skillName: string | null;
++  runId: string | null;
++  /** ISO timestamp used for sorting and display. */
++  timestamp: string;
++  href: string;
++  engagementPausedAt?: string | null;
++  /** Present only for kind "queue" — full fidelity for the detail panel
++   * and for wiring the exact same action buttons queue-panel.tsx uses
++   * (via useQueueItemActions / getRepairAction, both keyed off this). */
++  queueItem?: QueueItem;
++  /** Present only for kind "run". */
++  run?: {
++    status: string;
++    phase: string | null;
++    errorMessage: string | null;
++    subjectLabel: string | null;
++  };
++}
++
++export interface UnifiedActivityCounts {
++  needsAction: number;
++  running: number;
++  completed: number;
++  total: number;
++  byProduct: Record<ProductId, number>;
++}
++
++const STATUS_PRIORITY: Record<UnifiedActivityStatus, number> = {
++  needs_action: 0,
++  running: 1,
++  completed: 2,
++  other: 3,
++};
++
++function statusForRun(status: string): UnifiedActivityStatus {
++  const s = status.toLowerCase();
++  if (s === "running" || s === "in_progress") return "running";
++  if (s === "success" || s === "completed") return "completed";
++  if (s === "failed" || s === "error" || s === "timed_out") return "needs_action";
++  return "other"; // cancelled, skipped
++}
++
++function statusForQueueCategory(category: QueueItem["category"]): UnifiedActivityStatus {
++  return category === "fyi" ? "other" : "needs_action";
++}
++
++function productForSkill(skillName: string | null): ProductId | null {
++  if (!skillName) return null;
++  for (const productId of PRODUCT_IDS) {
++    if ((PRODUCT_SKILL_IDS[productId] as readonly string[]).includes(skillName)) return productId;
++  }
++  return null;
++}
++
++export function mergeUnifiedActivity(
++  queueItems: QueueItem[],
++  runs: UnifiedRunInput[]
++): { items: UnifiedActivityItem[]; counts: UnifiedActivityCounts } {
++  // See file header — a run this specific already has a richer queue-item
++  // representation shouldn't also render as a second, plainer feed row.
++  const queueRunIds = new Set(queueItems.map((q) => q.runId).filter((id): id is string => !!id));
++
++  const queueAsItems: UnifiedActivityItem[] = queueItems.map((q) => ({
++    id: `queue:${q.id}`,
++    kind: "queue",
++    status: statusForQueueCategory(q.category),
++    title: q.title,
++    subtitle: q.subtitle,
++    engagementId: q.engagementId,
++    buyer: q.buyer,
++    skillName: q.skillName ?? null,
++    runId: q.runId,
++    timestamp: q.createdAt,
++    href: q.fixHref ?? (q.engagementId ? `/dashboard/engagements/${q.engagementId}` : "/dashboard/queue"),
++    engagementPausedAt: q.engagementPausedAt,
++    queueItem: q,
++  }));
++
++  const runAsItems: UnifiedActivityItem[] = runs
++    .filter((r) => !queueRunIds.has(r.id))
++    .map((r) => ({
++      id: `run:${r.id}`,
++      kind: "run",
++      status: statusForRun(r.status),
++      title: anySkillDisplayName(r.skillName),
++      subtitle: r.subjectLabel ?? r.errorMessage ?? "",
++      engagementId: r.engagementId,
++      buyer: r.buyerName,
++      skillName: r.skillName,
++      runId: r.id,
++      timestamp: r.startedAt,
++      href: `/dashboard/runs/${r.id}`,
++      engagementPausedAt: r.engagementPausedAt,
++      run: {
++        status: r.status,
++        phase: r.phase,
++        errorMessage: r.errorMessage,
++        subjectLabel: r.subjectLabel,
++      },
++    }));
++
++  const items = [...queueAsItems, ...runAsItems].sort((a, b) => {
++    const priorityDelta = STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status];
++    if (priorityDelta !== 0) return priorityDelta;
++    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
++  });
++
++  const byProduct = Object.fromEntries(PRODUCT_IDS.map((id) => [id, 0])) as Record<ProductId, number>;
++  for (const item of items) {
++    const productId = productForSkill(item.skillName);
++    if (productId) byProduct[productId] += 1;
++  }
++
++  const counts: UnifiedActivityCounts = {
++    needsAction: items.filter((i) => i.status === "needs_action").length,
++    running: items.filter((i) => i.status === "running").length,
++    completed: items.filter((i) => i.status === "completed").length,
++    total: items.length,
++    byProduct,
++  };
++
++  return { items, counts };
++}
+diff --git a/tests/unit/unified-activity.test.ts b/tests/unit/unified-activity.test.ts
+new file mode 100644
+index 0000000..160a18c
+--- /dev/null
++++ b/tests/unit/unified-activity.test.ts
+@@ -0,0 +1,107 @@
++import { describe, it, expect } from "vitest";
++import { mergeUnifiedActivity, type UnifiedRunInput } from "@/lib/unified-activity";
++import type { QueueItem } from "@/lib/queue";
++
++function queueItem(overrides: Partial<QueueItem> = {}): QueueItem {
++  return {
++    id: "q1",
++    source: "action",
++    category: "approve",
++    title: "Approve something",
++    subtitle: "sub",
++    engagementId: "eng_1",
++    buyer: "Acme",
++    runId: null,
++    createdAt: "2026-09-01T00:00:00.000Z",
++    ...overrides,
++  };
++}
++
++function run(overrides: Partial<UnifiedRunInput> = {}): UnifiedRunInput {
++  return {
++    id: "run_1",
++    skillName: "pre-call-read",
++    status: "success",
++    phase: null,
++    startedAt: "2026-09-01T00:00:00.000Z",
++    engagementId: "eng_1",
++    buyerName: "Acme",
++    engagementPausedAt: null,
++    errorMessage: null,
++    subjectLabel: "Call brief sent",
++    ...overrides,
++  };
++}
++
++describe("mergeUnifiedActivity", () => {
++  it("drops a feed row whose run already has a richer run_failure queue item for the same run", () => {
++    const failedRun = run({ id: "run_dup", status: "failed", errorMessage: "boom" });
++    const q = queueItem({ id: "run-failure:run_dup", source: "run_failure", category: "action_needed", runId: "run_dup" });
++
++    const { items } = mergeUnifiedActivity([q], [failedRun]);
++
++    expect(items).toHaveLength(1);
++    expect(items[0].kind).toBe("queue");
++    expect(items[0].runId).toBe("run_dup");
++  });
++
++  it("keeps a failed run that has no matching queue item", () => {
++    const failedRun = run({ id: "run_solo", status: "failed" });
++    const { items } = mergeUnifiedActivity([], [failedRun]);
++
++    expect(items).toHaveLength(1);
++    expect(items[0].kind).toBe("run");
++    expect(items[0].status).toBe("needs_action");
++  });
++
++  it("sorts needs_action before running before completed, regardless of input order", () => {
++    const completedRun = run({ id: "r_done", status: "success", startedAt: "2026-09-03T00:00:00.000Z" });
++    const runningRun = run({ id: "r_run", status: "running", startedAt: "2026-09-02T00:00:00.000Z" });
++    const actionItem = queueItem({ id: "q_action", category: "action_needed", createdAt: "2026-09-01T00:00:00.000Z" });
++
++    const { items } = mergeUnifiedActivity([actionItem], [completedRun, runningRun]);
++
++    expect(items.map((i) => i.status)).toEqual(["needs_action", "running", "completed"]);
++  });
++
++  it("sorts by recency within the same status tier", () => {
++    const older = queueItem({ id: "q_old", createdAt: "2026-09-01T00:00:00.000Z" });
++    const newer = queueItem({ id: "q_new", createdAt: "2026-09-05T00:00:00.000Z" });
++
++    const { items } = mergeUnifiedActivity([older, newer], []);
++
++    expect(items.map((i) => i.id)).toEqual(["queue:q_new", "queue:q_old"]);
++  });
++
++  it("classifies fyi queue items as 'other', not needs_action", () => {
++    const fyiItem = queueItem({ id: "q_fyi", category: "fyi" });
++    const { items } = mergeUnifiedActivity([fyiItem], []);
++
++    expect(items[0].status).toBe("other");
++  });
++
++  it("counts items per product using each item's skillName", () => {
++    const showtimeRun = run({ id: "r1", skillName: "pre-call-read", status: "success" });
++    const repRun = run({ id: "r2", skillName: "rep-digest", status: "success" });
++    const { counts } = mergeUnifiedActivity([], [showtimeRun, repRun]);
++
++    expect(counts.total).toBe(2);
++    expect(counts.byProduct.showtime).toBe(1);
++    expect(counts.byProduct["reputation-manager"]).toBe(1);
++    expect(counts.byProduct["cold-open"]).toBe(0);
++    expect(counts.byProduct["whop-agent"]).toBe(0);
++  });
++
++  it("computes needsAction/running/completed counts across the combined list", () => {
++    const failedItem = queueItem({ id: "q1", category: "action_needed" });
++    const runningRun = run({ id: "r1", status: "running" });
++    const completedRun = run({ id: "r2", status: "success" });
++
++    const { counts } = mergeUnifiedActivity([failedItem], [runningRun, completedRun]);
++
++    expect(counts.needsAction).toBe(1);
++    expect(counts.running).toBe(1);
++    expect(counts.completed).toBe(1);
++    expect(counts.total).toBe(3);
++  });
++});
+-- 
+2.43.0
+
+
+From df28c6e26f256b23201749e75070978b9890f2c0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 17 Sep 2026 20:14:33 +0000
+Subject: [PATCH 3/3] Fix dead row-tap on mobile in the unified activity panel
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The detail pane is hidden md:flex — a real flex sibling that narrows
+the list, which has no sensible mobile shape, same call already made
+for right-utility-panel.tsx. Below md that left a row tap doing nothing
+visible: setSelectedId fired but the panel it would have opened never
+renders. Row actions (approve/reject/dismiss/cancel) were unaffected
+since those buttons live in the row itself, not the hidden panel.
+
+Now checks viewport width on tap: desktop opens the inline detail pane
+as before, mobile navigates to the item's full page instead — the same
+fallback right-utility-rail.tsx already uses for its own panels on
+mobile, rather than a silent no-op.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Lv1Fc4mc6LHrFpMHiHajTt
+---
+ src/app/dashboard/unified-activity-panel.tsx | 22 +++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/src/app/dashboard/unified-activity-panel.tsx b/src/app/dashboard/unified-activity-panel.tsx
+index 0fd5471..6001fd9 100644
+--- a/src/app/dashboard/unified-activity-panel.tsx
++++ b/src/app/dashboard/unified-activity-panel.tsx
+@@ -23,6 +23,7 @@
+ 
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import Link from "next/link";
++import { useRouter } from "next/navigation";
+ import {
+   Search,
+   X,
+@@ -101,6 +102,7 @@ export function UnifiedActivityPanel({
+   viewQueueHref?: string;
+   viewRunsHref?: string;
+ }) {
++  const router = useRouter();
+   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
+   const { busyId, errorId, errorText, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
+     useQueueItemActions((id) => setResolvedIds((prev) => new Set(prev).add(id)));
+@@ -149,6 +151,24 @@ export function UnifiedActivityPanel({
+   // no need to also null out the raw selectedId state to get that.
+   const selectedItem = useMemo(() => visibleItems.find((i) => i.id === selectedId) ?? null, [visibleItems, selectedId]);
+ 
++  // The detail panel is `hidden md:flex` (it's a real flex sibling that
++  // narrows the list, which has no sensible mobile shape — same call
++  // right-utility-panel.tsx already made). Below `md`, a row tap has
++  // nowhere to open a detail into, so it navigates to the full page
++  // instead — same fallback right-utility-rail.tsx uses for its own
++  // panels on mobile — rather than silently doing nothing.
++  const openItem = useCallback(
++    (item: UnifiedActivityItem) => {
++      const isDesktop = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
++      if (isDesktop) {
++        setSelectedId(item.id);
++      } else {
++        router.push(item.href);
++      }
++    },
++    [router]
++  );
++
+   const handleDetailWidthChange = useCallback((w: number) => {
+     setDetailWidth(w);
+     try {
+@@ -333,7 +353,7 @@ export function UnifiedActivityPanel({
+                     "group px-4 py-3 space-y-1.5 transition-colors cursor-pointer",
+                     selectedId === item.id ? "bg-zinc-100/80 dark:bg-zinc-900/60" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+                   )}
+-                  onClick={() => setSelectedId(item.id)}
++                  onClick={() => openItem(item)}
+                 >
+                   <div className="flex items-start gap-2.5">
+                     <span className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", STATUS_DOT[item.status])} />
+-- 
+2.43.0
+

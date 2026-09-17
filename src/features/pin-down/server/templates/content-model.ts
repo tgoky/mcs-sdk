@@ -137,7 +137,24 @@ export function escapeHtml(s: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * calendarAddToUrl is the one field on PageContentModel that's a real URL
+ * headed for an `href="..."` attribute rather than plain text content —
+ * escapeHtml alone (safe against attribute breakout) does nothing to stop
+ * a `javascript:`/`data:` URI from executing on click. Allowlists
+ * http(s)/mailto and HTML-escapes what's left; anything else (including
+ * no value at all) becomes undefined, which every template already
+ * treats as "don't render the calendar link."
+ */
+function sanitizeHref(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const trimmed = url.trim();
+  if (!/^(https?:\/\/|mailto:)/i.test(trimmed)) return undefined;
+  return escapeHtml(trimmed);
 }
 
 function buildReference(buyer: string): string {
@@ -183,7 +200,7 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
     hasRealQuestions,
     testimonials,
     showProof: testimonials.length > 0,
-    calendarAddToUrl: input.calendarAddToUrl,
+    calendarAddToUrl: sanitizeHref(input.calendarAddToUrl),
     reference: buildReference(input.buyer),
     designTokens: input.designSignal ? classifySiteSignal(input.designSignal) : DEFAULT_TOKENS,
   };

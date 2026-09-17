@@ -45,19 +45,11 @@ const DASHBOARD_BASICS: TourStep[] = [
     placement: "bottom",
   },
   {
-    id: "queue",
+    id: "activity",
     route: "/dashboard",
-    target: '[data-tour="dashboard-queue"]',
-    title: "The Queue — what needs you",
-    body: "Every pending approval, blocker, and alert across every client and skill lands here. If nothing's in it, nothing's waiting on a human right now.",
-    placement: "top",
-  },
-  {
-    id: "live-executions",
-    route: "/dashboard",
-    target: '[data-tour="dashboard-live-executions"]',
-    title: "Live Executions",
-    body: "Every skill run, past and present, with real-time status. This is the same feed you'll see filtered down on a client's own page.",
+    target: '[data-tour="dashboard-activity"]',
+    title: "Queue and Live Activity, in one place",
+    body: "Every pending approval, blocker, alert, and skill run — past and present, across every client and product — lands in this one filterable list. Needs-action items float to the top; click any row to see the full detail on the right without losing your place in the list.",
     placement: "top",
   },
   {

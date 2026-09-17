@@ -18,9 +18,9 @@ import {
   Copy,
   SkipForward,
 } from "lucide-react";
-import { phaseLabel, SKILL_INFO, SKILLS, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
+import { phaseLabel, SKILL_INFO, EXECUTIONS_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy, type SkillName } from "@/lib/copy";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { REP_SKILL_IDS, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
+import { PRODUCT_IDS, PRODUCT_SKILL_IDS } from "@/lib/product-catalog";
 import { classifyRunError } from "@/lib/error-classification";
 import type { RunSummary } from "@/models/schema";
 import { ActionPanel, useQuickActions, type ActionPanelSection } from "@/components/action-panel";
@@ -79,25 +79,23 @@ interface ExecutionsChipDef {
   predicate: (run: SkillRun) => boolean;
 }
 
-const MODULE_CHIP_DEFS: ExecutionsChipDef[] = [
-  ...SKILLS.map((skill) => ({
+// One chip per skill across ALL FOUR products (Showtime, Reputation
+// Manager, Cold Open, Whop Agent) — this used to only cover Showtime's
+// SKILLS plus Reputation Manager's, so a Cold Open or Whop Agent run had
+// no module chip to filter by at all on this page (it still showed up
+// under "All", just unfilterable, same gap RM's own fix comment above
+// used to describe). anySkillDisplayName already resolves every
+// product's manifest correctly, so one map covers all of them instead of
+// a growing list of per-product spreads.
+const MODULE_CHIP_DEFS: ExecutionsChipDef[] = PRODUCT_IDS.flatMap((productId) =>
+  PRODUCT_SKILL_IDS[productId].map((skill) => ({
     id: `module-${skill}`,
-    label: SKILL_INFO[skill].name,
+    label: anySkillDisplayName(skill),
     section: toolbarCopy.chipSections.module,
     group: "module",
     predicate: (run: SkillRun) => run.skillName === skill,
-  })),
-  // Reputation Manager's 5 skills, same shape — this used to only cover
-  // Showtime's SKILLS, so an RM run had no module chip to filter by at all
-  // on this page (it still showed up under "All", just unfilterable).
-  ...REP_SKILL_IDS.map((skill) => ({
-    id: `module-${skill}`,
-    label: REP_SKILL_MANIFEST[skill].name,
-    section: toolbarCopy.chipSections.module,
-    group: "module",
-    predicate: (run: SkillRun) => run.skillName === skill,
-  })),
-];
+  }))
+);
 
 const STATUS_ACCOUNT_CHIP_DEFS: ExecutionsChipDef[] = [
   {
