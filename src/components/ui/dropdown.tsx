@@ -62,7 +62,11 @@ export function Dropdown<T extends string>({
           disabled={disabled}
           onClick={() => setOpen((p) => !p)}
           className={cn(
-            "inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors cursor-pointer hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40",
+            // h-6 w-6 (24px) is below the ~40px touch-target guideline —
+            // the `before` pseudo-element pads the hit area out to ~40px
+            // without changing the icon's visual footprint or this
+            // component's density anywhere it's already in use.
+            "relative inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors cursor-pointer hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 before:content-[''] before:absolute before:-inset-2",
             open && "bg-zinc-800 text-white",
             triggerClassName
           )}

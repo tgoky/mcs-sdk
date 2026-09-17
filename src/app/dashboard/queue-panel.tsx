@@ -375,7 +375,7 @@ function QueueRow({
   };
 
   return (
-    <div className={`group flex items-center gap-3 py-3 px-3.5 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-50/40 dark:bg-zinc-900/20" : "bg-white dark:bg-transparent"}`}>
+    <div className={`group flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3.5 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors ${nested ? "pl-6 bg-zinc-50/40 dark:bg-zinc-900/20" : "bg-white dark:bg-transparent"}`}>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <CategoryBadge category={item.category} />
@@ -405,7 +405,7 @@ function QueueRow({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1.5 flex-wrap shrink-0">
         {item.category === "approve" && item.sweepNoShowReview ? (
           // Fix: a plain Approve/Reject was the wrong shape for "did this
           // person actually no-show" — see QueueItem.sweepNoShowReview's
@@ -414,8 +414,8 @@ function QueueRow({
           // three map directly to the real outcomes a reviewer is
           // actually choosing between, and each one (besides "not sure")
           // logs the real outcome, not just a status flip.
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("approved")}
@@ -1531,7 +1531,7 @@ export function QueuePanel({
                       <button
                         type="button"
                         onClick={() => handleDeleteTag(tag.id)}
-                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity cursor-pointer"
+                        className="absolute right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity cursor-pointer"
                         title="Delete tag"
                       >
                         <Trash2 size={11} />

@@ -11,6 +11,7 @@ import {
   Pencil,
   Check,
   ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { PrefillLoader } from "@/components/prefill-loader";
@@ -135,6 +136,7 @@ export function TeammatesChat({
   onRenamed,
   initialPendingMessage,
   size = "compact",
+  onBack,
 }: {
   initialThreadId?: string | null;
   onThreadEvent?: (thread: { id: string; title: string }) => void;
@@ -145,6 +147,10 @@ export function TeammatesChat({
   onRenamed?: (id: string, title: string) => void;
   initialPendingMessage?: string;
   size?: "compact" | "full";
+  /** Mobile-only "back to thread list" affordance (teammates-workspace.tsx's
+   * two-pane layout collapses to one pane below `md`) — omitted entirely
+   * when the caller has nowhere to go back to (the compact panel variant). */
+  onBack?: () => void;
 } = {}) {
   const isFull = size === "full";
   const textSize = isFull ? "text-sm" : "text-xs";
@@ -409,7 +415,17 @@ export function TeammatesChat({
           this thread's own real title (or "Workers" before one exists,
           never invented), no icon, no separate background — just the
           name, so it doesn't cost the page its own visual "area." */}
-      <div className={`flex items-center justify-center shrink-0 px-3 ${isFull ? "py-1.5" : "py-1"}`}>
+      <div className={`relative flex items-center justify-center shrink-0 px-3 ${isFull ? "py-1.5" : "py-1"}`}>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to conversations"
+            className="md:hidden absolute left-1 flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
         {isEditingTitle ? (
           <div className="flex items-center gap-1 w-full max-w-xs">
             <input

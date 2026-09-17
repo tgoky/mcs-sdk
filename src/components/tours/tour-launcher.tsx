@@ -32,7 +32,7 @@ export function TourLauncher() {
         title="Take a tour"
         aria-label="Take a tour"
         data-tour="tour-launcher"
-        className={`relative flex items-center justify-center h-6 w-6 rounded-lg transition-colors cursor-pointer ${
+        className={`relative flex items-center justify-center h-6 w-6 rounded-lg transition-colors cursor-pointer before:content-[''] before:absolute before:-inset-2 ${
           activeTourId
             ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40"
             : "text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"

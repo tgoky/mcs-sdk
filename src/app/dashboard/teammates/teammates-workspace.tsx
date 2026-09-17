@@ -42,7 +42,7 @@
 // against each other, divided only by the draggable line rendered
 // between them, matching how Claude's own chat sidebar and message pane
 // are one continuous surface instead of two floating panels.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { TeammatesChat, readStoredThreadId } from "./teammates-chat";
 import { TeammatesThreadRail, type ThreadSummary } from "./teammates-thread-rail";
 
@@ -63,6 +63,12 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
   const [selected, setSelected] = useState<string | null>(() => readStoredThreadId());
   const [epoch, setEpoch] = useState(0);
   const [railWidth, setRailWidth] = useState(readStoredRailWidth);
+  // Below `md` there's no room for the rail and the chat side by side (the
+  // rail alone is 200-400px wide — most of a phone screen), so mobile gets
+  // one pane at a time instead: the thread list, or the open chat with a
+  // back button. This only ever matters below `md` — at `md`+ both panes
+  // render together regardless of this flag (see the className below).
+  const [mobileShowList, setMobileShowList] = useState(() => readStoredThreadId() === null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -127,6 +133,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
   }, []);
 
   function selectThread(id: string) {
+    setMobileShowList(false);
     // Re-clicking the already-active thread shouldn't reload it — that'd
     // just be a pointless remount + spinner for content already on screen.
     if (id === selected) return;
@@ -135,6 +142,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
   }
 
   function startNewChat() {
+    setMobileShowList(false);
     // Same guard: clicking "New conversation" while already on a blank
     // one shouldn't wipe whatever's been typed but not sent yet.
     if (selected === null) return;
@@ -178,7 +186,12 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
 
   return (
     <div ref={containerRef} className="relative flex h-full min-h-0">
-      <div style={{ width: railWidth }} className="h-full min-h-0 shrink-0">
+      <div
+        style={{ "--rail-width": `${railWidth}px` } as CSSProperties}
+        className={`h-full min-h-0 shrink-0 w-full md:w-[var(--rail-width)] ${
+          mobileShowList ? "block" : "hidden md:block"
+        }`}
+      >
         <TeammatesThreadRail
           threads={threads}
           selectedId={selected}
@@ -191,13 +204,15 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
 
       {/* The "single vertical line" divider — draggable, no boxed panels
          on either side of it. Wider invisible hit target than the visible
-         line itself, same trick as right-utility-panel.tsx's own handle. */}
-      <div onMouseDown={onDragStart} className="relative w-px shrink-0 cursor-col-resize group" title="Drag to resize">
+         line itself, same trick as right-utility-panel.tsx's own handle.
+         Hidden below `md`: only one pane shows at a time there (see
+         mobileShowList above), so there's nothing to divide/resize. */}
+      <div onMouseDown={onDragStart} className="hidden md:block relative w-px shrink-0 cursor-col-resize group" title="Drag to resize">
         <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
         <div className="absolute inset-y-0 left-0 w-px bg-zinc-200 dark:bg-zinc-800 group-hover:bg-zinc-400 dark:group-hover:bg-zinc-600 transition-colors" />
       </div>
 
-      <div className="flex-1 min-w-0 h-full min-h-0">
+      <div className={`flex-1 min-w-0 h-full min-h-0 ${mobileShowList ? "hidden md:block" : "block"}`}>
         <TeammatesChat
           key={epoch}
           initialThreadId={selected}
@@ -205,6 +220,7 @@ export function TeammatesWorkspace({ initialThreads }: { initialThreads: ThreadS
           onRenamed={handleRenamed}
           initialPendingMessage={epoch === 0 ? pendingMessage : undefined}
           size="full"
+          onBack={() => setMobileShowList(true)}
         />
       </div>
     </div>

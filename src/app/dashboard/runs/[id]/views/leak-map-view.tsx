@@ -327,7 +327,8 @@ export function LeakMapView({
                     : "No funnel metrics match your search filter."}
                 </div>
               ) : (
-                <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 bg-white/50 dark:bg-zinc-900/50">
                       <th className="px-4 py-2 font-semibold">Funnel Metric</th>
@@ -385,6 +386,7 @@ export function LeakMapView({
                     })}
                   </tbody>
                 </table>
+                </div>
               )}
             </>
           );

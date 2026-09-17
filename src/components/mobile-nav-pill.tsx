@@ -4,8 +4,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Menu, X } from "lucide-react";
+import { Search, Menu, X, Check, Loader2, LogOut, Plus } from "lucide-react";
 import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
+import type { Workspace } from "@/lib/workspace";
 
 // Fix: this file used to hardcode its own NAVIGATION_SECTIONS — a second,
 // independently-authored guess at the app's structure that didn't match
@@ -20,9 +21,20 @@ import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
 // two product badges it mirrored — this is a flat list now, same shape
 // on mobile as on desktop.
 
-export function MobileNavPill() {
+export function MobileNavPill({
+  displayName,
+  userEmail,
+  workspaces = [],
+  activeWorkspaceId,
+}: {
+  displayName?: string;
+  userEmail?: string;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
+}) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -132,6 +144,87 @@ export function MobileNavPill() {
               <SETTINGS_NAV.icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
               <span>{SETTINGS_NAV.label}</span>
             </Link>
+
+            {/* Fix: desktop's only client switcher and only sign-out control
+                both live in PrimaryRail, which is `hidden md:flex` — mobile
+                had no way to switch clients or log out from inside the
+                dashboard at all. Reusing the same
+                /api/workspaces/:id/switch POST + /api/auth/logout POST
+                pattern primary-rail.tsx uses, just laid out for a full-bleed
+                mobile list instead of a popover. */}
+            {workspaces.length > 0 && (
+              <div className="px-5 py-4">
+                <p className="text-xs font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
+                  Workspaces
+                </p>
+                <div className="space-y-1">
+                  {workspaces.map((workspace) => {
+                    const isActive = workspace.workspaceId === activeWorkspaceId;
+                    const isSwitching = switchingWorkspaceId === workspace.workspaceId;
+                    return (
+                      <form
+                        key={workspace.workspaceId}
+                        action={`/api/workspaces/${workspace.workspaceId}/switch`}
+                        method="POST"
+                        onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
+                      >
+                        <button
+                          type="submit"
+                          disabled={isActive || switchingWorkspaceId !== null}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl min-w-0 text-sm transition-colors disabled:cursor-not-allowed ${
+                            isActive
+                              ? "bg-zinc-100 dark:bg-zinc-900 font-semibold cursor-default"
+                              : switchingWorkspaceId !== null
+                              ? "opacity-50"
+                              : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
+                          }`}
+                        >
+                          <span className="w-7 h-7 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-[11px] flex items-center justify-center shrink-0 font-mono">
+                            {workspace.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className="truncate min-w-0">{workspace.name}</span>
+                          {isSwitching ? (
+                            <Loader2 className="w-4 h-4 shrink-0 ml-auto animate-spin" />
+                          ) : (
+                            isActive && <Check className="w-4 h-4 shrink-0 ml-auto" />
+                          )}
+                        </button>
+                      </form>
+                    );
+                  })}
+                </div>
+                <Link
+                  href="/home/new"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 mt-1 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>New workspace</span>
+                </Link>
+              </div>
+            )}
+
+            <div className="px-5 py-4">
+              {displayName && (
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate mb-3">
+                  {displayName}
+                  {userEmail && (
+                    <span className="block text-xs font-normal text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                      {userEmail}
+                    </span>
+                  )}
+                </p>
+              )}
+              <form action="/api/auth/logout" method="POST">
+                <button
+                  type="submit"
+                  className="flex items-center gap-3 px-3 py-2.5 -mx-3 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors cursor-pointer bg-transparent border-none w-full"
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  <span>Sign out</span>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

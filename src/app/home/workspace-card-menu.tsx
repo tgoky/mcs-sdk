@@ -46,7 +46,7 @@ export function WorkspaceCardMenu({
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label={`Actions for ${workspace.name}`}
-            className="relative z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+            className="relative z-20 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>

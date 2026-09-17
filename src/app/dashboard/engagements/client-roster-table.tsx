@@ -337,8 +337,8 @@ export function ClientRosterTable({
                           type="button"
                           title="More options"
                           className={cn(
-                            "hover-lift press-settle shrink-0 p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
-                            "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-zinc-200 dark:data-[state=open]:bg-zinc-700/60 data-[state=open]:text-zinc-900 dark:data-[state=open]:text-white"
+                            "hover-lift press-settle shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer",
+                            "opacity-100 md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-zinc-200 dark:data-[state=open]:bg-zinc-700/60 data-[state=open]:text-zinc-900 dark:data-[state=open]:text-white"
                           )}
                         >
                           <MoreHorizontal className="w-3.5 h-3.5" />

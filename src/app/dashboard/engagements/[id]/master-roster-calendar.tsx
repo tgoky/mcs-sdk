@@ -566,6 +566,13 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
       {/* 1. Month View */}
       {mode === "month" && !roster.loading && (
         <div className="overflow-hidden no-ambient-glow surface-glass-2 rounded-2xl font-sans">
+          {/* 7 fixed columns don't fit a phone width without the day
+              content (skill badges + labels) getting crushed illegible —
+              scroll horizontally instead of shrinking cells below a
+              legible minimum, same pattern as the data tables elsewhere
+              in the app (client-rail.tsx etc). */}
+          <div className="overflow-x-auto">
+          <div className="min-w-[630px]">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -666,6 +673,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </button>
               );
             })}
+          </div>
+          </div>
           </div>
         </div>
       )}

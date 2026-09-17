@@ -379,6 +379,11 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       {/* 1. MONTH VIEW */}
       {mode === "month" && !loading && (
         <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans">
+          {/* 7 fixed columns don't fit a phone width without cell content
+              getting crushed illegible — scroll horizontally instead,
+              same pattern as master-roster-calendar.tsx's month view. */}
+          <div className="overflow-x-auto">
+          <div className="min-w-[630px]">
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
@@ -456,6 +461,8 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 </button>
               );
             })}
+          </div>
+          </div>
           </div>
         </div>
       )}

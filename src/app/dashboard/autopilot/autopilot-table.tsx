@@ -26,7 +26,7 @@ function ToggleSwitch({ on, busy, onClick, label }: { on: boolean; busy: boolean
       disabled={busy}
       aria-label={label}
       aria-pressed={on}
-      className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none ${
+      className={`relative inline-flex h-3.5 w-6 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none before:content-[''] before:absolute before:-inset-[10px] ${
         on
           ? "bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)]"
           : "bg-zinc-300 dark:bg-zinc-700/80 border border-zinc-400/30 dark:border-zinc-600/50"

@@ -94,7 +94,12 @@ export default async function DashboardLayout({
         </ShellLayout>
 
         {/* Floating Mobile Nav Pill & Accordion Navigation */}
-        <MobileNavPill />
+        <MobileNavPill
+          displayName={displayName}
+          userEmail={userEmail}
+          workspaces={workspaceList}
+          activeWorkspaceId={activeWorkspace.workspaceId}
+        />
 
         <TourOverlay />
       </TourProvider>

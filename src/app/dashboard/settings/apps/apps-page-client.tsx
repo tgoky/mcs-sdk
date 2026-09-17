@@ -446,8 +446,8 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
         </div>
       )}
 
-      <div className="flex items-start gap-6">
-        <aside className="w-44 shrink-0 sticky top-4 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start gap-6">
+        <aside className="w-full md:w-44 md:shrink-0 md:sticky md:top-4 space-y-4">
           <div>
             <p className="px-2.5 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               Browse
@@ -658,13 +658,13 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void 
             )}
           </p>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {!item.isComposioManaged && (
             <button
               type="button"
               onClick={() => setRotating((r) => !r)}
               title="Rotate key"
-              className="p-1.5 rounded-md cursor-pointer"
+              className="p-2 rounded-md cursor-pointer"
               style={{ color: "var(--text-muted)" }}
             >
               <RotateCw size={14} />
@@ -675,7 +675,7 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void 
             onClick={del}
             disabled={busy}
             title="Delete"
-            className="p-1.5 rounded-md cursor-pointer disabled:opacity-50"
+            className="p-2 rounded-md cursor-pointer disabled:opacity-50"
             style={{ color: "var(--text-muted)" }}
           >
             <Trash2 size={14} />

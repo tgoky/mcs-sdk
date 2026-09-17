@@ -44,14 +44,22 @@ export function FloatingPanel({
     setOpen(false);
   }
 
+  const [resolvedWidth, setResolvedWidth] = useState(panelWidth);
+
   useEffect(() => {
     if (!open) return;
     const el = anchorRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    // On a narrow viewport (phones), the panel can't be wider than the
+    // screen minus margin on both sides — clamping only `left` and not
+    // the width left it rendering full-width off the left edge of any
+    // phone screen, unreachable and unclosable by normal means.
+    const width = Math.min(panelWidth, window.innerWidth - VIEWPORT_MARGIN * 2);
     const top = Math.min(rect.bottom + 8, window.innerHeight - VIEWPORT_MARGIN);
-    let left = align === "end" ? rect.right - panelWidth : rect.left;
-    left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - panelWidth - VIEWPORT_MARGIN);
+    let left = align === "end" ? rect.right - width : rect.left;
+    left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - width - VIEWPORT_MARGIN);
+    setResolvedWidth(width);
     setCoords({ top, left });
   }, [open, align, panelWidth]);
 
@@ -87,7 +95,7 @@ export function FloatingPanel({
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              style={{ position: "fixed", top: coords.top, left: coords.left, width: panelWidth }}
+              style={{ position: "fixed", top: coords.top, left: coords.left, width: resolvedWidth }}
               className="z-50 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 motion-safe:origin-top-right"
             >
               <div

@@ -398,7 +398,8 @@ export function PileOnModuleView({
       {/* LIST VIEW */}
       {mode === "list" && (
         <div className="w-full font-sans border-t border-b border-zinc-800/80 pt-1">
-          <table className="w-full text-left text-xs font-sans">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-xs font-sans">
             <thead>
               <tr className="border-b border-zinc-800/80 text-[11px] text-zinc-400">
                 <th className="px-4 py-3 font-normal">Name & Diagnostic Action</th>
@@ -514,6 +515,7 @@ export function PileOnModuleView({
               )}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800/80">

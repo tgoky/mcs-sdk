@@ -81,7 +81,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("shrink-0 border-b border-zinc-800 px-5 py-4", className)}
+      className={cn("shrink-0 border-b border-zinc-200 dark:border-zinc-800 px-5 py-4", className)}
       {...props}
     />
   );
@@ -101,7 +101,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("shrink-0 border-t border-zinc-800 px-5 py-4", className)}
+      className={cn("shrink-0 border-t border-zinc-200 dark:border-zinc-800 px-5 py-4", className)}
       {...props}
     />
   );
@@ -111,7 +111,7 @@ function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPr
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-base font-semibold text-white leading-tight", className)}
+      className={cn("text-base font-semibold text-zinc-900 dark:text-white leading-tight", className)}
       {...props}
     />
   );
@@ -121,7 +121,7 @@ function SheetDescription({ className, ...props }: React.ComponentProps<typeof S
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("mt-1 text-xs text-zinc-400", className)}
+      className={cn("mt-1 text-xs text-zinc-500 dark:text-zinc-400", className)}
       {...props}
     />
   );

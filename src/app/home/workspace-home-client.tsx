@@ -411,31 +411,33 @@ export function WorkspaceHomeClient({
         </div>
       ) : (
         <div className="surface-glass-3 rounded-xl overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
-                <th className="py-3 pl-4 pr-3">Workspace Name</th>
-                <th className="py-3 px-3">Package & Skills</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Created</th>
-                <th className="py-3 pr-4 pl-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
-              {workspaceList.map((workspace, idx) => (
-                <WorkspaceRow
-                  key={workspace.workspaceId}
-                  workspace={workspace}
-                  packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
-                  enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
-                  index={idx}
-                  workspaceCount={workspaceList.length}
-                  isSwitching={switchingId === workspace.workspaceId}
-                  onSwitch={(id) => setSwitchingId(id)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/40 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 select-none">
+                  <th className="py-3 pl-4 pr-3">Workspace Name</th>
+                  <th className="py-3 px-3">Package & Skills</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Created</th>
+                  <th className="py-3 pr-4 pl-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/40">
+                {workspaceList.map((workspace, idx) => (
+                  <WorkspaceRow
+                    key={workspace.workspaceId}
+                    workspace={workspace}
+                    packageIds={installedByWorkspace[workspace.workspaceId] ?? []}
+                    enabledSkillIds={enabledSkillsByWorkspace[workspace.workspaceId] ?? []}
+                    index={idx}
+                    workspaceCount={workspaceList.length}
+                    isSwitching={switchingId === workspace.workspaceId}
+                    onSwitch={(id) => setSwitchingId(id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </main>

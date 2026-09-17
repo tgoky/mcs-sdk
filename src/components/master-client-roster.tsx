@@ -89,7 +89,8 @@ export function ModuleClientRoster({
 
   return (
     <div className="rounded-2xl border border-zinc-800/80 overflow-hidden font-sans">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="border-b border-zinc-800/80 bg-zinc-900/40 text-left text-[10.5px] font-mono uppercase tracking-wide text-zinc-500">
             <th className="px-4 py-2.5 font-medium">Client</th>
@@ -152,6 +153,7 @@ export function ModuleClientRoster({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

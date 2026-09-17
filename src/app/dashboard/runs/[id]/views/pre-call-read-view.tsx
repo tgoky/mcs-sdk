@@ -237,7 +237,8 @@ export function PreCallReadView({
                     day: "numeric",
                   })}
                 </div>
-                <table className="w-full text-left text-xs font-sans">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-xs font-sans">
                   <thead>
                     <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 font-sans">
                       <th className="px-4 py-2 font-semibold">Prospect</th>
@@ -296,6 +297,7 @@ export function PreCallReadView({
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             ))
           )}
