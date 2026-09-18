@@ -764,13 +764,19 @@ export function UnifiedActivityPanel({
             <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
           </div>
 
-          {/* Same explicit content-area background queue-panel.tsx's own
-              "TABLE AREA" wrapper uses (bg-white/60 dark:bg-sidebar) —
-              distinct from the outer shell's darker surface-glass-2, so
-              this reads as its own lighter surface the way queue-panel's
-              does, empty state included, rather than showing the darker
-              shell through any empty space. */}
-          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-white/60 dark:bg-sidebar p-3">
+          {/* Content-area background — NOT queue-panel.tsx's literal
+              `dark:bg-sidebar` (tried that; it's a no-op in dark mode).
+              globals.css: --sidebar is #100c19, and .surface-glass-2 (the
+              outer shell) resolves to --card (#1c1729) color-mixed to 62%
+              opacity over the page's near-black --background — the two
+              land within a couple RGB points of each other, so setting
+              this area to --sidebar was invisible against that shell no
+              matter how it's wrapped. --card is genuinely lighter
+              (#1c1729, solid) and is exactly the "a card sitting above
+              the page" token this app already defines for this — bg-card
+              reads it directly, no dark: prefix needed, since --card
+              itself flips value inside .dark {}. */}
+          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-card p-3">
             {pagedItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-center text-zinc-500 dark:text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">{items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}</p>
