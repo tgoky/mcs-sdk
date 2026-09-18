@@ -437,24 +437,6 @@
   background: var(--surface-glass);
 }
 
-/* Opt-in to a clearly visible border on a surface-glass-* card, for the
-   rare outer "card frame" that needs to read as a distinct container
-   (not blend into the page). The dark-mode surface-glass-* border is
-   deliberately near-invisible by design (see the 2026-09-10 note above)
-   for surfaces meant to blend in — this is the explicit opt-in for the
-   handful that shouldn't. Pair with a surface-glass-* class rather than
-   replacing it; does not change the shared surface-glass-* rule itself. */
-.glass-visible-border.surface-glass-1,
-.glass-visible-border.surface-glass-2,
-.glass-visible-border.surface-glass-3 {
-  border-color: rgba(0, 0, 0, 0.14);
-}
-.dark .glass-visible-border.surface-glass-1,
-.dark .glass-visible-border.surface-glass-2,
-.dark .glass-visible-border.surface-glass-3 {
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
 /* Flat solid surfaces (buttons) that still need real depth without a
    glass fill — shadow tiers alone, no blur/translucency. */
 .shadow-elevation-1 {
