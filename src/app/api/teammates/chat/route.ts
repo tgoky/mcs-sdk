@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements } from "@/models/schema";
+import { engagements, coldOpenConfig, whopAgentConnections } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { and, eq, isNull } from "drizzle-orm";
@@ -11,7 +11,27 @@ import { createMinimalEngagement } from "@/lib/create-minimal-engagement";
 import { createMinimalRepEngagement } from "@/lib/create-minimal-rep-engagement";
 import { getRepEnrolledEngagementIds } from "@/lib/rep-engagements";
 import { checkCredentialAvailability, linkReusableCredential, getComposioConnectLink, hasBookingCredential } from "@/lib/chat-credentials";
-import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison } from "@/lib/chat-status-queries";
+import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecoveries, getLeakMapBenchmarkComparison, getWhopConnectionStatus } from "@/lib/chat-status-queries";
+import {
+  runProductLaunchPreflightForEngagement,
+  assemblePurchaseCapPacketForEngagement,
+  configureCancelDiscountForEngagement,
+  assemblePayoutHoldKitForEngagement,
+  assembleDisputeResponseForEngagement,
+  submitDisputeEvidenceForEngagement,
+  draftWhopAdForEngagement,
+  flipWhopAdActiveForEngagement,
+  runBulkPromoCodesForEngagement,
+  runPortfolioRollupForEngagement,
+  runWeeklyOpsReportForEngagement,
+  runAttributionReportForEngagement,
+  configureWhopBridgeForEngagement,
+  configureCancellationSaveOfferForEngagement,
+} from "@/lib/chat-whop-agent";
+import { enableColdOpenSkillForEngagement } from "@/lib/chat-cold-open";
+import type { ProductLaunchInput } from "@/features/whop-agent/server/product-launch-preflight-service";
+import type { PromoCodeSpec } from "@/features/whop-agent/server/bulk-promo-codes-service";
+import type { DisputeEvidenceDraft } from "@/features/whop-agent/server/dispute-response-service";
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
 import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
 import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
@@ -149,6 +169,265 @@ const TOOLS = [
         provider: { type: "string", description: "Which platform — must be Composio-managed, check with check_credential's result first if unsure." },
       },
       required: ["field", "provider"],
+    },
+  },
+  {
+    name: "check_whop_connection",
+    description:
+      "Checks whether a client has a working Whop account connection through Whop Agent (the pasted Bot API key from its Connect step) — read-only. This is a completely different thing from the user being logged into this dashboard at all, which is a Whop OAuth session every request already requires and is never something to 'check' — never answer a general 'is my Whop account connected' question from session state alone; if the user means a specific client's Whop Agent connection, call this. If Whop Agent isn't installed in the workspace, say so plainly instead of calling this tool.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to check." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "run_product_launch_preflight",
+    description:
+      "Runs Whop Agent's Product Launch Pre-Flight for one product — validates the launch inputs against the purchase cap and Whop's own rules. For a client's first launch (per Section 8.2) this always comes back as a dry run — a preview of exactly what would be created, no live write. There is currently no way, in this chat or the dashboard, to force a real launch past that first dry run for a single product below the bulk-confirmation threshold (more than 3 products in one call queues the whole batch for a human to approve instead, and going live from there is real) — say so plainly rather than implying you can push it live.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to launch this for." },
+        title: { type: "string", description: "Product title." },
+        headline: { type: "string", description: "Product headline." },
+        description: { type: "string", description: "Optional product description." },
+        plans: {
+          type: "array",
+          description: "At least one pricing plan.",
+          items: {
+            type: "object",
+            properties: {
+              priceCents: { type: "number" },
+              billingType: { type: "string", enum: ["one_time", "recurring"] },
+              billingPeriod: { type: "string", enum: ["monthly", "yearly", "weekly"], description: "Required if billingType is recurring." },
+            },
+            required: ["priceCents", "billingType"],
+          },
+        },
+        promoCode: {
+          type: "object",
+          description: "Optional launch promo code.",
+          properties: { code: { type: "string" }, discountPercentage: { type: "number" } },
+        },
+      },
+      required: ["engagementId", "title", "headline", "plans"],
+    },
+  },
+  {
+    name: "assemble_purchase_cap_packet",
+    description:
+      "Read-only. Assembles Whop Agent's purchase-cap increase request packet for a client (sales history, account health, the manual walkthrough for submitting the request in the Whop dashboard — there's no API to submit it directly). Use this when a launch is halted for exceeding the purchase cap, or whenever the user wants to request a cap increase.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to assemble this for." },
+        highestPricedOfferCents: { type: "number", description: "The highest-priced offer driving the request, in cents." },
+        targetApprovalAmountCents: { type: "number", description: "The cap amount being requested, in cents." },
+        contactEmail: { type: "string", description: "Contact email for the request." },
+      },
+      required: ["engagementId", "highestPricedOfferCents", "targetApprovalAmountCents", "contactEmail"],
+    },
+  },
+  {
+    name: "configure_cancel_discount",
+    description:
+      "Proposes a native cancel-discount configuration on one of a client's recurring plans — every member who reaches the cancel step would see this offer. Always queued for a human to approve in the dashboard's Approvals (Section 8.3) — this never goes live directly, regardless of what's passed.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to configure this for." },
+        planId: { type: "string", description: "The Whop plan id." },
+        percentage: { type: "number", description: "Discount percentage, 1-100." },
+        intervals: { type: "number", description: "Number of billing intervals the discount applies for." },
+      },
+      required: ["engagementId", "planId", "percentage", "intervals"],
+    },
+  },
+  {
+    name: "assemble_payout_hold_kit",
+    description: "Read-only. Assembles a client's payout hold/suspension packet — account health, payout methods, chargeback ratio, a drafted escalation message to Whop support, and a follow-up checklist. Can run any time, not just during an actual hold (packet-on-demand).",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to assemble this for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "assemble_dispute_response",
+    description: "Read-only. Drafts a dispute evidence response for a real, specific Whop dispute on a client's account. Never posts anything — always show the user the draft and let them confirm before calling submit_dispute_evidence.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client this dispute belongs to." },
+        disputeId: { type: "string", description: "The Whop dispute id." },
+      },
+      required: ["engagementId", "disputeId"],
+    },
+  },
+  {
+    name: "submit_dispute_evidence",
+    description:
+      "Submits dispute evidence for real — but only ever as a queued request a human has to approve in the dashboard's Approvals (Section 8.3); this never posts to Whop directly. Only call this after assemble_dispute_response has produced a draft and the user has reviewed/confirmed it — pass the final draft (possibly user-edited), not a guessed one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client this dispute belongs to." },
+        disputeId: { type: "string", description: "The Whop dispute id." },
+        draft: {
+          type: "object",
+          description: "The evidence draft — notes is required, the rest are optional supporting fields matching Whop's own evidence categories.",
+          properties: {
+            notes: { type: "string" },
+            access_activity_log: { type: "string" },
+            billing_address: { type: "string" },
+            cancellation_policy_disclosure: { type: "string" },
+            customer_communication_attachment: { type: "string" },
+            customer_email_address: { type: "string" },
+            customer_name: { type: "string" },
+            product_description: { type: "string" },
+            refund_policy_disclosure: { type: "string" },
+            refund_refusal_explanation: { type: "string" },
+            service_date: { type: "string" },
+            uncategorized_attachment: { type: "string" },
+          },
+          required: ["notes"],
+        },
+      },
+      required: ["engagementId", "disputeId", "draft"],
+    },
+  },
+  {
+    name: "draft_whop_ad",
+    description:
+      "Drafts a Whop ad in the background — generates creative media and creates the ad in draft status only, no spend yet. Dispatches and returns a runId immediately; tell the user it's running. Flipping it active (real spend) is the separate flip_whop_ad_active action.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to draft this ad for." },
+        productId: { type: "string", description: "The Whop product id being advertised." },
+        creativeBrief: { type: "string", description: "The creative brief describing the ad." },
+        budgetCents: { type: "number", description: "Budget in cents." },
+        budgetLevel: { type: "string", enum: ["ad_group", "campaign"], description: "Which level the budget applies at." },
+        targeting: { type: "object", description: "Optional targeting parameters." },
+      },
+      required: ["engagementId", "productId", "creativeBrief", "budgetCents", "budgetLevel"],
+    },
+  },
+  {
+    name: "flip_whop_ad_active",
+    description: "Flips a drafted Whop ad active — starts real spend. Always queued for a human to approve in the dashboard's Approvals (Section 8.3); never goes live directly. Only call this after the user has seen the draft and explicitly asked to activate it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client this ad belongs to." },
+        adId: { type: "string", description: "The Whop ad id (from draft_whop_ad's result)." },
+        budgetCents: { type: "number", description: "The budget to activate with, in cents." },
+      },
+      required: ["engagementId", "adId", "budgetCents"],
+    },
+  },
+  {
+    name: "run_bulk_promo_codes",
+    description:
+      "Creates promo codes on a client's live Whop account, up to 25 in one call (more is automatically queued for a human to approve instead). First run for a client defaults to a dry run (Section 8.2) unless dryRun:false is explicitly passed — never pass dryRun:false yourself unless the user has already seen a dry-run result and explicitly confirmed the real thing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to create these for." },
+        codes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              code: { type: "string" },
+              planIds: { type: "array", items: { type: "string" } },
+              discountPercentage: { type: "number" },
+              newUsersOnly: { type: "boolean" },
+              existingMembershipsOnly: { type: "boolean" },
+              churnedUsersOnly: { type: "boolean" },
+              onePerCustomer: { type: "boolean" },
+              stock: { type: "number" },
+              unlimitedStock: { type: "boolean" },
+              promoDurationMonths: { type: "number" },
+              expiresAt: { type: "string" },
+            },
+            required: ["code", "planIds", "discountPercentage"],
+          },
+        },
+        dryRun: { type: "boolean", description: "Only set to false after the user has seen a dry run and explicitly confirmed the real thing." },
+      },
+      required: ["engagementId", "codes"],
+    },
+  },
+  {
+    name: "run_portfolio_rollup",
+    description: "Runs Whop Agent's Portfolio Rollup for a client in the background — read-only reporting, no writes to Whop. Dispatches and returns a runId; tell the user it's running and check get_run_history for the result.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to run this for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "run_weekly_ops_report",
+    description: "Runs Whop Agent's Weekly Ops Report for a client on demand (Section 9.8: manual on-demand always available) — read-only reporting. Dispatches and returns a runId; tell the user it's running.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to run this for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "run_attribution_report",
+    description: "Runs Whop Agent's Attribution & Affiliate Report for a client — read-only, no writes to Whop.",
+    input_schema: {
+      type: "object",
+      properties: { engagementId: { type: "string", description: "The client to run this for." } },
+      required: ["engagementId"],
+    },
+  },
+  {
+    name: "configure_whop_bridge",
+    description: "Sets the destination URL Whop Agent's Bridge Manager routes verified webhook events to for a client. A plain config write, never gated — it doesn't touch Whop or the destination itself. Field mapping (if the destination needs one) still has to be set on the client's own Bridge Manager page.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to configure this for." },
+        destinationUrl: { type: "string", description: "Must be a valid https:// URL." },
+      },
+      required: ["engagementId", "destinationUrl"],
+    },
+  },
+  {
+    name: "configure_cancellation_save_offer",
+    description:
+      "Saves what a client's native cancel-discount save-offer would say (discount %, duration, message) — a plain config write, not gated. This only saves the config; it gets proposed automatically the next time a real cancel-intent event comes in, it doesn't apply anything immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to configure this for." },
+        discountPercentage: { type: "number", description: "1-100." },
+        durationMonths: { type: "number", description: "Positive whole number." },
+        message: { type: "string", description: "The offer message shown to the member — required, never guess this." },
+        minTenureDays: { type: "number", description: "Optional minimum tenure before this offer applies." },
+        cooldownDays: { type: "number", description: "Optional cooldown between offers." },
+      },
+      required: ["engagementId", "discountPercentage", "durationMonths", "message"],
+    },
+  },
+  {
+    name: "enable_cold_open_skill",
+    description:
+      "Turns one of Cold Open's skills on or off for a client — the same toggle the dashboard's Skills panel has. Cannot turn on icp-lock this way (it needs its own onboarding bridge) and every other skill needs icp-lock to have already run for this client. This ONLY toggles the switch — voice-capture, source-connect, send-connect, daily-send, reply-sort, and send-report all then run automatically on their own cadence; there's no separate 'run now' for any of them, here or in the dashboard.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client to toggle this for." },
+        skillId: { type: "string", enum: ["voice-capture", "source-connect", "send-connect", "daily-send", "reply-sort", "send-report"], description: "Which Cold Open skill." },
+        enabled: { type: "boolean" },
+      },
+      required: ["engagementId", "skillId", "enabled"],
     },
   },
   {
@@ -415,26 +694,63 @@ const TOOLS = [
     },
   },
 ];
-function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEnrolled: boolean }[], repInstalled: boolean): string {
+interface ClientForPrompt {
+  engagementId: string;
+  buyer: string;
+  repEnrolled: boolean;
+  coldOpenEnrolled: boolean;
+  whopAgentConnected: boolean;
+}
+
+function buildSystemPrompt(
+  clients: ClientForPrompt[],
+  installed: { repInstalled: boolean; coldOpenInstalled: boolean; whopAgentInstalled: boolean }
+): string {
   const clientList =
     clients.length > 0
-      ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
+      ? clients
+          .map((c) => {
+            const tags = [
+              c.repEnrolled ? "Reputation Manager" : null,
+              c.coldOpenEnrolled ? "Cold Open" : null,
+              c.whopAgentConnected ? "Whop Agent connected" : null,
+            ].filter(Boolean);
+            return `- ${c.buyer} (engagementId: ${c.engagementId}${tags.length ? ", " + tags.join(", ") : ""})`;
+          })
+          .join("\n")
       : "(no clients yet)";
+  const installedProducts = [
+    "Showtime",
+    installed.repInstalled ? "Reputation Manager" : null,
+    installed.coldOpenInstalled ? "Cold Open" : null,
+    installed.whopAgentInstalled ? "Whop Agent" : null,
+  ].filter(Boolean);
+  const notInstalledProducts = [
+    !installed.repInstalled ? "Reputation Manager" : null,
+    !installed.coldOpenInstalled ? "Cold Open" : null,
+    !installed.whopAgentInstalled ? "Whop Agent" : null,
+  ].filter(Boolean);
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client (optionally with its SMS/ad-data platform), run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit, confirmation page rebuild) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard. The app has four products total: Showtime (booking/sales automation), Reputation Manager (online reputation monitoring), Cold Open (cold outbound email), and Whop Agent (automation against the operator's own Whop seller account — ads, disputes, payouts, webhooks, etc.). Know all four exist regardless of what's installed here — never act as if a product you have no tools for doesn't exist in the app at all; say plainly when something belongs to a real product but isn't wired up as a chat action yet, as the specific rules below do for each one.",
+    `Installed in this workspace: ${installedProducts.join(", ")}.${notInstalledProducts.length ? ` NOT installed: ${notInstalledProducts.join(", ")} — if asked to create a client or take an action in one of these, say plainly it isn't installed here rather than trying.` : ""}`,
+    "You can trigger real actions on the user's behalf. Showtime: Call Brief, Leak Map, create a client by name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client, run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit, confirmation page rebuild) standalone. Reputation Manager: create a client by operator name, ask a client's configured AI engines a live one-off question, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter/Trustpilot/Reddit. Whop Agent: check a client's connection health, run Product Launch Pre-Flight, assemble a purchase-cap increase packet, propose a cancel-discount configuration (queued for human approval), assemble a payout-hold kit, assemble and submit dispute evidence (submission queued for human approval), draft a Whop ad and flip one active (flipping is queued for human approval), create bulk promo codes, run the Portfolio Rollup / Weekly Ops Report / Attribution Report, and configure the Bridge Manager destination or the cancellation save-offer message. Cold Open: turn one of its skills on or off for an already-onboarded client. Plus status questions for any client — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — without triggering anything. What's genuinely NOT reachable from chat, because the underlying capability doesn't exist anywhere in the app yet (dashboard included) rather than just missing a chat wrapper: Whop Agent's own Connect step (pasting the Bot API key — a raw secret can never go through chat, full stop), Drift Monitor and Refund/Dispute Velocity (cron-only, no manual dispatch anywhere), Daily Change Digest (notification-only, nothing to run), Cold Open's ICP Lock onboarding and its other 6 skills' actual sends/scans (they run on their own cadence once enabled — only the on/off switch is real), Reputation Manager's own watch skills on demand, and Showtime's full Pin-Down wizard / a whole-worker Pile-On or Win-Back run. Say so plainly for any of those rather than pretending to do it.",
     "",
-    "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
+    "Clients (tags show which products beyond Showtime a client is actually enrolled in / connected to — a client with no tags is Showtime-only, or just created and not yet set up):",
     clientList,
     "",
     "Rules:",
     "- For Call Brief or Leak Map: only call the tool once you're sure which client the user means. If the client name is ambiguous, missing, or doesn't match anyone in the list above, ask a short clarifying question instead of guessing — never call a tool with a guessed engagementId. If they seem to mean a client who isn't in the list, ask whether they want to create that client first rather than assuming. Call Brief specifically needs a booking platform connected to run at all — if the tool says one isn't connected, offer to help set that up rather than just reporting the error and stopping. Neither tool applies to a Reputation Manager-only client — say so instead of trying.",
     "- For create_client: only the name is needed. Don't ask for booking/email platform, credentials, or anything else — that happens on the client's own page afterward, which the reply will link to automatically. Use this for a Showtime client.",
-    `- For create_rep_client: only the operator name is needed (the person/brand whose reputation is being monitored) — same minimal shape as create_client, just for Reputation Manager. ${repInstalled ? "Full identity-graph setup (aliases, handles, domains, competitors, which engines to run) still happens on the client's own Identity Setup page afterward, which the reply will link to automatically." : "Reputation Manager isn't installed in this workspace — if asked to create one, say so plainly rather than calling the tool."}`,
+    `- For create_rep_client: only the operator name is needed (the person/brand whose reputation is being monitored) — same minimal shape as create_client, just for Reputation Manager. ${installed.repInstalled ? "Full identity-graph setup (aliases, handles, domains, competitors, which engines to run) still happens on the client's own Identity Setup page afterward, which the reply will link to automatically." : "Reputation Manager isn't installed in this workspace — if asked to create one, say so plainly rather than calling the tool."}`,
     "- Reputation Manager's own watch skills (AI Engine Watch, Trustpilot/Reddit/Twitter Watch, Crisis Response) run automatically on their own schedule once a client's Identity Setup is complete — there's no manual \"run now\" for them yet, in the dashboard or here. If asked to trigger one on demand, say so plainly rather than pretending to.",
+    "- Whop Agent write actions are gated the same way the dashboard gates them, not by anything in this prompt alone: run_product_launch_preflight and run_bulk_promo_codes come back as a dry run on a client's first use (Section 8.2) with no way to force it live from chat for a single item — say so plainly rather than implying you can push it through; configure_cancel_discount, submit_dispute_evidence, and flip_whop_ad_active always queue a pendingAction for a human to approve in the dashboard's Approvals (Section 8.3), they never go live directly no matter how the user phrases the request — tell them it's queued and needs that approval, not that it's done. draft_whop_ad only creates a draft (no spend); flip_whop_ad_active only ever queues turning it on. assemble_purchase_cap_packet, assemble_payout_hold_kit, and assemble_dispute_response are read-only research/drafting, never move ahead to the queued action on your own — show the user what was assembled and let them decide.",
+    "- Whop Agent's Connect step (pasting the Bot API key) can never happen through chat — same raw-secret rule as booking/email credentials, no exception. Drift Monitor, Refund/Dispute Velocity, and Daily Change Digest have no manual trigger anywhere in this app, chat or dashboard — say so plainly rather than pretending to run one. Cold Open's ICP Lock onboarding needs its own bridge wizard (real ICP/product-identity input this chat can't collect) — point to that page instead of trying; enable_cold_open_skill only toggles an already-onboarded client's other skills on/off, it never runs a send or a scan on demand — those fire automatically on their own cadence once enabled, exactly like Reputation Manager's watch skills below.",
+    "- \"Is my Whop account connected\" is ambiguous between two real, different things — resolve which one before answering, don't guess: (1) the user's own Whop login session to this dashboard, which is always true simply by being here and using it (there's nothing to look up for that), and (2) a specific client's Whop Agent connection (a pasted Whop Bot API key, probed and health-checked — see check_whop_connection), which is a real per-client state that can be missing, healthy, or broken and genuinely needs looking up. If they mean their own login, say plainly it's already connected. If they mean a client's Whop Agent connection, or it's unclear which client, ask which client (if ambiguous) and call check_whop_connection rather than answering from memory. If Whop Agent isn't installed in this workspace at all, say that instead of calling the tool.",
+    "- More generally: if asked about something outside these tools' scope (a platform check_credential doesn't cover, an action none of these tools do, a product with no chat tools), don't just say it can't be checked/done and stop there — say plainly what you actually can do that's closest to what they asked, and whether the thing they want exists elsewhere in the app, so the reply is useful context rather than a dead end.",
     "- For booking or email platform setup: always call check_credential first, never assume whether one already exists or is reusable. If it finds a reusable saved credential, ask before calling use_saved_credential — don't link it without confirming. If none exists and the platform is Composio-managed (Calendly/GoHighLevel Calendar for booking; HubSpot/Klaviyo/Mailchimp/GoHighLevel for email), call connect_credential and tell the user to click the link — it's a real redirect, not something you can finish for them. For anything else (Cal.com, OnceHub, ActiveCampaign, ConvertKit, direct SMTP), or if they'd rather type a key directly, tell them to paste it on the client's own page instead — you can't collect a raw credential value in chat, only real links or saved-credential reuse. Always pass the correct field (\"booking\" or \"email\") matching which platform you're setting up.",
     "- Never ask the user to paste an API key or secret directly in this chat, under any circumstances, even if they offer to.",
     "- If a message arrives saying a platform was just connected, that means the user completed a connect_credential link and came back — call check_credential for that client/provider (it should now show a reusable credential) and then use_saved_credential to finish linking it, using whichever client was being set up earlier in the conversation.",
-    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery, how a client's Leak Map metrics compare to similar clients — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries / compare_leak_map_benchmarks. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
+    "- For status questions — what's on today, who cancelled, how did a run go, who's in an active recovery, how a client's Leak Map metrics compare to similar clients, whether a client's Whop Agent connection is healthy — use get_todays_calls / get_recent_cancellations / get_run_history / get_active_recoveries / compare_leak_map_benchmarks / check_whop_connection. These never change anything, so use them freely whenever the user is asking about current state rather than asking you to do something.",
     "- After a tool call, tell the user plainly what happened, including any error a tool returned (e.g. the skill being disabled for that client).",
     "- For enroll_in_winback: needs a working email-platform credential on the client already, plus the platform's recovery list/workflow configured — if the tool reports something's missing, tell the user plainly what and point them to the client's page, don't retry blindly.",
     "- For enroll_in_pile_on: ALWAYS call preview_pile_on_enrollment first and show the user its output before ever calling enroll_in_pile_on — never call enroll_in_pile_on in the same turn as the user's first request without a preview shown first. It only enrolls email, never SMS or an ad-data cohort sync (say so plainly if asked — deliberately not replicated for manual enrollment, see the tool's own description for why). If the preview or the real call reports an existing booking on file for that email, tell the user plainly and only pass force:true after they explicitly confirm they want to proceed anyway — never set force on your own judgment.",
@@ -446,7 +762,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
     "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, audit_confirmation_page, and rebuild_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. audit_confirmation_page only reviews a page that already exists; rebuild_confirmation_page is the one that actually rebuilds and republishes it — use rebuild_confirmation_page when asked to build, regenerate, or redeploy the confirmation page, or ask the user which they want if it's unclear.",
     "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose. rebuild_confirmation_page's heroVideoUrl: only set it when the user actually gives a Loom/YouTube/Vimeo link to save — omit it to just rebuild with whatever's already on file.",
-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, turn Pile-On on for a client (enable_pile_on), preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's five individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), compare a client's Leak Map metrics to benchmarks (compare_leak_map_benchmarks), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, enable_pile_on, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+    "- The full tool list is exactly the tools available to you in this call, nothing more — Showtime/RM/Whop Agent/Cold Open actions described above, plus status/read tools. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills on their regular cadence, or for anything listed as genuinely not reachable above (Whop Agent Connect, Drift Monitor, Refund/Dispute Velocity, Daily Change Digest, Cold Open's ICP Lock or its other skills' actual sends/scans), say plainly that it's not wired up rather than pretending to do it.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -465,15 +781,33 @@ export async function POST(request: Request) {
     }
 
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
-    const [clients, repEnrolledIds, repInstalled] = await Promise.all([
+    const [clients, repEnrolledIds, coldOpenEnrolledRows, whopAgentConnectedRows, repInstalled, coldOpenInstalled, whopAgentInstalled] = await Promise.all([
       db
         .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
         .from(engagements)
         .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt))),
       getRepEnrolledEngagementIds(session.whopUserId, activeWorkspace.workspaceId),
+      // coldOpenConfig/whopAgentConnections each key uniquely off
+      // engagementId with no workspaceId column of their own (same shape
+      // as repIdentityGraphs) — scoped to this workspace the same way
+      // getRepEnrolledEngagementIds is, via the engagements join.
+      db
+        .select({ engagementId: coldOpenConfig.engagementId })
+        .from(coldOpenConfig)
+        .innerJoin(engagements, eq(engagements.engagementId, coldOpenConfig.engagementId))
+        .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt))),
+      db
+        .select({ engagementId: whopAgentConnections.engagementId })
+        .from(whopAgentConnections)
+        .innerJoin(engagements, eq(engagements.engagementId, whopAgentConnections.engagementId))
+        .where(and(eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId), isNull(engagements.deletedAt))),
       isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "reputation-manager"),
+      isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "cold-open"),
+      isPackageInstalledInWorkspace(activeWorkspace.workspaceId, "whop-agent"),
     ]);
     const repEnrolledSet = new Set(repEnrolledIds);
+    const coldOpenEnrolledSet = new Set(coldOpenEnrolledRows.map((r) => r.engagementId));
+    const whopAgentConnectedSet = new Set(whopAgentConnectedRows.map((r) => r.engagementId));
 
     // Resolve (or create) the thread this message belongs to. A threadId
     // the caller doesn't actually own (wrong workspace, stale after a DB
@@ -501,8 +835,13 @@ export async function POST(request: Request) {
 
     await appendMessage({ threadId, role: "user", kind: "text", rawContent: message, displayText: message });
 
-    const clientsForPrompt = clients.map((c) => ({ ...c, repEnrolled: repEnrolledSet.has(c.engagementId) }));
-    const system = buildSystemPrompt(clientsForPrompt, repInstalled);
+    const clientsForPrompt: ClientForPrompt[] = clients.map((c) => ({
+      ...c,
+      repEnrolled: repEnrolledSet.has(c.engagementId),
+      coldOpenEnrolled: coldOpenEnrolledSet.has(c.engagementId),
+      whopAgentConnected: whopAgentConnectedSet.has(c.engagementId),
+    }));
+    const system = buildSystemPrompt(clientsForPrompt, { repInstalled, coldOpenInstalled, whopAgentInstalled });
     const history = await loadThreadForModel(threadId);
 
     const first = await callClaudeWithTools({ model: MODEL.SYNTHESIS, system, messages: history, tools: TOOLS, maxTokens: 800 });
@@ -601,6 +940,240 @@ export async function POST(request: Request) {
           if (result.ok) links.push({ label: `Connect ${provider}`, href: result.redirectUrl });
         } else {
           message2 = "Missing provider.";
+        }
+      } else if (block.name === "check_whop_connection") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace, so there's no Whop Bot API key connection to check for this client.";
+        } else {
+          const status = await getWhopConnectionStatus(engagementId, activeWorkspace.workspaceId);
+          ok = true;
+          if (!status.connected) {
+            message2 = "No Whop account has been connected for this client yet — Whop Agent's Connect step hasn't been run.";
+          } else if (status.disconnected) {
+            message2 = `This client's Whop connection was disconnected (account ${status.whopAccountId ?? "unknown"}) — it needs to be reconnected.`;
+          } else if (status.circuitBreakerState === "open") {
+            message2 = `This client's Whop connection is broken (account ${status.whopAccountId ?? "unknown"}) — the circuit breaker tripped${status.circuitBreakerReason ? `: ${status.circuitBreakerReason}` : ""}. It needs to be reconnected.`;
+          } else {
+            message2 = `Connected (account ${status.whopAccountId ?? "unknown"}, ${status.credentialType} credential). ${status.unlockedScopeCount}/${status.totalScopeCount} probed scopes unlocked${status.lastScopeProbeAt ? `, last checked ${status.lastScopeProbeAt.toLocaleString()}` : ""}.`;
+          }
+        }
+      } else if (block.name === "run_product_launch_preflight") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await runProductLaunchPreflightForEngagement(session, engagementId, {
+            title: typeof block.input.title === "string" ? block.input.title : "",
+            headline: typeof block.input.headline === "string" ? block.input.headline : "",
+            description: typeof block.input.description === "string" ? block.input.description : undefined,
+            plans: Array.isArray(block.input.plans) ? (block.input.plans as ProductLaunchInput["plans"]) : [],
+            promoCode: block.input.promoCode as ProductLaunchInput["promoCode"],
+          });
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "assemble_purchase_cap_packet") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await assemblePurchaseCapPacketForEngagement(session, engagementId, {
+            highestPricedOfferCents: Number(block.input.highestPricedOfferCents),
+            targetApprovalAmountCents: Number(block.input.targetApprovalAmountCents),
+            contactEmail: typeof block.input.contactEmail === "string" ? block.input.contactEmail : "",
+          });
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "configure_cancel_discount") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await configureCancelDiscountForEngagement(
+            session,
+            engagementId,
+            typeof block.input.planId === "string" ? block.input.planId : "",
+            Number(block.input.percentage),
+            Number(block.input.intervals)
+          );
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "assemble_payout_hold_kit") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await assemblePayoutHoldKitForEngagement(session, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "assemble_dispute_response") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await assembleDisputeResponseForEngagement(session, engagementId, typeof block.input.disputeId === "string" ? block.input.disputeId : "");
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "submit_dispute_evidence") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await submitDisputeEvidenceForEngagement(
+            session,
+            engagementId,
+            typeof block.input.disputeId === "string" ? block.input.disputeId : "",
+            (block.input.draft ?? {}) as DisputeEvidenceDraft
+          );
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "draft_whop_ad") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await draftWhopAdForEngagement(session, engagementId, {
+            productId: typeof block.input.productId === "string" ? block.input.productId : "",
+            creativeBrief: typeof block.input.creativeBrief === "string" ? block.input.creativeBrief : "",
+            budgetCents: Number(block.input.budgetCents),
+            budgetLevel: block.input.budgetLevel === "campaign" ? "campaign" : "ad_group",
+            targeting: block.input.targeting as Record<string, unknown> | undefined,
+          });
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok && result.runId) links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+        }
+      } else if (block.name === "flip_whop_ad_active") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await flipWhopAdActiveForEngagement(
+            session,
+            engagementId,
+            typeof block.input.adId === "string" ? block.input.adId : "",
+            Number(block.input.budgetCents)
+          );
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "run_bulk_promo_codes") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const dryRun = typeof block.input.dryRun === "boolean" ? block.input.dryRun : undefined;
+          const result = await runBulkPromoCodesForEngagement(session, engagementId, (block.input.codes ?? []) as PromoCodeSpec[], dryRun);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok && result.runId) links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+        }
+      } else if (block.name === "run_portfolio_rollup") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await runPortfolioRollupForEngagement(session, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok && result.runId) links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+        }
+      } else if (block.name === "run_weekly_ops_report") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await runWeeklyOpsReportForEngagement(session, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok && result.runId) links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+        }
+      } else if (block.name === "run_attribution_report") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await runAttributionReportForEngagement(session, engagementId);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok && result.runId) links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+        }
+      } else if (block.name === "configure_whop_bridge") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await configureWhopBridgeForEngagement(session, engagementId, typeof block.input.destinationUrl === "string" ? block.input.destinationUrl : "");
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "configure_cancellation_save_offer") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!whopAgentInstalled) {
+          message2 = "Whop Agent isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await configureCancellationSaveOfferForEngagement(session, engagementId, {
+            discountPercentage: Number(block.input.discountPercentage),
+            durationMonths: Number(block.input.durationMonths),
+            message: typeof block.input.message === "string" ? block.input.message : "",
+            minTenureDays: block.input.minTenureDays !== undefined ? Number(block.input.minTenureDays) : undefined,
+            cooldownDays: block.input.cooldownDays !== undefined ? Number(block.input.cooldownDays) : undefined,
+          });
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+        }
+      } else if (block.name === "enable_cold_open_skill") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        if (!coldOpenInstalled) {
+          message2 = "Cold Open isn't installed in this workspace.";
+        } else if (!engagementId) {
+          message2 = "Missing engagementId.";
+        } else {
+          const result = await enableColdOpenSkillForEngagement(
+            session.whopUserId,
+            activeWorkspace.workspaceId,
+            engagementId,
+            typeof block.input.skillId === "string" ? block.input.skillId : "",
+            block.input.enabled === true
+          );
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
         }
       } else if (block.name === "get_todays_calls") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

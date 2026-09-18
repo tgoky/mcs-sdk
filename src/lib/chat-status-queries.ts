@@ -10,7 +10,7 @@
 // first, and worth keeping that way going forward.
 
 import { db } from "@/lib/db";
-import { bookingRoster, skillRuns, winBackEnrollments, engagements, auditRunsLog } from "@/models/schema";
+import { bookingRoster, skillRuns, winBackEnrollments, engagements, auditRunsLog, whopAgentConnections } from "@/models/schema";
 import { and, eq, gte, lte, desc } from "drizzle-orm";
 import { getBenchmarkLines } from "@/features/leak-map/server/leak-map-benchmarks";
 
@@ -149,6 +149,72 @@ export async function getLeakMapBenchmarkComparison(engagementId: string, worksp
     };
   }
   return { lines, auditedAt: latestAudit.createdAt };
+}
+
+/**
+ * Whop Agent's own connection state for one client — the real thing
+ * behind "is my Whop account connected," which is a different question
+ * from being logged into this dashboard at all (that's the Whop OAuth
+ * session every request already requires, not a per-client state). This
+ * is whop_agent_connections: whether whop-connect (see
+ * connect-service.ts) has ever been run for this client, and if so
+ * whether it's still healthy — a pasted Bot API key can go bad later
+ * (revoked, rotated) independently of the initial connect having
+ * succeeded, which is exactly what the circuit breaker and
+ * disconnectedAt columns track.
+ *
+ * Whether Whop Agent is even installed in the workspace is a separate,
+ * cheaper check (isPackageInstalledInWorkspace) callers already do
+ * before reaching for this — this function only answers "for this one
+ * client, has whop-connect been run, and is it still healthy."
+ */
+export async function getWhopConnectionStatus(
+  engagementId: string,
+  workspaceId: string
+): Promise<
+  | { connected: false }
+  | {
+      connected: true;
+      credentialType: "bot" | "app" | "oauth" | "unknown";
+      whopAccountId: string | null;
+      circuitBreakerState: "closed" | "open";
+      circuitBreakerReason: string | null;
+      disconnected: boolean;
+      lastScopeProbeAt: Date | null;
+      unlockedScopeCount: number;
+      totalScopeCount: number;
+    }
+> {
+  if (!(await verifyEngagementInWorkspace(engagementId, workspaceId))) return { connected: false };
+
+  const [row] = await db
+    .select({
+      credentialType: whopAgentConnections.credentialType,
+      whopAccountId: whopAgentConnections.whopAccountId,
+      scopeProbeResults: whopAgentConnections.scopeProbeResults,
+      lastScopeProbeAt: whopAgentConnections.lastScopeProbeAt,
+      circuitBreakerState: whopAgentConnections.circuitBreakerState,
+      circuitBreakerReason: whopAgentConnections.circuitBreakerReason,
+      disconnectedAt: whopAgentConnections.disconnectedAt,
+    })
+    .from(whopAgentConnections)
+    .where(eq(whopAgentConnections.engagementId, engagementId))
+    .limit(1);
+
+  if (!row) return { connected: false };
+
+  const probeResults = row.scopeProbeResults ?? {};
+  return {
+    connected: true,
+    credentialType: row.credentialType,
+    whopAccountId: row.whopAccountId,
+    circuitBreakerState: row.circuitBreakerState,
+    circuitBreakerReason: row.circuitBreakerReason,
+    disconnected: Boolean(row.disconnectedAt),
+    lastScopeProbeAt: row.lastScopeProbeAt,
+    unlockedScopeCount: Object.values(probeResults).filter((r) => r.ok).length,
+    totalScopeCount: Object.keys(probeResults).length,
+  };
 }
 
 export async function getActiveRecoveries(engagementId: string, workspaceId: string) {
