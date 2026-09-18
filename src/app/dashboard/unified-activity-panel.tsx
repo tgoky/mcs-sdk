@@ -621,7 +621,12 @@ export function UnifiedActivityPanel({
           the rail's own scope card label right below it. Full Queue/All
           Runs moved into the toolbar row instead of getting a whole row
           of their own. */}
-      <div ref={containerRef} className="surface-glass-2 rounded-lg overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
+      {/* glass-visible-border: this outer shell's border is otherwise the
+          same near-invisible dark-mode border every surface-glass-2 card
+          gets (globals.css) — barely there against the rail/table busy-ness
+          right up against it. Opt-in modifier, scoped to this card only;
+          doesn't touch the shared class queue-panel.tsx's own card uses. */}
+      <div ref={containerRef} className="glass-visible-border surface-glass-2 rounded-lg overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
         {/* LEFT RAIL — By Worker / By Category. No client dimension: this
             workspace has exactly one client (see EngagementActionsMenu's
             own "one-workspace-one-client" comment) so there's nothing an
@@ -857,11 +862,13 @@ export function UnifiedActivityPanel({
               unambiguous step away from the shell's near-black tone,
               already proven visible elsewhere in this exact file (row
               hover/selected states below use zinc-800/zinc-900 the same
-              way) — rather than another custom-token guess. Dimmed to
-              zinc-900/40 rather than the full-strength zinc-900 the
-              header/rail get — this area doesn't need to read as bright
-              as the chrome around it, just distinguishable from it. */}
-          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-zinc-100/60 dark:bg-zinc-900/40 p-3">
+              way) — rather than another custom-token guess. zinc-900/65
+              reads noticeably darker than the header/rail chrome without
+              going flat black — the near-black --background underneath
+              still shows through at that opacity. Light mode reuses the
+              rail's own `#f8f7fa` so both sides of the card read as one
+              surface instead of two different off-whites. */}
+          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-[#f8f7fa] dark:bg-zinc-900/65 p-3">
             {pagedItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-center text-zinc-500 dark:text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">{items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}</p>
