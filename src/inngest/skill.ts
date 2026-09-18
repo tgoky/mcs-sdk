@@ -77,6 +77,7 @@ export const executeSkillRun = inngest.createFunction(
       deepScanTimeframe,
       scriptApproachOverride,
       competitorPageUrl,
+      heroVideoUrl,
     } = event.data;
 
     const tenantRaw = await step.run("load-tenant", async () => {
@@ -152,6 +153,7 @@ export const executeSkillRun = inngest.createFunction(
         deepScanTimeframe,
         scriptApproachOverride,
         competitorPageUrl,
+        heroVideoUrl,
       });
     } catch (err: unknown) {
       await failRun(runId, err).catch(() => {});

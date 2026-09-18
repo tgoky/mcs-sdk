@@ -1,5 +1,5 @@
 import type { PageContentModel } from "./content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass, buildGoogleFontLinks } from "./content-model";
 import { buildGoldenTicketDynamicHtml } from "./dynamic/golden-ticket.dynamic";
 
 /**
@@ -59,6 +59,7 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${m.title}</title>
+${buildGoogleFontLinks("family=Abril+Fatface&family=Inter:wght@400;500;600;700")}
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -66,7 +67,7 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
     margin: 0;
     background: #151014;
     color: #fcefcf;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 640px; margin: 0 auto; padding: 52px 22px 96px; }
@@ -75,7 +76,7 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
 
   .eyebrow { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; color: #E8B23D; margin: 0 0 6px; }
   .brand-line { text-align: center; font-size: 0.72rem; color: #a3915f; margin: 0 0 22px; }
-  h1 { text-align: center; font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 28px; }
+  h1 { text-align: center; font-family: "Abril Fatface", Georgia, serif; font-size: 2.3rem; font-weight: 400; letter-spacing: -0.01em; margin: 0 0 28px; }
 
   /* Ticket stub — signature element */
   .ticket { display: flex; margin: 0 0 22px; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45)); }
@@ -113,7 +114,7 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
   .notch.bottom { bottom: -8px; }
 
   .ticket-main .kicker { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #E8B23D; margin: 0 0 6px; font-weight: 700; }
-  .ticket-main .name { font-size: 1.2rem; font-weight: 700; margin: 0 0 4px; }
+  .ticket-main .name { font-family: "Abril Fatface", Georgia, serif; font-size: 1.3rem; font-weight: 400; margin: 0 0 4px; }
   .ticket-main .meta { font-size: 0.8rem; color: #cbb98d; margin: 0; }
   .admit { position: absolute; top: 22px; right: 24px; border: 1px solid #E8B23D; color: #E8B23D; font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 9px; border-radius: 3px; transform: rotate(4deg); }
 
@@ -148,9 +149,10 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
   .foot p { font-size: 0.84rem; color: #cbb98d; line-height: 1.6; margin: 0 0 18px; }
   .cta { display: inline-block; padding: 13px 28px; background: #E8B23D; color: #151014; border-radius: 999px; text-decoration: none; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.02em; }
   .cta-static { display: inline-block; font-size: 0.78rem; color: #8a7a54; font-style: italic; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="eyebrow">${m.heroEyebrow}</p>
   <p class="brand-line">Hosted by ${m.buyer}</p>
@@ -173,13 +175,16 @@ function buildGoldenTicketStaticHtml(m: PageContentModel): string {
     </div>
   </div>
 
-  <div class="video-card">
+  ${buildHeroVideoBlock({
+    heroVideoUrl: m.heroVideoUrl,
+    placeholderHtml: `<div class="video-card">
     <span class="play"></span>
     <div>
       <p class="vtitle">What to expect when you arrive</p>
       <p class="vsub">${m.heroLength} &middot; recording in progress</p>
     </div>
-  </div>
+  </div>`,
+  })}
 
   <section>
     <p class="label">Before you arrive</p>

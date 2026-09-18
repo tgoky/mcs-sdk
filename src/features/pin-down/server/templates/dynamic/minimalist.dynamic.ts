@@ -1,5 +1,5 @@
 import type { PageContentModel } from "../content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "../content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass } from "../content-model";
 import { buttonCss } from "./component-catalog";
 
 /**
@@ -73,9 +73,10 @@ export function buildMinimalistDynamicHtml(m: PageContentModel): string {
   .quote .who { display: block; margin-top: 6px; font-size: 0.78rem; color: ${t.color.textMuted}; }
 
   .foot p { font-size: 0.88rem; color: ${t.color.textMuted}; line-height: 1.6; margin: 0 0 18px; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <h1>${mergeField("firstName", "You&rsquo;re confirmed.", `You&rsquo;re confirmed, ${mergeSlot("firstName")}.`)}</h1>
@@ -90,7 +91,10 @@ export function buildMinimalistDynamicHtml(m: PageContentModel): string {
 
   <section>
     <p class="brief-text">A short briefing introduces your call with ${m.host} and what to expect &mdash; nothing you need to prepare.</p>
-    <div class="video-line"><span class="dot"></span>Briefing video &mdash; ${m.heroLength}, recording in progress</div>
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-line"><span class="dot"></span>Briefing video &mdash; ${m.heroLength}, recording in progress</div>`,
+    })}
   </section>
 
   <section>

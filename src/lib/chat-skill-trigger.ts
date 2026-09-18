@@ -274,3 +274,21 @@ export async function triggerPageAuditForEngagement(
     cleanUrl
   );
 }
+
+export async function triggerConfirmationPageRebuildForEngagement(
+  whopUserId: string,
+  workspaceId: string,
+  engagementId: string,
+  heroVideoUrl?: string
+): Promise<TriggerChatSkillResult> {
+  const cleanVideoUrl = heroVideoUrl?.trim() || undefined;
+  return triggerChatSkillForEngagement(
+    whopUserId,
+    workspaceId,
+    engagementId,
+    "pin-down-confirmation-page",
+    { heroVideoUrl: cleanVideoUrl },
+    "Rebuilding and republishing the confirmation page. This can take a minute — check back or ask for the status.",
+    "confirmation_page_deploy"
+  );
+}

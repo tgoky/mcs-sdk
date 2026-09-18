@@ -704,6 +704,19 @@ export const engagements = pgTable("engagements", {
   // when a live deploy succeeded — that would violate "buyer owns the
   // asset."
   confirmationPageUrl: text("confirmation_page_url"),
+  // A recorded hero video the buyer wants embedded in place of the
+  // permanent "recording in progress" placeholder every confirmation-page
+  // template ships with by default. Set once the buyer has actually
+  // recorded the hero script script-builder.ts generates — sanitizeVideoEmbedUrl
+  // (templates/content-model.ts) only ever accepts Loom/YouTube/Vimeo share
+  // links and rebuilds a known-safe embed URL from the extracted ID, never
+  // echoing this raw value into the published page.
+  heroVideoUrl: text("hero_video_url"),
+  // Opt-in only — off unless the operator explicitly turns it on in the
+  // client details drawer, applied on the next confirmation-page rebuild.
+  // See content-model.ts's ENTRANCE_ANIMATION_CSS for why this defaults
+  // to false rather than shipping motion on by default.
+  confirmationPageAnimationsEnabled: boolean("confirmation_page_animations_enabled").notNull().default(false),
   confirmationPageDeployment: jsonb("confirmation_page_deployment").$type<{
     mode: "live" | "paste_ready" | "not_deployed" | "pending_review";
     deployedVia?: string;

@@ -1,5 +1,5 @@
 import type { PageContentModel } from "./content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass, buildGoogleFontLinks } from "./content-model";
 import { buildAssessmentDynamicHtml } from "./dynamic/assessment.dynamic";
 
 /**
@@ -62,6 +62,7 @@ function buildAssessmentStaticHtml(m: PageContentModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${m.title}</title>
+${buildGoogleFontLinks("family=IBM+Plex+Sans:wght@400;500;600")}
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -69,7 +70,7 @@ function buildAssessmentStaticHtml(m: PageContentModel): string {
     margin: 0;
     background: #F5F7F5;
     color: #1C2321;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   main { max-width: 600px; margin: 0 auto; padding: 60px 24px 100px; }
   [hidden] { display: none !important; }
@@ -129,9 +130,10 @@ function buildAssessmentStaticHtml(m: PageContentModel): string {
 
   .contact { font-size: 0.86rem; color: #4d5851; line-height: 1.6; border-top: 1px solid #dbe4de; padding-top: 22px; }
   .cta { display: inline-block; margin-top: 16px; padding: 11px 22px; background: #1F6F5C; color: #f5f7f5; text-decoration: none; border-radius: 8px; font-size: 0.84rem; font-weight: 700; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
@@ -148,13 +150,16 @@ function buildAssessmentStaticHtml(m: PageContentModel): string {
   </div>
 
   <section>
-    <div class="video-card">
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-card">
       <span class="play"></span>
       <div>
         <p class="vtitle">How the assessment works</p>
         <p class="vsub">${m.heroLength} &middot; recording in progress</p>
       </div>
-    </div>
+    </div>`,
+    })}
   </section>
 
   <section>

@@ -9,10 +9,12 @@
 // `buyer` below is the operator's own client/brand name (labelled "Client
 // Name" in the engagement wizard — see offer-step.tsx), not the individual
 // prospect who books a call. That distinction matters here specifically
-// because these pages are built ONCE per engagement at onboarding
-// (buildConfirmationPageHtml is called a single time in
-// onboarding-service.ts) and then published as static HTML that every
-// future prospect who books lands on — there is no per-booking rebuild.
+// because these pages are built and published as static HTML that every
+// future prospect who books lands on, not rebuilt per booking — onboarding
+// (onboarding-service.ts) builds it once, and confirmation-page-only.ts
+// can rebuild+republish it again on demand afterward (still the same
+// static-per-engagement model — a rebuild replaces the one live page, it
+// doesn't create a per-prospect variant).
 // Every prospect who visits therefore sees byte-identical HTML; the only
 // thing that legitimately varies per visit is whatever the booking
 // platform's own redirect appends as URL query params. `/confirm/[id]`
@@ -45,6 +47,15 @@ export interface PageBuilderInput {
     }>;
   };
   calendarAddToUrl?: string;
+  /** A Loom/YouTube/Vimeo share link to the buyer's own recorded hero
+   * video, once they've actually recorded the script script-builder.ts
+   * generates. Every template ships a "recording in progress" placeholder
+   * by default (see buildHeroVideoBlock below) — this is the one field
+   * that replaces it with a real embed. Anything that isn't a recognized
+   * share link from one of those three providers is dropped rather than
+   * embedded, same "allowlist and rebuild the URL ourselves" approach as
+   * calendarAddToUrl below, not just HTML-escaped. */
+  heroVideoUrl?: string;
   /** Raw scraped signal from the buyer's own site (design-scraper.ts),
    * when a crawl produced one. Classified once, here, into DesignTokens —
    * templates never see the raw form. Absent (undefined) is a completely
@@ -53,6 +64,9 @@ export interface PageBuilderInput {
    * is exactly today's hardcoded look for each archetype — a scrape can
    * only add a matched skin, it can never break the safe default. */
   designSignal?: RawSiteSignal;
+  /** Opt-in only — see ENTRANCE_ANIMATION_CSS's own comment for why this
+   * defaults to false rather than shipping on by default. */
+  animationsEnabled?: boolean;
 }
 
 export interface EscapedTestimonial {
@@ -78,6 +92,12 @@ export interface PageContentModel {
   testimonials: EscapedTestimonial[];
   showProof: boolean;
   calendarAddToUrl?: string;
+  /** Already validated + rebuilt into a known-safe embed URL (see
+   * sanitizeVideoEmbedUrl) — templates can drop this straight into an
+   * iframe src with no further checks. Undefined means "no real video
+   * yet," not "sanitization failed silently" — both look the same to a
+   * template (show the placeholder), which is the point. */
+  heroVideoUrl?: string;
   /** Deterministic short reference code derived from the buyer's name
    * (e.g. "PD-JSC") — not a real tracking ID, just a docket-style flourish.
    * Used as a signature element by Ledger, Contract (agreement reference),
@@ -89,6 +109,10 @@ export interface PageContentModel {
    * default; templates should never need to look at anything else to
    * make that call. */
   designTokens: DesignTokens;
+  /** Already resolved to a plain boolean — see PageBuilderInput's own field
+   * for why this exists. Templates read this once, to set <body>'s class;
+   * they never need the raw input shape. */
+  animationsEnabled: boolean;
 }
 
 /**
@@ -157,6 +181,51 @@ function sanitizeHref(url: string | undefined): string | undefined {
   return escapeHtml(trimmed);
 }
 
+/**
+ * Recognizes a Loom/YouTube/Vimeo share link and rebuilds a fresh,
+ * known-safe embed URL from just the extracted video ID — the raw input
+ * string is never itself echoed into the output, only a capture group
+ * that a stricter regex has already constrained to safe characters. Any
+ * link that doesn't match one of the three exactly falls through to
+ * undefined rather than being embedded unvetted or escaped-and-trusted;
+ * a template treats "no video yet" and "unrecognized link" identically
+ * (show the placeholder), which is the safer default either way.
+ */
+export function sanitizeVideoEmbedUrl(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+
+  const loom = trimmed.match(/^https:\/\/(?:www\.)?loom\.com\/share\/([a-zA-Z0-9]+)/i);
+  if (loom) return `https://www.loom.com/embed/${loom[1]}`;
+
+  const youtubeWatch = trimmed.match(/^https:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([a-zA-Z0-9_-]{6,20})/i);
+  if (youtubeWatch) return `https://www.youtube.com/embed/${youtubeWatch[1]}`;
+
+  const youtuBe = trimmed.match(/^https:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,20})/i);
+  if (youtuBe) return `https://www.youtube.com/embed/${youtuBe[1]}`;
+
+  const vimeo = trimmed.match(/^https:\/\/(?:www\.)?vimeo\.com\/(\d+)/i);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+
+  return undefined;
+}
+
+/**
+ * The one piece of markup every template's hero section needs, factored
+ * out so a template only ever renders ONE of "placeholder" or "real
+ * video" instead of five separate copies of that branch. Returns a
+ * self-contained 16:9 box either way, styled inline so no template needs
+ * a new CSS rule to support it — heroVideoUrl is already a fully-formed,
+ * sanitized embed URL by the time it reaches here (see
+ * sanitizeVideoEmbedUrl), so this never re-validates it.
+ */
+export function buildHeroVideoBlock(opts: { heroVideoUrl?: string; placeholderHtml: string }): string {
+  if (!opts.heroVideoUrl) return opts.placeholderHtml;
+  return `<div style="position:relative;padding-top:56.25%;border-radius:12px;overflow:hidden;background:#000;">
+    <iframe src="${opts.heroVideoUrl}" style="position:absolute;inset:0;width:100%;height:100%;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy" title="Call briefing video"></iframe>
+  </div>`;
+}
+
 function buildReference(buyer: string): string {
   const initials =
     buyer
@@ -201,9 +270,67 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
     testimonials,
     showProof: testimonials.length > 0,
     calendarAddToUrl: sanitizeHref(input.calendarAddToUrl),
+    heroVideoUrl: sanitizeVideoEmbedUrl(input.heroVideoUrl),
     reference: buildReference(input.buyer),
     designTokens: input.designSignal ? classifySiteSignal(input.designSignal) : DEFAULT_TOKENS,
+    animationsEnabled: input.animationsEnabled === true,
   };
+}
+
+// ── Entrance animation (opt-in) ─────────────────────────────────────────
+// Off by default — a prospect landing here mid-decision shouldn't have
+// motion sprung on them without the operator having actually chosen it,
+// and a subtle fade doesn't fix a page that isn't working, it just adds
+// risk for someone who never asked for it. An operator flips this on per
+// engagement (client-details-drawer.tsx) once they've seen the page and
+// want the extra polish; the next rebuild is what applies it (this is a
+// build-time flag baked into the static HTML, same as every other page
+// setting, not something a viewer can toggle).
+//
+// Implementation is one shared CSS block plus a body class rather than
+// per-element markup changes — a template's own top-level `main > *`
+// children get a staggered fade-up automatically, so this drops into all
+// 10 templates (5 static, 5 site-matched) without editing their markup at
+// all. Entirely inert (zero visual change) unless both the class is
+// present AND the visitor's OS isn't requesting reduced motion — the
+// @media query below means a `prefers-reduced-motion: reduce` visitor
+// never gets it regardless of the operator's setting, matching how every
+// other real product handles that preference.
+export const ENTRANCE_ANIMATION_CSS = `
+  @media (prefers-reduced-motion: no-preference) {
+    body.pd-anim main > * { animation: pd-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    body.pd-anim main > *:nth-child(1) { animation-delay: 0s; }
+    body.pd-anim main > *:nth-child(2) { animation-delay: 0.06s; }
+    body.pd-anim main > *:nth-child(3) { animation-delay: 0.12s; }
+    body.pd-anim main > *:nth-child(4) { animation-delay: 0.18s; }
+    body.pd-anim main > *:nth-child(5) { animation-delay: 0.24s; }
+    body.pd-anim main > *:nth-child(n+6) { animation-delay: 0.3s; }
+    @keyframes pd-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  }`;
+
+/** `<body class="...">`'s value — every template calls this instead of
+ * inlining the ternary, so the class name itself (and ENTRANCE_ANIMATION_CSS's
+ * selector) can only ever drift out of sync in one place if it ever changes. */
+export function animationBodyClass(m: PageContentModel): string {
+  return m.animationsEnabled ? "pd-anim" : "";
+}
+
+// ── Static templates' webfont (site-matched templates skip this — see
+// their own dynamic/*.dynamic.ts files, which already render the buyer's
+// real detected font from the design scrape, a stronger signal than any
+// generic font choice here) ─────────────────────────────────────────────
+/**
+ * `families` is the exact `family=...&family=...` query Google Fonts'
+ * css2 endpoint expects — each static template passes its own, since
+ * each picked a different face to match its own personality (see each
+ * template's own file header). preconnect hints are included so the
+ * font request doesn't cost a full extra DNS+TLS round trip on top of
+ * the stylesheet fetch.
+ */
+export function buildGoogleFontLinks(families: string): string {
+  return `<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?${families}&display=swap" rel="stylesheet">`;
 }
 
 // ── Client-side prospect personalization ────────────────────────────────

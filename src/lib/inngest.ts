@@ -67,6 +67,11 @@ export type SkillRunExecuteData = {
   // prompt as comparison context. Optional: omitting it is the existing
   // single-page audit, unchanged.
   competitorPageUrl?: string;
+  // For pin-down-confirmation-page — an updated hero video link to save
+  // and use for this rebuild in one action, instead of requiring a
+  // separate "update the video URL" step first. Omitting it just reuses
+  // whatever heroVideoUrl is already on the engagement row.
+  heroVideoUrl?: string;
 };
 
 

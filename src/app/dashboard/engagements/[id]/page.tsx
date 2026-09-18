@@ -306,6 +306,8 @@ export default async function EngagementDetailPage({
                     rawVoiceCorpus: engagement.rawVoiceCorpus,
                     existingProof: engagement.existingProof ?? null,
                     confirmationPageTemplate: engagement.confirmationPageTemplate,
+                    heroVideoUrl: engagement.heroVideoUrl,
+                    confirmationPageAnimationsEnabled: engagement.confirmationPageAnimationsEnabled,
                     notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
                     hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
                     hasScriptPack: Boolean(engagement.pinDownScriptPack),

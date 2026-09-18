@@ -8,6 +8,8 @@ import { computeWinBackRevenueAttribution } from "@/features/win-back/server/rev
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcomes";
 import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outcomes-section";
+import { getShowRateByTemplate } from "@/features/reports/server/show-rate-by-template";
+import { ShowRateByTemplateSection } from "@/components/analytics/show-rate-by-template-section";
 import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
 import { CategorySignalsSection } from "@/components/analytics/category-signals-section";
 import { SkillComparisonSection, type SkillStat } from "@/components/analytics/skill-comparison-section";
@@ -205,6 +207,11 @@ export default async function AnalyticsPage() {
   // portfolio-outcomes.ts for why this is a real per-account read, not a
   // recycled version of the infra-health numbers further down the page.
   const portfolioAccounts = await getPortfolioOutcomes(engagementRows.map((e) => ({ engagementId: e.engagementId, buyer: e.buyer })));
+
+  // Pin-Down only, but reads whopUserId-wide same as everything else on
+  // this page — an operator with only Reputation Manager/Cold Open
+  // clients just sees the section's own empty state, no separate gate.
+  const showRateByTemplate = await getShowRateByTemplate(whopUserId);
 
   const [runRows, pendingWindow, blockersWindow, auditWindow, revenueResults] = await Promise.all([
     db
@@ -412,6 +419,16 @@ export default async function AnalyticsPage() {
         <Section title="Daily activity" caption={`Run volume and outcome mix, last ${TREND_DAYS} days`}>
           <Card className="p-4">
             {totalRuns === 0 ? <EmptyState>No skill runs in the last {TREND_DAYS} days.</EmptyState> : <DailyActivityChart days={dailyActivity} />}
+          </Card>
+        </Section>
+
+        {/* Show rate by confirmation-page template — Pin-Down's own
+            performance rollup, all time (not TREND/LOOKBACK-windowed —
+            template choice is a slow-moving, low-volume signal, and
+            windowing it would mostly just shrink an already-thin sample). */}
+        <Section title="Show rate by confirmation page template" caption="All-time, across every Pin-Down client on this account">
+          <Card>
+            <ShowRateByTemplateSection stats={showRateByTemplate} />
           </Card>
         </Section>
 

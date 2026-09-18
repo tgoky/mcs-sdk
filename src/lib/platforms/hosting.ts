@@ -40,6 +40,42 @@ export interface ConfirmationPageContent {
   title: string;
 }
 
+/**
+ * Every confirmation-page template (templates/*.ts) emits a full,
+ * self-contained `<!doctype html><html>...` document — its own `body { }`
+ * and `* { box-sizing: border-box }` rules are page-level resets, correct
+ * for a file that IS the whole page (plain_html, Vercel static deploy) or
+ * a full document an AI reads as a source (Lovable's paste-into-chat
+ * flow). They are NOT correct once that same string gets dropped into an
+ * existing page's DOM — a Webflow CMS item's Embed field, a WordPress
+ * Gutenberg HTML block, or a manually-pasted Custom HTML element — where
+ * the nested `<html>/<head>/<body>` tags get silently merged by the
+ * browser's parser into the ONE real `<body>` on the page. Those global
+ * resets would then apply to the buyer's actual nav bar, footer, and
+ * anything else already on that page, not just the confirmation content.
+ *
+ * Wrapping in a full-bleed `srcdoc` iframe sidesteps this completely: the
+ * document renders in a genuinely separate browsing context, so its CSS
+ * can never touch the host page's own styles regardless of what chrome
+ * surrounds it. This is the same technique real embeddable-widget
+ * products (Calendly, Typeform) use for exactly this reason — call sites
+ * below use it for every "insert this into an existing page" publish
+ * path (Webflow, WordPress, GHL, and unrecognized platforms) and skip it
+ * only for the three cases that legitimately want the raw full document:
+ * plain_html and the Vercel paste-ready fallback (both real static-file
+ * deploys) and Lovable (an AI reads the HTML as source, not a literal
+ * DOM paste).
+ */
+function escapeForHtmlAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+export function wrapAsEmbeddableIframe(html: string, title: string): string {
+  return `<iframe srcdoc="${escapeForHtmlAttribute(html)}" title="${escapeForHtmlAttribute(
+    title
+  )}" style="width:100%;min-height:100vh;border:0;display:block;" loading="eager"></iframe>`;
+}
+
 export type HostingDeployResult =
   | { mode: "live"; url: string; deployedVia: string; resourceId?: string | number } // 🌟 THE FIX: Clean typed data passing
   | {
@@ -72,35 +108,51 @@ export class WebflowClient {
    * https://buyer-domain.com/confirmation/{engagementId}. Webflow does not
    * expose a general "create arbitrary full-layout static page" endpoint,
    * so CMS-item-as-page is the correct mechanism, not a workaround.
+   *
+   * `existingItemId`, when supplied, PATCHes that item instead of POSTing
+   * a new one — same "update in place when we already know the resource"
+   * contract WordPressClient.publishPage below has always had. Without
+   * this, a second publish for the same engagement (a manual rebuild, or
+   * re-running onboarding) would POST a second CMS item at the same slug
+   * every time instead of updating the one the buyer's live page already
+   * points at — Webflow enforces unique slugs per collection, so this
+   * wasn't a "you get two pages" bug so much as "the second publish would
+   * fail outright."
    */
   async publishConfirmationItem(
     collectionId: string,
     slug: string,
-    content: ConfirmationPageContent
+    content: ConfirmationPageContent,
+    existingItemId?: string
   ): Promise<{ itemId: string }> {
+    const fieldData = {
+      name: content.title,
+      slug,
+      // Buyer's CMS template is expected to bind this field to a
+      // rich-text / embed element. Field name is a convention Pin-Down
+      // documents to the buyer during hosting setup, not a Webflow
+      // built-in. Wrapped in an isolated iframe (see wrapAsEmbeddableIframe's
+      // own comment) — the buyer's CMS template wraps this item in their
+      // site's real nav/footer, so the page's own body-level styles must
+      // never leak into that surrounding chrome.
+      "confirmation-page-html": wrapAsEmbeddableIframe(content.html, content.title),
+    };
+
     const res = await fetchWithTimeout(
-      `${this.baseUrl}/collections/${collectionId}/items`,
+      existingItemId
+        ? `${this.baseUrl}/collections/${collectionId}/items/${existingItemId}`
+        : `${this.baseUrl}/collections/${collectionId}/items`,
       {
-        method: "POST",
+        method: existingItemId ? "PATCH" : "POST",
         headers: this.headers,
-        body: JSON.stringify({
-          isArchived: false,
-          isDraft: false,
-          fieldData: {
-            name: content.title,
-            slug,
-            // Buyer's CMS template is expected to bind this field to a
-            // rich-text / embed element. Field name is a convention Pin-Down
-            // documents to the buyer during hosting setup, not a Webflow
-            // built-in.
-            "confirmation-page-html": content.html,
-          },
-        }),
+        body: JSON.stringify(
+          existingItemId ? { fieldData } : { isArchived: false, isDraft: false, fieldData }
+        ),
       }
     );
     if (!res.ok) {
       throw new Error(
-        `Webflow CMS item creation failed [${res.status}]: ${await res.text()}`
+        `Webflow CMS item ${existingItemId ? "update" : "creation"} failed [${res.status}]: ${await res.text()}`
       );
     }
     const data = await res.json();
@@ -184,7 +236,11 @@ export class WordPressClient {
     slug: string,
     pageId?: number
   ): Promise<{ pageId: number; link: string }> {
-    const blockContent = `<!-- wp:html -->\n${content.html}\n<!-- /wp:html -->`;
+    // Isolated in an iframe (see wrapAsEmbeddableIframe's own comment) —
+    // this page keeps the theme's real header/footer around it, so the
+    // confirmation page's own body-level resets must never leak into that
+    // surrounding chrome the way raw HTML in a block would.
+    const blockContent = `<!-- wp:html -->\n${wrapAsEmbeddableIframe(content.html, content.title)}\n<!-- /wp:html -->`;
 
     const body = {
       title: content.title,
@@ -265,6 +321,13 @@ export interface HostingMeta {
   webflow_site_id?: string;
   webflow_collection_id?: string;
   webflow_page_id?: string; // for optional script injection
+  /** The CMS Collection Item id from a prior successful publish — passed
+   * back in so a later publish (e.g. a manual "rebuild confirmation page")
+   * updates that same item instead of POSTing a new one at the same slug,
+   * which Webflow would reject. Set by the router below after a "live"
+   * webflow deploy; callers persist it the same way wordpress_page_id
+   * already gets persisted after a WordPress deploy. */
+  webflow_confirmation_item_id?: string;
   // WordPress
   wordpress_site_url?: string;
   wordpress_page_id?: number;
@@ -301,11 +364,13 @@ export async function publishConfirmationPage(
         const { itemId } = await client.publishConfirmationItem(
           meta.webflow_collection_id,
           slug,
-          content
+          content,
+          meta.webflow_confirmation_item_id
         );
         await client.publishSite(meta.webflow_site_id);
         return {
           mode: "live",
+          resourceId: itemId,
           url: `https://${meta.webflow_site_id}.webflow.io/confirmation/${slug}`,
           deployedVia: `webflow:${itemId}`,
         };
@@ -379,6 +444,16 @@ export async function publishConfirmationPage(
   }
 }
 
+// plain_html/nextjs_vercel (a real static file deploy) and lovable (an AI
+// reads the HTML as source, not a literal DOM paste) keep the raw full
+// document. Everything else — webflow, wordpress, ghl, and an unknown
+// platform (a safe default: "paste into an existing page" is the more
+// common shape, and the iframe wrapper costs nothing if we're wrong) —
+// describes dropping this into ONE element on an otherwise-real page (an
+// Embed block, a Custom HTML block), so it gets wrapAsEmbeddableIframe's
+// isolation instead.
+const FULL_DOCUMENT_PLATFORMS = new Set(["nextjs_vercel", "lovable", "plain_html"]);
+
 function pasteReady(
   platform: string,
   reason: string,
@@ -386,24 +461,29 @@ function pasteReady(
 ): HostingDeployResult {
   const instructionsByPlatform: Record<string, string> = {
     webflow:
-      "In Webflow Designer: create a page (or CMS collection item) at the confirmation slug, add an Embed element, and paste the HTML below into it. Publish the site.",
+      "In Webflow Designer: create a page (or CMS collection item) at the confirmation slug, add an Embed element, and paste the snippet below into it. Publish the site.",
     wordpress:
-      "In WordPress admin: create a new Page, switch to the Code Editor (or add a Custom HTML block), paste the HTML below, and publish.",
+      "In WordPress admin: create a new Page, switch to the Code Editor (or add a Custom HTML block), paste the snippet below, and publish.",
     nextjs_vercel:
       "Add the HTML below as a static file (e.g. public/confirmation.html) in the buyer's repo and deploy via their normal Git push flow.",
-    ghl: "In GoHighLevel: open Funnels/Websites, add a new page, switch to Custom Code / HTML element, and paste the HTML below.",
+    ghl: "In GoHighLevel: open Funnels/Websites, add a new page, switch to Custom Code / HTML element, and paste the snippet below.",
     lovable:
       "In the Lovable project chat, ask Lovable to create a new page at the confirmation route using the HTML/content below as the source of truth.",
     plain_html:
       "Upload the HTML file below to the buyer's own static host (S3, Cloudflare Pages, FTP, etc.) at the confirmation path.",
   };
 
+  const isFullDocument = FULL_DOCUMENT_PLATFORMS.has(platform);
+  const html = isFullDocument ? content.html : wrapAsEmbeddableIframe(content.html, content.title);
+
   return {
     mode: "paste_ready",
     reason,
     instructions:
       instructionsByPlatform[platform] ??
-      "Paste the HTML below into the buyer's hosting platform at the confirmation page path.",
-    html: content.html,
+      (isFullDocument
+        ? "Paste the HTML below into the buyer's hosting platform at the confirmation page path."
+        : "Paste the snippet below into a Custom HTML / Embed element on the buyer's confirmation page and publish. It's a self-contained iframe, so it won't clash with anything else already on that page."),
+    html,
   };
 }

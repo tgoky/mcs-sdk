@@ -129,6 +129,7 @@ export async function runPinDownOnboarding(
   const topCallQuestions: string[] = tenant.topCallQuestions ?? [];
   const topObjections: string[] = tenant.topObjections ?? [];
   const prospectMeets: string = tenant.prospectMeets ?? "founder";
+  const heroVideoUrl: string | undefined = tenant.heroVideoUrl ?? undefined;
   const castingChoice = (tenant.castingChoice ?? "founder_on_camera") as
     | "founder_on_camera"
     | "coach_on_camera"
@@ -703,6 +704,8 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
             prospectMeets,
             existingProof,
             designSignal: designSignal ?? undefined,
+            heroVideoUrl,
+            animationsEnabled: tenant.confirmationPageAnimationsEnabled,
           },
           confirmationPageTemplate
         );
@@ -798,6 +801,19 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         hosting_platform_meta: {
           ...finalStack.hosting_platform_meta,
           wordpress_page_id: remoteResourceId as number,
+        },
+      };
+    }
+    // Same reasoning as the WordPress case above — persists the CMS item
+    // id a "live" Webflow deploy returns so a later republish (see
+    // confirmation-page-only.ts) updates that item instead of POSTing a
+    // second one at the same slug, which Webflow rejects.
+    if (finalStack.hosting_platform === "webflow" && confirmationPageDeployment.mode === "live" && remoteResourceId) {
+      finalStack = {
+        ...finalStack,
+        hosting_platform_meta: {
+          ...finalStack.hosting_platform_meta,
+          webflow_confirmation_item_id: String(remoteResourceId),
         },
       };
     }

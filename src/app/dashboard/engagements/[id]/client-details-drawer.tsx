@@ -32,6 +32,8 @@ export interface ClientDetailsDrawerData {
   rawVoiceCorpus: string | null;
   existingProof: { testimonials: Testimonial[] } | null;
   confirmationPageTemplate: string;
+  heroVideoUrl: string | null;
+  confirmationPageAnimationsEnabled: boolean;
   notificationPackSelections: string[];
   hasAdCreativeBriefs: boolean;
   hasScriptPack: boolean;
@@ -128,6 +130,8 @@ export function ClientDetailsDrawer({
     data.existingProof?.testimonials?.length ? data.existingProof.testimonials : [{ name: "", role: "", company: "", quote: "", sourceUrl: "" }]
   );
   const [confirmationPageTemplate, setConfirmationPageTemplate] = useState(data.confirmationPageTemplate);
+  const [heroVideoUrl, setHeroVideoUrl] = useState(data.heroVideoUrl ?? "");
+  const [animationsEnabled, setAnimationsEnabled] = useState(data.confirmationPageAnimationsEnabled);
   const [notificationPackSelections, setNotificationPackSelections] = useState<Set<string>>(
     new Set(data.notificationPackSelections)
   );
@@ -137,6 +141,7 @@ export function ClientDetailsDrawer({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [regeneratingBriefs, setRegeneratingBriefs] = useState(false);
   const [regeneratingScripts, setRegeneratingScripts] = useState(false);
+  const [rebuildingConfirmationPage, setRebuildingConfirmationPage] = useState(false);
   const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null);
 
   function updateTestimonial(index: number, field: keyof Testimonial, value: string) {
@@ -176,6 +181,8 @@ export function ClientDetailsDrawer({
           rawVoiceCorpus,
           existingProof: { testimonials },
           confirmationPageTemplate,
+          heroVideoUrl: heroVideoUrl.trim() || null,
+          confirmationPageAnimationsEnabled: animationsEnabled,
           notificationPackSelections: [...notificationPackSelections],
         }),
       });
@@ -206,6 +213,25 @@ export function ClientDetailsDrawer({
       setRegenerateMessage(err instanceof Error ? err.message : "Regeneration failed.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRebuildConfirmationPage() {
+    setRebuildingConfirmationPage(true);
+    setRegenerateMessage(null);
+    try {
+      const res = await fetch(`/api/engagements/${data.engagementId}/pin-down/run-piece`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ piece: "confirmation_page", heroVideoUrl: heroVideoUrl.trim() || undefined }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error ?? "Rebuild failed.");
+      setRegenerateMessage(result.message ?? "Rebuilding and republishing the confirmation page.");
+    } catch (err) {
+      setRegenerateMessage(err instanceof Error ? err.message : "Rebuild failed.");
+    } finally {
+      setRebuildingConfirmationPage(false);
     }
   }
 
@@ -351,9 +377,37 @@ export function ClientDetailsDrawer({
               onSelect={(key) => setConfirmationPageTemplate(key)}
             />
             <p className="text-[11px] text-zinc-500">
-              Changes which design new confirmation pages use. Doesn&apos;t redeploy an already-live page — that has its own approval
-              step.
+              Changes which design new confirmation pages use. Doesn&apos;t redeploy an already-live page on its own — save your changes,
+              then use &quot;Rebuild confirmation page&quot; below to apply them.
             </p>
+          </Section>
+
+          <Section title="Hero video" description="Shown at the top of the confirmation page in place of the placeholder graphic.">
+            <div>
+              <Label>Loom, YouTube, or Vimeo share link</Label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="https://www.loom.com/share/..."
+                value={heroVideoUrl}
+                onChange={(e) => setHeroVideoUrl(e.target.value)}
+              />
+            </div>
+            <label className="flex items-start gap-2 text-xs text-zinc-300 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={animationsEnabled}
+                onChange={(e) => setAnimationsEnabled(e.target.checked)}
+                className="w-4 h-4 rounded-sm cursor-pointer border border-zinc-700 mt-0.5"
+              />
+              <span>
+                Entrance animations
+                <span className="block text-[11px] text-zinc-500 mt-0.5">
+                  A subtle fade-in as the page loads. Off by default — turn on once you&apos;ve seen the page and want the
+                  extra polish. Takes effect on the next rebuild.
+                </span>
+              </span>
+            </label>
           </Section>
 
           <Section title="Notification pack">
@@ -397,10 +451,19 @@ export function ClientDetailsDrawer({
                 {regeneratingScripts ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 {data.hasScriptPack ? "REGENERATE HERO/BREAKOUT SCRIPTS" : "SCRIPTS NOT YET GENERATED"}
               </button>
+              <button
+                type="button"
+                disabled={rebuildingConfirmationPage}
+                onClick={handleRebuildConfirmationPage}
+                className="w-full text-left px-3 py-2 text-[10px] font-mono font-bold tracking-wider rounded-sm border border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                {rebuildingConfirmationPage ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                REBUILD CONFIRMATION PAGE
+              </button>
               {regenerateMessage && <p className="text-[11px] text-zinc-400">{regenerateMessage}</p>}
               <p className="text-[11px] text-zinc-600">
-                The confirmation page itself isn&apos;t regenerated here — its live deploy requires the approval step under Edit stack
-                settings.
+                Rebuilding republishes to the client&apos;s existing hosting platform if one&apos;s configured (or requires approval first,
+                if this engagement has approval turned on) — save any changes above first so the rebuild picks them up.
               </p>
             </div>
           </Section>

@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "confirmation_page_animations_enabled" boolean DEFAULT false NOT NULL;

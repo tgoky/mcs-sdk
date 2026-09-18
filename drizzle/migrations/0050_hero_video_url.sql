@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "hero_video_url" text;

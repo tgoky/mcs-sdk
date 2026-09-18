@@ -3,6 +3,7 @@ import { runVoiceExtractionOnly } from "@/features/pin-down/server/voice-extract
 import { runScriptPackOnly } from "@/features/pin-down/server/script-pack-only";
 import { runAdCreativeBriefsOnly } from "@/features/pin-down/server/ad-briefs-only";
 import { runPageAuditOnly } from "@/features/pin-down/server/page-audit-only";
+import { runConfirmationPageOnly } from "@/features/pin-down/server/confirmation-page-only";
 import { runRepEngineAdhocCheck } from "@/features/reputation-manager/server/engine-adhoc-check";
 import { runCrisisStressTest } from "@/features/reputation-manager/server/crisis-stress-test";
 import { runDraftResponse } from "@/features/reputation-manager/server/draft-response";
@@ -33,6 +34,7 @@ export interface ChatSkillContext {
   deepScanTimeframe?: string;
   scriptApproachOverride?: "research_assistance" | "urgency" | "faq";
   competitorPageUrl?: string;
+  heroVideoUrl?: string;
 }
 
 export interface ChatSkillDefinition extends ChatSkillManifestEntry {
@@ -60,6 +62,10 @@ export const CHAT_SKILL_REGISTRY: Record<ChatSkillId, ChatSkillDefinition> = {
   "pin-down-page-audit": {
     ...CHAT_SKILL_MANIFEST["pin-down-page-audit"],
     execute: (tenant, runId, step, ctx) => runPageAuditOnly(tenant, runId, step, ctx),
+  },
+  "pin-down-confirmation-page": {
+    ...CHAT_SKILL_MANIFEST["pin-down-confirmation-page"],
+    execute: (tenant, runId, step, ctx) => runConfirmationPageOnly(tenant, runId, step, ctx),
   },
   "rep-engine-adhoc-check": {
     ...CHAT_SKILL_MANIFEST["rep-engine-adhoc-check"],

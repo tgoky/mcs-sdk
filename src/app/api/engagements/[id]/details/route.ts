@@ -62,6 +62,8 @@ export async function PATCH(
         rawVoiceCorpus: engagements.rawVoiceCorpus,
         existingProof: engagements.existingProof,
         confirmationPageTemplate: engagements.confirmationPageTemplate,
+        heroVideoUrl: engagements.heroVideoUrl,
+        confirmationPageAnimationsEnabled: engagements.confirmationPageAnimationsEnabled,
         stack: engagements.stack,
         deletedAt: engagements.deletedAt,
       })
@@ -180,6 +182,16 @@ export async function PATCH(
       return NextResponse.json({ error: `Invalid confirmationPageTemplate: ${incoming.confirmationPageTemplate}` }, { status: 400 });
     }
 
+    // ── Hero video URL — raw string on file; sanitizeVideoEmbedUrl (content-model.ts)
+    // does the real host/scheme validation at render time, same as onboarding's own path.
+    if (incoming.heroVideoUrl !== undefined && incoming.heroVideoUrl !== null && typeof incoming.heroVideoUrl !== "string") {
+      return NextResponse.json({ error: "heroVideoUrl must be a string or null." }, { status: 400 });
+    }
+
+    if (incoming.confirmationPageAnimationsEnabled !== undefined && typeof incoming.confirmationPageAnimationsEnabled !== "boolean") {
+      return NextResponse.json({ error: "confirmationPageAnimationsEnabled must be a boolean." }, { status: 400 });
+    }
+
     // ── Notification pack selections — diff against current, apply side effects ─
     let nextStack: EngagementStack | null = existing.stack as EngagementStack | null;
     if (incoming.notificationPackSelections !== undefined) {
@@ -223,6 +235,12 @@ export async function PATCH(
         existingProof: nextExistingProof,
         ...(incoming.confirmationPageTemplate !== undefined
           ? { confirmationPageTemplate: incoming.confirmationPageTemplate as string }
+          : {}),
+        ...(incoming.heroVideoUrl !== undefined
+          ? { heroVideoUrl: (incoming.heroVideoUrl as string | null)?.trim() || null }
+          : {}),
+        ...(incoming.confirmationPageAnimationsEnabled !== undefined
+          ? { confirmationPageAnimationsEnabled: incoming.confirmationPageAnimationsEnabled as boolean }
           : {}),
         ...(nextStack !== existing.stack ? { stack: nextStack } : {}),
         updatedAt: new Date(),

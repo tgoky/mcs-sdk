@@ -1,5 +1,5 @@
 import type { PageContentModel } from "../content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "../content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass } from "../content-model";
 import { buttonCss, cardCss, DENSITY_SPACE } from "./component-catalog";
 
 /**
@@ -121,9 +121,10 @@ export function buildTentativeHoldDynamicHtml(m: PageContentModel): string {
 
   .foot { text-align: center; font-size: 0.86rem; color: ${t.color.textMuted}; line-height: 1.6; }
   .cal-link { display: inline-block; margin-top: 16px; color: ${t.color.accent}; font-weight: 700; text-decoration: none; font-size: 0.84rem; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
@@ -148,13 +149,16 @@ export function buildTentativeHoldDynamicHtml(m: PageContentModel): string {
     </span>
   </div>
 
-  <div class="video-card card">
+  ${buildHeroVideoBlock({
+    heroVideoUrl: m.heroVideoUrl,
+    placeholderHtml: `<div class="video-card card">
     <span class="play"></span>
     <div>
       <p class="vtitle">What to expect on the call</p>
       <p class="vsub">${m.heroLength} &middot; recording in progress</p>
     </div>
-  </div>
+  </div>`,
+  })}
 
   <section>
     <p class="label">Before your call</p>

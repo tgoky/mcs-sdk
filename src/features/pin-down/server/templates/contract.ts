@@ -1,5 +1,5 @@
 import type { PageContentModel } from "./content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass, buildGoogleFontLinks } from "./content-model";
 import { buildContractDynamicHtml } from "./dynamic/contract.dynamic";
 
 const CLAUSE_NUMERALS = ["I", "II", "III", "IV"];
@@ -69,6 +69,7 @@ function buildContractStaticHtml(m: PageContentModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${m.title}</title>
+${buildGoogleFontLinks("family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600")}
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -76,7 +77,7 @@ function buildContractStaticHtml(m: PageContentModel): string {
     margin: 0;
     background: #141119;
     color: #efe9dd;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 640px; margin: 0 auto; padding: 64px 28px 100px; }
@@ -89,11 +90,11 @@ function buildContractStaticHtml(m: PageContentModel): string {
   .seal svg { opacity: 0.9; }
 
   .masthead { text-align: center; margin-bottom: 6px; }
-  .masthead .kind { font-family: Georgia, "Times New Roman", serif; font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: #C6A15B; margin: 0 0 6px; }
+  .masthead .kind { font-family: "Fraunces", Georgia, "Times New Roman", serif; font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: #C6A15B; margin: 0 0 6px; }
   .masthead .ref { font-size: 0.72rem; color: #8f8878; letter-spacing: 0.06em; margin: 0; }
   .on-behalf { text-align: center; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: #756a54; margin: 18px 0 0; }
 
-  h1 { text-align: center; font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 2.15rem; letter-spacing: -0.005em; line-height: 1.22; margin: 10px 0 8px; }
+  h1 { text-align: center; font-family: "Fraunces", Georgia, "Times New Roman", serif; font-weight: 400; font-size: 2.15rem; letter-spacing: -0.005em; line-height: 1.22; margin: 10px 0 8px; }
   .prepared { text-align: center; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: #a89a78; margin: 0 0 6px; }
   .sub { text-align: center; color: #b9b2a4; font-size: 0.92rem; margin: 0 auto 32px; max-width: 42ch; line-height: 1.55; }
 
@@ -107,13 +108,13 @@ function buildContractStaticHtml(m: PageContentModel): string {
 
   .clause { margin-bottom: 46px; }
   .clause-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid #3a3444; padding-bottom: 12px; margin-bottom: 20px; }
-  .clause-head .clause-num { font-family: Georgia, serif; font-size: 1rem; color: #C6A15B; flex-shrink: 0; }
+  .clause-head .clause-num { font-family: "Fraunces", Georgia, serif; font-size: 1rem; color: #C6A15B; flex-shrink: 0; }
   .clause-head .clause-title { margin: 0; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #cfc6b3; }
 
   .brief-panel { background: #F4EFE4; color: #221e29; border-radius: 2px; padding: 26px 28px; position: relative; }
   .brief-panel::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #C6A15B, #e8d3a0, #C6A15B); }
   .brief-panel p { margin: 0; font-size: 0.9rem; line-height: 1.65; color: #2b2634; }
-  .brief-panel .runtime { display: block; margin-top: 16px; font-family: Georgia, serif; font-style: italic; font-size: 0.78rem; color: #6b6152; }
+  .brief-panel .runtime { display: block; margin-top: 16px; font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 0.78rem; color: #6b6152; }
 
   /* Briefing video — placeholder until the operator's script pass
      produces a real recording; never a fabricated embed. */
@@ -126,15 +127,15 @@ function buildContractStaticHtml(m: PageContentModel): string {
   ul.clauses { list-style: none; margin: 0; padding: 0; }
   ul.clauses li { display: flex; gap: 18px; align-items: flex-start; padding: 16px 0; border-bottom: 1px solid #2c2734; }
   ul.clauses li:last-child { border-bottom: none; }
-  .clause-mark { font-family: Georgia, serif; font-size: 0.85rem; color: #C6A15B; flex-shrink: 0; min-width: 16px; padding-top: 1px; }
+  .clause-mark { font-family: "Fraunces", Georgia, serif; font-size: 0.85rem; color: #C6A15B; flex-shrink: 0; min-width: 16px; padding-top: 1px; }
   ul.clauses li p { margin: 0; font-size: 0.9rem; color: #ded6c5; line-height: 1.55; }
 
   /* Attestations — a bordered card with a quotation glyph up top, no
      vertical rule down the side. */
   .attestations { display: grid; gap: 16px; }
   figure { margin: 0; background: #1c1824; border: 1px solid #3a3444; border-radius: 4px; padding: 22px 24px; position: relative; }
-  figure .mark { position: absolute; top: 12px; right: 18px; font-family: Georgia, serif; font-size: 2.2rem; color: #3a3444; line-height: 1; user-select: none; }
-  blockquote { margin: 0 0 12px; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-size: 1rem; color: #efe9dd; line-height: 1.55; position: relative; }
+  figure .mark { position: absolute; top: 12px; right: 18px; font-family: "Fraunces", Georgia, serif; font-size: 2.2rem; color: #3a3444; line-height: 1; user-select: none; }
+  blockquote { margin: 0 0 12px; font-family: "Fraunces", Georgia, "Times New Roman", serif; font-style: italic; font-size: 1rem; color: #efe9dd; line-height: 1.55; position: relative; }
   figcaption { font-size: 0.76rem; color: #a89a78; letter-spacing: 0.02em; }
   figcaption span { display: block; color: #756a54; margin-top: 2px; }
 
@@ -142,9 +143,10 @@ function buildContractStaticHtml(m: PageContentModel): string {
   .signature .terms { font-size: 0.84rem; color: #b9b2a4; line-height: 1.6; max-width: 34ch; }
   .signature .terms strong { color: #efe9dd; font-weight: 600; }
   .cta { display: inline-block; padding: 12px 26px; background: transparent; border: 1px solid #C6A15B; color: #C6A15B; border-radius: 2px; text-decoration: none; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <div class="seal-row">
     <span class="line"></span>
@@ -182,13 +184,16 @@ function buildContractStaticHtml(m: PageContentModel): string {
       <p>A short recorded briefing precedes your call with ${m.host}, setting the terms of what will be covered so nothing arrives unannounced.</p>
       <span class="runtime">Duration of record &mdash; ${m.heroLength}</span>
     </div>
-    <div class="video-card">
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-card">
       <span class="play"></span>
       <div>
         <p class="vtitle">Briefing video</p>
         <p class="vsub">${m.heroLength} &middot; recording in progress</p>
       </div>
-    </div>
+    </div>`,
+    })}
   </section>
 
   <section class="clause">

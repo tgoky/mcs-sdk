@@ -1,5 +1,5 @@
 import type { PageContentModel } from "./content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass, buildGoogleFontLinks } from "./content-model";
 import { buildMinimalistDynamicHtml } from "./dynamic/minimalist.dynamic";
 
 /**
@@ -52,6 +52,7 @@ function buildMinimalistStaticHtml(m: PageContentModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${m.title}</title>
+${buildGoogleFontLinks("family=Inter:wght@400;500;600")}
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -59,7 +60,7 @@ function buildMinimalistStaticHtml(m: PageContentModel): string {
     margin: 0;
     background: #FFFFFF;
     color: #171717;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 520px; margin: 0 auto; padding: 88px 24px 120px; }
@@ -93,9 +94,10 @@ function buildMinimalistStaticHtml(m: PageContentModel): string {
 
   .foot p { font-size: 0.88rem; color: #6B6B6B; line-height: 1.6; margin: 0 0 18px; }
   .cta { color: #171717; text-decoration: none; font-size: 0.9rem; font-weight: 600; border-bottom: 1px solid #171717; padding-bottom: 1px; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <h1>${mergeField("firstName", "You&rsquo;re confirmed.", `You&rsquo;re confirmed, ${mergeSlot("firstName")}.`)}</h1>
@@ -110,7 +112,10 @@ function buildMinimalistStaticHtml(m: PageContentModel): string {
 
   <section>
     <p class="brief-text">A short briefing introduces your call with ${m.host} and what to expect &mdash; nothing you need to prepare.</p>
-    <div class="video-line"><span class="dot"></span>Briefing video &mdash; ${m.heroLength}, recording in progress</div>
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-line"><span class="dot"></span>Briefing video &mdash; ${m.heroLength}, recording in progress</div>`,
+    })}
   </section>
 
   <section>

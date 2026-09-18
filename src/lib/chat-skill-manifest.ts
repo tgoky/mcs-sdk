@@ -22,6 +22,7 @@ export type ChatSkillId =
   | "pin-down-scripts"
   | "pin-down-ad-briefs"
   | "pin-down-page-audit"
+  | "pin-down-confirmation-page"
   | "rep-engine-adhoc-check"
   | "rep-crisis-stress-test"
   | "rep-draft-response"
@@ -34,6 +35,7 @@ export const CHAT_SKILL_IDS: ChatSkillId[] = [
   "pin-down-scripts",
   "pin-down-ad-briefs",
   "pin-down-page-audit",
+  "pin-down-confirmation-page",
   "rep-engine-adhoc-check",
   "rep-crisis-stress-test",
   "rep-draft-response",
@@ -67,7 +69,12 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
   "pin-down-page-audit": {
     id: "pin-down-page-audit",
     name: "Confirmation Page Audit",
-    description: "Audits an existing confirmation page URL against what a well-built one should include, and notes concrete gaps — the same audit Show Rate Setup runs when a client already has a page, standalone. Does not build or deploy a new page — that's a bigger, separate action not wired up here.",
+    description: "Audits an existing confirmation page URL against what a well-built one should include, and notes concrete gaps — the same audit Show Rate Setup runs when a client already has a page, standalone. Does not build or deploy a new page — see pin-down-confirmation-page for that.",
+  },
+  "pin-down-confirmation-page": {
+    id: "pin-down-confirmation-page",
+    name: "Rebuild Confirmation Page",
+    description: "Rebuilds and republishes the Pin-Down confirmation page using the client's current offer, testimonials, top call questions, hero video, and design match — the same build+deploy Show Rate Setup ran once at onboarding, standalone, on demand. Use after the client's offer, proof, or hero video changes, or their site gets a new look. Does not re-run voice extraction, scripts, or ad briefs — those are their own standalone actions.",
   },
   "rep-engine-adhoc-check": {
     id: "rep-engine-adhoc-check",

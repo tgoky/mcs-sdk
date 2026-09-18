@@ -351,6 +351,20 @@
       "when": 1789394894847,
       "tag": "0049_skill_run_analyses",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789678668439,
+      "tag": "0050_hero_video_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1789718501123,
+      "tag": "0051_confirmation_page_animations_enabled",
+      "breakpoints": true
     }
   ]
 }

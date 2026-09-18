@@ -1,5 +1,5 @@
 import type { PageContentModel } from "../content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "../content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass } from "../content-model";
 import { buttonCss, cardCss, DENSITY_SPACE } from "./component-catalog";
 
 const CLAUSE_NUMERALS = ["I", "II", "III", "IV"];
@@ -121,9 +121,10 @@ export function buildContractDynamicHtml(m: PageContentModel): string {
   .signature { margin-top: 56px; padding-top: 24px; border-top: 1px solid ${t.color.border}; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 20px; }
   .signature .terms { font-size: 0.84rem; color: ${t.color.textMuted}; line-height: 1.6; max-width: 34ch; }
   .signature .terms strong { color: ${t.color.text}; font-weight: 700; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <div class="seal-row">
     <span class="line"></span>
@@ -157,13 +158,16 @@ export function buildContractDynamicHtml(m: PageContentModel): string {
       <p>A short recorded briefing precedes your call with ${m.host}, setting the terms of what will be covered so nothing arrives unannounced.</p>
       <span class="runtime">Duration of record &mdash; ${m.heroLength}</span>
     </div>
-    <div class="video-card card">
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-card card">
       <span class="play"></span>
       <div>
         <p class="vtitle">Briefing video</p>
         <p class="vsub">${m.heroLength} &middot; recording in progress</p>
       </div>
-    </div>
+    </div>`,
+    })}
   </section>
 
   <section class="clause">

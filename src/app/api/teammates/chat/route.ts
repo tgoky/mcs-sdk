@@ -15,7 +15,7 @@ import { getTodaysCalls, getRecentCancellations, getRunHistory, getActiveRecover
 import { enrollProspectInWinBack } from "@/lib/chat-winback";
 import { previewManualPileOnEnrollment, enrollProspectInPileOn } from "@/lib/chat-pile-on";
 import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
-import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
+import { triggerVoiceExtractionForEngagement, triggerScriptPackForEngagement, triggerAdCreativeBriefsForEngagement, triggerPageAuditForEngagement, triggerConfirmationPageRebuildForEngagement, triggerEngineAdhocCheckForEngagement, triggerCrisisStressTestForEngagement, triggerDraftResponseForEngagement, triggerTwitterDeepScanForEngagement, triggerTrustpilotDeepScanForEngagement, triggerRedditDeepScanForEngagement } from "@/lib/chat-skill-trigger";
 import { BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS } from "@/lib/copy";
 
 export const runtime = "nodejs";
@@ -300,7 +300,7 @@ const TOOLS = [
   {
     name: "audit_confirmation_page",
     description:
-      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — say so plainly if asked for that, it's a bigger, separate action not wired up here. Optionally also fetches a second URL (typically a competitor's confirmation page) and compares directly against it. Dispatches and returns immediately with a runId.",
+      "Audits an existing confirmation page URL against what a well-built one should include (hero video, what-to-expect section, breakout content, social proof, reschedule path) and notes concrete gaps, in the background — the same audit Show Rate Setup runs. Does NOT build or deploy a new page — use rebuild_confirmation_page for that, or ask the user which they want. Optionally also fetches a second URL (typically a competitor's confirmation page) and compares directly against it. Dispatches and returns immediately with a runId.",
     input_schema: {
       type: "object",
       properties: {
@@ -309,6 +309,22 @@ const TOOLS = [
         competitorPageUrl: { type: "string", description: "Optional — a competitor's confirmation page URL to fetch and compare against directly. Only include this if the user actually gave a specific competitor URL to compare against." },
       },
       required: ["engagementId", "pageUrl"],
+    },
+  },
+  {
+    name: "rebuild_confirmation_page",
+    description:
+      "Rebuilds and republishes the client's Pin-Down confirmation page using their current offer, testimonials, top call questions, hero video, and chosen design template — the same build+deploy Show Rate Setup ran once at onboarding, run again on demand. Republishes to the client's existing hosting platform (Webflow/WordPress/Vercel) if one is configured, updating the page already live there rather than creating a duplicate; otherwise hands back paste-ready HTML. Also re-scrapes the client's site for design signal, so this is the right call after their offer, proof, hero video, or site design changes. Does NOT re-run voice extraction, scripts, or ad briefs — those are their own separate actions. Has no effect if the client is configured to keep their own existing confirmation page instead of a Pin-Down-built one. Dispatches and returns immediately with a runId.",
+    input_schema: {
+      type: "object",
+      properties: {
+        engagementId: { type: "string", description: "The client whose confirmation page to rebuild." },
+        heroVideoUrl: {
+          type: "string",
+          description: "Optional — a Loom, YouTube, or Vimeo share link to the client's recorded hero video, to save and embed in this same rebuild. Only include this if the user actually gave a video link; omit to just rebuild with whatever's already on file (or the placeholder, if no video has been recorded yet).",
+        },
+      },
+      required: ["engagementId"],
     },
   },
   {
@@ -405,7 +421,7 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
       ? clients.map((c) => `- ${c.buyer} (engagementId: ${c.engagementId}${c.repEnrolled ? ", Reputation Manager" : ""})`).join("\n")
       : "(no clients yet)";
   return [
-    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client (optionally with its SMS/ad-data platform), run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
+    "You are Teammates, an assistant inside a sales-automation dashboard covering two products: Showtime (booking/sales automation) and Reputation Manager (online reputation monitoring). You can trigger real actions on the user's behalf: Call Brief, Leak Map, create a new Showtime client by name, create a new Reputation Manager client by operator name, connect a booking or email platform credential, manually enroll a specific prospect in win-back recovery, preview or manually enroll a specific prospect in Pile-On's pre-call sequence, turn the Pile-On worker on for a client (optionally with its SMS/ad-data platform), run any of Show Rate Setup's individual pieces (brand voice extraction, video scripts, ad creative briefs, confirmation page audit, confirmation page rebuild) standalone for an already-created client, ask a client's configured AI engines a live one-off question about the client or a tracked competitor, test a hypothetical finding against a client's crisis threshold, draft a suggested response to a real flagged finding, deep-scan X/Twitter back to a specific date, deep-scan Trustpilot back to a specific date, widen a Reddit scan to an older timeframe bucket, and answer status questions — today's calls, recent cancellations, run history, active win-back recoveries, how a client's Leak Map metrics compare to similar clients — for any client, without triggering anything.",
     "",
     "Clients (a client tagged \"Reputation Manager\" is enrolled in that product; everyone else is Showtime-only unless just created and not yet set up):",
     clientList,
@@ -428,9 +444,9 @@ function buildSystemPrompt(clients: { engagementId: string; buyer: string; repEn
     "- For reddit_deep_scan: Reddit's own search has no exact date cutoff the way Trustpilot/X do, only a timeframe bucket (hour/day/week/month/year/all) — never ask the user for a specific date for this one, ask which bucket to widen into instead, and if they give you a date, translate it to the closest bucket yourself rather than pushing back. Adds real results to the client's actual monitoring history, same as the regular scheduled watch.",
     "- For draft_response: this is for a REAL finding the user gives you (a real review, a real mention) — the draft never gets posted anywhere automatically, always tell the user to review and post it themselves. Don't fabricate specific facts, offers, or promises in how you relay the draft.",
     "- For check_ai_engines: omit subject to ask about the client themselves; to ask about a competitor, use the exact name from their tracked competitors list (shown on their Identity Setup) — never guess or paraphrase a competitor name that hasn't been confirmed as tracked, ask the user to confirm the exact name instead. This is a live spot-check, separate from the scheduled AI Engine Watch panel — nothing gets saved to the client's monitoring history, so don't present it as if it updates their ongoing findings.",
-    "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, and audit_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring, no new page deployment) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. If asked to build or deploy a new confirmation page (not audit an existing one), say plainly that's not wired up — audit_confirmation_page only reviews a page that already exists.",
-    "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose.",
-    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, turn Pile-On on for a client (enable_pile_on), preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's four individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), compare a client's Leak Map metrics to benchmarks (compare_leak_map_benchmarks), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, enable_pile_on, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
+    "- extract_brand_voice, generate_video_scripts, generate_ad_briefs, audit_confirmation_page, and rebuild_confirmation_page all run in the background and take a while — always tell the user it's running and won't finish instantly, and offer to check status with get_run_history if they ask later. None of these run the full Show Rate Setup wizard end to end (no booking webhook wiring) — each does exactly the one piece it's named for, using whatever the client already has on file (brand voice, offer details, call questions) and degrading to a more generic result if some of that isn't set yet, never failing outright for missing optional context. audit_confirmation_page only reviews a page that already exists; rebuild_confirmation_page is the one that actually rebuilds and republishes it — use rebuild_confirmation_page when asked to build, regenerate, or redeploy the confirmation page, or ask the user which they want if it's unclear.",
+    "- generate_video_scripts' approach param: only set it when the user explicitly asks to regenerate with a different angle/framing — never set it on a first-time script generation, and never invent a description beyond the 3 real options (research_assistance/urgency/faq) listed in the tool's own schema. audit_confirmation_page's competitorPageUrl: only set it when the user gives an actual competitor URL to compare against — never guess or reuse a URL from earlier in the conversation for a different purpose. rebuild_confirmation_page's heroVideoUrl: only set it when the user actually gives a Loom/YouTube/Vimeo link to save — omit it to just rebuild with whatever's already on file.",
+    "- You can only trigger Call Brief, Leak Map, create a Showtime or Reputation Manager client, set up a booking or email credential, enroll someone in win-back, turn Pile-On on for a client (enable_pile_on), preview or enroll someone in Pile-On (preview_pile_on_enrollment, enroll_in_pile_on — email only, see that rule above), run Show Rate Setup's five individual pieces above, run a live AI-engine spot-check (check_ai_engines), test a hypothetical against the crisis threshold (check_crisis_threshold), draft a response to a real finding (draft_response), deep-scan X/Twitter back to a date (twitter_deep_scan), deep-scan Trustpilot back to a date (trustpilot_deep_scan), widen a Reddit scan to an older timeframe (reddit_deep_scan), compare a client's Leak Map metrics to benchmarks (compare_leak_map_benchmarks), and answer status questions right now. If asked for Showtime's full onboarding wizard end to end, Pile-On's SMS or ad-data cohort sync during MANUAL PROSPECT ENROLLMENT specifically (enroll_in_pile_on only does email — enable_pile_on can set the platform CHOICE when turning the worker on, that's a different thing), or to manually trigger the SCHEDULED AI Engine Watch panel or the Trustpilot/Reddit/Twitter/Crisis Response watch skills themselves on their regular cadence, say plainly that it's not wired up rather than pretending to do it — check_ai_engines, check_crisis_threshold, draft_response, twitter_deep_scan, trustpilot_deep_scan, reddit_deep_scan, enable_pile_on, and enroll_in_pile_on are separate, narrower, manually-triggered actions, not a way to fire the scheduled skills themselves.",
     "- Keep replies short and direct.",
   ].join("\n");
 }
@@ -766,6 +782,21 @@ export async function POST(request: Request) {
           }
         } else {
           message2 = "Missing engagementId or pageUrl.";
+        }
+      } else if (block.name === "rebuild_confirmation_page") {
+        const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";
+        const heroVideoUrl = typeof block.input.heroVideoUrl === "string" ? block.input.heroVideoUrl : undefined;
+        if (engagementId) {
+          const result = await triggerConfirmationPageRebuildForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, heroVideoUrl);
+          ok = result.ok;
+          message2 = result.ok ? result.message : result.error;
+          if (result.ok) {
+            const buyer = clients.find((c) => c.engagementId === engagementId)?.buyer;
+            links.push({ label: "View run", href: `/dashboard/runs/${result.runId}` });
+            links.push({ label: buyer ? `${buyer}'s page` : "Client page", href: `/dashboard/engagements/${engagementId}` });
+          }
+        } else {
+          message2 = "Missing engagementId.";
         }
       } else if (block.name === "check_ai_engines") {
         const engagementId = typeof block.input.engagementId === "string" ? block.input.engagementId : "";

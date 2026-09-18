@@ -1,5 +1,5 @@
 import type { PageContentModel } from "../content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "../content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass } from "../content-model";
 import { buttonCss, cardCss, DENSITY_SPACE } from "./component-catalog";
 
 /**
@@ -104,9 +104,10 @@ export function buildGoldenTicketDynamicHtml(m: PageContentModel): string {
   .foot { text-align: center; }
   .foot p { font-size: 0.84rem; color: ${t.color.textMuted}; line-height: 1.6; margin: 0 0 18px; }
   .cta-static { display: inline-block; font-size: 0.78rem; color: ${t.color.textMuted}; font-style: italic; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="eyebrow">${m.heroEyebrow}</p>
   <p class="brand-line">Hosted by ${m.buyer}</p>
@@ -129,13 +130,16 @@ export function buildGoldenTicketDynamicHtml(m: PageContentModel): string {
     </div>
   </div>
 
-  <div class="video-card card">
+  ${buildHeroVideoBlock({
+    heroVideoUrl: m.heroVideoUrl,
+    placeholderHtml: `<div class="video-card card">
     <span class="play"></span>
     <div>
       <p class="vtitle">What to expect when you arrive</p>
       <p class="vsub">${m.heroLength} &middot; recording in progress</p>
     </div>
-  </div>
+  </div>`,
+  })}
 
   <section>
     <p class="label">Before you arrive</p>

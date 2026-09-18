@@ -1,5 +1,5 @@
 import type { PageContentModel } from "../content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "../content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass } from "../content-model";
 import { buttonCss, cardCss, DENSITY_SPACE } from "./component-catalog";
 
 /**
@@ -108,9 +108,10 @@ export function buildAssessmentDynamicHtml(m: PageContentModel): string {
   .proof-card .who { font-size: 0.76rem; color: ${t.color.textMuted}; }
 
   .contact { font-size: 0.86rem; color: ${t.color.textMuted}; line-height: 1.6; border-top: 1px solid ${t.color.border}; padding-top: 22px; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
@@ -123,13 +124,16 @@ export function buildAssessmentDynamicHtml(m: PageContentModel): string {
   </div>
 
   <section>
-    <div class="video-card card">
+    ${buildHeroVideoBlock({
+      heroVideoUrl: m.heroVideoUrl,
+      placeholderHtml: `<div class="video-card card">
       <span class="play"></span>
       <div>
         <p class="vtitle">How the assessment works</p>
         <p class="vsub">${m.heroLength} &middot; recording in progress</p>
       </div>
-    </div>
+    </div>`,
+    })}
   </section>
 
   <section>

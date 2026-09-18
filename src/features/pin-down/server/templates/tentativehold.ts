@@ -1,5 +1,5 @@
 import type { PageContentModel } from "./content-model";
-import { buildMergeScriptTag, mergeField, mergeSlot } from "./content-model";
+import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRANCE_ANIMATION_CSS, animationBodyClass, buildGoogleFontLinks } from "./content-model";
 import { buildTentativeHoldDynamicHtml } from "./dynamic/tentative-hold.dynamic";
 
 /**
@@ -64,6 +64,7 @@ function buildTentativeHoldStaticHtml(m: PageContentModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${m.title}</title>
+${buildGoogleFontLinks("family=Manrope:wght@400;500;600;700")}
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -71,7 +72,7 @@ function buildTentativeHoldStaticHtml(m: PageContentModel): string {
     margin: 0;
     background: #EEF1F5;
     color: #1B2733;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   main { max-width: 600px; margin: 0 auto; padding: 56px 24px 96px; }
   [hidden] { display: none !important; }
@@ -144,9 +145,10 @@ function buildTentativeHoldStaticHtml(m: PageContentModel): string {
 
   .foot { text-align: center; font-size: 0.86rem; color: #4d5c6e; line-height: 1.6; }
   .cal-link { display: inline-block; margin-top: 16px; color: #2B4C7E; font-weight: 700; text-decoration: none; font-size: 0.84rem; }
+  ${ENTRANCE_ANIMATION_CSS}
 </style>
 </head>
-<body>
+<body class="${animationBodyClass(m)}">
 <main>
   <p class="brand-line">${m.buyer}</p>
   <p class="eyebrow">${m.heroEyebrow}</p>
@@ -175,13 +177,16 @@ function buildTentativeHoldStaticHtml(m: PageContentModel): string {
     </span>
   </div>
 
-  <div class="video-card">
+  ${buildHeroVideoBlock({
+    heroVideoUrl: m.heroVideoUrl,
+    placeholderHtml: `<div class="video-card">
     <span class="play"></span>
     <div>
       <p class="vtitle">What to expect on the call</p>
       <p class="vsub">${m.heroLength} &middot; recording in progress</p>
     </div>
-  </div>
+  </div>`,
+  })}
 
   <section>
     <p class="label">Before your call</p>

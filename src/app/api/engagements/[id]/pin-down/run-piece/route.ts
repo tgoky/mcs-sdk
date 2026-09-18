@@ -1,25 +1,26 @@
 // src/app/api/engagements/[id]/pin-down/run-piece/route.ts
 //
-// Dashboard UI counterpart to two of Teammates chat's standalone Show Rate
-// Setup pieces — extract_brand_voice and audit_confirmation_page
-// (src/app/api/teammates/chat/route.ts). Neither had ANY UI trigger before
-// this route: DeliverablesPanel only ever displayed their results, and
-// client-details-drawer.tsx's "Regenerate" buttons only cover scripts/ad
-// briefs, and only once one already exists. This reuses the exact same
-// trigger functions chat already calls (triggerVoiceExtractionForEngagement,
-// triggerPageAuditForEngagement in chat-skill-trigger.ts) rather than a
-// second implementation — same dispatch, same run tracking, same behavior
-// regardless of which surface triggered it.
+// Dashboard UI counterpart to three of Teammates chat's standalone Show
+// Rate Setup pieces — extract_brand_voice, audit_confirmation_page, and
+// rebuild_confirmation_page (src/app/api/teammates/chat/route.ts). None
+// had a UI trigger before this route: DeliverablesPanel only ever
+// displayed results, and client-details-drawer.tsx's "Regenerate" buttons
+// only cover scripts/ad briefs, and only once one already exists. This
+// reuses the exact same trigger functions chat already calls
+// (triggerVoiceExtractionForEngagement, triggerPageAuditForEngagement,
+// triggerConfirmationPageRebuildForEngagement in chat-skill-trigger.ts)
+// rather than a second implementation — same dispatch, same run tracking,
+// same behavior regardless of which surface triggered it.
 //
-// Both dispatch a background run and return a runId immediately (real web
-// crawling / an LLM audit — too slow for a synchronous request), same
-// reasoning as the chat tools' own "dispatches and returns immediately"
-// description.
+// All three dispatch a background run and return a runId immediately
+// (real web crawling / an LLM call / a hosting-platform publish — too
+// slow for a synchronous request), same reasoning as the chat tools' own
+// "dispatches and returns immediately" description.
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { triggerVoiceExtractionForEngagement, triggerPageAuditForEngagement } from "@/lib/chat-skill-trigger";
+import { triggerVoiceExtractionForEngagement, triggerPageAuditForEngagement, triggerConfirmationPageRebuildForEngagement } from "@/lib/chat-skill-trigger";
 
 export const runtime = "nodejs";
 
@@ -51,7 +52,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ runId: result.runId, message: result.message });
     }
 
-    return NextResponse.json({ error: 'piece must be "voice" or "page_audit"' }, { status: 400 });
+    if (piece === "confirmation_page") {
+      const heroVideoUrl = typeof body?.heroVideoUrl === "string" ? body.heroVideoUrl.trim() : undefined;
+      const result = await triggerConfirmationPageRebuildForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, heroVideoUrl);
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ runId: result.runId, message: result.message });
+    }
+
+    return NextResponse.json({ error: 'piece must be "voice", "page_audit", or "confirmation_page"' }, { status: 400 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
