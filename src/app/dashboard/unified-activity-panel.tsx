@@ -45,7 +45,8 @@ import { AnySkillBadge } from "@/components/any-skill-badge";
 import { VerboseTime } from "@/components/relative-time";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
-import { WORKER_REGISTRY, WORKER_CATEGORY_LIST, type WorkerId, type WorkerCategory } from "@/lib/worker-registry";
+import { WORKER_REGISTRY, WORKER_CATEGORY_LIST, workersForProduct, type WorkerId, type WorkerCategory, type WorkerDefinition } from "@/lib/worker-registry";
+import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 import {
   QUEUE_COPY as queueCopy,
   QUEUE_TOOLBAR_COPY as queueToolbarCopy,
@@ -214,6 +215,8 @@ export function UnifiedActivityPanel({
   counts,
   clients,
   enabledWorkerIds,
+  workspaceProductIds = [],
+  weeklyReportBlocks = [],
   title = "Activity",
   viewQueueHref = "/dashboard/queue",
   viewRunsHref = "/dashboard/runs",
@@ -222,6 +225,17 @@ export function UnifiedActivityPanel({
   counts: UnifiedActivityCounts;
   clients: ClientOption[];
   enabledWorkerIds: WorkerId[];
+  /** Every product this WORKSPACE actually has access to (Whop package
+   * install), not just the ones with an enabled worker today — the "By
+   * Worker" rail's own `installedProductIds` below only covers the
+   * latter, which is too narrow for the Setup Gaps banner slide: a
+   * product a client is entitled to but hasn't turned anything on for
+   * yet should still surface a nudge. */
+  workspaceProductIds?: ProductId[];
+  /** This engagement's own real report numbers for the last 7 days
+   * (worker-report-blocks.ts) — the "This Week" banner slide's source,
+   * computed server-side once per page load rather than re-derived here. */
+  weeklyReportBlocks?: WorkerReportBlock[];
   title?: string;
   viewQueueHref?: string;
   viewRunsHref?: string;
@@ -239,7 +253,7 @@ export function UnifiedActivityPanel({
   // can never push out, since it isn't sorted/paginated with everything
   // else — it always shows the highest-severity, most-recent thing that
   // needs a look, regardless of how much other activity happened. ──
-  const bannerCandidates = useMemo(() => {
+  const bannerQueueCandidates = useMemo(() => {
     // kind === "queue" only — a bare failed/timed-out run (no matching
     // queue item) also carries status "needs_action" and would otherwise
     // qualify here too, which is exactly what made this read as "just
@@ -255,15 +269,54 @@ export function UnifiedActivityPanel({
       .slice(0, 15);
   }, [items]);
 
+  // "This Week" — up to 3 of this engagement's real report numbers
+  // (worker-report-blocks.ts, computed server-side for whichever workers
+  // are actually enabled). A block with a null value means no baseline
+  // yet this week (e.g. a rate with zero calls) — skipped here rather
+  // than shown as a misleading "—", since this is a glanceable ticker,
+  // not the full report.
+  const bannerThisWeekBlocks = useMemo(() => weeklyReportBlocks.filter((b) => b.value !== null).slice(0, 3), [weeklyReportBlocks]);
+
+  // "Setup Gap" — at most ONE nudge, ever, not a list of every unturned-on
+  // worker (a client who only wants 4 of 15 available workers made that
+  // choice on purpose; reminding them about the other 11 is spam, not
+  // help). Scoped to workspaceProductIds — products this workspace is
+  // actually entitled to — not hardcoded to any one product, so a client
+  // using only Reputation Manager gets nudged about Reputation Manager
+  // gaps, same as a Showtime-only client gets Showtime gaps. Picks the
+  // first gap in product/registry order, which is arbitrary but stable —
+  // it won't jump between different workers on every render.
+  const bannerSetupGap = useMemo(() => {
+    const enabledSet = new Set(enabledWorkerIds);
+    const candidates = workspaceProductIds.flatMap((productId) =>
+      workersForProduct(productId)
+        .filter((w) => !enabledSet.has(w.id))
+        .map((w) => ({ worker: w, productLabel: PRODUCT_LABELS[productId] }))
+    );
+    return candidates[0] ?? null;
+  }, [workspaceProductIds, enabledWorkerIds]);
+
+  type BannerSlide =
+    | { kind: "queue"; item: UnifiedActivityItem }
+    | { kind: "this_week"; blocks: WorkerReportBlock[] }
+    | { kind: "setup_gap"; worker: WorkerDefinition; productLabel: string };
+
+  const bannerSlides = useMemo<BannerSlide[]>(() => {
+    const slides: BannerSlide[] = bannerQueueCandidates.map((item) => ({ kind: "queue", item }));
+    if (bannerThisWeekBlocks.length > 0) slides.push({ kind: "this_week", blocks: bannerThisWeekBlocks });
+    if (bannerSetupGap) slides.push({ kind: "setup_gap", worker: bannerSetupGap.worker, productLabel: bannerSetupGap.productLabel });
+    return slides;
+  }, [bannerQueueCandidates, bannerThisWeekBlocks, bannerSetupGap]);
+
   const [bannerIndex, setBannerIndex] = useState(0);
   useEffect(() => {
-    if (bannerCandidates.length <= 1) return;
+    if (bannerSlides.length <= 1) return;
     const interval = setInterval(() => {
-      setBannerIndex((i) => (i + 1) % bannerCandidates.length);
+      setBannerIndex((i) => (i + 1) % bannerSlides.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [bannerCandidates.length]);
-  const bannerItem = bannerCandidates[bannerIndex % Math.max(1, bannerCandidates.length)] ?? null;
+  }, [bannerSlides.length]);
+  const bannerSlide = bannerSlides[bannerIndex % Math.max(1, bannerSlides.length)] ?? null;
 
   // ── Rail: Worker / Category (see the rail's own JSX comment for why
   // there's no client dimension — this workspace has exactly one client).
@@ -607,9 +660,17 @@ export function UnifiedActivityPanel({
       <div
         className={cn(
           "w-full flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100",
-          bannerItem && "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
+          bannerSlide && "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
         )}
-        onClick={bannerItem ? () => openItem(bannerItem) : undefined}
+        onClick={
+          bannerSlide?.kind === "queue"
+            ? () => openItem(bannerSlide.item)
+            : bannerSlide?.kind === "this_week"
+              ? () => router.push("/dashboard/reports")
+              : bannerSlide?.kind === "setup_gap" && clients[0]
+                ? () => router.push(`/dashboard/engagements/${clients[0].engagementId}`)
+                : undefined
+        }
       >
         {clients.length === 1 && (
           <Link
@@ -629,26 +690,54 @@ export function UnifiedActivityPanel({
         )}
 
         <div className="flex-1 min-w-0 h-5 relative overflow-hidden border-l border-zinc-300/60 dark:border-zinc-800 pl-3">
-          {bannerItem ? (
+          {bannerSlide?.kind === "queue" ? (
             <div
-              key={bannerItem.id}
+              key={bannerSlide.item.id}
               className="absolute inset-0 flex items-center gap-2 min-w-0 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-500"
             >
-              {bannerItem.skillName && <AnySkillBadge skill={bannerItem.skillName} size={16} />}
-              <span className="font-bold truncate shrink-0">{bannerItem.title}</span>
-              {bannerItem.subtitle && <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">{bannerItem.subtitle}</span>}
-              {bannerItem.pinned && (
+              {bannerSlide.item.skillName && <AnySkillBadge skill={bannerSlide.item.skillName} size={16} />}
+              <span className="font-bold truncate shrink-0">{bannerSlide.item.title}</span>
+              {bannerSlide.item.subtitle && (
+                <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">{bannerSlide.item.subtitle}</span>
+              )}
+              {bannerSlide.item.pinned && (
                 <span className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-sky-100 dark:bg-sky-950/50 text-sky-700 dark:text-sky-400">
                   New
                 </span>
               )}
+            </div>
+          ) : bannerSlide?.kind === "this_week" ? (
+            <div
+              key="this-week"
+              className="absolute inset-0 flex items-center gap-2 min-w-0 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-500"
+            >
+              <span className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-zinc-300/60 dark:bg-zinc-700/60 text-zinc-700 dark:text-zinc-300">
+                This Week
+              </span>
+              <span className="font-normal text-zinc-600 dark:text-zinc-300 truncate">
+                {bannerSlide.blocks.map((b) => `${b.label} ${b.displayValue}`).join(" · ")}
+              </span>
+            </div>
+          ) : bannerSlide?.kind === "setup_gap" ? (
+            <div
+              key={`setup-gap-${bannerSlide.worker.id}`}
+              className="absolute inset-0 flex items-center gap-2 min-w-0 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-500"
+            >
+              <span className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-violet-200/60 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400">
+                Setup
+              </span>
+              <span className="font-bold truncate shrink-0">{bannerSlide.worker.name} isn&apos;t enabled</span>
+              <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">
+                {bannerSlide.productLabel} · {bannerSlide.worker.description}
+              </span>
+              <span className="shrink-0 text-zinc-700 dark:text-zinc-200 font-bold">Enable →</span>
             </div>
           ) : (
             <span className="flex items-center h-full text-zinc-400 dark:text-zinc-500 font-normal">Nothing needs attention right now.</span>
           )}
         </div>
 
-        {bannerItem && <SeverityBars severity={bannerItem.severity} />}
+        {bannerSlide?.kind === "queue" && <SeverityBars severity={bannerSlide.item.severity} />}
       </div>
 
       {/* No separate "Recent Activity" title row here — it just duplicated

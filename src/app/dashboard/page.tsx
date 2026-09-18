@@ -13,6 +13,8 @@ import { latestStepLabel } from "@/lib/run-display";
 import { OverviewStatsPanel } from "./overview-stats-panel";
 import { UnifiedActivityPanel } from "./unified-activity-panel";
 import { mergeUnifiedActivity } from "@/lib/unified-activity";
+import { getReportBlocksForEngagement } from "@/lib/worker-report-blocks";
+import { isProductId } from "@/lib/product-catalog";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
 import Link from "next/link";
@@ -179,6 +181,18 @@ export default async function DashboardPage() {
     primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
   ]);
   const installedProductIds = installedPackagesByWorkspace.get(workspaceId) ?? [];
+  // Same list, narrowed to real ProductIds — workspacePackages.packageId
+  // is a plain string column, and UnifiedActivityPanel's Setup Gaps slide
+  // needs the actual ProductId union to look workers up by product.
+  const workspaceProductIds = installedProductIds.filter(isProductId);
+
+  // The merged activity panel's "This Week" banner slide — every worker's
+  // own report block (worker-report-blocks.ts), for whichever workers are
+  // actually enabled, windowed to the last 7 days. Depends on
+  // enabledWorkerIds above, so it can't join that first Promise.all.
+  const weeklyReportBlocks = primaryEngagementId
+    ? await getReportBlocksForEngagement(primaryEngagementId, enabledWorkerIds, { start: thisWeekStart })
+    : [];
 
   const completedThisWeek = Number(thisWeekResult[0]?.count ?? 0);
   const completedLastWeek = Number(lastWeekResult[0]?.count ?? 0);
@@ -291,6 +305,8 @@ export default async function DashboardPage() {
             counts={activityCounts}
             clients={clients}
             enabledWorkerIds={enabledWorkerIds}
+            workspaceProductIds={workspaceProductIds}
+            weeklyReportBlocks={weeklyReportBlocks}
             title={copy.activityLogSectionTitle}
           />
         </div>
