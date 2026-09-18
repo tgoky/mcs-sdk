@@ -199,9 +199,15 @@ const ACTIVITY_CHIP_SECTION_ORDER = [
 
 interface ActivityViewState {
   pinnedChipIds: string[];
+  // Full Queue / All Runs used to render unconditionally in the toolbar's
+  // top-right corner, permanently reserving that space. They're now just
+  // two more pin-able options in the same "+" customizer as the filter
+  // chips — off by default, appearing only once a user opts in, so the
+  // table gets that vertical room back for everyone who never uses them.
+  pinnedLinkIds: string[];
   pageSize: 10 | 25 | 50;
 }
-const DEFAULT_ACTIVITY_VIEW: ActivityViewState = { pinnedChipIds: [], pageSize: 10 };
+const DEFAULT_ACTIVITY_VIEW: ActivityViewState = { pinnedChipIds: [], pinnedLinkIds: [], pageSize: 10 };
 
 export function UnifiedActivityPanel({
   items,
@@ -357,6 +363,9 @@ export function UnifiedActivityPanel({
   const [page, setPage] = useState(0);
   const [savedView, setSavedView] = useLocalViewState<ActivityViewState>("mcs:unified-activity:view", DEFAULT_ACTIVITY_VIEW);
   const pinnedChipIds = new Set(savedView.pinnedChipIds);
+  // Guarded fallback: existing persisted views from before this field
+  // existed won't have it yet.
+  const pinnedLinkIds = new Set(savedView.pinnedLinkIds ?? []);
   const pageSize = savedView.pageSize ?? 10;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -538,6 +547,13 @@ export function UnifiedActivityPanel({
     }));
   }
 
+  function togglePinnedLink(id: string) {
+    setSavedView((prev) => ({
+      ...prev,
+      pinnedLinkIds: prev.pinnedLinkIds?.includes(id) ? prev.pinnedLinkIds.filter((c) => c !== id) : [...(prev.pinnedLinkIds ?? []), id],
+    }));
+  }
+
   const tabOptions: SegmentedTabOption<ActivityTab>[] = [
     { key: "all", label: execToolbarCopy.tabs.all, count: tabCounts.all },
     { key: "needs_action", label: execToolbarCopy.tabs.needs_attention, count: tabCounts.needs_action },
@@ -559,6 +575,24 @@ export function UnifiedActivityPanel({
     label: d.label,
     count: chipCounts.get(d.id) ?? 0,
   }));
+
+  // Full Queue / All Runs — plain page links, not filters, so they get
+  // their own small "Shortcuts" section in the same "+" popover rather
+  // than going through the filter-chip predicate machinery above.
+  const ACTIVITY_LINK_DEFS = [
+    { id: "full-queue", label: "Full Queue", href: viewQueueHref },
+    { id: "all-runs", label: "All Runs", href: viewRunsHref },
+  ];
+  const customizerSectionsWithLinks: CustomizerSection[] = [
+    ...customizerSections,
+    { label: "Shortcuts", options: ACTIVITY_LINK_DEFS.map((d) => ({ id: d.id, label: d.label })) },
+  ];
+  const pinnedOrPinnableIds = new Set([...pinnedChipIds, ...pinnedLinkIds]);
+  function toggleCustomizerOption(id: string) {
+    if (ACTIVITY_LINK_DEFS.some((d) => d.id === id)) togglePinnedLink(id);
+    else togglePinnedChip(id);
+  }
+  const pinnedLinks = ACTIVITY_LINK_DEFS.filter((d) => pinnedLinkIds.has(d.id));
 
   return (
     <div className="space-y-2 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
@@ -834,16 +868,20 @@ export function UnifiedActivityPanel({
             <SegmentedTabs options={tabOptions} value={tab} onChange={(k) => { setTab(k); setPage(0); }} />
             <TableSearchInput value={search} onChange={(v) => { setSearch(v); setPage(0); }} placeholder={execToolbarCopy.searchPlaceholder} className="w-full sm:w-56" />
             <TimeRangeMenu value={timeRange} onChange={(v) => { setTimeRange(v); setPage(0); }} />
-            <ViewCustomizer sections={customizerSections} enabledIds={pinnedChipIds} onToggle={togglePinnedChip} menuTitle={sharedToolbarCopy.filtersSectionLabel} />
+            {/* Full Queue / All Runs live in this same "+" menu now, under
+                "Shortcuts" — pin one to bring it back into view on the
+                right; unpinned (the default) it takes no space at all. */}
+            <ViewCustomizer sections={customizerSectionsWithLinks} enabledIds={pinnedOrPinnableIds} onToggle={toggleCustomizerOption} menuTitle={sharedToolbarCopy.filtersSectionLabel} />
             <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
-            <div className="ml-auto flex items-center gap-3 text-xs font-mono">
-              <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-                Full Queue
-              </Link>
-              <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-                All Runs
-              </Link>
-            </div>
+            {pinnedLinks.length > 0 && (
+              <div className="ml-auto flex items-center gap-3 text-xs font-mono">
+                {pinnedLinks.map((link) => (
+                  <Link key={link.id} href={link.href} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Content-area background — reverted back to the original
