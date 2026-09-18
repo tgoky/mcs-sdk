@@ -1,0 +1,51 @@
+diff --git a/src/app/dashboard/unified-activity-panel.tsx b/src/app/dashboard/unified-activity-panel.tsx
+index 6d0ff06..af7bc82 100644
+--- a/src/app/dashboard/unified-activity-panel.tsx
++++ b/src/app/dashboard/unified-activity-panel.tsx
+@@ -552,7 +552,7 @@ export function UnifiedActivityPanel({
+   }));
+ 
+   return (
+-    <div className="space-y-3 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
++    <div className="space-y-2 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
+       {/* Full-width client identity bar — the client chip queue-panel.tsx
+           renders above its own rail, extended edge-to-edge and doubling as
+           a rotating "needs attention" ticker (stadium-ad-board style: one
+@@ -608,18 +608,10 @@ export function UnifiedActivityPanel({
+         {bannerItem && <SeverityBars severity={bannerItem.severity} />}
+       </div>
+ 
+-      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+-        <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
+-        <div className="flex items-center gap-3 text-xs font-mono">
+-          <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+-            Full Queue
+-          </Link>
+-          <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+-            All Runs
+-          </Link>
+-        </div>
+-      </div>
+-
++      {/* No separate "Recent Activity" title row here — it just duplicated
++          the rail's own scope card label right below it. Full Queue/All
++          Runs moved into the toolbar row instead of getting a whole row
++          of their own. */}
+       <div ref={containerRef} className="surface-glass-2 rounded-lg overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
+         {/* LEFT RAIL — By Worker / By Category. No client dimension: this
+             workspace has exactly one client (see EngagementActionsMenu's
+@@ -835,6 +827,14 @@ export function UnifiedActivityPanel({
+             <TimeRangeMenu value={timeRange} onChange={(v) => { setTimeRange(v); setPage(0); }} />
+             <ViewCustomizer sections={customizerSections} enabledIds={pinnedChipIds} onToggle={togglePinnedChip} menuTitle={sharedToolbarCopy.filtersSectionLabel} />
+             <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
++            <div className="ml-auto flex items-center gap-3 text-xs font-mono">
++              <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
++                Full Queue
++              </Link>
++              <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
++                All Runs
++              </Link>
++            </div>
+           </div>
+ 
+           {/* Content-area background — NOT queue-panel.tsx's literal
