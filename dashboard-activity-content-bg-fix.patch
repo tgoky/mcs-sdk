@@ -1,0 +1,170 @@
+diff --git a/src/app/dashboard/unified-activity-panel.tsx b/src/app/dashboard/unified-activity-panel.tsx
+index ba4f827..6a91d6a 100644
+--- a/src/app/dashboard/unified-activity-panel.tsx
++++ b/src/app/dashboard/unified-activity-panel.tsx
+@@ -764,85 +764,94 @@ export function UnifiedActivityPanel({
+             <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
+           </div>
+ 
+-          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px]">
++          {/* Same explicit content-area background queue-panel.tsx's own
++              "TABLE AREA" wrapper uses (bg-white/60 dark:bg-sidebar) —
++              distinct from the outer shell's darker surface-glass-2, so
++              this reads as its own lighter surface the way queue-panel's
++              does, empty state included, rather than showing the darker
++              shell through any empty space. */}
++          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-white/60 dark:bg-sidebar p-3">
+             {pagedItems.length === 0 ? (
+-              <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
+-                {items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}
++              <div className="h-full flex flex-col items-center justify-center py-12 text-center text-zinc-500 dark:text-zinc-500 space-y-1">
++                <p className="text-sm font-medium">{items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}</p>
++                {items.length > 0 && <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>}
+               </div>
+             ) : (
+-              pagedItems.map((item) => {
+-                const isBusy = busyId === item.queueItem?.id;
+-                const isTriggering = triggeringId === item.id;
+-                const isCancelling = cancellingRunId === `cancel-${item.runId}`;
+-                const repair = item.queueItem ? getRepairAction(item.queueItem) : null;
++              <div className="surface-glass-1 rounded-xl overflow-hidden">
++                {pagedItems.map((item) => {
++                  const isBusy = busyId === item.queueItem?.id;
++                  const isTriggering = triggeringId === item.id;
++                  const isCancelling = cancellingRunId === `cancel-${item.runId}`;
++                  const repair = item.queueItem ? getRepairAction(item.queueItem) : null;
+ 
+-                return (
+-                  <div
+-                    key={item.id}
+-                    className={cn(
+-                      "group px-4 py-3.5 space-y-2 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 transition-colors cursor-pointer",
+-                      selectedId === item.id
+-                        ? "bg-zinc-100/80 dark:bg-zinc-900/60"
+-                        : "bg-white dark:bg-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
+-                    )}
+-                    onClick={() => openItem(item)}
+-                  >
+-                    <div className="flex items-start gap-3">
+-                      {item.skillName && <AnySkillBadge skill={item.skillName} size={24} />}
+-                      <div className="min-w-0 flex-1">
+-                        <div className="flex items-center gap-2 flex-wrap">
+-                          <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
+-                          {item.buyer && <span className="text-sm font-mono text-zinc-500 dark:text-zinc-400 truncate">· {item.buyer}</span>}
++                  return (
++                    <div
++                      key={item.id}
++                      className={cn(
++                        "group px-4 py-3.5 space-y-2 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 transition-colors cursor-pointer",
++                        selectedId === item.id
++                          ? "bg-zinc-100/80 dark:bg-zinc-900/60"
++                          : "bg-white dark:bg-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
++                      )}
++                      onClick={() => openItem(item)}
++                    >
++                      <div className="flex items-start gap-3">
++                        {item.skillName && <AnySkillBadge skill={item.skillName} size={24} />}
++                        <div className="min-w-0 flex-1">
++                          <div className="flex items-center gap-2 flex-wrap">
++                            <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
++                            {item.buyer && <span className="text-sm font-mono text-zinc-500 dark:text-zinc-400 truncate">· {item.buyer}</span>}
++                          </div>
++                          {item.subtitle && <p className="text-sm text-zinc-600 dark:text-zinc-300 truncate mt-0.5">{item.subtitle}</p>}
+                         </div>
+-                        {item.subtitle && <p className="text-sm text-zinc-600 dark:text-zinc-300 truncate mt-0.5">{item.subtitle}</p>}
++                        <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-sm font-medium shrink-0 whitespace-nowrap text-zinc-500 dark:text-zinc-400" />
+                       </div>
+-                      <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-sm font-medium shrink-0 whitespace-nowrap text-zinc-500 dark:text-zinc-400" />
+-                    </div>
+ 
+-                    {item.status === "needs_action" && (
+-                      <div className="flex items-center gap-1.5 flex-wrap pl-9" onClick={(e) => e.stopPropagation()}>
+-                        {item.queueItem ? (
+-                          <QueueItemQuickActions
+-                            item={item.queueItem}
+-                            repair={repair}
+-                            isBusy={isBusy}
+-                            isTriggering={isTriggering}
+-                            triggerErrorId={triggerErrorId}
+-                            errorId={errorId}
+-                            errorText={errorText}
+-                            decide={decide}
+-                            resolveSweepNoShow={resolveSweepNoShow}
+-                            dismissSyncSetup={dismissSyncSetup}
+-                            dismissRunFailure={dismissRunFailure}
+-                            onRunRepairTrigger={runRepairTrigger}
+-                          />
+-                        ) : (
+-                          <Link href={item.href} className={btnGhost}>
+-                            <ArrowUpRight size={11} /> View run
+-                          </Link>
+-                        )}
+-                      </div>
+-                    )}
++                      {item.status === "needs_action" && (
++                        <div className="flex items-center gap-1.5 flex-wrap pl-9" onClick={(e) => e.stopPropagation()}>
++                          {item.queueItem ? (
++                            <QueueItemQuickActions
++                              item={item.queueItem}
++                              repair={repair}
++                              isBusy={isBusy}
++                              isTriggering={isTriggering}
++                              triggerErrorId={triggerErrorId}
++                              errorId={errorId}
++                              errorText={errorText}
++                              decide={decide}
++                              resolveSweepNoShow={resolveSweepNoShow}
++                              dismissSyncSetup={dismissSyncSetup}
++                              dismissRunFailure={dismissRunFailure}
++                              onRunRepairTrigger={runRepairTrigger}
++                            />
++                          ) : (
++                            <Link href={item.href} className={btnGhost}>
++                              <ArrowUpRight size={11} /> View run
++                            </Link>
++                          )}
++                        </div>
++                      )}
+ 
+-                    {item.status === "running" && item.runId && (
+-                      <div className="pl-9" onClick={(e) => e.stopPropagation()}>
+-                        <button
+-                          type="button"
+-                          disabled={isCancelling}
+-                          onClick={() =>
+-                            runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => {
+-                              /* list re-fetches on next server nav; nothing to do client-side for a one-shot dashboard tile */
+-                            })
+-                          }
+-                          className={btnGhost}
+-                        >
+-                          {isCancelling ? <Loader2 size={11} className="animate-spin" /> : <Ban size={11} />} Cancel run
+-                        </button>
+-                      </div>
+-                    )}
+-                  </div>
+-                );
+-              })
++                      {item.status === "running" && item.runId && (
++                        <div className="pl-9" onClick={(e) => e.stopPropagation()}>
++                          <button
++                            type="button"
++                            disabled={isCancelling}
++                            onClick={() =>
++                              runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => {
++                                /* list re-fetches on next server nav; nothing to do client-side for a one-shot dashboard tile */
++                              })
++                            }
++                            className={btnGhost}
++                          >
++                            {isCancelling ? <Loader2 size={11} className="animate-spin" /> : <Ban size={11} />} Cancel run
++                          </button>
++                        </div>
++                      )}
++                    </div>
++                  );
++                })}
++              </div>
+             )}
+           </div>
+ 
