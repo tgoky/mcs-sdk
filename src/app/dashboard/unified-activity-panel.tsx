@@ -46,7 +46,14 @@ import { VerboseTime } from "@/components/relative-time";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, WORKER_CATEGORY_LIST, type WorkerId, type WorkerCategory } from "@/lib/worker-registry";
-import { QUEUE_COPY as queueCopy, QUEUE_TOOLBAR_COPY as queueToolbarCopy, EXECUTIONS_TOOLBAR_COPY as execToolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy } from "@/lib/copy";
+import {
+  QUEUE_COPY as queueCopy,
+  QUEUE_TOOLBAR_COPY as queueToolbarCopy,
+  EXECUTIONS_TOOLBAR_COPY as execToolbarCopy,
+  TABLE_TOOLBAR_COPY as sharedToolbarCopy,
+  WORKSPACE_PRODUCTS,
+} from "@/lib/copy";
+import type { ClientOption } from "./queue-panel";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
 import { TableSearchInput } from "@/components/table-search-input";
 import { TimeRangeMenu, computeTimeRangeBounds, isWithinTimeRange, type TimeRangeValue } from "@/components/time-range-menu";
@@ -64,6 +71,12 @@ const PRODUCT_LABELS: Record<ProductId, string> = {
   "cold-open": "Cold Open",
   "whop-agent": "Whop Agent",
 };
+
+// Same real logo artwork the Library's ProductCard uses (WORKSPACE_PRODUCTS,
+// copy.ts) — not a generic icon standing in for each product.
+const PRODUCT_LOGOS: Record<ProductId, string> = Object.fromEntries(
+  WORKSPACE_PRODUCTS.map((p) => [p.id, p.image])
+) as Record<ProductId, string>;
 
 // Narrower than queue-panel's own w-64 (256px) rail — this panel's list is
 // the point of the page, and a narrower rail leaves it noticeably more
@@ -175,6 +188,7 @@ const DEFAULT_ACTIVITY_VIEW: ActivityViewState = { pinnedChipIds: [], pageSize: 
 export function UnifiedActivityPanel({
   items,
   counts,
+  clients,
   enabledWorkerIds,
   title = "Activity",
   viewQueueHref = "/dashboard/queue",
@@ -182,6 +196,7 @@ export function UnifiedActivityPanel({
 }: {
   items: UnifiedActivityItem[];
   counts: UnifiedActivityCounts;
+  clients: ClientOption[];
   enabledWorkerIds: WorkerId[];
   title?: string;
   viewQueueHref?: string;
@@ -496,15 +511,39 @@ export function UnifiedActivityPanel({
 
   return (
     <div className="space-y-3 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-            Full Queue
-          </Link>
-          <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-            All Runs
-          </Link>
+      {/* Same single-client identity chip queue-panel.tsx renders above its
+          own rail — borrowed as-is rather than re-invented, since this
+          workspace has exactly one client too (see the rail's own comment
+          for why there's no All/Clients-style toggle here). */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="w-full md:w-64 shrink-0">
+          {clients.length === 1 && (
+            <Link
+              href={`/dashboard/engagements/${clients[0].engagementId}`}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Open client engagement"
+            >
+              <span className="truncate flex-1">{clients[0].buyer}</span>
+              {clients[0].pausedAt && (
+                <span className="shrink-0 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  Paused
+                </span>
+              )}
+              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+            </Link>
+          )}
+        </div>
+
+        <div className="flex-1 flex items-center justify-between w-full min-w-0 pl-1">
+          <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
+          <div className="flex items-center gap-3 text-xs font-mono">
+            <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+              Full Queue
+            </Link>
+            <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+              All Runs
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -527,13 +566,23 @@ export function UnifiedActivityPanel({
             title="Drag to resize"
           />
 
-          {/* SCOPE CARD */}
-          <div className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+          {/* SCOPE CARD — also the reset control now that "Every item" is
+              gone: clicking it clears every rail selection, the same
+              "back to the full list" action that row used to be. */}
+          <button
+            type="button"
+            onClick={() => {
+              clearRailSelection();
+              setExpandedProductId(null);
+            }}
+            title="Reset filters"
+            className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+          >
             <span>{title}</span>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 font-bold tabular-nums">
               {counts.total}
             </span>
-          </div>
+          </button>
 
           {/* GROUPING MODE SELECTOR — same popover-dropdown component
               queue-panel.tsx's own rail uses for "By CRM/Platform" etc.,
@@ -582,7 +631,7 @@ export function UnifiedActivityPanel({
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">
-                {groupingMode === "worker" ? "Products" : "Categories"}
+                {groupingMode === "worker" ? "United Tools Platform" : "Categories"}
               </span>
             </div>
             <div className="relative">
@@ -599,25 +648,8 @@ export function UnifiedActivityPanel({
 
           {/* SUB-LIST ITEMS */}
           <div className="overflow-y-auto space-y-0.5 pt-1 flex-1 [scrollbar-width:none]">
-            <button
-              type="button"
-              onClick={clearRailSelection}
-              className={cn(
-                "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                !selectedProductId && !selectedWorkerId && !selectedCategory
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
-                  : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
-              )}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Layers size={14} className={!selectedProductId && !selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white shrink-0" : "text-zinc-400 shrink-0"} />
-                <span className="truncate">Every item</span>
-              </div>
-              <span className={cn("text-[11px] font-mono tabular-nums font-bold", !selectedProductId && !selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
-                {counts.total}
-              </span>
-            </button>
-
+            {/* No "Every item" row — the SCOPE CARD above is the reset
+                control now (click it to clear every rail selection). */}
             {groupingMode === "worker" ? (
               filteredInstalledProducts.length === 0 ? (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic px-2.5 py-2">No products installed for this client yet.</p>
@@ -639,7 +671,8 @@ export function UnifiedActivityPanel({
                         )}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <Layers size={14} className={isSelected ? "text-zinc-900 dark:text-white shrink-0" : "text-zinc-400 shrink-0"} />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={PRODUCT_LOGOS[productId]} alt="" className="w-[18px] h-[18px] object-contain shrink-0" />
                           <span className="truncate">{PRODUCT_LABELS[productId]}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">

@@ -35,13 +35,6 @@ export default async function DashboardPage() {
   // Promise.all instead of only starting once that whole block resolves.
   const [
     [
-      // Unused since UnifiedActivityPanel's rail dropped its client
-      // dimension (this workspace only ever has one client — see that
-      // file's own rail comment) — its only consumer was the now-removed
-      // `clients` prop. Left fetched rather than pulled out of this
-      // Promise.all: every slot below is positionally aligned with its
-      // own query (see the 9th-slot comment further down), and
-      // renumbering 9 slots for one unused variable isn't worth the risk.
       userEngagements,
       totalRunsResult,
       thisWeekResult,
@@ -197,6 +190,16 @@ export default async function DashboardPage() {
     .map((r) => ({ skillName: r.skillName, count: Number(r.count) }))
     .sort((a, b) => b.count - a.count);
 
+  // Back in use — UnifiedActivityPanel's header now borrows queue-panel's
+  // own single-client identity chip (this workspace's one client, linking
+  // straight to their engagement page), the same real card queue-panel.tsx
+  // renders above its own rail.
+  const clients = userEngagements.map((e) => ({
+    engagementId: e.engagementId,
+    buyer: e.buyer,
+    pausedAt: e.pausedAt ? e.pausedAt.toISOString() : null,
+  }));
+
   const recentCompletions = recentCompletionsRaw.map(({ steps, completedAt, ...rest }) => ({
     ...rest,
     completedAt: (completedAt ?? new Date()).toISOString(),
@@ -285,6 +288,7 @@ export default async function DashboardPage() {
           <UnifiedActivityPanel
             items={activityItems}
             counts={activityCounts}
+            clients={clients}
             enabledWorkerIds={enabledWorkerIds}
             title={copy.activityLogSectionTitle}
           />
