@@ -33,7 +33,7 @@ import {
   CalendarClock,
   Ban,
   ChevronDown,
-  ChevronRight,
+  GripVertical,
   Layers,
 } from "lucide-react";
 import { useQueueItemActions } from "./use-queue-item-actions";
@@ -44,9 +44,8 @@ import { useQuickActions } from "@/components/action-panel";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { VerboseTime } from "@/components/relative-time";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { PRODUCT_IDS, PRODUCT_SKILL_IDS } from "@/lib/product-catalog";
+import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, WORKER_CATEGORY_LIST, type WorkerId, type WorkerCategory } from "@/lib/worker-registry";
-import { SKILLS_BY_WORKER } from "@/lib/worker-skill-hierarchy";
 import { QUEUE_COPY as queueCopy, QUEUE_TOOLBAR_COPY as queueToolbarCopy, EXECUTIONS_TOOLBAR_COPY as execToolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy } from "@/lib/copy";
 import { SegmentedTabs, type SegmentedTabOption } from "@/components/segmented-tabs";
 import { TableSearchInput } from "@/components/table-search-input";
@@ -59,10 +58,20 @@ import type { UnifiedActivityItem, UnifiedActivityCounts, UnifiedActivityStatus 
 type ActivityTab = "all" | UnifiedActivityStatus;
 type RailGroupingMode = "worker" | "category";
 
+const PRODUCT_LABELS: Record<ProductId, string> = {
+  showtime: "Showtime",
+  "reputation-manager": "Reputation Manager",
+  "cold-open": "Cold Open",
+  "whop-agent": "Whop Agent",
+};
+
+// Narrower than queue-panel's own w-64 (256px) rail — this panel's list is
+// the point of the page, and a narrower rail leaves it noticeably more
+// room without losing the rail's own usability at these widths.
 const RAIL_WIDTH_KEY = "mcs-unified-activity-rail-width";
-const MIN_RAIL_WIDTH = 200;
-const MAX_RAIL_WIDTH = 380;
-const DEFAULT_RAIL_WIDTH = 256; // matches queue-panel's w-64
+const MIN_RAIL_WIDTH = 180;
+const MAX_RAIL_WIDTH = 300;
+const DEFAULT_RAIL_WIDTH = 220;
 
 function readStoredRailWidth(): number {
   if (typeof window === "undefined") return DEFAULT_RAIL_WIDTH;
@@ -90,13 +99,6 @@ function readStoredDetailWidth(): number {
     return DEFAULT_DETAIL_WIDTH;
   }
 }
-
-const STATUS_DOT: Record<UnifiedActivityStatus, string> = {
-  needs_action: "bg-rose-500 dark:bg-rose-400",
-  running: "bg-sky-500 dark:bg-sky-400 animate-pulse",
-  completed: "bg-emerald-500 dark:bg-emerald-400",
-  other: "bg-zinc-400 dark:bg-zinc-600",
-};
 
 const btnBase =
   "hover-lift press-settle inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60";
@@ -192,71 +194,82 @@ export function UnifiedActivityPanel({
   const { busyKey: cancellingRunId, run: runQuickAction } = useQuickActions();
 
   // ── Rail: Worker / Category (see the rail's own JSX comment for why
-  // there's no client dimension — this workspace has exactly one client). ──
+  // there's no client dimension — this workspace has exactly one client).
+  // "By Worker" is two levels — product (Showtime, Reputation Manager,
+  // Cold Open, Whop Agent), expanding to the real installed workers under
+  // it (Pin-Down, Win-Back, AI Engine Watch, etc.) — and stops there.
+  // Deliberately not three levels: a worker's own chat-only sub-actions
+  // (pin-down-voice, rep-twitter-deep-scan, etc.) already count toward
+  // their parent worker's total via workerIdForSkill/counts.byWorker, but
+  // don't get their own expandable row here — a worker that expands into
+  // its own further-expandable sub-items reads as confusing nesting, not
+  // extra clarity. ──
   const [groupingMode, setGroupingModeRaw] = useState<RailGroupingMode>("worker");
-  const [expandedWorkerId, setExpandedWorkerId] = useState<WorkerId | null>(null);
+  const [isGroupingPopoverOpen, setIsGroupingPopoverOpen] = useState(false);
+  const [expandedProductId, setExpandedProductId] = useState<ProductId | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<ProductId | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<WorkerId | null>(null);
-  const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<WorkerCategory | null>(null);
   const [railSearch, setRailSearch] = useState("");
 
+  const groupingModeLabels: Record<RailGroupingMode, string> = { worker: "By Worker", category: "By Category" };
+
   function setGroupingMode(mode: RailGroupingMode) {
     setGroupingModeRaw(mode);
-    setSelectedWorkerId(null);
-    setSelectedSkillName(null);
-    setSelectedCategory(null);
-    setExpandedWorkerId(null);
+    clearRailSelection();
+    setExpandedProductId(null);
   }
 
   function clearRailSelection() {
+    setSelectedProductId(null);
     setSelectedWorkerId(null);
-    setSelectedSkillName(null);
     setSelectedCategory(null);
   }
 
-  function toggleWorkerRow(workerId: WorkerId) {
-    const alreadyActive = selectedWorkerId === workerId && !selectedSkillName;
+  function toggleProductRow(productId: ProductId) {
+    const alreadyActive = selectedProductId === productId && !selectedWorkerId;
     if (alreadyActive) {
       clearRailSelection();
-      setExpandedWorkerId(null);
+      setExpandedProductId(null);
       return;
     }
-    setSelectedWorkerId(workerId);
-    setSelectedSkillName(null);
-    // Only ever expand a worker that actually has sub-skills nested under
-    // it (SKILLS_BY_WORKER's length > 1) — most workers don't (see
-    // worker-skill-hierarchy.ts), and a chevron that reveals a single row
-    // identical to the one just clicked is dead weight, not a feature.
-    setExpandedWorkerId(SKILLS_BY_WORKER[workerId].length > 1 ? workerId : null);
+    setSelectedProductId(productId);
+    setSelectedWorkerId(null);
+    setExpandedProductId(productId);
   }
 
-  function selectSkill(workerId: WorkerId, skillName: string) {
+  function selectWorker(productId: ProductId, workerId: WorkerId) {
+    setSelectedProductId(productId);
     setSelectedWorkerId(workerId);
-    setSelectedSkillName(skillName);
   }
 
   function toggleCategory(category: WorkerCategory) {
     setSelectedCategory((prev) => (prev === category ? null : category));
   }
 
-  // Per-skillName counts — a finer breakdown than counts.byWorker/
-  // byCategory (both computed once in unified-activity.ts's merge step)
-  // needs, so it's kept local to this rail rather than growing the shared
-  // data-layer type for a UI-only concern.
-  const skillCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of items) {
-      if (!item.skillName) continue;
-      map.set(item.skillName, (map.get(item.skillName) ?? 0) + 1);
+  // Only the products this client actually has workers installed for —
+  // same "never a hardcoded catalog" rule enabledWorkerIds itself follows.
+  const installedProductIds = useMemo(() => {
+    const productIds = new Set(enabledWorkerIds.map((id) => WORKER_REGISTRY[id].productId));
+    return PRODUCT_IDS.filter((id) => productIds.has(id));
+  }, [enabledWorkerIds]);
+
+  const enabledWorkersByProduct = useMemo(() => {
+    const map = new Map<ProductId, WorkerId[]>();
+    for (const workerId of enabledWorkerIds) {
+      const productId = WORKER_REGISTRY[workerId].productId;
+      map.set(productId, [...(map.get(productId) ?? []), workerId]);
     }
     return map;
-  }, [items]);
+  }, [enabledWorkerIds]);
 
-  const filteredEnabledWorkers = useMemo(() => {
-    if (!railSearch.trim()) return enabledWorkerIds;
+  const filteredInstalledProducts = useMemo(() => {
+    if (!railSearch.trim()) return installedProductIds;
     const q = railSearch.trim().toLowerCase();
-    return enabledWorkerIds.filter((id) => WORKER_REGISTRY[id].name.toLowerCase().includes(q));
-  }, [enabledWorkerIds, railSearch]);
+    return installedProductIds.filter(
+      (id) => PRODUCT_LABELS[id].toLowerCase().includes(q) || (enabledWorkersByProduct.get(id) ?? []).some((w) => WORKER_REGISTRY[w].name.toLowerCase().includes(q))
+    );
+  }, [installedProductIds, enabledWorkersByProduct, railSearch]);
 
   const categoriesWithActivity = useMemo(() => {
     return WORKER_CATEGORY_LIST.filter((c) => counts.byCategory[c] > 0);
@@ -309,14 +322,18 @@ export function UnifiedActivityPanel({
   const railFiltered = useMemo(() => {
     return items.filter((item) => {
       if (groupingMode === "worker") {
-        if (selectedSkillName) return item.skillName === selectedSkillName;
         if (selectedWorkerId) return item.workerId === selectedWorkerId;
+        // Matched via workerId, not skillName directly — a chat sub-skill's
+        // own skillName (e.g. "pin-down-voice") never appears in
+        // PRODUCT_SKILL_IDS (that only lists worker-level ids), but its
+        // workerId already resolves to a real worker with a real product.
+        if (selectedProductId) return !!item.workerId && WORKER_REGISTRY[item.workerId].productId === selectedProductId;
       } else if (groupingMode === "category" && selectedCategory) {
         return item.category === selectedCategory;
       }
       return true;
     });
-  }, [items, groupingMode, selectedWorkerId, selectedSkillName, selectedCategory]);
+  }, [items, groupingMode, selectedProductId, selectedWorkerId, selectedCategory]);
 
   const tabCounts = useMemo(() => {
     const c: Record<ActivityTab, number> = { all: railFiltered.length, needs_action: 0, running: 0, completed: 0, other: 0 };
@@ -377,7 +394,7 @@ export function UnifiedActivityPanel({
         router.push(item.href);
       }
     },
-    [router, isDesktop]
+    [router, isDesktop, setSelectedId]
   );
 
   const handleDetailWidthChange = useCallback((w: number) => {
@@ -518,43 +535,54 @@ export function UnifiedActivityPanel({
             </span>
           </div>
 
-          {/* WORKER / CATEGORY TOGGLE — same visual language as
-              queue-panel's All/Clients switch. */}
-          <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-medium">
+          {/* GROUPING MODE SELECTOR — same popover-dropdown component
+              queue-panel.tsx's own rail uses for "By CRM/Platform" etc.,
+              just with 2 modes instead of 4. */}
+          <div className="relative">
             <button
               type="button"
-              role="tab"
-              aria-selected={groupingMode === "worker"}
-              onClick={() => setGroupingMode("worker")}
-              className={cn(
-                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-                groupingMode === "worker"
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-              )}
+              onClick={() => setIsGroupingPopoverOpen((p) => !p)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
             >
-              By Worker
+              <div className="flex items-center gap-2 truncate">
+                <GripVertical size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
+                <span className="truncate">{groupingModeLabels[groupingMode]}</span>
+              </div>
+              <ChevronDown size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={groupingMode === "category"}
-              onClick={() => setGroupingMode("category")}
-              className={cn(
-                "py-1.5 rounded-lg text-center transition-all cursor-pointer",
-                groupingMode === "category"
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-              )}
-            >
-              By Category
-            </button>
+
+            {isGroupingPopoverOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-xl space-y-0.5 text-xs">
+                  {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setGroupingMode(mode);
+                        setIsGroupingPopoverOpen(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer",
+                        groupingMode === mode
+                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold shadow-xs"
+                          : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      )}
+                    >
+                      <span>{groupingModeLabels[mode]}</span>
+                      {groupingMode === mode && <Check size={12} className="text-emerald-600 dark:text-emerald-400" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-300 uppercase tracking-wider">
-                {groupingMode === "worker" ? "Workers" : "Categories"}
+                {groupingMode === "worker" ? "Products" : "Categories"}
               </span>
             </div>
             <div className="relative">
@@ -563,7 +591,7 @@ export function UnifiedActivityPanel({
                 type="text"
                 value={railSearch}
                 onChange={(e) => setRailSearch(e.target.value)}
-                placeholder={groupingMode === "worker" ? "Search workers..." : "Search categories..."}
+                placeholder={groupingMode === "worker" ? "Search products or workers..." : "Search categories..."}
                 className="w-full pl-7 pr-2.5 py-1.5 text-xs bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
             </div>
@@ -576,35 +604,33 @@ export function UnifiedActivityPanel({
               onClick={clearRailSelection}
               className={cn(
                 "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
-                !selectedWorkerId && !selectedCategory
+                !selectedProductId && !selectedWorkerId && !selectedCategory
                   ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
                   : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
               )}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Layers size={14} className={!selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white shrink-0" : "text-zinc-400 shrink-0"} />
+                <Layers size={14} className={!selectedProductId && !selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white shrink-0" : "text-zinc-400 shrink-0"} />
                 <span className="truncate">Every item</span>
               </div>
-              <span className={cn("text-[11px] font-mono tabular-nums font-bold", !selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
+              <span className={cn("text-[11px] font-mono tabular-nums font-bold", !selectedProductId && !selectedWorkerId && !selectedCategory ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
                 {counts.total}
               </span>
             </button>
 
             {groupingMode === "worker" ? (
-              filteredEnabledWorkers.length === 0 ? (
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic px-2.5 py-2">No workers installed for this client yet.</p>
+              filteredInstalledProducts.length === 0 ? (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic px-2.5 py-2">No products installed for this client yet.</p>
               ) : (
-                filteredEnabledWorkers.map((workerId) => {
-                  const worker = WORKER_REGISTRY[workerId];
-                  const isSelected = selectedWorkerId === workerId && !selectedSkillName;
-                  const isExpanded = expandedWorkerId === workerId;
-                  const subSkills = SKILLS_BY_WORKER[workerId];
-                  const canExpand = subSkills.length > 1;
+                filteredInstalledProducts.map((productId) => {
+                  const isSelected = selectedProductId === productId && !selectedWorkerId;
+                  const isExpanded = expandedProductId === productId;
+                  const workersForProduct = enabledWorkersByProduct.get(productId) ?? [];
                   return (
-                    <div key={workerId}>
+                    <div key={productId}>
                       <button
                         type="button"
-                        onClick={() => toggleWorkerRow(workerId)}
+                        onClick={() => toggleProductRow(productId)}
                         className={cn(
                           "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
                           isSelected
@@ -613,16 +639,14 @@ export function UnifiedActivityPanel({
                         )}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <AnySkillBadge skill={workerId} size={18} />
-                          <span className="truncate">{worker.name}</span>
+                          <Layers size={14} className={isSelected ? "text-zinc-900 dark:text-white shrink-0" : "text-zinc-400 shrink-0"} />
+                          <span className="truncate">{PRODUCT_LABELS[productId]}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className={cn("text-[11px] font-mono tabular-nums font-bold", isSelected ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
-                            {counts.byWorker[workerId]}
+                            {counts.byProduct[productId]}
                           </span>
-                          {canExpand && (
-                            <ChevronDown size={13} className={cn("text-zinc-400 transition-transform", isExpanded && "rotate-180")} />
-                          )}
+                          <ChevronDown size={13} className={cn("text-zinc-400 transition-transform", isExpanded && "rotate-180")} />
                         </div>
                       </button>
 
@@ -630,29 +654,32 @@ export function UnifiedActivityPanel({
                           mechanics as win-back-cadence-preview.tsx's
                           recovery-cadence rows (a plain conditional
                           render + Tailwind's animate-in utilities, no
-                          height/max-height animation). */}
+                          height/max-height animation). Reveals this
+                          product's real installed workers (Pin-Down,
+                          Win-Back, AI Engine Watch, ...) — one level only,
+                          a worker here is a leaf, not itself expandable. */}
                       {isExpanded && (
                         <div className="pl-3 space-y-0.5 pt-0.5 pb-1 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
-                          {subSkills.map((skillName) => {
-                            const skillSelected = selectedSkillName === skillName;
+                          {workersForProduct.map((workerId) => {
+                            const workerSelected = selectedWorkerId === workerId;
                             return (
                               <button
-                                key={skillName}
+                                key={workerId}
                                 type="button"
-                                onClick={() => selectSkill(workerId, skillName)}
+                                onClick={() => selectWorker(productId, workerId)}
                                 className={cn(
                                   "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[10px] text-[11.5px] font-medium transition-colors cursor-pointer",
-                                  skillSelected
+                                  workerSelected
                                     ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
                                     : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
                                 )}
                               >
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <ChevronRight size={11} className="text-zinc-400 shrink-0" />
-                                  <span className="truncate">{anySkillDisplayName(skillName)}</span>
+                                  <AnySkillBadge skill={workerId} size={16} />
+                                  <span className="truncate">{WORKER_REGISTRY[workerId].name}</span>
                                 </div>
-                                <span className={cn("text-[10.5px] font-mono tabular-nums font-bold shrink-0", skillSelected ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
-                                  {skillCounts.get(skillName) ?? 0}
+                                <span className={cn("text-[10.5px] font-mono tabular-nums font-bold shrink-0", workerSelected ? "text-zinc-900 dark:text-white" : "text-zinc-400")}>
+                                  {counts.byWorker[workerId]}
                                 </span>
                               </button>
                             );
@@ -704,7 +731,7 @@ export function UnifiedActivityPanel({
             <FilterChipBar chips={pinnedChips} activeIds={activeChipIds} onToggle={toggleActiveChip} />
           </div>
 
-          <div className="flex-1 min-w-0 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900 max-h-[560px]">
+          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px]">
             {pagedItems.length === 0 ? (
               <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                 {items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}
@@ -720,26 +747,27 @@ export function UnifiedActivityPanel({
                   <div
                     key={item.id}
                     className={cn(
-                      "group px-4 py-3 space-y-1.5 transition-colors cursor-pointer",
-                      selectedId === item.id ? "bg-zinc-100/80 dark:bg-zinc-900/60" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+                      "group px-4 py-3.5 space-y-2 border-b border-zinc-100 dark:border-sidebar-border/60 last:border-b-0 transition-colors cursor-pointer",
+                      selectedId === item.id
+                        ? "bg-zinc-100/80 dark:bg-zinc-900/60"
+                        : "bg-white dark:bg-transparent hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
                     )}
                     onClick={() => openItem(item)}
                   >
-                    <div className="flex items-start gap-2.5">
-                      <span className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", STATUS_DOT[item.status])} />
-                      {item.skillName && <AnySkillBadge skill={item.skillName} size={18} />}
+                    <div className="flex items-start gap-3">
+                      {item.skillName && <AnySkillBadge skill={item.skillName} size={24} />}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
-                          {item.buyer && <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 truncate">· {item.buyer}</span>}
+                          <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">{item.title}</p>
+                          {item.buyer && <span className="text-sm font-mono text-zinc-500 dark:text-zinc-400 truncate">· {item.buyer}</span>}
                         </div>
-                        {item.subtitle && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</p>}
+                        {item.subtitle && <p className="text-sm text-zinc-600 dark:text-zinc-300 truncate mt-0.5">{item.subtitle}</p>}
                       </div>
-                      <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-[11px] shrink-0 whitespace-nowrap text-zinc-400 dark:text-zinc-500" />
+                      <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-sm font-medium shrink-0 whitespace-nowrap text-zinc-500 dark:text-zinc-400" />
                     </div>
 
                     {item.status === "needs_action" && (
-                      <div className="flex items-center gap-1.5 flex-wrap pl-6" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5 flex-wrap pl-9" onClick={(e) => e.stopPropagation()}>
                         {item.queueItem ? (
                           <QueueItemQuickActions
                             item={item.queueItem}
@@ -764,7 +792,7 @@ export function UnifiedActivityPanel({
                     )}
 
                     {item.status === "running" && item.runId && (
-                      <div className="pl-6" onClick={(e) => e.stopPropagation()}>
+                      <div className="pl-9" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           disabled={isCancelling}
@@ -843,7 +871,7 @@ export function UnifiedActivityPanel({
                 title="Drag to resize"
               />
               <div className="flex items-center justify-between px-3 h-11 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
-                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Details</span>
+                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Details</span>
                 <button
                   type="button"
                   onClick={() => setSelectedId(null)}
@@ -853,7 +881,7 @@ export function UnifiedActivityPanel({
                   <X size={14} />
                 </button>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 text-xs">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 text-sm">
                 {selectedItem.queueItem ? (
                   <div className="space-y-4">
                     <QueueItemPreview item={selectedItem.queueItem} />
@@ -876,23 +904,23 @@ export function UnifiedActivityPanel({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      {selectedItem.skillName && <AnySkillBadge skill={selectedItem.skillName} size={22} />}
+                    <div className="flex items-center gap-2.5">
+                      {selectedItem.skillName && <AnySkillBadge skill={selectedItem.skillName} size={26} />}
                       <div className="min-w-0">
-                        <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{selectedItem.title}</p>
-                        {selectedItem.buyer && <p className="text-zinc-500 dark:text-zinc-400 truncate">{selectedItem.buyer}</p>}
+                        <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">{selectedItem.title}</p>
+                        {selectedItem.buyer && <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate">{selectedItem.buyer}</p>}
                       </div>
                     </div>
                     {selectedItem.run?.subjectLabel && (
-                      <p className="text-zinc-600 dark:text-zinc-300 whitespace-pre-line">{selectedItem.run.subjectLabel}</p>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-300 whitespace-pre-line">{selectedItem.run.subjectLabel}</p>
                     )}
                     {selectedItem.run?.errorMessage && (
-                      <p className="text-rose-600 dark:text-rose-400 font-mono whitespace-pre-line">{selectedItem.run.errorMessage}</p>
+                      <p className="text-sm text-rose-600 dark:text-rose-400 font-mono whitespace-pre-line">{selectedItem.run.errorMessage}</p>
                     )}
-                    <VerboseTime isoString={selectedItem.timestamp} className="text-zinc-400 dark:text-zinc-500" />
+                    <VerboseTime isoString={selectedItem.timestamp} className="text-sm font-medium text-zinc-500 dark:text-zinc-400" />
                     <Link
                       href={selectedItem.href}
-                      className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                      className="inline-flex items-center gap-1 text-sm font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
                     >
                       View full run <ArrowUpRight className="w-3 h-3" />
                     </Link>
