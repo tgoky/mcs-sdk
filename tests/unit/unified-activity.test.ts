@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { mergeUnifiedActivity, type UnifiedRunInput } from "@/lib/unified-activity";
+import { mergeUnifiedActivity, DEFAULT_QUEUE_PIN_WINDOW_HOURS, type UnifiedRunInput } from "@/lib/unified-activity";
 import type { QueueItem } from "@/lib/queue";
+
+const NOW = new Date("2026-09-18T12:00:00.000Z");
+function hoursAgoIso(hours: number): string {
+  return new Date(NOW.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
 
 function queueItem(overrides: Partial<QueueItem> = {}): QueueItem {
   return {
@@ -145,5 +150,114 @@ describe("mergeUnifiedActivity", () => {
     // than an undefined lookup.
     expect(counts.byWorker["leak-map"]).toBe(0);
     expect(counts.byCategory["Crisis & Recovery"]).toBe(0);
+  });
+});
+
+describe("mergeUnifiedActivity — pin window", () => {
+  it("marks a queue item younger than the pin window as pinned", () => {
+    const fresh = queueItem({ id: "q_fresh", createdAt: hoursAgoIso(2) });
+    const { items } = mergeUnifiedActivity([fresh], [], DEFAULT_QUEUE_PIN_WINDOW_HOURS, NOW);
+
+    expect(items[0].pinned).toBe(true);
+  });
+
+  it("normalizes a queue item once it's older than the pin window", () => {
+    const stale = queueItem({ id: "q_stale", createdAt: hoursAgoIso(49) });
+    const { items } = mergeUnifiedActivity([stale], [], DEFAULT_QUEUE_PIN_WINDOW_HOURS, NOW);
+
+    expect(items[0].pinned).toBe(false);
+  });
+
+  it("respects a custom, narrower pin window", () => {
+    const item = queueItem({ id: "q1", createdAt: hoursAgoIso(10) });
+    const { items: withDefault } = mergeUnifiedActivity([item], [], 48, NOW);
+    const { items: withNarrow } = mergeUnifiedActivity([item], [], 6, NOW);
+
+    expect(withDefault[0].pinned).toBe(true);
+    expect(withNarrow[0].pinned).toBe(false);
+  });
+
+  it("never pins a run — only queue items get pinned", () => {
+    const freshFailedRun = run({ id: "r1", status: "failed", startedAt: hoursAgoIso(1) });
+    const { items } = mergeUnifiedActivity([], [freshFailedRun], 48, NOW);
+
+    expect(items[0].pinned).toBe(false);
+  });
+
+  it("sorts a pinned item above everything else, even a running/completed item that would otherwise sort first by status tier", () => {
+    const pinnedApproval = queueItem({ id: "q_pinned", category: "approve", createdAt: hoursAgoIso(1) });
+    const staleActionItem = queueItem({ id: "q_stale", category: "action_needed", createdAt: hoursAgoIso(100) });
+    const { items } = mergeUnifiedActivity([pinnedApproval, staleActionItem], [], 48, NOW);
+
+    expect(items[0].id).toBe("queue:q_pinned");
+    expect(items[1].id).toBe("queue:q_stale");
+  });
+
+  it("falls back to DEFAULT_QUEUE_PIN_WINDOW_HOURS (48) when no window is passed", () => {
+    // Uses the real wall clock (no `now` override) — mergeUnifiedActivity's
+    // own default `now` param is `new Date()`, so this deliberately doesn't
+    // pin the fixed NOW/hoursAgoIso helper used everywhere else above.
+    const realHoursAgoIso = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const justUnder = queueItem({ id: "q1", createdAt: realHoursAgoIso(1) });
+    const justOver = queueItem({ id: "q2", createdAt: realHoursAgoIso(49) });
+    const { items } = mergeUnifiedActivity([justUnder, justOver], []);
+
+    expect(items.find((i) => i.id === "queue:q1")?.pinned).toBe(true);
+    expect(items.find((i) => i.id === "queue:q2")?.pinned).toBe(false);
+  });
+});
+
+describe("mergeUnifiedActivity — severity", () => {
+  it("scores an alert queue item as the highest severity (4)", () => {
+    const alert = queueItem({ id: "q1", category: "alert" });
+    const { items } = mergeUnifiedActivity([alert], []);
+    expect(items[0].severity).toBe(4);
+  });
+
+  it("scores an approve queue item as 3", () => {
+    const approve = queueItem({ id: "q1", category: "approve" });
+    const { items } = mergeUnifiedActivity([approve], []);
+    expect(items[0].severity).toBe(3);
+  });
+
+  it("scores a plain action_needed queue item as 2", () => {
+    const actionNeeded = queueItem({ id: "q1", category: "action_needed" });
+    const { items } = mergeUnifiedActivity([actionNeeded], []);
+    expect(items[0].severity).toBe(2);
+  });
+
+  it("scores an fyi queue item as 1", () => {
+    const fyi = queueItem({ id: "q1", category: "fyi" });
+    const { items } = mergeUnifiedActivity([fyi], []);
+    expect(items[0].severity).toBe(1);
+  });
+
+  it("bumps severity by one, capped at 4, for a credential-issue item", () => {
+    const actionNeeded = queueItem({ id: "q1", category: "action_needed", isCredentialIssue: true });
+    const alert = queueItem({ id: "q2", category: "alert", isCredentialIssue: true });
+    const { items } = mergeUnifiedActivity([actionNeeded, alert], []);
+
+    expect(items.find((i) => i.id === "queue:q1")?.severity).toBe(3);
+    expect(items.find((i) => i.id === "queue:q2")?.severity).toBe(4);
+  });
+
+  it("bumps severity by one for a paused engagement", () => {
+    const actionNeeded = queueItem({ id: "q1", category: "action_needed", engagementPausedAt: "2026-09-01T00:00:00.000Z" });
+    const { items } = mergeUnifiedActivity([actionNeeded], []);
+    expect(items[0].severity).toBe(3);
+  });
+
+  it("scores a failed run with no matching queue item as 3", () => {
+    const failedRun = run({ id: "r1", status: "failed" });
+    const { items } = mergeUnifiedActivity([], [failedRun]);
+    expect(items[0].severity).toBe(3);
+  });
+
+  it("scores a non-actionable run (running/completed) as 1", () => {
+    const runningRun = run({ id: "r1", status: "running" });
+    const completedRun = run({ id: "r2", status: "success" });
+    const { items } = mergeUnifiedActivity([], [runningRun, completedRun]);
+
+    expect(items.every((i) => i.severity === 1)).toBe(true);
   });
 });

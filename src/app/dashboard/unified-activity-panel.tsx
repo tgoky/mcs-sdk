@@ -118,6 +118,24 @@ const btnBase =
 const btnGhost =
   "hover-lift press-settle inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer disabled:opacity-60";
 
+/** 4-bar signal-strength-style severity meter for the rotating banner —
+ * more bars filled/colored = more important. Color, not just fill count,
+ * carries the top tier (4) so it reads at a glance without counting bars. */
+function SeverityBars({ severity }: { severity: 1 | 2 | 3 | 4 }) {
+  const filledColor = severity === 4 ? "bg-rose-500 dark:bg-rose-400" : severity === 3 ? "bg-amber-500 dark:bg-amber-400" : "bg-zinc-400 dark:bg-zinc-500";
+  return (
+    <div className="flex items-end gap-0.5 h-4 shrink-0" title={`Severity ${severity}/4`}>
+      {([1, 2, 3, 4] as const).map((n) => (
+        <span
+          key={n}
+          className={cn("w-1 rounded-sm transition-colors", n <= severity ? filledColor : "bg-zinc-200 dark:bg-zinc-800")}
+          style={{ height: `${n * 25}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // Per-skill "Module" chips across all 4 products, same shape
 // live-execution-feed.tsx's own MODULE_CHIP_DEFS has always used — merged
 // here rather than duplicated so a run's module filters exactly the same
@@ -207,6 +225,30 @@ export function UnifiedActivityPanel({
   const { busyId, errorId, errorText, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
     useQueueItemActions((id) => setResolvedIds((prev) => new Set(prev).add(id)));
   const { busyKey: cancellingRunId, run: runQuickAction } = useQuickActions();
+
+  // ── Rotating "needs attention" banner — a stadium-ad-board style ticker
+  // above the rail/table, cycling through pinned + needs_action items.
+  // Double-rendered on purpose: these items still appear in the table
+  // below exactly as before. This is the one surface a busy week of runs
+  // can never push out, since it isn't sorted/paginated with everything
+  // else — it always shows the highest-severity, most-recent thing that
+  // needs a look, regardless of how much other activity happened. ──
+  const bannerCandidates = useMemo(() => {
+    return items
+      .filter((i) => i.pinned || i.status === "needs_action")
+      .sort((a, b) => b.severity - a.severity || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 15);
+  }, [items]);
+
+  const [bannerIndex, setBannerIndex] = useState(0);
+  useEffect(() => {
+    if (bannerCandidates.length <= 1) return;
+    const interval = setInterval(() => {
+      setBannerIndex((i) => (i + 1) % bannerCandidates.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [bannerCandidates.length]);
+  const bannerItem = bannerCandidates[bannerIndex % Math.max(1, bannerCandidates.length)] ?? null;
 
   // ── Rail: Worker / Category (see the rail's own JSX comment for why
   // there's no client dimension — this workspace has exactly one client).
@@ -511,43 +553,74 @@ export function UnifiedActivityPanel({
 
   return (
     <div className="space-y-3 w-full font-sans antialiased text-zinc-800 dark:text-zinc-300 select-none">
-      {/* Same single-client identity chip queue-panel.tsx renders above its
-          own rail — borrowed as-is rather than re-invented, since this
-          workspace has exactly one client too (see the rail's own comment
-          for why there's no All/Clients-style toggle here). */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="w-full md:w-64 shrink-0">
-          {clients.length === 1 && (
-            <Link
-              href={`/dashboard/engagements/${clients[0].engagementId}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              title="Open client engagement"
+      {/* Full-width client identity bar — the client chip queue-panel.tsx
+          renders above its own rail, extended edge-to-edge and doubling as
+          a rotating "needs attention" ticker (stadium-ad-board style: one
+          item shows, then the next slides in) so pinned/needs_action items
+          always have a permanent home a busy week of runs can't push out
+          of. This is purely additive — every one of these items still
+          renders in the table below exactly as before; nothing is removed
+          from there, only also surfaced here. */}
+      <div
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100",
+          bannerItem && "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
+        )}
+        onClick={bannerItem ? () => openItem(bannerItem) : undefined}
+      >
+        {clients.length === 1 && (
+          <Link
+            href={`/dashboard/engagements/${clients[0].engagementId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 shrink-0 hover:underline"
+            title="Open client engagement"
+          >
+            <span className="truncate max-w-[140px]">{clients[0].buyer}</span>
+            {clients[0].pausedAt && (
+              <span className="shrink-0 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                Paused
+              </span>
+            )}
+            <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+          </Link>
+        )}
+
+        <div className="flex-1 min-w-0 h-5 relative overflow-hidden border-l border-zinc-300/60 dark:border-zinc-800 pl-3">
+          {bannerItem ? (
+            <div
+              key={bannerItem.id}
+              className="absolute inset-0 flex items-center gap-2 min-w-0 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-500"
             >
-              <span className="truncate flex-1">{clients[0].buyer}</span>
-              {clients[0].pausedAt && (
-                <span className="shrink-0 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                  Paused
+              {bannerItem.skillName && <AnySkillBadge skill={bannerItem.skillName} size={16} />}
+              <span className="font-bold truncate shrink-0">{bannerItem.title}</span>
+              {bannerItem.subtitle && <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">{bannerItem.subtitle}</span>}
+              {bannerItem.pinned && (
+                <span className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-sky-100 dark:bg-sky-950/50 text-sky-700 dark:text-sky-400">
+                  New
                 </span>
               )}
-              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-            </Link>
+            </div>
+          ) : (
+            <span className="flex items-center h-full text-zinc-400 dark:text-zinc-500 font-normal">Nothing needs attention right now.</span>
           )}
         </div>
 
-        <div className="flex-1 flex items-center justify-between w-full min-w-0 pl-1">
-          <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
-          <div className="flex items-center gap-3 text-xs font-mono">
-            <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-              Full Queue
-            </Link>
-            <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-              All Runs
-            </Link>
-          </div>
+        {bannerItem && <SeverityBars severity={bannerItem.severity} />}
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+        <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
+        <div className="flex items-center gap-3 text-xs font-mono">
+          <Link href={viewQueueHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+            Full Queue
+          </Link>
+          <Link href={viewRunsHref} className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+            All Runs
+          </Link>
         </div>
       </div>
 
-      <div ref={containerRef} className="surface-glass-2 rounded-2xl overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
+      <div ref={containerRef} className="surface-glass-2 rounded-lg overflow-visible flex flex-col md:flex-row min-h-[420px] w-full">
         {/* LEFT RAIL — By Worker / By Category. No client dimension: this
             workspace has exactly one client (see EngagementActionsMenu's
             own "one-workspace-one-client" comment) so there's nothing an
@@ -576,7 +649,7 @@ export function UnifiedActivityPanel({
               setExpandedProductId(null);
             }}
             title="Reset filters"
-            className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+            className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-md text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
           >
             <span>{title}</span>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 font-bold tabular-nums">
@@ -591,7 +664,7 @@ export function UnifiedActivityPanel({
             <button
               type="button"
               onClick={() => setIsGroupingPopoverOpen((p) => !p)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
             >
               <div className="flex items-center gap-2 truncate">
                 <GripVertical size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
@@ -603,7 +676,7 @@ export function UnifiedActivityPanel({
             {isGroupingPopoverOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
-                <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-xl space-y-0.5 text-xs">
+                <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-md space-y-0.5 text-xs">
                   {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
                     <button
                       key={mode}
@@ -664,7 +737,7 @@ export function UnifiedActivityPanel({
                         type="button"
                         onClick={() => toggleProductRow(productId)}
                         className={cn(
-                          "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                          "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer",
                           isSelected
                             ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
                             : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
@@ -701,7 +774,7 @@ export function UnifiedActivityPanel({
                                 type="button"
                                 onClick={() => selectWorker(productId, workerId)}
                                 className={cn(
-                                  "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[10px] text-[11.5px] font-medium transition-colors cursor-pointer",
+                                  "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium transition-colors cursor-pointer",
                                   workerSelected
                                     ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
                                     : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
@@ -734,7 +807,7 @@ export function UnifiedActivityPanel({
                     type="button"
                     onClick={() => toggleCategory(category)}
                     className={cn(
-                      "w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-xs font-medium transition-colors cursor-pointer",
+                      "w-full flex items-center justify-between px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer",
                       active
                         ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white font-semibold shadow-xs"
                         : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
@@ -768,22 +841,22 @@ export function UnifiedActivityPanel({
               `dark:bg-sidebar` (tried that; it's a no-op in dark mode).
               globals.css: --sidebar is #100c19, and .surface-glass-2 (the
               outer shell) resolves to --card (#1c1729) color-mixed to 62%
-              opacity over the page's near-black --background — the two
-              land within a couple RGB points of each other, so setting
-              this area to --sidebar was invisible against that shell no
-              matter how it's wrapped. --card is genuinely lighter
-              (#1c1729, solid) and is exactly the "a card sitting above
-              the page" token this app already defines for this — bg-card
-              reads it directly, no dark: prefix needed, since --card
-              itself flips value inside .dark {}. */}
-          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-card p-3">
+              opacity over the page's near-black --background — those two
+              land close enough that a --card-based fix (tried first)
+              wasn't reliably distinguishable either. Using the standard
+              zinc scale instead (zinc-100/zinc-900) — a well-known,
+              unambiguous step away from the shell's near-black tone,
+              already proven visible elsewhere in this exact file (row
+              hover/selected states below use zinc-800/zinc-900 the same
+              way) — rather than another custom-token guess. */}
+          <div className="flex-1 min-w-0 overflow-y-auto max-h-[560px] bg-zinc-100 dark:bg-zinc-900 p-3">
             {pagedItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-center text-zinc-500 dark:text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">{items.length === 0 ? "Nothing to show yet." : sharedToolbarCopy.noResultsTitle}</p>
                 {items.length > 0 && <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>}
               </div>
             ) : (
-              <div className="surface-glass-1 rounded-xl overflow-hidden">
+              <div className="surface-glass-1 rounded-md overflow-hidden">
                 {pagedItems.map((item) => {
                   const isBusy = busyId === item.queueItem?.id;
                   const isTriggering = triggeringId === item.id;

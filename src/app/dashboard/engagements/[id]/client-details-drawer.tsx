@@ -34,6 +34,7 @@ export interface ClientDetailsDrawerData {
   confirmationPageTemplate: string;
   heroVideoUrl: string | null;
   confirmationPageAnimationsEnabled: boolean;
+  queuePinWindowHours: number;
   notificationPackSelections: string[];
   hasAdCreativeBriefs: boolean;
   hasScriptPack: boolean;
@@ -132,6 +133,7 @@ export function ClientDetailsDrawer({
   const [confirmationPageTemplate, setConfirmationPageTemplate] = useState(data.confirmationPageTemplate);
   const [heroVideoUrl, setHeroVideoUrl] = useState(data.heroVideoUrl ?? "");
   const [animationsEnabled, setAnimationsEnabled] = useState(data.confirmationPageAnimationsEnabled);
+  const [queuePinWindowHours, setQueuePinWindowHours] = useState(String(data.queuePinWindowHours));
   const [notificationPackSelections, setNotificationPackSelections] = useState<Set<string>>(
     new Set(data.notificationPackSelections)
   );
@@ -183,6 +185,7 @@ export function ClientDetailsDrawer({
           confirmationPageTemplate,
           heroVideoUrl: heroVideoUrl.trim() || null,
           confirmationPageAnimationsEnabled: animationsEnabled,
+          queuePinWindowHours: Math.min(720, Math.max(1, Math.round(Number(queuePinWindowHours) || data.queuePinWindowHours))),
           notificationPackSelections: [...notificationPackSelections],
         }),
       });
@@ -408,6 +411,27 @@ export function ClientDetailsDrawer({
                 </span>
               </span>
             </label>
+          </Section>
+
+          <Section
+            title="Queue pin window"
+            description="How long a fresh approval or blocker stays pinned to the top of the dashboard's activity list before it normalizes into ordinary date order."
+          >
+            <div>
+              <Label>Hours</Label>
+              <input
+                type="number"
+                min={1}
+                max={720}
+                className={inputClass}
+                value={queuePinWindowHours}
+                onChange={(e) => setQueuePinWindowHours(e.target.value)}
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Default is 48 hours. Widen it if things tend to sit unaddressed longer than that; narrow it if you want the
+                list to feel current sooner.
+              </p>
+            </div>
           </Section>
 
           <Section title="Notification pack">

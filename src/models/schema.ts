@@ -939,6 +939,18 @@ voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
   pausedAt: timestamp("paused_at"),
   pausedReason: text("paused_reason"),
 
+  // How long a freshly-created queue item (an approval, blocker, alert)
+  // stays pinned to the very top of the dashboard's unified activity list
+  // before normalizing into ordinary recency-within-tier sorting —
+  // src/lib/unified-activity.ts's isPinned()/mergeUnifiedActivity() read
+  // this. Exists so a quiet approval doesn't get visually swallowed by a
+  // busy day of skill runs the moment it stops being brand-new; the
+  // operator can widen or shrink the window per client from the client
+  // details drawer instead of it being a fixed constant everyone's stuck
+  // with. 48h default matches a realistic "should have been looked at by
+  // now" expectation without being so short it normalizes overnight.
+  queuePinWindowHours: integer("queue_pin_window_hours").notNull().default(48),
+
   // ── Soft delete ─────────────────────────────────────────────────────
   // Deliberately not a hard DELETE. ~20 tables (skillRuns, artifacts,
   // credentialsRefs, notifications, activeAlerts, engagementSkills, etc.)

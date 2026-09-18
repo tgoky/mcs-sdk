@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "queue_pin_window_hours" integer DEFAULT 48 NOT NULL;

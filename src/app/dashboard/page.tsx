@@ -213,7 +213,8 @@ export default async function DashboardPage() {
     subjectLabel: latestStepLabel(steps),
   }));
 
-  const { items: activityItems, counts: activityCounts } = mergeUnifiedActivity(queueItems, recentRuns);
+  const queuePinWindowHours = userEngagements.find((e) => e.engagementId === primaryEngagementId)?.queuePinWindowHours;
+  const { items: activityItems, counts: activityCounts } = mergeUnifiedActivity(queueItems, recentRuns, queuePinWindowHours);
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",

@@ -365,6 +365,13 @@
       "when": 1789718501123,
       "tag": "0051_confirmation_page_animations_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1789743369186,
+      "tag": "0052_queue_pin_window_hours",
+      "breakpoints": true
     }
   ]
 }

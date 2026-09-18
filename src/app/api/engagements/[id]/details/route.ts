@@ -192,6 +192,17 @@ export async function PATCH(
       return NextResponse.json({ error: "confirmationPageAnimationsEnabled must be a boolean." }, { status: 400 });
     }
 
+    // ── Queue pin window — how long a fresh queue item stays pinned in the
+    // dashboard's unified activity list (unified-activity.ts) before
+    // normalizing — bounded 1-720h (30 days) so a typo can't accidentally
+    // pin everything forever or disable pinning outright.
+    if (incoming.queuePinWindowHours !== undefined) {
+      const n = incoming.queuePinWindowHours;
+      if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 720) {
+        return NextResponse.json({ error: "queuePinWindowHours must be a whole number between 1 and 720." }, { status: 400 });
+      }
+    }
+
     // ── Notification pack selections — diff against current, apply side effects ─
     let nextStack: EngagementStack | null = existing.stack as EngagementStack | null;
     if (incoming.notificationPackSelections !== undefined) {
@@ -242,6 +253,7 @@ export async function PATCH(
         ...(incoming.confirmationPageAnimationsEnabled !== undefined
           ? { confirmationPageAnimationsEnabled: incoming.confirmationPageAnimationsEnabled as boolean }
           : {}),
+        ...(incoming.queuePinWindowHours !== undefined ? { queuePinWindowHours: incoming.queuePinWindowHours as number } : {}),
         ...(nextStack !== existing.stack ? { stack: nextStack } : {}),
         updatedAt: new Date(),
       })

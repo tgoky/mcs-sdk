@@ -78,6 +78,21 @@ export interface UnifiedActivityItem {
     errorMessage: string | null;
     subjectLabel: string | null;
   };
+  /** True while this item is younger than the engagement's
+   * queuePinWindowHours (schema.ts) — sorts above every other item
+   * regardless of status tier (see mergeUnifiedActivity's sort), and is
+   * what UnifiedActivityPanel's rotating "needs attention" banner reads to
+   * decide what stays pinned there. Only ever true for kind "queue" — a
+   * run is never "pinned," it's either still going or it's done. Exists
+   * so a genuinely new approval/blocker doesn't read as buried the moment
+   * a busy day of skill runs pushes recency-sorted rows past it; it isn't
+   * about age making something MORE urgent, just about a fresh item
+   * staying visible for a real window before falling back to ordinary
+   * recency-within-tier sorting. */
+  pinned: boolean;
+  /** 1 (lowest) to 4 (highest) — feeds the banner's 4-bar severity meter.
+   * See computeSeverity's own comment for the exact scoring. */
+  severity: 1 | 2 | 3 | 4;
 }
 
 export interface UnifiedActivityCounts {
@@ -121,58 +136,110 @@ function productForSkill(skillName: string | null): ProductId | null {
   return null;
 }
 
+/** Matches engagements.queuePinWindowHours' own DB default (schema.ts) —
+ * kept in sync there, not re-derived, since a caller that doesn't have a
+ * real per-engagement value yet (a test, a not-yet-migrated row) should
+ * see the same "48h" behavior the column defaults new rows to. */
+export const DEFAULT_QUEUE_PIN_WINDOW_HOURS = 48;
+
+/**
+ * 1 (lowest) to 4 (highest). Queue items score off their real category —
+ * approve/alert are "someone needs to actually do something or something
+ * is actively wrong," action_needed/fyi are lower — with isCredentialIssue
+ * or a paused engagement bumping the score, since either means the thing
+ * blocking it is bigger than the single item itself. A bare failed run
+ * (kind "run", no matching queue item) scores a flat 3 — real enough to
+ * flag, but without a queue item's own category to read, there's no finer
+ * signal available. Anything else non-actionable (running, completed,
+ * other) is a flat 1 — never shown in the banner anyway (see
+ * UnifiedActivityPanel's own banner-candidate filter), this only exists so
+ * every item has SOME severity rather than the field being optional.
+ */
+function computeSeverity(item: {
+  kind: "queue" | "run";
+  status: UnifiedActivityStatus;
+  queueItem?: QueueItem;
+  engagementPausedAt?: string | null;
+}): 1 | 2 | 3 | 4 {
+  if (item.kind === "run") {
+    return item.status === "needs_action" ? 3 : 1;
+  }
+  const q = item.queueItem;
+  let score = q?.category === "alert" ? 4 : q?.category === "approve" ? 3 : q?.category === "action_needed" ? 2 : 1;
+  if (q?.isCredentialIssue || item.engagementPausedAt) score += 1;
+  return Math.min(4, score) as 1 | 2 | 3 | 4;
+}
+
 export function mergeUnifiedActivity(
   queueItems: QueueItem[],
-  runs: UnifiedRunInput[]
+  runs: UnifiedRunInput[],
+  queuePinWindowHours: number = DEFAULT_QUEUE_PIN_WINDOW_HOURS,
+  now: Date = new Date()
 ): { items: UnifiedActivityItem[]; counts: UnifiedActivityCounts } {
   // See file header — a run this specific already has a richer queue-item
   // representation shouldn't also render as a second, plainer feed row.
   const queueRunIds = new Set(queueItems.map((q) => q.runId).filter((id): id is string => !!id));
 
-  const queueAsItems: UnifiedActivityItem[] = queueItems.map((q) => ({
-    id: `queue:${q.id}`,
-    kind: "queue",
-    status: statusForQueueCategory(q.category),
-    title: q.title,
-    subtitle: q.subtitle,
-    engagementId: q.engagementId,
-    buyer: q.buyer,
-    skillName: q.skillName ?? null,
-    workerId: workerIdForSkill(q.skillName),
-    category: workerCategoryForSkill(q.skillName),
-    runId: q.runId,
-    timestamp: q.createdAt,
-    href: q.fixHref ?? (q.engagementId ? `/dashboard/engagements/${q.engagementId}` : "/dashboard/queue"),
-    engagementPausedAt: q.engagementPausedAt,
-    queueItem: q,
-  }));
+  const pinWindowMs = queuePinWindowHours * 60 * 60 * 1000;
+
+  const queueAsItems: UnifiedActivityItem[] = queueItems.map((q) => {
+    const pinned = now.getTime() - new Date(q.createdAt).getTime() < pinWindowMs;
+    return {
+      id: `queue:${q.id}`,
+      kind: "queue",
+      status: statusForQueueCategory(q.category),
+      title: q.title,
+      subtitle: q.subtitle,
+      engagementId: q.engagementId,
+      buyer: q.buyer,
+      skillName: q.skillName ?? null,
+      workerId: workerIdForSkill(q.skillName),
+      category: workerCategoryForSkill(q.skillName),
+      runId: q.runId,
+      timestamp: q.createdAt,
+      href: q.fixHref ?? (q.engagementId ? `/dashboard/engagements/${q.engagementId}` : "/dashboard/queue"),
+      engagementPausedAt: q.engagementPausedAt,
+      queueItem: q,
+      pinned,
+      severity: computeSeverity({ kind: "queue", status: statusForQueueCategory(q.category), queueItem: q, engagementPausedAt: q.engagementPausedAt }),
+    };
+  });
 
   const runAsItems: UnifiedActivityItem[] = runs
     .filter((r) => !queueRunIds.has(r.id))
-    .map((r) => ({
-      id: `run:${r.id}`,
-      kind: "run",
-      status: statusForRun(r.status),
-      title: anySkillDisplayName(r.skillName),
-      subtitle: r.subjectLabel ?? r.errorMessage ?? "",
-      engagementId: r.engagementId,
-      buyer: r.buyerName,
-      skillName: r.skillName,
-      workerId: workerIdForSkill(r.skillName),
-      category: workerCategoryForSkill(r.skillName),
-      runId: r.id,
-      timestamp: r.startedAt,
-      href: `/dashboard/runs/${r.id}`,
-      engagementPausedAt: r.engagementPausedAt,
-      run: {
-        status: r.status,
-        phase: r.phase,
-        errorMessage: r.errorMessage,
-        subjectLabel: r.subjectLabel,
-      },
-    }));
+    .map((r) => {
+      const status = statusForRun(r.status);
+      return {
+        id: `run:${r.id}`,
+        kind: "run",
+        status,
+        title: anySkillDisplayName(r.skillName),
+        subtitle: r.subjectLabel ?? r.errorMessage ?? "",
+        engagementId: r.engagementId,
+        buyer: r.buyerName,
+        skillName: r.skillName,
+        workerId: workerIdForSkill(r.skillName),
+        category: workerCategoryForSkill(r.skillName),
+        runId: r.id,
+        timestamp: r.startedAt,
+        href: `/dashboard/runs/${r.id}`,
+        engagementPausedAt: r.engagementPausedAt,
+        run: {
+          status: r.status,
+          phase: r.phase,
+          errorMessage: r.errorMessage,
+          subjectLabel: r.subjectLabel,
+        },
+        pinned: false,
+        severity: computeSeverity({ kind: "run", status, engagementPausedAt: r.engagementPausedAt }),
+      };
+    });
 
+  // Pinned first, full stop — a fresh queue item outranks everything else
+  // regardless of status tier while it's within its pin window. Below
+  // that, the existing status-tier-then-recency order is unchanged.
   const items = [...queueAsItems, ...runAsItems].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     const priorityDelta = STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status];
     if (priorityDelta !== 0) return priorityDelta;
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();

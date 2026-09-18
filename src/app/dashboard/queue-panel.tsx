@@ -1193,7 +1193,7 @@ export function QueuePanel({
       <div className="flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="w-full md:w-64 shrink-0">
           {clients.length > 1 ? (
-            <div role="tablist" className="grid grid-cols-2 p-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-medium">
+            <div role="tablist" className="grid grid-cols-2 p-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-medium">
               <button
                 type="button"
                 role="tab"
@@ -1237,7 +1237,7 @@ export function QueuePanel({
           ) : clients.length === 1 ? (
             <Link
               href={`/dashboard/engagements/${clients[0].engagementId}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title="Open client engagement"
             >
               <span className="truncate flex-1">{clients[0].buyer}</span>
@@ -1269,11 +1269,11 @@ export function QueuePanel({
       </div>
 
       {/* MAIN CONTAINER FRAME (Integrated Rail + Table) */}
-      <div className="surface-glass-2 rounded-2xl overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
+      <div className="surface-glass-2 rounded-lg overflow-visible flex flex-col md:flex-row min-h-[400px] w-full">
         {/* LEFT RAIL */}
         <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-zinc-200/80 dark:border-sidebar-border bg-[#f8f7fa] dark:bg-sidebar p-3 flex flex-col shrink-0 space-y-3 select-none rounded-t-2xl md:rounded-tr-none md:rounded-l-2xl">
           {/* SCOPE CARD */}
-          <div className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+          <div className="flex items-center justify-between px-3 py-2.5 surface-glass-1 rounded-md text-xs font-semibold text-zinc-900 dark:text-zinc-100">
             <span>{railView === "all" ? "All queues" : "All clients"}</span>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 font-bold tabular-nums">
               {railView === "all" ? items.length : clients.length}
@@ -1286,7 +1286,7 @@ export function QueuePanel({
               <button
                 type="button"
                 onClick={() => setIsGroupingPopoverOpen((p) => !p)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-white dark:bg-zinc-900/80 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 font-medium transition-colors cursor-pointer shadow-elevation-1"
               >
                 <div className="flex items-center gap-2 truncate">
                   <GripVertical size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
@@ -1298,7 +1298,7 @@ export function QueuePanel({
               {isGroupingPopoverOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setIsGroupingPopoverOpen(false)} />
-                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-xl space-y-0.5 text-xs">
+                  <div className="absolute top-full left-0 mt-1 w-full z-40 p-1 surface-glass-3 rounded-md space-y-0.5 text-xs">
                     {(Object.keys(groupingModeLabels) as RailGroupingMode[]).map((mode) => (
                       <button
                         key={mode}
@@ -1611,7 +1611,7 @@ export function QueuePanel({
                 </p>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
+              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-md overflow-hidden">
                 {archiveItems.map((it) => (
                   <ClosedQueueRow key={it.id} item={it} />
                 ))}
@@ -1624,7 +1624,7 @@ export function QueuePanel({
                 <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
               </div>
             ) : (
-              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
+              <div className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-md overflow-hidden">
                 {clients.map((client) => (
                   <button
                     key={client.engagementId}
@@ -1652,7 +1652,7 @@ export function QueuePanel({
               <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600">{sharedToolbarCopy.noResultsSubtitle}</p>
             </div>
           ) : (
-            <div ref={listContainerRef} className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-xl overflow-hidden">
+            <div ref={listContainerRef} className="flex-1 divide-y divide-zinc-100 dark:divide-sidebar-border surface-glass-1 rounded-md overflow-hidden">
               {pagedGroups.map((group) => {
                 const expanded = expandedGroups.has(group.signature);
                 return (
@@ -1731,7 +1731,7 @@ export function QueuePanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="absolute inset-0" onClick={() => setIsAddTagOpen(false)} />
 
-          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 surface-glass-3 rounded-2xl text-xs space-y-3.5 font-sans [scrollbar-width:none]">
+          <div className="relative z-10 w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 surface-glass-3 rounded-lg text-xs space-y-3.5 font-sans [scrollbar-width:none]">
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-2.5">
               <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">Create New Tag</span>
               <button
@@ -1750,7 +1750,7 @@ export function QueuePanel({
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="e.g. alerts"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 text-xs"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 text-xs"
                 autoFocus
               />
             </div>
@@ -1761,14 +1761,14 @@ export function QueuePanel({
                 <button
                   type="button"
                   onClick={() => { setIsSkillDropdownOpen((p) => !p); setIsCategoryDropdownOpen(false); }}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-800 dark:text-zinc-300 text-[11px] hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-800 dark:text-zinc-300 text-[11px] hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer"
                 >
                   <span className="truncate">{skillTargetLabels[newTagTargetSkill]}</span>
                   <ChevronDown size={11} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
                 </button>
 
                 {isSkillDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-md space-y-0.5">
                     {Object.entries(skillTargetLabels).map(([k, label]) => (
                       <button
                         key={k}
@@ -1788,14 +1788,14 @@ export function QueuePanel({
                 <button
                   type="button"
                   onClick={() => { setIsCategoryDropdownOpen((p) => !p); setIsSkillDropdownOpen(false); }}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-800 dark:text-zinc-300 text-[11px] hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-800 dark:text-zinc-300 text-[11px] hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer"
                 >
                   <span className="truncate">{categoryTargetLabels[newTagTargetCategory]}</span>
                   <ChevronDown size={11} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
                 </button>
 
                 {isCategoryDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-xl space-y-0.5">
+                  <div className="absolute top-full left-0 mt-1 w-full z-50 p-1 surface-glass-3 rounded-md space-y-0.5">
                     {Object.entries(categoryTargetLabels).map(([k, label]) => (
                       <button
                         key={k}
@@ -1845,7 +1845,7 @@ export function QueuePanel({
                 type="button"
                 onClick={handleCreateTag}
                 disabled={!newTagName.trim()}
-                className="w-full py-2 text-xs font-semibold rounded-xl bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                className="w-full py-2 text-xs font-semibold rounded-md bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
               >
                 Create Tag
               </button>
