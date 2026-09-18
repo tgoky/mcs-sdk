@@ -35,6 +35,13 @@ export default async function DashboardPage() {
   // Promise.all instead of only starting once that whole block resolves.
   const [
     [
+      // Unused since UnifiedActivityPanel's rail dropped its client
+      // dimension (this workspace only ever has one client — see that
+      // file's own rail comment) — its only consumer was the now-removed
+      // `clients` prop. Left fetched rather than pulled out of this
+      // Promise.all: every slot below is positionally aligned with its
+      // own query (see the 9th-slot comment further down), and
+      // renumbering 9 slots for one unused variable isn't worth the risk.
       userEngagements,
       totalRunsResult,
       thisWeekResult,
@@ -167,10 +174,13 @@ export default async function DashboardPage() {
     getPrimaryEngagementIdForWorkspace(workspaceId),
   ]);
 
-  // For the welcome modal only — lets it tell a workspace that already
-  // picked products at creation (or already has a worker running) apart
+  // Two consumers: the welcome modal (tell a workspace that already
+  // picked products at creation, or already has a worker running, apart
   // from a genuinely blank one, instead of always pointing at "set up
-  // your first worker" regardless of what's actually true.
+  // your first worker" regardless of what's actually true) and
+  // UnifiedActivityPanel's "By Worker" rail below (only ever lists
+  // workers actually installed for this workspace's one client, never a
+  // hardcoded catalog).
   const [installedPackagesByWorkspace, enabledWorkerIds] = await Promise.all([
     getInstalledPackagesByWorkspace([workspaceId]),
     primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId) : Promise.resolve([]),
@@ -191,12 +201,6 @@ export default async function DashboardPage() {
     ...rest,
     completedAt: (completedAt ?? new Date()).toISOString(),
     subjectLabel: latestStepLabel(steps),
-  }));
-
-  const clients = userEngagements.map((e) => ({
-    engagementId: e.engagementId,
-    buyer: e.buyer,
-    pausedAt: e.pausedAt ? e.pausedAt.toISOString() : null,
   }));
 
   const recentRuns = recentRunsRaw.map(({ steps, startedAt, engagementPausedAt, ...rest }) => ({
@@ -278,7 +282,12 @@ export default async function DashboardPage() {
             from dashboard-queue + dashboard-live-executions into one step
             (see tour-definitions.ts) since they're now the same element. */}
         <div className="pt-2 scroll-mt-20" id="live-executions-section" data-tour="dashboard-activity">
-          <UnifiedActivityPanel items={activityItems} counts={activityCounts} clients={clients} title={copy.activityLogSectionTitle} />
+          <UnifiedActivityPanel
+            items={activityItems}
+            counts={activityCounts}
+            enabledWorkerIds={enabledWorkerIds}
+            title={copy.activityLogSectionTitle}
+          />
         </div>
 
         {/* Shortcuts */}

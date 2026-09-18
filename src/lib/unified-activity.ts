@@ -23,6 +23,8 @@
 import type { QueueItem } from "@/lib/queue";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
+import { workerIdForSkill, workerCategoryForSkill } from "@/lib/worker-skill-hierarchy";
+import { WORKER_IDS, WORKER_CATEGORY_LIST, type WorkerId, type WorkerCategory } from "@/lib/worker-registry";
 
 export type UnifiedActivityStatus = "needs_action" | "running" | "completed" | "other";
 
@@ -52,6 +54,14 @@ export interface UnifiedActivityItem {
   engagementId: string | null;
   buyer: string | null;
   skillName: string | null;
+  /** Resolved once here from skillName via worker-skill-hierarchy.ts —
+   * the worker this item's skill belongs under (a worker's own runs map
+   * to themselves; a chat sub-skill's run maps to its parent worker). */
+  workerId: WorkerId | null;
+  /** This item's WorkerCategory (Setup / Monitoring / Outreach &
+   * Sequences / Analysis & Briefing / Crisis & Recovery) — the rail's "By
+   * Category" grouping reads this directly rather than re-deriving it. */
+  category: WorkerCategory | null;
   runId: string | null;
   /** ISO timestamp used for sorting and display. */
   timestamp: string;
@@ -76,6 +86,12 @@ export interface UnifiedActivityCounts {
   completed: number;
   total: number;
   byProduct: Record<ProductId, number>;
+  /** Per-worker item count, for the rail's "By Worker" list — every
+   * WorkerId is present (0 for a worker with no activity), the rail
+   * itself decides which of those to actually show (only this
+   * engagement's enabled workers). */
+  byWorker: Record<WorkerId, number>;
+  byCategory: Record<WorkerCategory, number>;
 }
 
 const STATUS_PRIORITY: Record<UnifiedActivityStatus, number> = {
@@ -122,6 +138,8 @@ export function mergeUnifiedActivity(
     engagementId: q.engagementId,
     buyer: q.buyer,
     skillName: q.skillName ?? null,
+    workerId: workerIdForSkill(q.skillName),
+    category: workerCategoryForSkill(q.skillName),
     runId: q.runId,
     timestamp: q.createdAt,
     href: q.fixHref ?? (q.engagementId ? `/dashboard/engagements/${q.engagementId}` : "/dashboard/queue"),
@@ -140,6 +158,8 @@ export function mergeUnifiedActivity(
       engagementId: r.engagementId,
       buyer: r.buyerName,
       skillName: r.skillName,
+      workerId: workerIdForSkill(r.skillName),
+      category: workerCategoryForSkill(r.skillName),
       runId: r.id,
       timestamp: r.startedAt,
       href: `/dashboard/runs/${r.id}`,
@@ -159,9 +179,13 @@ export function mergeUnifiedActivity(
   });
 
   const byProduct = Object.fromEntries(PRODUCT_IDS.map((id) => [id, 0])) as Record<ProductId, number>;
+  const byWorker = Object.fromEntries(WORKER_IDS.map((id) => [id, 0])) as Record<WorkerId, number>;
+  const byCategory = Object.fromEntries(WORKER_CATEGORY_LIST.map((c) => [c, 0])) as Record<WorkerCategory, number>;
   for (const item of items) {
     const productId = productForSkill(item.skillName);
     if (productId) byProduct[productId] += 1;
+    if (item.workerId) byWorker[item.workerId] += 1;
+    if (item.category) byCategory[item.category] += 1;
   }
 
   const counts: UnifiedActivityCounts = {
@@ -170,6 +194,8 @@ export function mergeUnifiedActivity(
     completed: items.filter((i) => i.status === "completed").length,
     total: items.length,
     byProduct,
+    byWorker,
+    byCategory,
   };
 
   return { items, counts };

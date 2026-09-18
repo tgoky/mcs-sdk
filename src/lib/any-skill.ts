@@ -1,6 +1,7 @@
 import { isRepSkillId, REP_SKILL_MANIFEST } from "@/lib/rep-skill-manifest";
 import { isColdOpenSkillId, COLD_OPEN_SKILL_MANIFEST } from "@/lib/cold-open-skill-manifest";
 import { isWhopAgentSkillId, WHOP_AGENT_SKILL_MANIFEST } from "@/lib/whop-agent-skill-manifest";
+import { isChatSkillId, CHAT_SKILL_MANIFEST } from "@/lib/chat-skill-manifest";
 import { skillName as showtimeSkillName } from "@/lib/copy";
 
 /**
@@ -17,11 +18,19 @@ import { skillName as showtimeSkillName } from "@/lib/copy";
  * skillName fell through to showtimeSkillName's raw-id fallback), not a
  * hypothetical; fixed alongside rather than left to compound with a third
  * product falling through the same way.
+ *
+ * Also extended to check chat-skill-manifest.ts's 11 standalone ids
+ * (pin-down-voice, rep-twitter-deep-scan, etc.) — the same gap Cold Open
+ * had, found while building the unified-activity rail's per-skill rows: a
+ * run of one of these fell through to showtimeSkillName's raw-id
+ * fallback (the literal id string, e.g. "pin-down-voice") instead of its
+ * real manifest name ("Brand Voice Extraction").
  */
 export function anySkillDisplayName(raw: string | null | undefined): string {
   if (!raw) return "Unknown module";
   if (isRepSkillId(raw)) return REP_SKILL_MANIFEST[raw].name;
   if (isColdOpenSkillId(raw)) return COLD_OPEN_SKILL_MANIFEST[raw].name;
   if (isWhopAgentSkillId(raw)) return WHOP_AGENT_SKILL_MANIFEST[raw].name;
+  if (isChatSkillId(raw)) return CHAT_SKILL_MANIFEST[raw].name;
   return showtimeSkillName(raw);
 }

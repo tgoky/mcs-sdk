@@ -104,4 +104,46 @@ describe("mergeUnifiedActivity", () => {
     expect(counts.completed).toBe(1);
     expect(counts.total).toBe(3);
   });
+
+  it("resolves a worker-owned run's workerId to itself and its category from worker-registry.ts", () => {
+    const preCallReadRun = run({ id: "r1", skillName: "pre-call-read" });
+    const { items } = mergeUnifiedActivity([], [preCallReadRun]);
+
+    expect(items[0].workerId).toBe("pre-call-read");
+    expect(items[0].category).toBe("Analysis & Briefing");
+  });
+
+  it("resolves a chat-sub-skill run's workerId to its parent worker, not itself", () => {
+    const voiceExtractionRun = run({ id: "r1", skillName: "pin-down-voice" });
+    const { items } = mergeUnifiedActivity([], [voiceExtractionRun]);
+
+    expect(items[0].workerId).toBe("pin-down");
+    expect(items[0].category).toBe("Setup");
+  });
+
+  it("leaves workerId/category null for a queue item with no skillName", () => {
+    const q = queueItem({ id: "q1", skillName: undefined });
+    const { items } = mergeUnifiedActivity([q], []);
+
+    expect(items[0].workerId).toBeNull();
+    expect(items[0].category).toBeNull();
+  });
+
+  it("counts items per worker and per category across the combined list", () => {
+    const preCallReadRun = run({ id: "r1", skillName: "pre-call-read" });
+    const anotherPreCallReadRun = run({ id: "r2", skillName: "pre-call-read" });
+    const voiceExtractionRun = run({ id: "r3", skillName: "pin-down-voice" });
+
+    const { counts } = mergeUnifiedActivity([], [preCallReadRun, anotherPreCallReadRun, voiceExtractionRun]);
+
+    expect(counts.byWorker["pre-call-read"]).toBe(2);
+    expect(counts.byWorker["pin-down"]).toBe(1);
+    expect(counts.byCategory["Analysis & Briefing"]).toBe(2);
+    expect(counts.byCategory["Setup"]).toBe(1);
+    // Every WorkerId/WorkerCategory is present, zeroed, even with no activity —
+    // the rail relies on this to render a worker's row with a real "0" rather
+    // than an undefined lookup.
+    expect(counts.byWorker["leak-map"]).toBe(0);
+    expect(counts.byCategory["Crisis & Recovery"]).toBe(0);
+  });
 });

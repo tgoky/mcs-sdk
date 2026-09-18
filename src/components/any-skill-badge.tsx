@@ -3,6 +3,8 @@
 import { isRepSkillId } from "@/lib/rep-skill-manifest";
 import { isColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { isWhopAgentSkillId } from "@/lib/whop-agent-skill-manifest";
+import { isChatSkillId } from "@/lib/chat-skill-manifest";
+import { workerIdForSkill } from "@/lib/worker-skill-hierarchy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RepSkillBadge } from "@/components/rep-skill-badge";
 import { ColdOpenSkillBadge } from "@/components/cold-open-skill-badge";
@@ -35,6 +37,18 @@ export function AnySkillBadge({
   paused?: boolean;
   count?: number;
 }) {
+  // A chat-only standalone sub-skill (pin-down-voice, rep-twitter-deep-scan,
+  // etc.) has no icon of its own — it's a sub-action of a real worker, not
+  // a separate visual identity — so it borrows its parent worker's badge.
+  // Previously fell through to SquishySkillBadge, which silently renders
+  // nothing for anything outside Showtime's 5 ids (see that component's
+  // own doc comment) — the same gap Cold Open/Whop Agent had before this
+  // component's isColdOpenSkillId/isWhopAgentSkillId checks existed.
+  if (isChatSkillId(skill)) {
+    const parentWorkerId = workerIdForSkill(skill);
+    if (parentWorkerId) return <AnySkillBadge skill={parentWorkerId} size={size} enabled={enabled} paused={paused} count={count} />;
+  }
+
   if (isRepSkillId(skill) || isColdOpenSkillId(skill) || isWhopAgentSkillId(skill)) {
     return (
       <div className="relative shrink-0" style={{ width: size, height: size }}>
