@@ -1,0 +1,23 @@
+diff --git a/src/app/dashboard/unified-activity-panel.tsx b/src/app/dashboard/unified-activity-panel.tsx
+index 29e3caa..dca23dc 100644
+--- a/src/app/dashboard/unified-activity-panel.tsx
++++ b/src/app/dashboard/unified-activity-panel.tsx
+@@ -234,8 +234,17 @@ export function UnifiedActivityPanel({
+   // else — it always shows the highest-severity, most-recent thing that
+   // needs a look, regardless of how much other activity happened. ──
+   const bannerCandidates = useMemo(() => {
++    // kind === "queue" only — a bare failed/timed-out run (no matching
++    // queue item) also carries status "needs_action" and would otherwise
++    // qualify here too, which is exactly what made this read as "just
++    // showing live executions" instead of "the needs attention and queue
++    // stuff" it's meant to be. A run failure that's serious enough to
++    // page someone already becomes its own run_failure queue item (see
++    // queue.ts) and shows up here through that, same as any other queue
++    // item — this isn't losing real failures, just not double-counting
++    // every transient one that never rose to that bar.
+     return items
+-      .filter((i) => i.pinned || i.status === "needs_action")
++      .filter((i) => i.kind === "queue" && (i.pinned || i.status === "needs_action"))
+       .sort((a, b) => b.severity - a.severity || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+       .slice(0, 15);
+   }, [items]);
