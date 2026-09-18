@@ -164,7 +164,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "publishDomain",
       label: "Confirmation page domain",
       kind: "derivable",
-      description: "Usually the same domain as buyerDomain, but stored separately since a confirmation page can publish to a different subdomain — pre-filled as a suggestion, not forced to match.",
+      description: "Collected and stored, but audited and confirmed functionally dead — grepped across the whole repo and nothing in the actual publish path (hosting.ts's publishConfirmationPage) ever reads it; it builds URLs from platform-specific subdomains/slugs instead. Kept here for now as a documented finding, not gated on (worker-config-completeness.ts's checkPinDown deliberately excludes it) — a real candidate for removal in a later pass, not just a reclassification.",
       derivableFrom: "primaryDomain",
     },
     {
@@ -250,6 +250,40 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       label: "Confirmation page template",
       kind: "ask",
       description: "A style preference, not derivable.",
+    },
+    // The 4 fields below were found missing entirely from this list during
+    // the full 34-worker audit (worker-config-completeness.ts's own header
+    // has the fuller account) — real, DB-backed, UI-editable facts the
+    // worker code actually reads, previously undisclosed here the way
+    // topCallQuestions/topObjections above are honestly flagged. None of
+    // them gate a run (see each description) — a blocking gate on a field
+    // the code already handles gracefully would be friction with no
+    // correctness payoff, the same reasoning win-back's recoveryWindowDays
+    // and leak-map's sampleSizeMinimum already establish elsewhere in this
+    // file.
+    {
+      key: "castingChoice",
+      label: "Who's on camera",
+      kind: "ask",
+      description: "Drives which of 4 script archetypes generates (founder_on_camera/coach_on_camera/animation/other) — a real, consequential choice, but script-builder.ts's own comment documents it falling back to founder_on_camera when unset, same default prospectMeets uses. Does not block.",
+    },
+    {
+      key: "heroVideoUrl",
+      label: "Hero video",
+      kind: "ask",
+      description: "Embedded once the buyer has actually recorded the hero script — until then the confirmation page ships its own 'recording in progress' placeholder. Genuinely optional, not a gap to fill before launch. Does not block.",
+    },
+    {
+      key: "confirmationPageAnimationsEnabled",
+      label: "Entrance animations",
+      kind: "ask",
+      description: "Opt-in cosmetic preference, defaults to off. Does not block.",
+    },
+    {
+      key: "hybridModeEnabled",
+      label: "AI-personalized intro paragraph",
+      kind: "ask",
+      description: "Collected in this same wizard (offer-step.tsx), but consumed by pile-on and win-back's own enrollment logic, not pin-down itself — reused, not re-collected, same convention as the booking/email credentials below. Defaults to off (templated email, no AI paragraph) when unset. Does not block.",
     },
   ],
   // Traced against brief-service.ts's real reads (gatherEngagementContext,
@@ -415,8 +449,17 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "sampleSizeMinimum",
       label: "Minimum sample size for a metric to be trusted",
       kind: "ask",
-      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter. Ask, flagged unbuilt.",
+      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block.",
     },
+    // AGING_THRESHOLD_DAYS = 30 (audit-engine.ts) was found during the
+    // full 34-worker audit as a real gap distinct from sampleSizeMinimum
+    // above: a pure hardcoded literal with NO storage slot anywhere in the
+    // schema, not even a stack-config fallback. It feeds a finding shown
+    // directly to the client ("N deals have been in the pipeline longer
+    // than 30 days"), and sales-cycle length varies enormously by
+    // vertical. Not added as a WorkerConfigField entry here — there's
+    // nothing to point one at yet. Needs a schema migration first, tracked
+    // as Phase 6 / Open Risks in the plan doc.
   ],
   // Traced against enrollment-service.ts's handleInboundBookingEvent
   // (eventKind === "created" branch). No hinges panel — every field below
@@ -593,6 +636,26 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       kind: "ask",
       description: "Real preference narrowing the panel to specific engines — not derivable.",
     },
+    // The 2 fields below were found missing entirely from this list during
+    // the full 34-worker audit — real, DB-backed, UI-collected
+    // repIdentityGraphs columns (identity-graph-form.tsx) that
+    // rep-crisis-response reads directly for its escalation notify/SMS
+    // logic, previously undisclosed the way entities/seedPanelPrompts/
+    // activeEngines above are honestly flagged as found-missing. A third
+    // real field, operatorEmailContacts, is collected but read by nothing
+    // downstream today — inert, not consequential, not listed here.
+    {
+      key: "soleAuthorityName",
+      label: "Sole authority name",
+      kind: "ask",
+      description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation, so this can never actually be blank once a row exists. Read directly by rep-crisis-response's escalation logic.",
+    },
+    {
+      key: "operatorPagePhone",
+      label: "Crisis SMS paging number",
+      kind: "ask",
+      description: "Destination for rep-crisis-response's SMS paging fallback — optional, paging still happens via in-app/Slack/email without it. Read directly by rep-crisis-response.",
+    },
   ],
   // The 5 workers below were traced (Phase 5) and confirmed to need
   // NOTHING beyond rep-onboarding's repIdentityGraphs fields above — every
@@ -611,15 +674,16 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
 
 // Traced against the Cold Open skill pack's own config schema (see
 // COLD_OPEN_SKILL_PACK_REVIEW.md and coldOpenConfig in schema.ts, which
-// mirrors coldopen.config.md's frontmatter section by section). Two real
-// reuse opportunities from Showtime, both flagged "derivable" the same
-// way pin-down's own rawVoiceCorpus/buyerDomain fields are: a client that
-// already ran Pin-Down has a primaryDomain and a buyer name on file, so
-// icp-lock and voice-capture should offer those as a starting suggestion
-// rather than a blank field — same unbuilt-pre-fill caveat
-// ClientProfileFact's own doc comment already states for every other
-// "derivable" entry in this file (the resolver exists; nothing calls it
-// from a UI surface yet).
+// mirrors coldopen.config.md's frontmatter section by section).
+// productName stays a real, working "derivable" field — the icp-lock
+// bridge route pre-fills it from engagements.buyer, confirmed live.
+// productUrl and voice-capture's voiceProfile were originally described
+// the same way (reuse Showtime's primaryDomain/rawVoiceCorpus) but that
+// reuse was audited and found not to exist anywhere in the actual code —
+// both reclassified to "ask" below, not just left aspirational the way
+// ClientProfileFact's own doc comment describes for fields that DO have
+// real-but-unwired resolvers. See each field's own description for the
+// distinction.
 const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField[]>> = {
   "icp-lock": [
     {
@@ -632,9 +696,8 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
     {
       key: "productUrl",
       label: "Product URL",
-      kind: "derivable",
-      description: "Pre-fillable from the client profile's shared primaryDomain, same mechanism pin-down's own buyerDomain field uses.",
-      derivableFrom: "primaryDomain",
+      kind: "ask",
+      description: "Audited and reclassified from derivable — unlike pin-down's buyerDomain/rawVoiceCorpus (which have real, running extraction code, just not reused across products yet), no live crawl or resolver path exists anywhere for this field. The icp-lock bridge route never reads engagements.primaryDomain and the form only pre-fills from a previously-saved value. A 100% manual ask field today, not just an unwired one.",
     },
     {
       key: "productPrice",
@@ -671,9 +734,8 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
     {
       key: "voiceProfile",
       label: "Greeting, sign-off, and tone",
-      kind: "derivable",
-      description: "Derived by crawling the client's domain — the same brand-voice extraction pin-down's own rawVoiceCorpus field already runs, reused rather than re-implemented.",
-      derivableFrom: "primaryDomain",
+      kind: "ask",
+      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried.",
     },
     {
       key: "subjectVariants",
@@ -727,6 +789,12 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       kind: "ask",
       description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable.",
     },
+    {
+      key: "autoPushIcps",
+      label: "Auto-push ICPs",
+      kind: "ask",
+      description: "Found missing entirely during the full 34-worker audit — a real, UI-collected, database-persisted field (send-connect-config-form.tsx, coldOpenConfig.autoPushIcps) that daily-send.ts reads directly to decide whether a matched lead auto-pushes or holds for human review. Defaults to empty (nothing auto-pushed, everything review-required-and-held) when unset — a safe default, so this does not block, but was previously undisclosed in this registry.",
+    },
   ],
   "daily-send": [
     {
@@ -749,6 +817,28 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
     },
   ],
   "reply-sort": [],
+  // Verified zero for real, UI-settable config — traced in full during the
+  // 34-worker audit (reply-sort.ts, reply-classifier.ts), runtime only
+  // reads config.sendPlatform/config.productIdentity, both already
+  // collected by send-connect/icp-lock. QUEUE_WORTHY and DEFAULT_TAXONOMY
+  // are hardcoded but read as a fixed product taxonomy, not a business
+  // rule a buyer would set — unlike the fields flagged elsewhere in this
+  // file, there's no evidence anywhere in the code that these need to vary
+  // per client.
+  //
+  // send-report has one real gap the audit found: REPORT_WINDOW_DAYS = 7
+  // (send-report.ts), a hardcoded rolling-window constant with zero
+  // override anywhere — not in coldOpenConfig's schema, not in any UI
+  // form. Low severity (advisory rollup only, no money/sends at stake),
+  // but genuinely per-client-variable (a 5-leads/day client and a
+  // 500-leads/day client likely want different rollup cadences). Left as
+  // an empty array here deliberately, not populated with a fake entry —
+  // unlike every other "ask, flagged unbuilt" field in this file, this
+  // one has NO storage slot anywhere in the schema to point a
+  // WorkerConfigField at, so adding one here would claim a real field
+  // that doesn't exist yet. Needs a schema migration before it can be a
+  // real registry entry, tracked as Phase 6 / Open Risks in the plan doc,
+  // not silently treated as covered by this empty array.
   "send-report": [],
 };
 
@@ -768,12 +858,30 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
     },
   ],
   "whop-cancellation-save-offer": [
-    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes." },
-    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for." },
-    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out." },
+    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes. No sane default — unset means nothing to propose yet, not a guessed discount (schema.ts's own comment). Blocks." },
+    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for. Same no-default reasoning as discount percentage. Blocks." },
+    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out. Blocks." },
+    {
+      key: "whop_save_offer_min_tenure_days",
+      label: "Minimum tenure before eligible (days)",
+      kind: "ask",
+      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). No UI collects it yet, but the safe default means it does not block.",
+    },
+    {
+      key: "whop_save_offer_cooldown_days",
+      label: "Cooldown between offers (days)",
+      kind: "ask",
+      description: "Same finding as min-tenure-days — real stack column, documented default (90), real code-level fallback. No UI collects it yet; does not block.",
+    },
   ],
   "whop-bridge-manager": [
-    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed." },
+    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed. No sane default — unset means the bridge does nothing (schema.ts's own comment). Blocks." },
+    {
+      key: "whop_bridge_field_mapping",
+      label: "Field mapping",
+      kind: "ask",
+      description: "Found missing entirely during the full 34-worker audit — a real per-client payload-transformation object (attemptBridgeDelivery reads it via mapPayload) with a documented safe default: identity mapping (fields pass through unchanged) when unset. Does not block.",
+    },
   ],
 };
 

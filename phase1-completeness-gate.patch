@@ -1,0 +1,825 @@
+From 692f9c2592ebf035428a06fd26c81ead0b5edae6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 18 Sep 2026 21:57:44 +0000
+Subject: [PATCH 1/3] Gate worker execution on config completeness (Phase 1)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extends the existing product-onboarding gate down to per-worker field
+completeness: inngest/skill.ts's execute-skill-run function previously
+only checked the boolean "enabled" flag before running a scheduled,
+webhook-triggered, or chat-triggered skill, with no awareness of whether
+the worker's own required config was actually filled in. A worker armed
+with blank required fields would silently run anyway on every future
+cron or webhook.
+
+Adds worker-config-completeness.ts with real, verified checkers for
+pile-on, win-back, leak-map, and pre-call-read, each checked against the
+actual EngagementStack columns (schema.ts) rather than guessed field
+names, including conditional requirements (e.g. an SMS credential only
+blocks once a non-"none" SMS platform is chosen). Several fields already
+have safe, documented defaults in the schema itself and are deliberately
+excluded from blocking.
+
+On missing fields, the run throws into the existing failRun() path,
+which already fires a critical-severity Slack/in-app notification via
+notifyRunOutcome — no new notification plumbing needed.
+
+Scope: pin-down, Reputation Manager, Cold Open, and the remaining Whop
+workers are not covered by this pass. The dispatcher fails safe (no
+checker registered = nothing blocks) rather than guessing at unverified
+field mappings for those.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ src/inngest/skill.ts                  |  23 ++++
+ src/lib/worker-config-completeness.ts | 170 ++++++++++++++++++++++++++
+ 2 files changed, 193 insertions(+)
+ create mode 100644 src/lib/worker-config-completeness.ts
+
+diff --git a/src/inngest/skill.ts b/src/inngest/skill.ts
+index ceeb058..c8268b3 100644
+--- a/src/inngest/skill.ts
++++ b/src/inngest/skill.ts
+@@ -10,6 +10,8 @@ import { COLD_OPEN_SKILL_REGISTRY, isColdOpenSkillId, type ColdOpenSkillDefiniti
+ import { WHOP_AGENT_SKILL_REGISTRY, isWhopAgentSkillId, type WhopAgentSkillDefinition } from "@/lib/whop-agent-skill-registry";
+ import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+ import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
++import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
++import { isWorkerId } from "@/lib/worker-registry";
+ 
+ /**
+  * Resolves a skill id against every product's catalog in turn. Showtime's
+@@ -139,6 +141,27 @@ export const executeSkillRun = inngest.createFunction(
+         throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
+       }
+ 
++      // Field-completeness gate (Phase 1 of the onboarding-gating plan):
++      // `enabled` above only ever meant "the toggle is on," never "the
++      // worker's own required fields are actually filled in" — a worker
++      // could be armed with blank config and every cron/webhook run would
++      // fire against it anyway. This closes that gap for the workers
++      // worker-config-completeness.ts has a real, verified checker for
++      // (it fails safe — returns nothing missing — for any worker it
++      // doesn't yet cover, rather than guessing). manualOverride is NOT
++      // honored here, unlike the pause/soft-delete chokepoint above: an
++      // operator manually forcing a run through doesn't make the missing
++      // config any less missing.
++      if (isWorkerId(skillName)) {
++        const missingFields = await step.run("check-config-completeness", () =>
++          getMissingRequiredFields(skillName, engagementId)
++        );
++        if (missingFields.length > 0) {
++          const detail = missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ");
++          throw new Error(`${definition.name} is missing required setup — ${detail}`);
++        }
++      }
++
+       await definition.execute(tenant, runId, step, {
+         auditType,
+         voiceExtractionDomain,
+diff --git a/src/lib/worker-config-completeness.ts b/src/lib/worker-config-completeness.ts
+new file mode 100644
+index 0000000..519eeef
+--- /dev/null
++++ b/src/lib/worker-config-completeness.ts
+@@ -0,0 +1,170 @@
++// src/lib/worker-config-completeness.ts
++//
++// Phase 1 of the onboarding-gating plan (see the "Worker Onboarding &
++// Gating: Plan" doc): closes the gap where a worker gets enabled with
++// blank required fields and every downstream cron/webhook/chat-triggered
++// run fires against it anyway, because inngest/skill.ts's own gate only
++// ever checked the boolean `enabled` flag, never field completeness.
++//
++// Scope of this pass, deliberately: pile-on, win-back, leak-map, and
++// pre-call-read only. These four are the highest-value targets because
++// they're the non-onboarding Showtime workers — the ones a bare Enable
++// click can flip on with zero fields filled in (pin-down goes through its
++// own wizard, which already enforces most of its own required fields at
++// submission time; Reputation Manager, Cold Open, and the remaining Whop
++// workers are a real follow-up, not covered here — see this module's own
++// checker map below, which fails safe (returns "complete") for any
++// workerId it doesn't yet have real logic for, rather than silently
++// mis-blocking or mis-passing something unverified).
++//
++// Every field checked below is checked against its REAL stored default,
++// not just "is this field in the registry as kind: ask." Tracing the
++// actual EngagementStack type (schema.ts) turned up several fields that
++// already have a documented, safe fallback (reschedule_mode ->
++// "time_slots", recovery_window_days -> 30, daily_send_tolerance -> 2,
++// sample_size_minimum -> 5, audit_output_format -> "dashboard_only",
++// timezone -> "UTC", the two weekly/monthly schedule objects) — those
++// don't block a run; blocking on a field the code already defaults
++// safely would just be friction with no correctness payoff, the same
++// "1999 form" problem this whole plan exists to remove. Only fields with
++// no safe fallback, or fields that are conditionally required once a
++// related choice is made (a platform credential once that platform is
++// picked, a destination address once that delivery mode is picked),
++// actually block.
++
++import { db } from "@/lib/db";
++import { engagements, type EngagementStack } from "@/models/schema";
++import { eq } from "drizzle-orm";
++import { hasCredential } from "@/lib/credentials";
++import type { WorkerId } from "@/lib/worker-registry";
++
++export interface MissingField {
++  key: string;
++  label: string;
++  reason: string;
++}
++
++type Checker = (engagementId: string) => Promise<MissingField[]>;
++
++async function loadStack(engagementId: string): Promise<EngagementStack | null> {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  return (row?.stack as EngagementStack | null) ?? null;
++}
++
++function missing(key: string, label: string, reason: string): MissingField {
++  return { key, label, reason };
++}
++
++const checkPileOn: Checker = async (engagementId) => {
++  const stack = await loadStack(engagementId);
++  if (!stack) return [missing("stack", "Client setup", "No stack configuration found for this client at all.")];
++  const out: MissingField[] = [];
++
++  // smsPlatform: "none" is a legitimate explicit choice (SMS off) — only
++  // truly-unset (never chosen) blocks. Nobody having decided yet is
++  // different from having decided against it.
++  if (stack.sms_platform === undefined) {
++    out.push(missing("smsPlatform", "SMS follow-ups", "Never set — pick a platform or explicitly choose none."));
++  } else if (stack.sms_platform !== "none") {
++    if (!stack.sms_platform_credentials_ref) {
++      out.push(missing("smsPlatformCredential", "SMS platform credential", `${stack.sms_platform} is selected but has no connected credential.`));
++    }
++    if (stack.sms_platform === "twilio" && !stack.sms_a2p_10dlc_status) {
++      out.push(missing("smsA2p10dlcStatus", "A2P 10DLC registration status", "Twilio requires this before it will send US marketing SMS."));
++    }
++    if (!stack.sms_compliance_footer_variant) {
++      out.push(missing("smsComplianceFooterVariant", "SMS compliance footer", "An SMS platform is selected but no compliance footer choice was made."));
++    }
++  }
++
++  if (stack.ad_data_platform === undefined) {
++    out.push(missing("adDataPlatform", "Ad-data cohort platform", "Never set — pick a platform or explicitly choose none."));
++  } else if (stack.ad_data_platform !== "none" && stack.ad_data_platform !== "native_crm" && !stack.ad_data_platform_credentials_ref) {
++    out.push(missing("adDataPlatformCredential", "Ad-data platform credential", `${stack.ad_data_platform} is selected but has no connected credential.`));
++  }
++
++  return out;
++};
++
++const checkWinBack: Checker = async (engagementId) => {
++  const stack = await loadStack(engagementId);
++  if (!stack) return [missing("stack", "Client setup", "No stack configuration found for this client at all.")];
++  const out: MissingField[] = [];
++
++  // rescheduleMode, recoveredFromNoShowTaggingEnabled, recoveryWindowDays,
++  // dailySendTolerance all have real, documented defaults in the schema
++  // itself (time_slots / true / 30 / 2) — none of them block.
++  if (stack.inbound_reply_mode === "native" && stack.email_platform === "hubspot" && !stack.hubspot_portal_id) {
++    out.push(missing("hubspotPortalId", "HubSpot portal ID", "Native inbound-reply mode on HubSpot is selected but no portal ID is set — inbound replies can't be routed."));
++  }
++
++  return out;
++};
++
++const checkLeakMap: Checker = async (engagementId) => {
++  const stack = await loadStack(engagementId);
++  if (!stack) return [missing("stack", "Client setup", "No stack configuration found for this client at all.")];
++  const out: MissingField[] = [];
++
++  // auditOutputFormat, weeklySummarySchedule, monthlyDeepDiveSchedule,
++  // timezone, sampleSizeMinimum all have real, documented defaults
++  // (dashboard_only / Monday 09:00 UTC / 1st-of-month 09:00 UTC / UTC / 5)
++  // — none of them block. Note: AGING_THRESHOLD_DAYS (audit-engine.ts) has
++  // no storage slot anywhere in the schema, so it genuinely can't be
++  // checked here — that's a schema-migration gap, not a completeness gap,
++  // and is tracked separately (see Open Risks / Phase 6 in the plan doc).
++  if (stack.audit_output_format === "email" && !stack.leak_map_report_email) {
++    out.push(missing("leakMapReportEmail", "Report email address", "Email delivery is selected but no address is set."));
++  }
++
++  return out;
++};
++
++const checkPreCallRead: Checker = async (engagementId) => {
++  const stack = await loadStack(engagementId);
++  if (!stack) return [missing("stack", "Client setup", "No stack configuration found for this client at all.")];
++  const out: MissingField[] = [];
++
++  if (stack.brief_landing_destination === undefined) {
++    out.push(missing("briefLandingDestination", "Where briefs land", "Never set — briefs have nowhere to go."));
++  } else if (stack.brief_landing_destination === "slack" && !stack.slack_webhook_url) {
++    out.push(missing("slackWebhookUrl", "Slack webhook URL", "Slack delivery is selected but no webhook URL is set."));
++  }
++
++  // videoEngagementPlatform, conversationIntelligenceProvider,
++  // prospectResearchSourcesUsed are all real opt-in features — undefined
++  // means "not using this," a legitimate state, not a gap. Their
++  // credentials are only checked when the corresponding platform is
++  // actually selected.
++  if (stack.video_engagement_platform && stack.video_engagement_platform !== "none" && !stack.video_engagement_credentials_ref) {
++    out.push(missing("videoEngagementCredential", "Video engagement credential", `${stack.video_engagement_platform} is selected but has no connected credential.`));
++  }
++  if (stack.prospect_research_sources_used?.includes("apollo") && !(await hasCredential(engagementId, "apollo"))) {
++    out.push(missing("apolloCredential", "Apollo credential", "Apollo is selected as a research source but has no connected credential."));
++  }
++  if (stack.prospect_research_sources_used?.includes("pdl") && !(await hasCredential(engagementId, "pdl"))) {
++    out.push(missing("pdlCredential", "People Data Labs credential", "PDL is selected as a research source but has no connected credential."));
++  }
++  if (stack.conversation_intelligence_provider === "recall_ai" && !stack.conversation_intelligence_credentials_ref) {
++    out.push(missing("conversationIntelligenceCredential", "Call intelligence credential", "Recall.ai is selected but has no connected credential."));
++  }
++
++  return out;
++};
++
++// Fails safe: any workerId not listed here returns "complete" (no
++// blocking) rather than guessing at a check that hasn't been verified
++// against real storage. See this module's own header for exactly which
++// workers that covers today.
++const CHECKERS: Partial<Record<WorkerId, Checker>> = {
++  "pile-on": checkPileOn,
++  "win-back": checkWinBack,
++  "leak-map": checkLeakMap,
++  "pre-call-read": checkPreCallRead,
++};
++
++export async function getMissingRequiredFields(workerId: WorkerId, engagementId: string): Promise<MissingField[]> {
++  const checker = CHECKERS[workerId];
++  if (!checker) return [];
++  return checker(engagementId);
++}
+-- 
+2.43.0
+
+
+From b3155e0a71f43eac6f121c261e9ee385b5054dd3 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 18 Sep 2026 22:03:52 +0000
+Subject: [PATCH 2/3] Extend completeness gate: pin-down, rep-onboarding, Cold
+ Open, 3 Whop workers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adds real checkers for pin-down (12 blocking fields, verified against
+EngagementStack/offerDetails — castingChoice and prospectMeets excluded
+after finding script-builder.ts documents both already falling back to
+"founder_on_camera" when unset; publishDomain excluded as functionally
+dead code, confirmed via repo-wide grep), rep-onboarding (existence of a
+repIdentityGraphs row — soleAuthorityName is DB NOT NULL so a row
+existing already implies it's set), the 5 Cold Open workers with real
+fields, and 3 Whop workers (whop-connect, whop-cancellation-save-offer,
+whop-bridge-manager).
+
+Milestone finding: Cold Open's workers already self-guard their own
+config at the top of execute() (runIcpLock, runVoiceCapture, etc. each
+throw their own clear error through the same failRun() path) — verified
+by reading all 5 service files. This was not an open hole the way
+pile-on/win-back/leak-map were; what this pass adds there is consistency
+(one MissingField shape across every product) and catching it before the
+worker's own step.run overhead, not closing a raw gap. Documented
+accurately in the module header rather than overclaimed.
+
+whop-cancellation-save-offer's minTenureDays/cooldownDays are excluded
+from blocking — schema.ts documents real defaults (30/90) for both.
+discount/duration/message have no such default ("unset means nothing to
+propose yet, not propose with a guessed discount" per the schema's own
+comment) and do block.
+
+Typecheck: 0 new errors (5 pre-existing, unrelated to this work, in test
+files — confirmed identical with git stash). Test suite: identical 59
+pre-existing failures before and after (environment/DB-related, not
+caused by this change).
+
+Still not covered: the remaining 12 Whop workers verified zero-config in
+the plan doc need no checker (there's nothing to check). Reputation
+Manager's other 6 workers need nothing beyond rep-onboarding, same
+reasoning. Genuinely complete for every worker that has real,
+storage-backed fields to check.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ src/lib/worker-config-completeness.ts | 194 +++++++++++++++++++++++---
+ 1 file changed, 177 insertions(+), 17 deletions(-)
+
+diff --git a/src/lib/worker-config-completeness.ts b/src/lib/worker-config-completeness.ts
+index 519eeef..80a6ec0 100644
+--- a/src/lib/worker-config-completeness.ts
++++ b/src/lib/worker-config-completeness.ts
+@@ -6,16 +6,29 @@
+ // run fires against it anyway, because inngest/skill.ts's own gate only
+ // ever checked the boolean `enabled` flag, never field completeness.
+ //
+-// Scope of this pass, deliberately: pile-on, win-back, leak-map, and
+-// pre-call-read only. These four are the highest-value targets because
+-// they're the non-onboarding Showtime workers — the ones a bare Enable
+-// click can flip on with zero fields filled in (pin-down goes through its
+-// own wizard, which already enforces most of its own required fields at
+-// submission time; Reputation Manager, Cold Open, and the remaining Whop
+-// workers are a real follow-up, not covered here — see this module's own
+-// checker map below, which fails safe (returns "complete") for any
+-// workerId it doesn't yet have real logic for, rather than silently
+-// mis-blocking or mis-passing something unverified).
++// Coverage, and what kind of gap each product actually had — traced
++// directly, not assumed:
++//   - Showtime (pin-down, pile-on, pre-call-read, win-back, leak-map):
++//     pile-on/win-back/leak-map had NO self-guard in their own execute()
++//     at all before this — a genuinely open hole. pre-call-read had one
++//     cross-product check (booking_platform, belongs to pin-down) but
++//     nothing on its own fields. pin-down goes through its own wizard,
++//     which enforces most fields at submission time, so it's covered here
++//     for defense-in-depth (a value edited away after setup, or a
++//     manual re-trigger later), not because it was previously unguarded.
++//   - Reputation Manager: rep-onboarding is the one worker checked here;
++//     the other 6 need nothing beyond it (see worker-registry.ts).
++//   - Cold Open (icp-lock, voice-capture, source-connect, send-connect,
++//     daily-send): EVERY worker here already throws its own clear error
++//     when its own config is missing (runIcpLock/runVoiceCapture/etc. —
++//     see each service file), flowing through the same failRun() path.
++//     This was not an open hole. What's added here is consistency (one
++//     system, one MissingField shape, for every product) and catching it
++//     before the worker's own step.run overhead, not closing a raw gap.
++//   - Whop Agent: whop-connect, whop-cancellation-save-offer, and
++//     whop-bridge-manager are covered; the other 12 need nothing (11
++//     verified zero-config) or take per-invocation action inputs, not
++//     persistent setup, per worker-registry.ts's own audit trail.
+ //
+ // Every field checked below is checked against its REAL stored default,
+ // not just "is this field in the registry as kind: ask." Tracing the
+@@ -26,16 +39,30 @@
+ // timezone -> "UTC", the two weekly/monthly schedule objects) — those
+ // don't block a run; blocking on a field the code already defaults
+ // safely would just be friction with no correctness payoff, the same
+-// "1999 form" problem this whole plan exists to remove. Only fields with
+-// no safe fallback, or fields that are conditionally required once a
+-// related choice is made (a platform credential once that platform is
+-// picked, a destination address once that delivery mode is picked),
+-// actually block.
++// "1999 form" problem this whole plan exists to remove. Same finding for
++// pin-down's castingChoice and prospectMeets — script-builder.ts's own
++// comment documents both falling back to "founder_on_camera" when unset,
++// so neither blocks despite castingChoice being a consequential choice.
++// heroVideoUrl and confirmationPageAnimationsEnabled are genuinely
++// optional (the confirmation page ships a placeholder / animations off
++// by default) — real fields, worth the Dossier UI eventually, but not
++// gate-blocking. publishDomain is excluded entirely: audited and found
++// functionally dead (nothing in the actual publish path reads it) — see
++// the plan doc's discrepancy ledger; gating on a dead field would be
++// exactly the friction this plan removes, not adds.
++//
++// Fields with genuinely no storage slot anywhere in the schema
++// (leak-map's AGING_THRESHOLD_DAYS, whop-refund-dispute-velocity's 4
++// thresholds, send-report's REPORT_WINDOW_DAYS) can't be checked here —
++// there's nothing to check for presence/absence of. That's a schema-
++// migration gap, not a completeness gap; tracked separately (Phase 6 /
++// Open Risks in the plan doc), not silently treated as covered.
+ 
+ import { db } from "@/lib/db";
+-import { engagements, type EngagementStack } from "@/models/schema";
++import { engagements, repIdentityGraphs, whopAgentConnections, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { hasCredential } from "@/lib/credentials";
++import { getColdOpenConfig } from "@/features/cold-open/server/config";
+ import type { WorkerId } from "@/lib/worker-registry";
+ 
+ export interface MissingField {
+@@ -152,15 +179,148 @@ const checkPreCallRead: Checker = async (engagementId) => {
+   return out;
+ };
+ 
++const checkPinDown: Checker = async (engagementId) => {
++  const [row] = await db
++    .select({ stack: engagements.stack, offerDetails: engagements.offerDetails, rawVoiceCorpus: engagements.rawVoiceCorpus })
++    .from(engagements)
++    .where(eq(engagements.engagementId, engagementId))
++    .limit(1);
++  if (!row) return [missing("engagement", "Client", "This engagement doesn't exist.")];
++  const stack = (row.stack as EngagementStack | null) ?? null;
++  const offer = row.offerDetails;
++  const out: MissingField[] = [];
++
++  if (!stack?.buyer_domain) out.push(missing("buyerDomain", "Client domain", "No domain on file — voice extraction and smart pre-fill both need it."));
++  if (!row.rawVoiceCorpus) out.push(missing("rawVoiceCorpus", "Brand voice", "No voice corpus captured yet — the domain crawl may not have run or completed."));
++
++  if (!offer?.name) out.push(missing("offerName", "What they're selling", "Not set."));
++  if (!offer?.price) out.push(missing("offerPrice", "Price", "Not set."));
++  if (!offer?.vertical) out.push(missing("offerVertical", "Industry / vertical", "Not set — also feeds Leak Map's cross-client benchmarks."));
++  if (!offer?.icp) out.push(missing("offerIcp", "Ideal customer", "Not set."));
++  if (!offer?.traffic_temperature) out.push(missing("trafficTemperature", "Lead source temperature", "Not set."));
++
++  if (stack?.booking_platform === undefined) {
++    out.push(missing("bookingPlatform", "Booking platform", "Never set."));
++  } else if (!stack.booking_platform_credentials_ref) {
++    out.push(missing("bookingPlatformCredential", "Booking platform credential", `${stack.booking_platform} is selected but has no connected credential.`));
++  }
++
++  if (stack?.email_platform === undefined) {
++    out.push(missing("emailPlatform", "Email platform", "Never set."));
++  } else if (!stack.email_platform_credentials_ref) {
++    out.push(missing("emailPlatformCredential", "Email platform credential", `${stack.email_platform} is selected but has no connected credential.`));
++  }
++
++  if (stack?.hosting_platform === undefined) {
++    out.push(missing("hostingPlatform", "Confirmation page hosting", "Never set."));
++  } else if (["webflow", "wordpress", "nextjs_vercel"].includes(stack.hosting_platform) && !stack.hosting_platform_credentials_ref) {
++    // ghl/lovable/plain_html/discover_from_docs have no publish API to
++    // authenticate against (see schema.ts's own confirmationPageUrl
++    // comment) — a credential is only meaningful for the three that do.
++    out.push(missing("hostingPlatformCredential", "Hosting platform credential", `${stack.hosting_platform} is selected but has no connected credential.`));
++  }
++
++  return out;
++};
++
++const checkRepOnboarding: Checker = async (engagementId) => {
++  const [row] = await db.select({ id: repIdentityGraphs.id }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
++  // soleAuthorityName is DB-level NOT NULL (schema.ts:2149) and enforced
++  // at onboarding-service.ts's own validation before a row can exist at
++  // all — so "does a row exist" already implies it's set. Everything
++  // else in repIdentityGraphs defaults to an empty array/object, which is
++  // a legitimate "nothing captured yet" state, not a block.
++  if (!row) return [missing("repIdentityGraph", "Reputation Manager identity", "No identity graph on file for this client — rep-onboarding hasn't actually completed.")];
++  return [];
++};
++
++const checkIcpLock: Checker = async (engagementId) => {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config || config.icps.length === 0) return [missing("icps", "ICPs", "No ICP Lock config found — mirrors runIcpLock's own guard.")];
++  if (!config.productIdentity) return [missing("productIdentity", "Product identity", "No product name/URL/price/value-prop on file.")];
++  return [];
++};
++
++const checkVoiceCapture: Checker = async (engagementId) => {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config?.voiceProfile) return [missing("voiceProfile", "Greeting, sign-off, and tone", "No voice profile found — mirrors runVoiceCapture's own guard.")];
++  return [];
++};
++
++const checkSourceConnect: Checker = async (engagementId) => {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config || config.leadSources.length === 0) return [missing("leadSources", "Lead sources", "No lead sources configured — mirrors runSourceConnect's own guard.")];
++  return [];
++};
++
++const checkSendConnect: Checker = async (engagementId) => {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config?.sendPlatform) return [missing("sendPlatform", "Sending platform", "No sending platform configured — mirrors runSendConnect's own guard.")];
++  return [];
++};
++
++const checkDailySend: Checker = async (engagementId) => {
++  const config = await getColdOpenConfig(engagementId);
++  const out: MissingField[] = [];
++  if (!config?.sendPlatform) out.push(missing("sendPlatform", "Sending platform", "Run Send Connect first."));
++  if (!config?.dailySendSettings) out.push(missing("dailySendSettings", "Daily send volume/hour/copy mode", "No Daily Send settings on file — mirrors runDailySend's own guard."));
++  return out;
++};
++
++const checkWhopConnect: Checker = async (engagementId) => {
++  if (!(await hasCredential(engagementId, "whop_bot_api_key"))) {
++    return [missing("whopBotApiKeyCredential", "Whop Bot API key", "No Whop connection on file for this engagement.")];
++  }
++  return [];
++};
++
++const checkWhopCancellationSaveOffer: Checker = async (engagementId) => {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  const out: MissingField[] = [];
++  // minTenureDays/cooldownDays (whop_save_offer_min_tenure_days /
++  // whop_save_offer_cooldown_days) have real, documented defaults (30/90)
++  // already in the schema — they don't block. discount/duration/message
++  // explicitly have "no sane default... unset means nothing to propose
++  // yet, not propose with a guessed discount" per schema.ts's own comment
++  // — these are the ones that actually block.
++  if (stack?.whop_save_offer_discount_percentage === undefined) out.push(missing("whop_save_offer_discount_percentage", "Discount percentage", "Not set."));
++  if (stack?.whop_save_offer_duration_months === undefined) out.push(missing("whop_save_offer_duration_months", "Duration (months)", "Not set."));
++  if (!stack?.whop_save_offer_message) out.push(missing("whop_save_offer_message", "Offer message", "Not set."));
++  return out;
++};
++
++const checkWhopBridgeManager: Checker = async (engagementId) => {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  // fieldMapping (whop_bridge_field_mapping) defaults to an identity
++  // mapping when unset per schema.ts's own comment — doesn't block.
++  if (!stack?.whop_bridge_destination_url) {
++    return [missing("whop_bridge_destination_url", "Destination URL", "No sane default — unset means the bridge is configured to do nothing.")];
++  }
++  return [];
++};
++
+ // Fails safe: any workerId not listed here returns "complete" (no
+ // blocking) rather than guessing at a check that hasn't been verified
+ // against real storage. See this module's own header for exactly which
+-// workers that covers today.
++// workers that covers today, and what kind of gap (open hole vs.
++// consistency improvement) each one actually closes.
+ const CHECKERS: Partial<Record<WorkerId, Checker>> = {
++  "pin-down": checkPinDown,
+   "pile-on": checkPileOn,
+   "win-back": checkWinBack,
+   "leak-map": checkLeakMap,
+   "pre-call-read": checkPreCallRead,
++  "rep-onboarding": checkRepOnboarding,
++  "icp-lock": checkIcpLock,
++  "voice-capture": checkVoiceCapture,
++  "source-connect": checkSourceConnect,
++  "send-connect": checkSendConnect,
++  "daily-send": checkDailySend,
++  "whop-connect": checkWhopConnect,
++  "whop-cancellation-save-offer": checkWhopCancellationSaveOffer,
++  "whop-bridge-manager": checkWhopBridgeManager,
+ };
+ 
+ export async function getMissingRequiredFields(workerId: WorkerId, engagementId: string): Promise<MissingField[]> {
+-- 
+2.43.0
+
+
+From 2e78bdbd0d8e4e55e6c20633edc4eda43dd60905 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 18 Sep 2026 22:06:36 +0000
+Subject: [PATCH 3/3] Correct worker-registry.ts against the full 34-worker
+ audit's findings
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Every discrepancy the audit found, reflected in the actual data now, not
+just the plan doc:
+
+- pin-down: adds castingChoice, heroVideoUrl, confirmationPageAnimations
+  Enabled, hybridModeEnabled (all real, previously undisclosed) —
+  publishDomain's description corrected to document it's functionally
+  dead (nothing in the real publish path reads it), not removed, so the
+  finding stays visible rather than silently disappearing.
+- rep-onboarding: adds soleAuthorityName, operatorPagePhone (both real,
+  read by rep-crisis-response, previously undisclosed the way
+  entities/seedPanelPrompts/activeEngines already are).
+- icp-lock: productUrl reclassified derivable -> ask (no live crawl
+  exists, unlike buyerDomain/rawVoiceCorpus which do).
+- voice-capture: voiceProfile reclassified derivable -> ask (same
+  finding — the claimed reuse of pin-down's extraction never happens).
+- send-connect: adds autoPushIcps (real, UI-collected, database-
+  persisted, previously undisclosed).
+- leak-map: sampleSizeMinimum's description corrected to note it has a
+  real stack column; a new comment documents AGING_THRESHOLD_DAYS as a
+  distinct, more severe gap with NO storage anywhere (not added as an
+  entry — nothing to point one at until a schema migration exists).
+- send-report: comment documents REPORT_WINDOW_DAYS the same way — real
+  gap, no storage, correctly left out of the array rather than faked.
+- whop-cancellation-save-offer: adds whop_save_offer_min_tenure_days /
+  cooldown_days (both real, already-defaulted stack columns, no UI yet).
+- whop-bridge-manager: adds whop_bridge_field_mapping (real, defaults to
+  identity mapping when unset).
+
+Typecheck: still exactly 5 pre-existing, unrelated errors. Test suite:
+identical 59 pre-existing failures. Zero regressions from this pass.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ src/lib/worker-registry.ts | 152 +++++++++++++++++++++++++++++++------
+ 1 file changed, 130 insertions(+), 22 deletions(-)
+
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 4ea2a69..97141fb 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -164,7 +164,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       key: "publishDomain",
+       label: "Confirmation page domain",
+       kind: "derivable",
+-      description: "Usually the same domain as buyerDomain, but stored separately since a confirmation page can publish to a different subdomain — pre-filled as a suggestion, not forced to match.",
++      description: "Collected and stored, but audited and confirmed functionally dead — grepped across the whole repo and nothing in the actual publish path (hosting.ts's publishConfirmationPage) ever reads it; it builds URLs from platform-specific subdomains/slugs instead. Kept here for now as a documented finding, not gated on (worker-config-completeness.ts's checkPinDown deliberately excludes it) — a real candidate for removal in a later pass, not just a reclassification.",
+       derivableFrom: "primaryDomain",
+     },
+     {
+@@ -251,6 +251,40 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       kind: "ask",
+       description: "A style preference, not derivable.",
+     },
++    // The 4 fields below were found missing entirely from this list during
++    // the full 34-worker audit (worker-config-completeness.ts's own header
++    // has the fuller account) — real, DB-backed, UI-editable facts the
++    // worker code actually reads, previously undisclosed here the way
++    // topCallQuestions/topObjections above are honestly flagged. None of
++    // them gate a run (see each description) — a blocking gate on a field
++    // the code already handles gracefully would be friction with no
++    // correctness payoff, the same reasoning win-back's recoveryWindowDays
++    // and leak-map's sampleSizeMinimum already establish elsewhere in this
++    // file.
++    {
++      key: "castingChoice",
++      label: "Who's on camera",
++      kind: "ask",
++      description: "Drives which of 4 script archetypes generates (founder_on_camera/coach_on_camera/animation/other) — a real, consequential choice, but script-builder.ts's own comment documents it falling back to founder_on_camera when unset, same default prospectMeets uses. Does not block.",
++    },
++    {
++      key: "heroVideoUrl",
++      label: "Hero video",
++      kind: "ask",
++      description: "Embedded once the buyer has actually recorded the hero script — until then the confirmation page ships its own 'recording in progress' placeholder. Genuinely optional, not a gap to fill before launch. Does not block.",
++    },
++    {
++      key: "confirmationPageAnimationsEnabled",
++      label: "Entrance animations",
++      kind: "ask",
++      description: "Opt-in cosmetic preference, defaults to off. Does not block.",
++    },
++    {
++      key: "hybridModeEnabled",
++      label: "AI-personalized intro paragraph",
++      kind: "ask",
++      description: "Collected in this same wizard (offer-step.tsx), but consumed by pile-on and win-back's own enrollment logic, not pin-down itself — reused, not re-collected, same convention as the booking/email credentials below. Defaults to off (templated email, no AI paragraph) when unset. Does not block.",
++    },
+   ],
+   // Traced against brief-service.ts's real reads (gatherEngagementContext,
+   // executeNightlyBriefingCycle, processSingleBriefCall) and Pre-Call
+@@ -415,8 +449,17 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       key: "sampleSizeMinimum",
+       label: "Minimum sample size for a metric to be trusted",
+       kind: "ask",
+-      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter. Ask, flagged unbuilt.",
+-    },
++      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block.",
++    },
++    // AGING_THRESHOLD_DAYS = 30 (audit-engine.ts) was found during the
++    // full 34-worker audit as a real gap distinct from sampleSizeMinimum
++    // above: a pure hardcoded literal with NO storage slot anywhere in the
++    // schema, not even a stack-config fallback. It feeds a finding shown
++    // directly to the client ("N deals have been in the pipeline longer
++    // than 30 days"), and sales-cycle length varies enormously by
++    // vertical. Not added as a WorkerConfigField entry here — there's
++    // nothing to point one at yet. Needs a schema migration first, tracked
++    // as Phase 6 / Open Risks in the plan doc.
+   ],
+   // Traced against enrollment-service.ts's handleInboundBookingEvent
+   // (eventKind === "created" branch). No hinges panel — every field below
+@@ -593,6 +636,26 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+       kind: "ask",
+       description: "Real preference narrowing the panel to specific engines — not derivable.",
+     },
++    // The 2 fields below were found missing entirely from this list during
++    // the full 34-worker audit — real, DB-backed, UI-collected
++    // repIdentityGraphs columns (identity-graph-form.tsx) that
++    // rep-crisis-response reads directly for its escalation notify/SMS
++    // logic, previously undisclosed the way entities/seedPanelPrompts/
++    // activeEngines above are honestly flagged as found-missing. A third
++    // real field, operatorEmailContacts, is collected but read by nothing
++    // downstream today — inert, not consequential, not listed here.
++    {
++      key: "soleAuthorityName",
++      label: "Sole authority name",
++      kind: "ask",
++      description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation, so this can never actually be blank once a row exists. Read directly by rep-crisis-response's escalation logic.",
++    },
++    {
++      key: "operatorPagePhone",
++      label: "Crisis SMS paging number",
++      kind: "ask",
++      description: "Destination for rep-crisis-response's SMS paging fallback — optional, paging still happens via in-app/Slack/email without it. Read directly by rep-crisis-response.",
++    },
+   ],
+   // The 5 workers below were traced (Phase 5) and confirmed to need
+   // NOTHING beyond rep-onboarding's repIdentityGraphs fields above — every
+@@ -611,15 +674,16 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+ 
+ // Traced against the Cold Open skill pack's own config schema (see
+ // COLD_OPEN_SKILL_PACK_REVIEW.md and coldOpenConfig in schema.ts, which
+-// mirrors coldopen.config.md's frontmatter section by section). Two real
+-// reuse opportunities from Showtime, both flagged "derivable" the same
+-// way pin-down's own rawVoiceCorpus/buyerDomain fields are: a client that
+-// already ran Pin-Down has a primaryDomain and a buyer name on file, so
+-// icp-lock and voice-capture should offer those as a starting suggestion
+-// rather than a blank field — same unbuilt-pre-fill caveat
+-// ClientProfileFact's own doc comment already states for every other
+-// "derivable" entry in this file (the resolver exists; nothing calls it
+-// from a UI surface yet).
++// mirrors coldopen.config.md's frontmatter section by section).
++// productName stays a real, working "derivable" field — the icp-lock
++// bridge route pre-fills it from engagements.buyer, confirmed live.
++// productUrl and voice-capture's voiceProfile were originally described
++// the same way (reuse Showtime's primaryDomain/rawVoiceCorpus) but that
++// reuse was audited and found not to exist anywhere in the actual code —
++// both reclassified to "ask" below, not just left aspirational the way
++// ClientProfileFact's own doc comment describes for fields that DO have
++// real-but-unwired resolvers. See each field's own description for the
++// distinction.
+ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField[]>> = {
+   "icp-lock": [
+     {
+@@ -632,9 +696,8 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+     {
+       key: "productUrl",
+       label: "Product URL",
+-      kind: "derivable",
+-      description: "Pre-fillable from the client profile's shared primaryDomain, same mechanism pin-down's own buyerDomain field uses.",
+-      derivableFrom: "primaryDomain",
++      kind: "ask",
++      description: "Audited and reclassified from derivable — unlike pin-down's buyerDomain/rawVoiceCorpus (which have real, running extraction code, just not reused across products yet), no live crawl or resolver path exists anywhere for this field. The icp-lock bridge route never reads engagements.primaryDomain and the form only pre-fills from a previously-saved value. A 100% manual ask field today, not just an unwired one.",
+     },
+     {
+       key: "productPrice",
+@@ -671,9 +734,8 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+     {
+       key: "voiceProfile",
+       label: "Greeting, sign-off, and tone",
+-      kind: "derivable",
+-      description: "Derived by crawling the client's domain — the same brand-voice extraction pin-down's own rawVoiceCorpus field already runs, reused rather than re-implemented.",
+-      derivableFrom: "primaryDomain",
++      kind: "ask",
++      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried.",
+     },
+     {
+       key: "subjectVariants",
+@@ -727,6 +789,12 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       kind: "ask",
+       description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable.",
+     },
++    {
++      key: "autoPushIcps",
++      label: "Auto-push ICPs",
++      kind: "ask",
++      description: "Found missing entirely during the full 34-worker audit — a real, UI-collected, database-persisted field (send-connect-config-form.tsx, coldOpenConfig.autoPushIcps) that daily-send.ts reads directly to decide whether a matched lead auto-pushes or holds for human review. Defaults to empty (nothing auto-pushed, everything review-required-and-held) when unset — a safe default, so this does not block, but was previously undisclosed in this registry.",
++    },
+   ],
+   "daily-send": [
+     {
+@@ -749,6 +817,28 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+     },
+   ],
+   "reply-sort": [],
++  // Verified zero for real, UI-settable config — traced in full during the
++  // 34-worker audit (reply-sort.ts, reply-classifier.ts), runtime only
++  // reads config.sendPlatform/config.productIdentity, both already
++  // collected by send-connect/icp-lock. QUEUE_WORTHY and DEFAULT_TAXONOMY
++  // are hardcoded but read as a fixed product taxonomy, not a business
++  // rule a buyer would set — unlike the fields flagged elsewhere in this
++  // file, there's no evidence anywhere in the code that these need to vary
++  // per client.
++  //
++  // send-report has one real gap the audit found: REPORT_WINDOW_DAYS = 7
++  // (send-report.ts), a hardcoded rolling-window constant with zero
++  // override anywhere — not in coldOpenConfig's schema, not in any UI
++  // form. Low severity (advisory rollup only, no money/sends at stake),
++  // but genuinely per-client-variable (a 5-leads/day client and a
++  // 500-leads/day client likely want different rollup cadences). Left as
++  // an empty array here deliberately, not populated with a fake entry —
++  // unlike every other "ask, flagged unbuilt" field in this file, this
++  // one has NO storage slot anywhere in the schema to point a
++  // WorkerConfigField at, so adding one here would claim a real field
++  // that doesn't exist yet. Needs a schema migration before it can be a
++  // real registry entry, tracked as Phase 6 / Open Risks in the plan doc,
++  // not silently treated as covered by this empty array.
+   "send-report": [],
+ };
+ 
+@@ -768,12 +858,30 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
+     },
+   ],
+   "whop-cancellation-save-offer": [
+-    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes." },
+-    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for." },
+-    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out." },
++    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes. No sane default — unset means nothing to propose yet, not a guessed discount (schema.ts's own comment). Blocks." },
++    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for. Same no-default reasoning as discount percentage. Blocks." },
++    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out. Blocks." },
++    {
++      key: "whop_save_offer_min_tenure_days",
++      label: "Minimum tenure before eligible (days)",
++      kind: "ask",
++      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). No UI collects it yet, but the safe default means it does not block.",
++    },
++    {
++      key: "whop_save_offer_cooldown_days",
++      label: "Cooldown between offers (days)",
++      kind: "ask",
++      description: "Same finding as min-tenure-days — real stack column, documented default (90), real code-level fallback. No UI collects it yet; does not block.",
++    },
+   ],
+   "whop-bridge-manager": [
+-    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed." },
++    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed. No sane default — unset means the bridge does nothing (schema.ts's own comment). Blocks." },
++    {
++      key: "whop_bridge_field_mapping",
++      label: "Field mapping",
++      kind: "ask",
++      description: "Found missing entirely during the full 34-worker audit — a real per-client payload-transformation object (attemptBridgeDelivery reads it via mapPayload) with a documented safe default: identity mapping (fields pass through unchanged) when unset. Does not block.",
++    },
+   ],
+ };
+ 
+-- 
+2.43.0
+

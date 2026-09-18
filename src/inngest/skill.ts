@@ -10,6 +10,8 @@ import { COLD_OPEN_SKILL_REGISTRY, isColdOpenSkillId, type ColdOpenSkillDefiniti
 import { WHOP_AGENT_SKILL_REGISTRY, isWhopAgentSkillId, type WhopAgentSkillDefinition } from "@/lib/whop-agent-skill-registry";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isEngagementPaused } from "@/lib/engagement-status"; // <--- ADDED
+import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
+import { isWorkerId } from "@/lib/worker-registry";
 
 /**
  * Resolves a skill id against every product's catalog in turn. Showtime's
@@ -137,6 +139,27 @@ export const executeSkillRun = inngest.createFunction(
 
       if (!definition.execute) {
         throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
+      }
+
+      // Field-completeness gate (Phase 1 of the onboarding-gating plan):
+      // `enabled` above only ever meant "the toggle is on," never "the
+      // worker's own required fields are actually filled in" — a worker
+      // could be armed with blank config and every cron/webhook run would
+      // fire against it anyway. This closes that gap for the workers
+      // worker-config-completeness.ts has a real, verified checker for
+      // (it fails safe — returns nothing missing — for any worker it
+      // doesn't yet cover, rather than guessing). manualOverride is NOT
+      // honored here, unlike the pause/soft-delete chokepoint above: an
+      // operator manually forcing a run through doesn't make the missing
+      // config any less missing.
+      if (isWorkerId(skillName)) {
+        const missingFields = await step.run("check-config-completeness", () =>
+          getMissingRequiredFields(skillName, engagementId)
+        );
+        if (missingFields.length > 0) {
+          const detail = missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ");
+          throw new Error(`${definition.name} is missing required setup — ${detail}`);
+        }
       }
 
       await definition.execute(tenant, runId, step, {
