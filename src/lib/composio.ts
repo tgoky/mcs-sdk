@@ -184,11 +184,31 @@ export async function deleteComposioConnection(connectedAccountId: string): Prom
  * Composio-hosted page and this app should never trust it blindly as an
  * open redirect target. Exact-match only, no prefix matching: add a new
  * entry here deliberately rather than widening the check.
+ *
+ * /dashboard/engagements/new is dead — that route is a permanent redirect
+ * to /home/new (see its own page.tsx), and nothing live renders
+ * CredentialField's "Connect" tab from there anymore. Left in place rather
+ * than removed: it's inert (isAllowedComposioReturnPath is the only thing
+ * that reads it, and a dead route matching it changes nothing), and
+ * deleting the entry is a separate cleanup from what this change is for.
  */
 const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new", "/dashboard/teammates"];
 
+/**
+ * The 4 worker config forms that render CredentialRow with a live "Connect"
+ * option (see update-credentials-form.tsx) — each is a real, standalone,
+ * bookmarkable route at /dashboard/engagements/<id>/bridges/<worker>, but
+ * <id> is per-engagement and can't be exact-matched the way the static
+ * paths above are. Still a closed, explicit set — not "anything under
+ * /bridges/" — so this stays a real allowlist, not a prefix check.
+ */
+const COMPOSIO_RETURN_BRIDGE_WORKERS = ["pin-down", "pre-call-read", "icp-lock", "rep-onboarding"];
+const COMPOSIO_RETURN_BRIDGE_PATTERN = new RegExp(
+  `^/dashboard/engagements/[^/]+/bridges/(${COMPOSIO_RETURN_BRIDGE_WORKERS.join("|")})$`
+);
+
 export function isAllowedComposioReturnPath(path: string): boolean {
-  return COMPOSIO_RETURN_ALLOWLIST.includes(path);
+  return COMPOSIO_RETURN_ALLOWLIST.includes(path) || COMPOSIO_RETURN_BRIDGE_PATTERN.test(path);
 }
 
 export const COMPOSIO_VAULT_REFKEY_PREFIX = "composio:";

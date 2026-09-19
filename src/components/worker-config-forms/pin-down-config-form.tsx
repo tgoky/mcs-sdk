@@ -18,6 +18,10 @@ import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new
 import { DEFAULT_FORM } from "@/app/dashboard/engagements/new/constants";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useTour } from "@/components/tours/tour-provider";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { PinDownLivePreview } from "./pin-down-live-preview";
+import type { TemplateId } from "@/features/pin-down/server/templates";
 
 export function PinDownConfigForm({
   engagementId,
@@ -149,6 +153,209 @@ export function PinDownConfigForm({
     );
   }
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "brand-voice",
+      label: "Brand voice",
+      isComplete: canSubmit,
+      content: (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+              How should we learn this client&apos;s voice?
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVoiceSource("scrape")}
+                className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+                  voiceSource === "scrape"
+                    ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+                    : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+                }`}
+              >
+                <span className="font-bold uppercase tracking-wider font-mono block">Scrape their website</span>
+                <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "scrape" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+                  We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample too still helps if the crawl comes up short.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceSource("manual")}
+                className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+                  voiceSource === "manual"
+                    ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+                    : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+                }`}
+              >
+                <span className="font-bold uppercase tracking-wider font-mono block">Paste a writing sample</span>
+                <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "manual" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+                  Sales copy, call transcripts, or email examples — ready to use right now.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {voiceSource === "scrape" && (
+            <InputField
+              label="Marketing website"
+              value={marketingDomain}
+              onChange={setMarketingDomain}
+              placeholder="yoursite.com"
+              helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
+              required
+            />
+          )}
+
+          <div className="space-y-1.5 w-full">
+            <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+              Sales copy, scripts, or call transcripts (500 words minimum)
+            </label>
+            <textarea
+              value={rawVoiceCorpus}
+              onChange={(e) => setRawVoiceCorpus(e.target.value)}
+              placeholder="Paste sales call transcripts, email copy, or scripts here..."
+              rows={8}
+              className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            />
+            <p className="text-[11px] font-mono font-bold" style={{ color: "var(--text-muted)" }}>
+              {wordCount} words pasted.{" "}
+              {voiceSource === "manual" && wordCount < 50
+                ? "Add more — at least 500 words are needed to learn the brand voice accurately."
+                : voiceSource === "manual"
+                ? "✓ That's enough to learn the brand voice."
+                : "Optional — helps if the crawl comes up short."}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "confirmation-page",
+      label: "Confirmation page",
+      isComplete: true,
+      content: (
+        <div className="space-y-4">
+          <InputField
+            label="Existing confirmation page (if any)"
+            value={existingConfirmationPageUrl}
+            onChange={setExistingConfirmationPageUrl}
+            placeholder="https://yoursite.com/thank-you"
+            helpText="If the client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one."
+          />
+
+          {existingConfirmationPageUrl && (
+            <label className="flex items-start gap-2 text-xs cursor-pointer -mt-2" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={existingConfirmationPageReuse}
+                onChange={(e) => setExistingConfirmationPageReuse(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Keep using this page — don&apos;t build or publish a new one. We&apos;ll still run the audit above so
+                you can see what&apos;s missing, but nothing gets deployed to {buyer || "the client"}&apos;s site.
+              </span>
+            </label>
+          )}
+
+          {!existingConfirmationPageReuse && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
+                  Choose a confirmation page design
+                </h2>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  The page {buyer || "the client"}&apos;s prospects land on after booking. It regenerates with real
+                  call data once Pin-Down runs.
+                </p>
+              </div>
+              <TemplatePicker form={{ ...previewData, confirmationPageTemplate }} onSelect={setConfirmationPageTemplate} />
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "pile-on-leak-map",
+      label: "Pile-On & Leak Map",
+      isComplete: true,
+      content: (
+        <div className="space-y-3">
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            A few things Pin-Down checks once, during setup, on behalf of Pile-On and Leak Map — so their results are
+            ready before you ever turn those on.
+          </p>
+
+          <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={existingPileOnSequenceFlagged}
+              onChange={(e) => setExistingPileOnSequenceFlagged(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              This client already has a pre-call email sequence running on {emailPlatform || "their ESP"}.{" "}
+              We&apos;ll audit it (Klaviyo/HubSpot only) and show a keep/replace/merge/drop recommendation per email
+              before anything new goes live.
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={existingAuditFlagged}
+              onChange={(e) => setExistingAuditFlagged(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>This client already has a dashboard, KPI report, or audit process we should know about.</span>
+          </label>
+          {existingAuditFlagged && (
+            <InputField
+              label="Describe their existing report"
+              value={existingAuditDescription}
+              onChange={setExistingAuditDescription}
+              placeholder="e.g. A weekly Google Sheet tracking show-rate and close-rate, reviewed manually every Monday."
+              helpText="We'll compare it against what Leak Map covers and show the overlap — never replaces or modifies what's already there."
+            />
+          )}
+
+          <div>
+            <label className="text-xs font-semibold block mb-2" style={{ color: "var(--text-primary)" }}>
+              Notification pack (optional)
+            </label>
+            <p className="text-[11px] font-mono mb-2" style={{ color: "var(--text-muted)" }}>
+              Curated Leak Map alerts you can activate now — nothing fires unless checked. Thresholds can be adjusted later.
+            </p>
+            <div className="space-y-2">
+              {[
+                { id: "low_identity_confidence", label: "Identity match confidence dropping below 70" },
+                { id: "show_rate_drop", label: "Booking show-rate falling below 50%" },
+                { id: "email_open_rate_drop", label: "Email open-rate falling below 25%" },
+                { id: "pipeline_win_rate_drop", label: "CRM pipeline win-rate falling below 20%" },
+                { id: "brief_volume_drop", label: "Brief delivery volume dropping 10%+ week over week" },
+              ].map((pack) => (
+                <label key={pack.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                  <input
+                    type="checkbox"
+                    checked={notificationPackSelections.includes(pack.id)}
+                    onChange={(e) =>
+                      setNotificationPackSelections((prev) =>
+                        e.target.checked ? [...prev, pack.id] : prev.filter((id) => id !== pack.id)
+                      )
+                    }
+                  />
+                  {pack.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -161,186 +368,11 @@ export function PinDownConfigForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
-          How should we learn this client&apos;s voice?
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setVoiceSource("scrape")}
-            className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
-              voiceSource === "scrape"
-                ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
-                : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
-            }`}
-          >
-            <span className="font-bold uppercase tracking-wider font-mono block">Scrape their website</span>
-            <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "scrape" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
-              We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample too still helps if the crawl comes up short.
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setVoiceSource("manual")}
-            className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
-              voiceSource === "manual"
-                ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
-                : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
-            }`}
-          >
-            <span className="font-bold uppercase tracking-wider font-mono block">Paste a writing sample</span>
-            <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "manual" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
-              Sales copy, call transcripts, or email examples — ready to use right now.
-            </p>
-          </button>
-        </div>
-      </div>
+      <PinDownLivePreview form={{ ...previewData, confirmationPageTemplate }} confirmationPageTemplate={confirmationPageTemplate as TemplateId} />
 
-      {voiceSource === "scrape" && (
-        <InputField
-          label="Marketing website"
-          value={marketingDomain}
-          onChange={setMarketingDomain}
-          placeholder="yoursite.com"
-          helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
-          required
-        />
-      )}
+      <WorkerCapabilityMatrix workerId="pin-down" engagementId={engagementId} />
 
-      <InputField
-        label="Existing confirmation page (if any)"
-        value={existingConfirmationPageUrl}
-        onChange={setExistingConfirmationPageUrl}
-        placeholder="https://yoursite.com/thank-you"
-        helpText="If the client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one."
-      />
-
-      {existingConfirmationPageUrl && (
-        <label className="flex items-start gap-2 text-xs cursor-pointer -mt-2" style={{ color: "var(--text-secondary)" }}>
-          <input
-            type="checkbox"
-            checked={existingConfirmationPageReuse}
-            onChange={(e) => setExistingConfirmationPageReuse(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            Keep using this page — don&apos;t build or publish a new one. We&apos;ll still run the audit above so you
-            can see what&apos;s missing, but nothing gets deployed to {buyer || "the client"}&apos;s site.
-          </span>
-        </label>
-      )}
-
-      <div className="space-y-1.5 w-full">
-        <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
-          Sales copy, scripts, or call transcripts (500 words minimum)
-        </label>
-        <textarea
-          value={rawVoiceCorpus}
-          onChange={(e) => setRawVoiceCorpus(e.target.value)}
-          placeholder="Paste sales call transcripts, email copy, or scripts here..."
-          rows={8}
-          className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-        />
-        <p className="text-[11px] font-mono font-bold" style={{ color: "var(--text-muted)" }}>
-          {wordCount} words pasted.{" "}
-          {voiceSource === "manual" && wordCount < 50
-            ? "Add more — at least 500 words are needed to learn the brand voice accurately."
-            : voiceSource === "manual"
-            ? "✓ That's enough to learn the brand voice."
-            : "Optional — helps if the crawl comes up short."}
-        </p>
-      </div>
-
-      {!existingConfirmationPageReuse && (
-      <div className="space-y-3">
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
-            Choose a confirmation page design
-          </h2>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            The page {buyer || "the client"}&apos;s prospects land on after booking. It regenerates with real call data
-            once Pin-Down runs.
-          </p>
-        </div>
-      <TemplatePicker
-  form={{ ...previewData, confirmationPageTemplate }}
-  onSelect={setConfirmationPageTemplate}
-/>
-      </div>
-      )}
-
-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          A few things Pin-Down checks once, during setup, on behalf of Pile-On and Leak Map — so their results are
-          ready before you ever turn those on.
-        </p>
-
-        <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-          <input
-            type="checkbox"
-            checked={existingPileOnSequenceFlagged}
-            onChange={(e) => setExistingPileOnSequenceFlagged(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            This client already has a pre-call email sequence running on {emailPlatform || "their ESP"}.{" "}
-            We&apos;ll audit it (Klaviyo/HubSpot only) and show a keep/replace/merge/drop recommendation per email
-            before anything new goes live.
-          </span>
-        </label>
-
-        <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-          <input
-            type="checkbox"
-            checked={existingAuditFlagged}
-            onChange={(e) => setExistingAuditFlagged(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>This client already has a dashboard, KPI report, or audit process we should know about.</span>
-        </label>
-        {existingAuditFlagged && (
-          <InputField
-            label="Describe their existing report"
-            value={existingAuditDescription}
-            onChange={setExistingAuditDescription}
-            placeholder="e.g. A weekly Google Sheet tracking show-rate and close-rate, reviewed manually every Monday."
-            helpText="We'll compare it against what Leak Map covers and show the overlap — never replaces or modifies what's already there."
-          />
-        )}
-
-        <div>
-          <label className="text-xs font-semibold block mb-2" style={{ color: "var(--text-primary)" }}>
-            Notification pack (optional)
-          </label>
-          <p className="text-[11px] font-mono mb-2" style={{ color: "var(--text-muted)" }}>
-            Curated Leak Map alerts you can activate now — nothing fires unless checked. Thresholds can be adjusted later.
-          </p>
-          <div className="space-y-2">
-            {[
-              { id: "low_identity_confidence", label: "Identity match confidence dropping below 70" },
-              { id: "show_rate_drop", label: "Booking show-rate falling below 50%" },
-              { id: "email_open_rate_drop", label: "Email open-rate falling below 25%" },
-              { id: "pipeline_win_rate_drop", label: "CRM pipeline win-rate falling below 20%" },
-              { id: "brief_volume_drop", label: "Brief delivery volume dropping 10%+ week over week" },
-            ].map((pack) => (
-              <label key={pack.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-                <input
-                  type="checkbox"
-                  checked={notificationPackSelections.includes(pack.id)}
-                  onChange={(e) =>
-                    setNotificationPackSelections((prev) =>
-                      e.target.checked ? [...prev, pack.id] : prev.filter((id) => id !== pack.id)
-                    )
-                  }
-                />
-                {pack.label}
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
+      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save & Run Pin-Down" finishDisabled={!canSubmit} finishing={saving} />
 
       {saveError && (
         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
@@ -348,19 +380,12 @@ export function PinDownConfigForm({
         </p>
       )}
 
-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
         >
           {cancelLabel}
-        </button>
-        <button
-          onClick={save}
-          disabled={saving || !canSubmit}
-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-        >
-          {saving ? "Saving..." : "Save & Run Pin-Down"}
         </button>
       </div>
     </div>

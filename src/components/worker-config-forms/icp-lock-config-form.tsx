@@ -20,8 +20,12 @@ import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { InferredFieldBadge } from "@/components/inferred-field-badge";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { IcpLockLivePreview } from "./icp-lock-live-preview";
 
-type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
+export type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
 
 function emptyIcpRow(): IcpRow {
   return { slug: "", label: "", weight: "", teamSizeMin: "", teamSizeMax: "", disqualifyIf: "" };
@@ -161,6 +165,69 @@ export function IcpLockConfigForm({
   if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "product-identity",
+      label: "Product identity",
+      isComplete: Boolean(productName.trim() && productUrl.trim() && productValueProp.trim()),
+      content: (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+          <div>
+            <InferredFieldBadge
+              detectedValue={buyer}
+              currentValue={productName}
+              detectedFromLabel="the client's name on file"
+              onUse={setProductName}
+            />
+            <InputField label="Product / offer name" value={productName} onChange={setProductName} required />
+          </div>
+          <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
+          <InputField label="Price" value={productPrice} onChange={setProductPrice} placeholder="$99/mo" />
+          <InputField label="Value proposition" value={productValueProp} onChange={setProductValueProp} placeholder="one sentence" required />
+        </div>
+      ),
+    },
+    {
+      id: "icps",
+      label: "ICPs",
+      isComplete: cleanRows.length > 0,
+      content: (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Who this client sells to, and the sizing/disqualify rules per segment.</p>
+            <button type="button" onClick={addRow} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer shrink-0">
+              + Add ICP
+            </button>
+          </div>
+          {icpRows.map((row, i) => (
+            <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+              <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+                <InputField label="Slug" value={row.slug} onChange={(v) => updateRow(i, { slug: v })} placeholder="boutique-agency" />
+                <InputField label="Label" value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Boutique agencies" />
+                <InputField label="Weight" value={row.weight} onChange={(v) => updateRow(i, { weight: v })} placeholder="0.6" />
+                <InputField label="Team size max" value={row.teamSizeMax} onChange={(v) => updateRow(i, { teamSizeMax: v })} placeholder="30" />
+              </div>
+              <InputField label="Disqualify if (comma-separated)" value={row.disqualifyIf} onChange={(v) => updateRow(i, { disqualifyIf: v })} placeholder="team_size > 50" />
+              {icpRows.length > 1 && (
+                <button type="button" onClick={() => removeRow(i)} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: "review-settings",
+      label: "Review settings",
+      isComplete: true,
+      content: (
+        <InputField label="Review-required ICPs (comma-separated slugs, optional)" value={reviewRequiredIcps} onChange={setReviewRequiredIcps} placeholder="enterprise" />
+      ),
+    },
+  ];
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -179,50 +246,13 @@ export function IcpLockConfigForm({
         </p>
       )}
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-        <InputField label="Product / offer name" value={productName} onChange={setProductName} required />
-        <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
-        <InputField label="Price" value={productPrice} onChange={setProductPrice} placeholder="$99/mo" />
-        <InputField label="Value proposition" value={productValueProp} onChange={setProductValueProp} placeholder="one sentence" required />
-      </div>
+      <IcpLockLivePreview productName={productName} productValueProp={productValueProp} icpRows={icpRows} />
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICPs</h2>
-          <button type="button" onClick={addRow} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
-            + Add ICP
-          </button>
-        </div>
-        {icpRows.map((row, i) => (
-          <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
-            <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-              <InputField label="Slug" value={row.slug} onChange={(v) => updateRow(i, { slug: v })} placeholder="boutique-agency" />
-              <InputField label="Label" value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Boutique agencies" />
-              <InputField label="Weight" value={row.weight} onChange={(v) => updateRow(i, { weight: v })} placeholder="0.6" />
-              <InputField label="Team size max" value={row.teamSizeMax} onChange={(v) => updateRow(i, { teamSizeMax: v })} placeholder="30" />
-            </div>
-            <InputField label="Disqualify if (comma-separated)" value={row.disqualifyIf} onChange={(v) => updateRow(i, { disqualifyIf: v })} placeholder="team_size > 50" />
-            {icpRows.length > 1 && (
-              <button type="button" onClick={() => removeRow(i)} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+      <WorkerCapabilityMatrix workerId="icp-lock" engagementId={engagementId} />
 
-      <InputField label="Review-required ICPs (comma-separated slugs, optional)" value={reviewRequiredIcps} onChange={setReviewRequiredIcps} placeholder="enterprise" />
+      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save & enable" finishDisabled={!canSubmit} finishing={saving} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
-
-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
-        <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
-          {cancelLabel}
-        </button>
-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-          {saving ? "Saving…" : "Save & enable"}
-        </button>
-      </div>
     </div>
   );
 }

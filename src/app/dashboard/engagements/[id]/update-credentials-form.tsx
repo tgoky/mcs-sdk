@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Link2, Check } from "lucide-react";
 import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel, hostingPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
 import { useToast } from "@/components/toast/toast-provider";
+import { isComposioManagedProvider } from "@/lib/composio-providers";
+import { isTestableCredentialProvider } from "@/lib/credential-test-providers";
 
 interface VaultCredential {
   id: string;
@@ -39,8 +41,11 @@ export function CredentialRow({
   onRequestClose?: () => void;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
-  const [mode, setMode] = useState<"paste" | "reuse">(currentlyLinkedVaultId ? "reuse" : "paste");
+  const composioAvailable = isComposioManagedProvider(provider);
+  const testable = isTestableCredentialProvider(provider);
+  const [mode, setMode] = useState<"paste" | "reuse" | "connect">(currentlyLinkedVaultId ? "reuse" : "paste");
 
   // Paste a new key state
   const [value, setValue] = useState("");
@@ -57,6 +62,42 @@ export function CredentialRow({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linked, setLinked] = useState(false);
 
+  // Connect-via-Composio state
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // Test-connection state — /api/credentials/test already exists and is
+  // already wired up on the standalone Settings > Connections diagnostics
+  // page (src/app/dashboard/settings/connections/page.tsx), but was never
+  // reachable from here, the actual live per-client credential UI. Surfaces
+  // the same real check right where the credential itself lives.
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function testConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/credentials/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId, provider }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult({ ok: false, message: data.error ?? "Couldn't run the test." });
+      } else if (data.ok) {
+        setTestResult({ ok: true, message: "Connection works." });
+      } else {
+        setTestResult({ ok: false, message: data.error ?? "Connection failed." });
+      }
+    } catch {
+      setTestResult({ ok: false, message: "Network error. Try again." });
+    } finally {
+      setTesting(false);
+    }
+  }
+
   useEffect(() => {
     if (mode !== "reuse" || vaultOptions !== null) return;
     fetch(`/api/credential-vault?provider=${encodeURIComponent(provider)}`)
@@ -64,6 +105,94 @@ export function CredentialRow({
       .then((data) => setVaultOptions(data.items ?? []))
       .catch(() => setVaultOptions([]));
   }, [mode, provider, vaultOptions]);
+
+  // Landing back from a real Composio OAuth redirect for THIS row's own
+  // provider (composio/callback route.ts echoes ?composio_provider=<provider>
+  // alongside either ?composio_connected=<provider> or ?composio_error=...,
+  // added specifically so a page rendering several CredentialRows at once —
+  // e.g. Pre-Call Read's video/research/call-intelligence keys — can tell
+  // which row's own connect attempt this return belongs to, the same way
+  // apps-page-client.tsx and teammates-workspace.tsx already read the two
+  // older params). Auto-links rather than making the person switch to
+  // "Reuse saved" and pick it themselves — the whole point of Connect is
+  // skipping that manual step.
+  useEffect(() => {
+    if (searchParams.get("composio_provider") !== provider) return;
+    const status = searchParams.get("composio_connected");
+    const err = searchParams.get("composio_error");
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("composio_connected");
+    url.searchParams.delete("composio_error");
+    url.searchParams.delete("composio_provider");
+    window.history.replaceState({}, "", url.toString());
+
+    if (err) {
+      setMode("connect");
+      setConnectError(err);
+      return;
+    }
+    if (status !== provider) return;
+
+    (async () => {
+      setLinking(true);
+      setLinkError(null);
+      try {
+        const res = await fetch(`/api/credential-vault?provider=${encodeURIComponent(provider)}`);
+        const data = await res.json();
+        const items: VaultCredential[] = data.items ?? [];
+        if (items.length === 0) {
+          throw new Error("Connected, but couldn't find the saved credential — try \"Reuse saved\" instead.");
+        }
+        const newest = items.reduce((a, b) => (new Date(b.createdAt) > new Date(a.createdAt) ? b : a));
+        const linkRes = await fetch(`/api/engagements/${engagementId}/credentials/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, vaultId: newest.id }),
+        });
+        const linkData = await linkRes.json();
+        if (!linkRes.ok) throw new Error(linkData.error ?? "Connected, but couldn't link it to this client.");
+        setVaultOptions(items);
+        setSelectedVaultId(newest.id);
+        setMode("reuse");
+        setLinked(true);
+        toast.success(`${label} connected.`);
+        router.refresh();
+      } catch (e) {
+        setMode("connect");
+        setConnectError(e instanceof Error ? e.message : "Something went wrong finishing the connection.");
+      } finally {
+        setLinking(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function connect() {
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      const res = await fetch("/api/composio/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, returnTo: window.location.pathname }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setConnectError(data.error ?? "Couldn't start the connection.");
+        setConnecting(false);
+        return;
+      }
+      // Full navigation, not a popup — Composio's hosted page redirects
+      // straight back to /api/composio/callback, which lands the browser
+      // back on this exact page (see the returnTo above and the
+      // composio-return effect that follows).
+      window.location.assign(data.redirectUrl);
+    } catch {
+      setConnectError("Network error. Try again.");
+      setConnecting(false);
+    }
+  }
 
   async function update() {
     if (!value.trim()) return;
@@ -178,8 +307,36 @@ export function CredentialRow({
           >
             Reuse saved
           </button>
+          {composioAvailable && (
+            <button
+              onClick={() => { setMode("connect"); setConnectError(null); }}
+              className={`hover-lift press-settle px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                mode === "connect"
+                  ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
+                  : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
+              }`}
+            >
+              Connect
+            </button>
+          )}
         </div>
       </div>
+      {testable && (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={testConnection}
+            disabled={testing}
+            className="hover-lift press-settle text-[10px] font-mono font-semibold text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-colors cursor-pointer"
+          >
+            {testing ? "Testing connection " : "Test connection"}
+          </button>
+          {testResult && (
+            <span className={`text-[10px] font-mono ${testResult.ok ? "text-ink-hover dark:text-ink" : "text-rose-600 dark:text-rose-400"}`}>
+              {testResult.ok ? "✓" : "✗"} {testResult.message}
+            </span>
+          )}
+        </div>
+      )}
       {mode === "paste" ? (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
@@ -219,7 +376,7 @@ export function CredentialRow({
           {saved && <span className="text-[11px] font-mono text-ink-hover dark:text-ink">Saved</span>}
           {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
         </div>
-      ) : (
+      ) : mode === "reuse" ? (
         <div className="space-y-1.5">
           {vaultOptions === null ? (
             <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Loading saved credentials </p>
@@ -255,6 +412,24 @@ export function CredentialRow({
             </span>
           )}
           {linkError && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{linkError}</span>}
+        </div>
+      ) : (
+        <div className="space-y-1.5 rounded border border-dashed border-zinc-300 dark:border-zinc-800 px-2 py-1.5">
+          <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 leading-relaxed">
+            Connect {label.replace(/ key$/i, "")} securely — no key to copy or paste, and it&apos;s saved for reuse
+            on future clients automatically.
+          </p>
+          <button
+            onClick={connect}
+            disabled={connecting || linking}
+            className="hover-lift press-settle text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer"
+          >
+            {linking ? "Finishing connection " : connecting ? "Connecting " : "Connect via Composio"}
+          </button>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
+            This briefly leaves this page to connect, then brings you back here and links it automatically.
+          </p>
+          {connectError && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{connectError}</span>}
         </div>
       )}
     </div>

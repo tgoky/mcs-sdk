@@ -67,6 +67,34 @@ export type WorkerConfigFieldKind = "derivable" | "ask" | "secret";
  */
 export type ClientProfileFact = "primaryDomain" | "buyerName";
 
+/**
+ * Phase 2 of the onboarding-gating plan ("Worker Onboarding & Gating:
+ * Plan" doc) — field-risk tiering, encoded as real data instead of left
+ * as doc prose a human would have to retype into code later (that
+ * retyping step is exactly the kind of translation-error risk this app's
+ * own audits keep finding elsewhere):
+ *   - "blocking": the Dossier can't Arm the worker without it. Must match
+ *     what worker-config-completeness.ts's real checker actually blocks
+ *     on for that worker — this type doesn't drive the gate (the
+ *     checkers do, since they need real conditional DB reads a static
+ *     tier can't express), but the two must never silently diverge.
+ *   - "deferrable": Save & Defer now; becomes blocking only once a run
+ *     actually needs it (Stripe Connect's currently_due/eventually_due
+ *     pattern) — typically an opt-in feature's own fields, bundled
+ *     together.
+ *   - "visible-default": has a real, safe default already in the schema,
+ *     shown with the default pre-filled and never blocks (Stripe Radar's
+ *     exposed-but-tunable risk threshold pattern) — used when a wrong
+ *     silent default has real cost (e.g. personMatchConfidenceThreshold).
+ *   - "hidden-default": has a real, safe default, Advanced-only, never
+ *     surfaced in the main flow — used when a wrong default is genuinely
+ *     low-cost (e.g. confirmationPageAnimationsEnabled).
+ * Only populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
+ * rep-onboarding, icp-lock, pile-on) today — undefined for every other
+ * field, not a claim that field has been classified and found tier-less.
+ */
+export type WorkerFieldTier = "blocking" | "deferrable" | "visible-default" | "hidden-default";
+
 export interface WorkerConfigField {
   key: string;
   label: string;
@@ -77,6 +105,21 @@ export interface WorkerConfigField {
    * it. A "derivable" field with no derivableFrom is a claim nothing
    * actually fulfills; treat it as a bug to fix, not a valid state. */
   derivableFrom?: ClientProfileFact;
+  /** See WorkerFieldTier's own doc comment. Undefined = not yet
+   * classified (most fields, until Phase 2 extends past the top 5). */
+  tier?: WorkerFieldTier;
+}
+
+/**
+ * A real capability a worker unlocks, and exactly which of its own
+ * configFields (by key) have to be satisfied before that capability
+ * lights up — the data the Dossier's Live Capability Matrix (Phase 3)
+ * renders directly, rather than a human inventing badge-to-field wiring
+ * ad hoc in a component. Only populated for the Phase 2 top-5 workers.
+ */
+export interface WorkerCapability {
+  name: string;
+  requiredFieldKeys: string[];
 }
 
 /**
@@ -152,6 +195,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       kind: "derivable",
       description: "Pre-fillable from the client profile's shared primaryDomain — also what smart pre-fill and brand voice extraction crawl.",
       derivableFrom: "primaryDomain",
+      tier: "blocking",
     },
     {
       key: "rawVoiceCorpus",
@@ -159,6 +203,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       kind: "derivable",
       description: "Derived by crawling the client's domain — the exact mechanism chat-skill-trigger.ts's extract_brand_voice already runs standalone, not a new capability.",
       derivableFrom: "primaryDomain",
+      tier: "blocking",
     },
     {
       key: "publishDomain",
@@ -172,84 +217,105 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       label: "What they're selling",
       kind: "ask",
       description: "A real business fact only the operator knows — no seed to derive it from.",
+      tier: "blocking",
     },
     {
       key: "offerPrice",
       label: "Price",
       kind: "ask",
       description: "Not derivable — the operator's own pricing.",
+      tier: "blocking",
     },
     {
       key: "offerVertical",
       label: "Industry / vertical",
       kind: "ask",
       description: "Powers Leak Map's cross-client benchmarks — a real classification call, not inferred.",
+      tier: "blocking",
     },
     {
       key: "offerIcp",
       label: "Ideal customer",
       kind: "ask",
       description: "A judgment call about who the offer targets.",
+      tier: "blocking",
     },
     {
       key: "trafficTemperature",
       label: "Lead source temperature",
       kind: "ask",
       description: "Cold/warm/hot — a real classification, not derivable from a domain.",
+      tier: "blocking",
     },
     {
       key: "prospectMeets",
       label: "Who runs the calls",
       kind: "ask",
-      description: "A role/person fact, not derivable.",
+      description: "A role/person fact, not derivable. script-builder.ts falls back to founder_on_camera when unset — real and consequential, but doesn't block.",
+      tier: "visible-default",
     },
     {
       key: "topCallQuestions",
       label: "Common call questions",
       kind: "ask",
-      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability.",
+      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability. Enriches call-prep once available; the confirmation page doesn't need it to go live.",
+      tier: "deferrable",
     },
     {
       key: "topObjections",
       label: "Common objections",
       kind: "ask",
       description: "Same reasoning as topCallQuestions — real content only the operator has today.",
+      tier: "deferrable",
     },
     {
       key: "bookingPlatform",
       label: "Booking platform",
       kind: "ask",
       description: "Which calendar tool the client uses — a real choice.",
+      tier: "blocking",
     },
     {
       key: "bookingPlatformCredential",
       label: "Booking platform credential",
       kind: "secret",
       description: "Routes to the credential reuse/OAuth/paste-a-key path — never a plain text field, never sent through chat.",
+      tier: "blocking",
     },
     {
       key: "emailPlatform",
       label: "Email platform",
       kind: "ask",
       description: "Which email/CRM tool follow-ups send from — a real choice.",
+      tier: "blocking",
     },
     {
       key: "emailPlatformCredential",
       label: "Email platform credential",
       kind: "secret",
       description: "Same secret path as the booking credential.",
+      tier: "blocking",
     },
     {
       key: "hostingPlatform",
       label: "Confirmation page hosting",
       kind: "ask",
       description: "Where the confirmation page publishes — a real choice, each option branching into its own mechanical sub-fields once picked.",
+      tier: "blocking",
+    },
+    {
+      key: "hostingPlatformCredential",
+      label: "Hosting platform credential",
+      kind: "secret",
+      description: "Found missing as its own entry during the full 34-worker audit — booking/email credentials already get their own entry per this file's convention, hosting's didn't. Only actually needed for platforms with a real publish API (webflow, wordpress, nextjs_vercel) — ghl/lovable/plain_html/discover_from_docs have none to authenticate against (worker-config-completeness.ts's checkPinDown encodes this conditional).",
+      tier: "blocking",
     },
     {
       key: "confirmationPageTemplate",
       label: "Confirmation page template",
       kind: "ask",
-      description: "A style preference, not derivable.",
+      description: "A style preference, not derivable. DB default \"signal\" — can never actually be blank.",
+      tier: "hidden-default",
     },
     // The 4 fields below were found missing entirely from this list during
     // the full 34-worker audit (worker-config-completeness.ts's own header
@@ -266,24 +332,28 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       label: "Who's on camera",
       kind: "ask",
       description: "Drives which of 4 script archetypes generates (founder_on_camera/coach_on_camera/animation/other) — a real, consequential choice, but script-builder.ts's own comment documents it falling back to founder_on_camera when unset, same default prospectMeets uses. Does not block.",
+      tier: "visible-default",
     },
     {
       key: "heroVideoUrl",
       label: "Hero video",
       kind: "ask",
       description: "Embedded once the buyer has actually recorded the hero script — until then the confirmation page ships its own 'recording in progress' placeholder. Genuinely optional, not a gap to fill before launch. Does not block.",
+      tier: "deferrable",
     },
     {
       key: "confirmationPageAnimationsEnabled",
       label: "Entrance animations",
       kind: "ask",
       description: "Opt-in cosmetic preference, defaults to off. Does not block.",
+      tier: "hidden-default",
     },
     {
       key: "hybridModeEnabled",
       label: "AI-personalized intro paragraph",
       kind: "ask",
       description: "Collected in this same wizard (offer-step.tsx), but consumed by pile-on and win-back's own enrollment logic, not pin-down itself — reused, not re-collected, same convention as the booking/email credentials below. Defaults to off (templated email, no AI paragraph) when unset. Does not block.",
+      tier: "hidden-default",
     },
   ],
   // Traced against brief-service.ts's real reads (gatherEngagementContext,
@@ -297,72 +367,84 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       label: "Where briefs land",
       kind: "ask",
       description: "Real operator choice of delivery destination for finished briefs — not derivable.",
+      tier: "blocking",
     },
     {
       key: "slackWebhookUrl",
       label: "Slack webhook URL",
       kind: "ask",
       description: "Where briefs post if Slack is the landing destination — a real per-workspace URL only the operator has, entered as a plain field matching this codebase's existing convention for it.",
+      tier: "blocking",
     },
     {
       key: "briefTriggerType",
       label: "Nightly vs. dynamic briefing",
       kind: "ask",
-      description: "A real operational cadence preference, not derivable.",
+      description: "A real operational cadence preference, not derivable. Defaults to \"nightly\".",
+      tier: "hidden-default",
     },
     {
       key: "videoEngagementPlatform",
       label: "Video engagement tracking",
       kind: "ask",
       description: "Optional platform choice (Wistia/YouTube) for hero-video watch-time signals — a real preference, not derivable.",
+      tier: "deferrable",
     },
     {
       key: "videoEngagementCredential",
       label: "Video engagement credential",
       kind: "secret",
       description: "Routes to the credential path — confirmed via storeCredential in the pre-call-read bridge route, never a plain field.",
+      tier: "deferrable",
     },
     {
       key: "prospectResearchSourcesUsed",
       label: "Prospect research sources",
       kind: "ask",
       description: "Real BYOK opt-in list (Apollo/PDL) — which external enrichment sources to use, a preference not a lookup.",
+      tier: "deferrable",
     },
     {
       key: "apolloCredential",
       label: "Apollo credential",
       kind: "secret",
       description: "Routes to the credential path, gated on prospectResearchSourcesUsed including apollo.",
+      tier: "deferrable",
     },
     {
       key: "pdlCredential",
       label: "People Data Labs credential",
       kind: "secret",
       description: "Routes to the credential path, gated on prospectResearchSourcesUsed including pdl.",
+      tier: "deferrable",
     },
     {
       key: "conversationIntelligenceProvider",
       label: "Call intelligence provider",
       kind: "ask",
       description: "Real opt-in choice (currently Recall.ai) — set in the generic Edit Stack Settings drawer rather than this skill's own hinges panel, an inconsistency worth normalizing in a later pass, not fixed here.",
+      tier: "deferrable",
     },
     {
       key: "conversationIntelligenceCredential",
       label: "Call intelligence credential",
       kind: "secret",
       description: "Routes to the credential path per its own drawer copy ('entered separately under Update credentials').",
+      tier: "deferrable",
     },
     {
       key: "recallRegion",
       label: "Recall.ai workspace region",
       kind: "ask",
-      description: "Must match the operator's actual Recall.ai account region — a real fact only they know, not derivable.",
+      description: "Must match the operator's actual Recall.ai account region — a real fact only they know, not derivable. The adapter defaults to us-east-1 when unset, but a wrong silent default here 404s every call rather than degrading gracefully — bundled with the Call Intelligence opt-in (deferrable), not left as a hidden default, precisely because wrong-but-silent is actively harmful here.",
+      tier: "deferrable",
     },
     {
       key: "recallBotName",
       label: "Recall bot display name",
       kind: "ask",
       description: "Cosmetic preference, optional.",
+      tier: "hidden-default",
     },
     {
       key: "recallWebhookSigningSecret",
@@ -370,30 +452,35 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       kind: "secret",
       description:
         "A real secret (verifies inbound Recall webhooks) — currently entered via a password-typed field but stored directly in the stack jsonb rather than routed through the actual credential vault. Classified as secret because that's what it is, not because today's storage matches that classification; worth a real fix separate from this pass.",
+      tier: "deferrable",
     },
     {
       key: "personMatchConfidenceThreshold",
       label: "Person-match confidence threshold",
       kind: "ask",
-      description: "Real risk-tolerance knob gating whether a brief sends (Rule 14) — currently hardcoded to 70 with no UI anywhere to change it. Ask, not derivable, flagged unbuilt rather than silently defaulted.",
+      description: "Real risk-tolerance knob gating whether a brief sends (Rule 14) — currently hardcoded to 70 with no UI anywhere to change it, but has a real stack column (person_match_confidence_threshold) with that exact default already documented. High-blast-radius (see Open Risks) — shown, never blocking.",
+      tier: "visible-default",
     },
     {
       key: "briefLeadTimeHours",
       label: "Brief lead time",
       kind: "ask",
-      description: "How far ahead of a call a brief should send — currently hardcoded to 12 hours with no UI setter. Ask, flagged unbuilt.",
+      description: "How far ahead of a call a brief should send — currently hardcoded to 12 hours with no UI setter, but has a real stack column with that default already documented. Low-blast-radius — hidden.",
+      tier: "hidden-default",
     },
     {
       key: "showRateScoringEnabled",
       label: "Show-rate scoring",
       kind: "ask",
-      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt.",
+      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt. Defaults off.",
+      tier: "hidden-default",
     },
     {
       key: "slackSigningSecret",
       label: "Slack app signing secret",
       kind: "secret",
-      description: "Needed to verify the Slack interactions webhook once the Slack landing-destination button is real — no UI setter exists yet anywhere. Secret, flagged unbuilt.",
+      description: "Needed to verify the Slack interactions webhook once the Slack landing-destination button is real — no UI setter exists yet anywhere. Secret, flagged unbuilt. Only relevant once Slack interactive buttons are used.",
+      tier: "deferrable",
     },
   ],
   // Traced against audit-engine.ts's real reads. No credential of its own —
@@ -475,43 +562,50 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "smsPlatform",
       label: "SMS platform",
       kind: "ask",
-      description: "Real platform choice (none/Twilio/GHL SMS/HubSpot SMS) for the pre-call text sequence — not derivable.",
+      description: "Real platform choice (none/Twilio/GHL SMS/HubSpot SMS) for the pre-call text sequence — not derivable. \"None\" is a legitimate explicit choice, not a gap — only truly-unset blocks.",
+      tier: "blocking",
     },
     {
       key: "smsPlatformCredential",
       label: "SMS platform credential",
       kind: "secret",
-      description: "Routes to the credential path — a genuinely new provider (Twilio auth token / HubSpot key) distinct from the booking/email credentials, confirmed via CredentialField in the setup wizard.",
+      description: "Routes to the credential path — a genuinely new provider (Twilio auth token / HubSpot key) distinct from the booking/email credentials, confirmed via CredentialField in the setup wizard. Only required once smsPlatform isn't \"none\".",
+      tier: "blocking",
     },
     {
       key: "smsA2p10dlcStatus",
       label: "A2P 10DLC registration status",
       kind: "ask",
-      description: "Real US SMS compliance-registration status only the Twilio account holder knows — sends are refused until this is 'Campaign approved,' per the setup screen's own copy.",
+      description: "Real US SMS compliance-registration status only the Twilio account holder knows — sends are refused until this is 'Campaign approved,' per the setup screen's own copy. Only relevant once Twilio is chosen — bundled with that path.",
+      tier: "deferrable",
     },
     {
       key: "smsComplianceFooterVariant",
       label: "SMS compliance footer",
       kind: "ask",
-      description: "Real compliance-copy choice (standard vs. custom opt-out language) — not derivable.",
+      description: "Real compliance-copy choice (standard vs. custom opt-out language) — not derivable. Only relevant once smsPlatform isn't \"none\" — bundled with that path.",
+      tier: "deferrable",
     },
     {
       key: "adDataPlatform",
       label: "Ad-data cohort platform",
       kind: "ask",
-      description: "Real platform choice (none/Hyros/Sheets/native CRM tag) for syncing booked leads into ad-spend attribution — not derivable.",
+      description: "Real platform choice (none/Hyros/Sheets/native CRM tag) for syncing booked leads into ad-spend attribution — not derivable. \"None\" is a legitimate explicit choice — only truly-unset blocks.",
+      tier: "blocking",
     },
     {
       key: "adDataPlatformCredential",
       label: "Ad-data platform credential",
       kind: "secret",
-      description: "Routes to the credential path — a new provider (Hyros account / Google Sheets token) distinct from booking/email, unless native_crm is chosen (no separate credential needed).",
+      description: "Routes to the credential path — a new provider (Hyros account / Google Sheets token) distinct from booking/email, unless native_crm is chosen (no separate credential needed). Only required once a platform needing one is chosen.",
+      tier: "blocking",
     },
     {
       key: "existingPileOnSequenceFlagged",
       label: "Existing pre-call sequence on file",
       kind: "ask",
-      description: "Collected on pin-down's own setup screen on Pile-On's behalf — whether the operator already has a pre-call sequence worth referencing.",
+      description: "Collected on pin-down's own setup screen on Pile-On's behalf — whether the operator already has a pre-call sequence worth referencing. Informational, defaults to \"no existing sequence,\" doesn't gate whether pile-on can run.",
+      tier: "hidden-default",
     },
   ],
   // Traced against enrollProspectInWinBack (chat-winback.ts), the
@@ -571,45 +665,52 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "operatorName",
       label: "Operator / brand name",
       kind: "derivable",
-      description: "Pre-fillable from the client's own buyer name (engagements.buyer, always set) — a starting suggestion to confirm or edit, not forced to always match it.",
+      description: "Pre-fillable from the client's own buyer name (engagements.buyer, always set) — a starting suggestion to confirm or edit, not forced to always match it. Confirmed working (rep-onboarding-config-form.tsx pre-fills from the bridge GET's raw buyer field), just not via the named resolver.",
       derivableFrom: "buyerName",
+      tier: "blocking",
     },
     {
       key: "operatorDomains",
       label: "Domains",
       kind: "derivable",
-      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one.",
+      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one — honestly unbuilt today (the resolver exists, nothing calls it yet), same caveat as every other derivable field in this file. Shown as a confirm card once wired; ask field until then.",
       derivableFrom: "primaryDomain",
+      tier: "hidden-default",
     },
     {
       key: "operatorAliases",
       label: "Known aliases",
       kind: "ask",
       description: "Not reliably derivable — other names the operator is known by, best answered directly.",
+      tier: "deferrable",
     },
     {
       key: "operatorHandles",
       label: "Social handles",
       kind: "ask",
-      description: "Plausibly derivable from a domain in a future pass, but not verified yet — treated as ask for now.",
+      description: "Plausibly derivable from a domain in a future pass, but not verified yet — treated as ask for now. Enriches rep-twitter-watch's matching once available, not required to start watching.",
+      tier: "deferrable",
     },
     {
       key: "competitors",
       label: "Competitors",
       kind: "ask",
       description: "A judgment call about who counts as a competitor — not something to infer silently.",
+      tier: "blocking",
     },
     {
       key: "trustedSources",
       label: "Trusted sources",
       kind: "ask",
       description: "Which review/mention sources actually matter to this client — a real preference, not a lookup.",
+      tier: "blocking",
     },
     {
       key: "crisisThresholdOverride",
       label: "Crisis threshold",
       kind: "ask",
-      description: "A subjective risk-tolerance call — has a sane default, only needs asking if they want to tune it.",
+      description: "A subjective risk-tolerance call — inherits REP_THRESHOLD_DEFAULTS.crisisScoreFloor (80) when unset, a real documented default. Shown per the same reasoning as personMatchConfidenceThreshold, never blocking.",
+      tier: "visible-default",
     },
     // The 3 fields below were confirmed missing from this list (Phase 5's
     // own verification pass) despite being real, currently-collected
@@ -623,18 +724,21 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       label: "Tracked entities / sub-brands",
       kind: "ask",
       description: "Which companies, brands, products, or publications this operator is publicly associated with — a real judgment call, not inferable from a domain.",
+      tier: "blocking",
     },
     {
       key: "seedPanelPrompts",
       label: "Seed AI-engine prompts",
       kind: "ask",
-      description: "The 5-8 starting prompts the AI Engine Watch panel checks — real content only the operator can specify. Plausibly AI-suggestible from the operator name/domain in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
+      description: "The 5-8 starting prompts the AI Engine Watch panel checks — real content only the operator can specify. Plausibly AI-suggestible from the operator name/domain in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry. Can start blank and be tuned later — rep-engine-panel doesn't need it to begin watching.",
+      tier: "deferrable",
     },
     {
       key: "activeEngines",
       label: "Which AI engines to check",
       kind: "ask",
-      description: "Real preference narrowing the panel to specific engines — not derivable.",
+      description: "Real preference narrowing the panel to specific engines — not derivable. engine-panel-service.ts's own real fallback is \"null means check every platform-configured engine\" — a genuine default.",
+      tier: "deferrable",
     },
     // The 2 fields below were found missing entirely from this list during
     // the full 34-worker audit — real, DB-backed, UI-collected
@@ -649,12 +753,14 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       label: "Sole authority name",
       kind: "ask",
       description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation, so this can never actually be blank once a row exists. Read directly by rep-crisis-response's escalation logic.",
+      tier: "blocking",
     },
     {
       key: "operatorPagePhone",
       label: "Crisis SMS paging number",
       kind: "ask",
       description: "Destination for rep-crisis-response's SMS paging fallback — optional, paging still happens via in-app/Slack/email without it. Read directly by rep-crisis-response.",
+      tier: "hidden-default",
     },
   ],
   // The 5 workers below were traced (Phase 5) and confirmed to need
@@ -692,42 +798,49 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       kind: "derivable",
       description: "Pre-fillable from the client's own buyer name (engagements.buyer) — a starting suggestion to confirm or edit.",
       derivableFrom: "buyerName",
+      tier: "blocking",
     },
     {
       key: "productUrl",
       label: "Product URL",
       kind: "ask",
       description: "Audited and reclassified from derivable — unlike pin-down's buyerDomain/rawVoiceCorpus (which have real, running extraction code, just not reused across products yet), no live crawl or resolver path exists anywhere for this field. The icp-lock bridge route never reads engagements.primaryDomain and the form only pre-fills from a previously-saved value. A 100% manual ask field today, not just an unwired one.",
+      tier: "blocking",
     },
     {
       key: "productPrice",
       label: "Price",
       kind: "ask",
       description: "Not derivable — the operator's own pricing.",
+      tier: "blocking",
     },
     {
       key: "productValueProp",
       label: "Value proposition",
       kind: "ask",
       description: "One sentence on what the offer actually does for a buyer — a real business fact only the operator knows.",
+      tier: "blocking",
     },
     {
       key: "icps",
       label: "ICPs (slug, label, weight)",
       kind: "ask",
-      description: "Who this client sells to, and the traffic-allocation weight across each ICP if there's more than one — a judgment call, not inferred.",
+      description: "Who this client sells to, and the traffic-allocation weight across each ICP if there's more than one — a judgment call, not inferred. validateIcpSeed's own save-path already hard-requires at least one, weights summing to ~1.0.",
+      tier: "blocking",
     },
     {
       key: "sizingBounds",
       label: "Sizing bounds + disqualifiers",
       kind: "ask",
-      description: "Per-ICP sizing sweet spot and who to skip — real business rules, paired one-to-one with the ICPs above.",
+      description: "Per-ICP sizing sweet spot and who to skip — real business rules, paired one-to-one with the ICPs above. validateIcpSeed requires a sizing-bounds entry per ICP.",
+      tier: "blocking",
     },
     {
       key: "reviewRequiredIcps",
       label: "Review-required ICPs",
       kind: "ask",
       description: "Which ICPs (if any) hold for manual review before a push instead of auto-pushing — a real risk-tolerance preference, defaults to none held.",
+      tier: "visible-default",
     },
   ],
   "voice-capture": [
@@ -882,6 +995,49 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
       kind: "ask",
       description: "Found missing entirely during the full 34-worker audit — a real per-client payload-transformation object (attemptBridgeDelivery reads it via mapPayload) with a documented safe default: identity mapping (fields pass through unchanged) when unset. Does not block.",
     },
+  ],
+};
+
+// Phase 2's capability map (see WorkerCapability's own doc comment) —
+// only the top-5 workers this pass covers (pin-down, pre-call-read,
+// rep-onboarding, icp-lock, pile-on). Every requiredFieldKeys entry is a
+// real key from that worker's own configFields above, cross-checked by
+// hand, not invented — a capability naming a key that doesn't exist in
+// that worker's own field list would be exactly the kind of unverified
+// claim this file's other doc comments (ClientProfileFact, configFields)
+// already guard against.
+export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>> = {
+  "pin-down": [
+    { name: "Confirmation Page", requiredFieldKeys: ["offerName", "offerPrice", "offerVertical", "offerIcp", "trafficTemperature", "hostingPlatform", "hostingPlatformCredential"] },
+    { name: "Brand Voice", requiredFieldKeys: ["buyerDomain", "rawVoiceCorpus"] },
+    { name: "Booking Sync", requiredFieldKeys: ["bookingPlatform", "bookingPlatformCredential"] },
+    { name: "Follow-up Email", requiredFieldKeys: ["emailPlatform", "emailPlatformCredential"] },
+  ],
+  "pre-call-read": [
+    { name: "Dispatch Briefs", requiredFieldKeys: ["briefLandingDestination", "slackWebhookUrl"] },
+    { name: "Video Engagement Signal", requiredFieldKeys: ["videoEngagementPlatform", "videoEngagementCredential"] },
+    { name: "Enriched Prospect Research", requiredFieldKeys: ["prospectResearchSourcesUsed"] },
+    { name: "Call Intelligence", requiredFieldKeys: ["conversationIntelligenceProvider", "conversationIntelligenceCredential", "recallRegion"] },
+    { name: "Show-Rate Scoring", requiredFieldKeys: ["showRateScoringEnabled"] },
+  ],
+  // This worker IS onboarding — its capabilities are what it unlocks for
+  // the rest of the product, not itself.
+  "rep-onboarding": [
+    { name: "AI Engine Watch", requiredFieldKeys: ["seedPanelPrompts", "activeEngines"] },
+    { name: "Trustpilot Watch", requiredFieldKeys: ["operatorDomains", "operatorName"] },
+    { name: "Reddit/Twitter Watch", requiredFieldKeys: ["entities", "operatorHandles"] },
+    { name: "Crisis Response", requiredFieldKeys: ["soleAuthorityName", "operatorPagePhone", "crisisThresholdOverride"] },
+  ],
+  // Same reasoning — "ICP Targeting Locked" is the one capability that
+  // gates the rest of the Cold Open pipeline (confirmed directly from
+  // runIcpLock's own summary: "Run Voice Capture, Source Connect, and
+  // Send Connect next").
+  "icp-lock": [
+    { name: "ICP Targeting Locked", requiredFieldKeys: ["productName", "productUrl", "productPrice", "productValueProp", "icps", "sizingBounds"] },
+  ],
+  "pile-on": [
+    { name: "SMS Follow-ups", requiredFieldKeys: ["smsPlatform", "smsPlatformCredential", "smsA2p10dlcStatus", "smsComplianceFooterVariant"] },
+    { name: "Ad-Cohort Sync", requiredFieldKeys: ["adDataPlatform", "adDataPlatformCredential"] },
   ],
 };
 

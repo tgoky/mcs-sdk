@@ -4,6 +4,7 @@ import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-
 import { Plus, Trash2 } from "lucide-react";
 import type { RepEntity, RepCompetitor, RepCollision, RepEngineId } from "@/models/schema";
 import { REP_ENGINE_IDS, REP_ENGINE_LABELS } from "@/features/reputation-manager/engine-models";
+import { InferredFieldBadge } from "@/components/inferred-field-badge";
 
 /**
  * Everything rep-onboarding's form needs to hold, in the shape the save
@@ -190,6 +191,7 @@ export function IdentityGraphForm({
   form,
   onChange,
   readOnlyCollisions,
+  detectedOperatorName,
 }: {
   form: IdentityGraphFormState;
   onChange: (next: IdentityGraphFormState) => void;
@@ -198,6 +200,12 @@ export function IdentityGraphForm({
    * form never touches them (see fromSavedGraph's comment). Empty until
    * rep-onboarding has actually run once for this engagement. */
   readOnlyCollisions?: (RepCollision & { source: "collision_check" })[];
+  /** Optional — the client's own buyer name, if the caller has one.
+   * Omitted entirely by any caller that doesn't pass it (identical to
+   * this component's behavior before this prop existed); when passed,
+   * shows the Phase 3 Inferred Card above operatorName instead of a
+   * silent pre-fill with no visible provenance. */
+  detectedOperatorName?: string;
 }) {
   function set<K extends keyof IdentityGraphFormState>(key: K, value: IdentityGraphFormState[K]) {
     onChange({ ...form, [key]: value });
@@ -209,6 +217,14 @@ export function IdentityGraphForm({
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
           Operator
         </h2>
+        {detectedOperatorName !== undefined && (
+          <InferredFieldBadge
+            detectedValue={detectedOperatorName}
+            currentValue={form.operatorName}
+            detectedFromLabel="the client's name on file"
+            onUse={(v) => set("operatorName", v)}
+          />
+        )}
         <InputField
           label="Operator name"
           required

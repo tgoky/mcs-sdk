@@ -1,0 +1,2713 @@
+diff --git a/src/app/api/composio/callback/route.ts b/src/app/api/composio/callback/route.ts
+index c26387f..0993c84 100644
+--- a/src/app/api/composio/callback/route.ts
++++ b/src/app/api/composio/callback/route.ts
+@@ -35,6 +35,17 @@ export async function GET(request: Request) {
+     return NextResponse.redirect(returnUrl);
+   }
+ 
++  // Echoed on every outcome from here on (success and failure alike) so a
++  // caller rendering several credential rows on one page at once — e.g.
++  // Pre-Call Read's video/research/call-intelligence keys, each a
++  // potentially-different provider — can tell which row's own connect
++  // attempt this particular return belongs to, instead of every row on the
++  // page reacting to composio_connected/composio_error alike. Purely
++  // additive: existing readers of this route (apps-page-client.tsx,
++  // teammates-workspace.tsx) only ever looked at composio_connected/
++  // composio_error and stay unaffected by this extra param.
++  returnUrl.searchParams.set("composio_provider", provider);
++
+   if (status !== "success" || !connectedAccountId) {
+     returnUrl.searchParams.set("composio_error", `Connecting ${provider} was cancelled or failed.`);
+     return NextResponse.redirect(returnUrl);
+diff --git a/src/app/api/credentials/test/route.ts b/src/app/api/credentials/test/route.ts
+index e441316..0f808c3 100644
+--- a/src/app/api/credentials/test/route.ts
++++ b/src/app/api/credentials/test/route.ts
+@@ -18,6 +18,11 @@ import {
+  * Same verified-endpoint set as runCredentialHealthCheck() in
+  * src/features/notifications/server/credential-health.ts — see the
+  * comment there for why this list isn't just "every provider we support."
++ *
++ * Keys here are duplicated as a client-safe list in
++ * src/lib/credential-test-providers.ts (TESTABLE_CREDENTIAL_PROVIDERS),
++ * which CredentialRow uses to decide whether to show a "Test connection"
++ * action at all — keep both in sync when this map changes.
+  */
+ const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
+   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
+diff --git a/src/app/api/engagements/[id]/workers/[workerId]/capabilities/route.ts b/src/app/api/engagements/[id]/workers/[workerId]/capabilities/route.ts
+new file mode 100644
+index 0000000..782e6ba
+--- /dev/null
++++ b/src/app/api/engagements/[id]/workers/[workerId]/capabilities/route.ts
+@@ -0,0 +1,46 @@
++// src/app/api/engagements/[id]/workers/[workerId]/capabilities/route.ts
++//
++// Phase 3's first real slice (see the "Worker Onboarding & Gating: Plan"
++// doc): read-only status for the Live Capability Matrix. Mirrors the
++// auth shape every sibling route under workers/[workerId]/ already uses
++// (enable/route.ts) — GET only, this never writes anything.
++
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { isWorkerId } from "@/lib/worker-registry";
++import { getFilledFieldKeys, computeCapabilityStatus } from "@/lib/worker-capability-status";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++export async function GET(_req: Request, { params }: { params: Promise<{ id: string; workerId: string }> }) {
++  const session = await getSession();
++  if (!session?.whopUserId) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const { id, workerId } = await params;
++  if (!isWorkerId(workerId)) {
++    return NextResponse.json({ error: `Unknown worker: ${workerId}` }, { status: 400 });
++  }
++
++  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++  const [row] = await db
++    .select({ engagementId: engagements.engagementId })
++    .from(engagements)
++    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++    .limit(1);
++
++  if (!row) {
++    return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
++  }
++
++  const filledKeys = await getFilledFieldKeys(workerId, id);
++  const capabilities = computeCapabilityStatus(workerId, filledKeys);
++
++  return NextResponse.json({ capabilities });
++}
+diff --git a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+index 096faeb..6804804 100644
+--- a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
++++ b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
+ import { KeyRound, Link2, Check } from "lucide-react";
+ import { bookingPlatformLabel, emailPlatformLabel, conversationIntelligenceProviderLabel, hostingPlatformLabel, smsPlatformLabel, adDataPlatformLabel } from "@/lib/copy";
+ import { useToast } from "@/components/toast/toast-provider";
++import { isComposioManagedProvider } from "@/lib/composio-providers";
++import { isTestableCredentialProvider } from "@/lib/credential-test-providers";
+ 
+ interface VaultCredential {
+   id: string;
+@@ -39,8 +41,11 @@ export function CredentialRow({
+   onRequestClose?: () => void;
+ }) {
+   const router = useRouter();
++  const searchParams = useSearchParams();
+   const toast = useToast();
+-  const [mode, setMode] = useState<"paste" | "reuse">(currentlyLinkedVaultId ? "reuse" : "paste");
++  const composioAvailable = isComposioManagedProvider(provider);
++  const testable = isTestableCredentialProvider(provider);
++  const [mode, setMode] = useState<"paste" | "reuse" | "connect">(currentlyLinkedVaultId ? "reuse" : "paste");
+ 
+   // Paste a new key state
+   const [value, setValue] = useState("");
+@@ -57,6 +62,42 @@ export function CredentialRow({
+   const [linkError, setLinkError] = useState<string | null>(null);
+   const [linked, setLinked] = useState(false);
+ 
++  // Connect-via-Composio state
++  const [connecting, setConnecting] = useState(false);
++  const [connectError, setConnectError] = useState<string | null>(null);
++
++  // Test-connection state — /api/credentials/test already exists and is
++  // already wired up on the standalone Settings > Connections diagnostics
++  // page (src/app/dashboard/settings/connections/page.tsx), but was never
++  // reachable from here, the actual live per-client credential UI. Surfaces
++  // the same real check right where the credential itself lives.
++  const [testing, setTesting] = useState(false);
++  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
++
++  async function testConnection() {
++    setTesting(true);
++    setTestResult(null);
++    try {
++      const res = await fetch("/api/credentials/test", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ engagementId, provider }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setTestResult({ ok: false, message: data.error ?? "Couldn't run the test." });
++      } else if (data.ok) {
++        setTestResult({ ok: true, message: "Connection works." });
++      } else {
++        setTestResult({ ok: false, message: data.error ?? "Connection failed." });
++      }
++    } catch {
++      setTestResult({ ok: false, message: "Network error. Try again." });
++    } finally {
++      setTesting(false);
++    }
++  }
++
+   useEffect(() => {
+     if (mode !== "reuse" || vaultOptions !== null) return;
+     fetch(`/api/credential-vault?provider=${encodeURIComponent(provider)}`)
+@@ -65,6 +106,94 @@ export function CredentialRow({
+       .catch(() => setVaultOptions([]));
+   }, [mode, provider, vaultOptions]);
+ 
++  // Landing back from a real Composio OAuth redirect for THIS row's own
++  // provider (composio/callback route.ts echoes ?composio_provider=<provider>
++  // alongside either ?composio_connected=<provider> or ?composio_error=...,
++  // added specifically so a page rendering several CredentialRows at once —
++  // e.g. Pre-Call Read's video/research/call-intelligence keys — can tell
++  // which row's own connect attempt this return belongs to, the same way
++  // apps-page-client.tsx and teammates-workspace.tsx already read the two
++  // older params). Auto-links rather than making the person switch to
++  // "Reuse saved" and pick it themselves — the whole point of Connect is
++  // skipping that manual step.
++  useEffect(() => {
++    if (searchParams.get("composio_provider") !== provider) return;
++    const status = searchParams.get("composio_connected");
++    const err = searchParams.get("composio_error");
++
++    const url = new URL(window.location.href);
++    url.searchParams.delete("composio_connected");
++    url.searchParams.delete("composio_error");
++    url.searchParams.delete("composio_provider");
++    window.history.replaceState({}, "", url.toString());
++
++    if (err) {
++      setMode("connect");
++      setConnectError(err);
++      return;
++    }
++    if (status !== provider) return;
++
++    (async () => {
++      setLinking(true);
++      setLinkError(null);
++      try {
++        const res = await fetch(`/api/credential-vault?provider=${encodeURIComponent(provider)}`);
++        const data = await res.json();
++        const items: VaultCredential[] = data.items ?? [];
++        if (items.length === 0) {
++          throw new Error("Connected, but couldn't find the saved credential — try \"Reuse saved\" instead.");
++        }
++        const newest = items.reduce((a, b) => (new Date(b.createdAt) > new Date(a.createdAt) ? b : a));
++        const linkRes = await fetch(`/api/engagements/${engagementId}/credentials/link`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ provider, vaultId: newest.id }),
++        });
++        const linkData = await linkRes.json();
++        if (!linkRes.ok) throw new Error(linkData.error ?? "Connected, but couldn't link it to this client.");
++        setVaultOptions(items);
++        setSelectedVaultId(newest.id);
++        setMode("reuse");
++        setLinked(true);
++        toast.success(`${label} connected.`);
++        router.refresh();
++      } catch (e) {
++        setMode("connect");
++        setConnectError(e instanceof Error ? e.message : "Something went wrong finishing the connection.");
++      } finally {
++        setLinking(false);
++      }
++    })();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  async function connect() {
++    setConnecting(true);
++    setConnectError(null);
++    try {
++      const res = await fetch("/api/composio/connect", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ provider, returnTo: window.location.pathname }),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setConnectError(data.error ?? "Couldn't start the connection.");
++        setConnecting(false);
++        return;
++      }
++      // Full navigation, not a popup — Composio's hosted page redirects
++      // straight back to /api/composio/callback, which lands the browser
++      // back on this exact page (see the returnTo above and the
++      // composio-return effect that follows).
++      window.location.assign(data.redirectUrl);
++    } catch {
++      setConnectError("Network error. Try again.");
++      setConnecting(false);
++    }
++  }
++
+   async function update() {
+     if (!value.trim()) return;
+     if (saveForReuse && !reuseLabel.trim()) {
+@@ -178,8 +307,36 @@ export function CredentialRow({
+           >
+             Reuse saved
+           </button>
++          {composioAvailable && (
++            <button
++              onClick={() => { setMode("connect"); setConnectError(null); }}
++              className={`hover-lift press-settle px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
++                mode === "connect"
++                  ? "border-ink/40 bg-ink/10 text-ink-hover dark:text-ink"
++                  : "border-transparent text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400"
++              }`}
++            >
++              Connect
++            </button>
++          )}
+         </div>
+       </div>
++      {testable && (
++        <div className="flex items-center gap-1.5">
++          <button
++            onClick={testConnection}
++            disabled={testing}
++            className="hover-lift press-settle text-[10px] font-mono font-semibold text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-colors cursor-pointer"
++          >
++            {testing ? "Testing connection " : "Test connection"}
++          </button>
++          {testResult && (
++            <span className={`text-[10px] font-mono ${testResult.ok ? "text-ink-hover dark:text-ink" : "text-rose-600 dark:text-rose-400"}`}>
++              {testResult.ok ? "✓" : "✗"} {testResult.message}
++            </span>
++          )}
++        </div>
++      )}
+       {mode === "paste" ? (
+         <div className="space-y-1.5">
+           <div className="flex items-center gap-2">
+@@ -219,7 +376,7 @@ export function CredentialRow({
+           {saved && <span className="text-[11px] font-mono text-ink-hover dark:text-ink">Saved</span>}
+           {error && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{error}</span>}
+         </div>
+-      ) : (
++      ) : mode === "reuse" ? (
+         <div className="space-y-1.5">
+           {vaultOptions === null ? (
+             <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600">Loading saved credentials </p>
+@@ -256,6 +413,24 @@ export function CredentialRow({
+           )}
+           {linkError && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{linkError}</span>}
+         </div>
++      ) : (
++        <div className="space-y-1.5 rounded border border-dashed border-zinc-300 dark:border-zinc-800 px-2 py-1.5">
++          <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 leading-relaxed">
++            Connect {label.replace(/ key$/i, "")} securely — no key to copy or paste, and it&apos;s saved for reuse
++            on future clients automatically.
++          </p>
++          <button
++            onClick={connect}
++            disabled={connecting || linking}
++            className="hover-lift press-settle text-[11px] font-mono font-bold px-2.5 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 disabled:opacity-40 transition-all cursor-pointer"
++          >
++            {linking ? "Finishing connection " : connecting ? "Connecting " : "Connect via Composio"}
++          </button>
++          <p className="text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
++            This briefly leaves this page to connect, then brings you back here and links it automatically.
++          </p>
++          {connectError && <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">{connectError}</span>}
++        </div>
+       )}
+     </div>
+   );
+diff --git a/src/components/choice-card-group.tsx b/src/components/choice-card-group.tsx
+new file mode 100644
+index 0000000..18d62fa
+--- /dev/null
++++ b/src/components/choice-card-group.tsx
+@@ -0,0 +1,64 @@
++"use client";
++
++// Phase 3's "Choice cards" (see the "Worker Onboarding & Gating: Plan"
++// doc's Worker Dossier section): "platform-choice fields become tappable
++// tiles with icons, not <select> dropdowns." Deliberately the exact same
++// prop signature as form-fields.tsx's SelectField — a drop-in
++// replacement wherever a caller wants it, not a new form-state pattern.
++// Reuses PlatformLogo (form-fields.tsx) for icons instead of inventing a
++// second icon system — the same /logos/{provider}.png assets every
++// SelectField already renders next to its own label.
++
++import { PlatformLogo } from "@/app/dashboard/engagements/new/form-fields";
++
++export function ChoiceCardGroup({
++  label,
++  value,
++  onChange,
++  options,
++  helpText,
++  required,
++  disabled,
++}: {
++  label: string;
++  value: string;
++  onChange: (v: string) => void;
++  options: { value: string; label: string }[];
++  helpText?: string;
++  required?: boolean;
++  disabled?: boolean;
++}) {
++  return (
++    <div className="space-y-1.5 w-full">
++      <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
++        {label}
++        {required && (
++          <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">(REQUIRED)</span>
++        )}
++      </label>
++      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
++        {options.map((option) => {
++          const selected = option.value === value;
++          return (
++            <button
++              key={option.value}
++              type="button"
++              disabled={disabled}
++              onClick={() => onChange(option.value)}
++              aria-pressed={selected}
++              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
++                selected
++                  ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
++                  : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600"
++              }`}
++            >
++              <PlatformLogo provider={option.value} />
++              <span className="truncate">{option.label}</span>
++            </button>
++          );
++        })}
++      </div>
++      {helpText && <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">{helpText}</p>}
++    </div>
++  );
++}
+diff --git a/src/components/inferred-field-badge.tsx b/src/components/inferred-field-badge.tsx
+new file mode 100644
+index 0000000..d2cba1e
+--- /dev/null
++++ b/src/components/inferred-field-badge.tsx
+@@ -0,0 +1,72 @@
++"use client";
++
++// Phase 3's "Inferred cards" (see the "Worker Onboarding & Gating: Plan"
++// doc's Worker Dossier section): "here's what I already found" with a
++// Confirm / Override choice, never a blank box that looks the same
++// whether the value was detected or hand-typed. Deliberately a small,
++// self-contained affordance rendered ABOVE an existing input, not a
++// replacement for it — the input keeps working exactly as it did before
++// for every caller that doesn't render this alongside it.
++//
++// Three states, not two, because a silent auto-fill (rep-onboarding's own
++// `setForm(f => ({ ...f, operatorName: data.buyer }))`, icp-lock's
++// equivalent) already exists and is left untouched here — removing it
++// would be a behavior change with its own real risk. This badge adds
++// transparency on top of that existing behavior instead of replacing it:
++//   1. currentValue is empty, a detected value exists -> "Detected: X" +
++//      a one-click "Use this" button.
++//   2. currentValue already equals the detected value (the existing
++//      eager pre-fill already ran) -> a quiet, button-less confirmation
++//      note, so the field's origin is visible instead of looking
++//      indistinguishable from something the user typed themselves.
++//   3. currentValue is non-empty and different from the detected value
++//      -> renders nothing. The user already made a real choice; don't
++//      nag them back toward a guess.
++
++export function InferredFieldBadge({
++  detectedValue,
++  currentValue,
++  detectedFromLabel,
++  onUse,
++}: {
++  /** The value this app can derive right now — omit/empty if nothing's
++   * actually derivable yet, in which case this renders nothing (state 3
++   * by default, no false "detected" claim). */
++  detectedValue: string | undefined;
++  /** The field's current live value, from the same state the input
++   * itself reads/writes. */
++  currentValue: string;
++  /** Where the value came from, e.g. "the client's name on file" —
++   * plugged into "Detected from {x}", not a generic claim. */
++  detectedFromLabel: string;
++  /** Only called from state 1's button — the parent already knows how
++   * to update its own field state (the same setter the input uses). */
++  onUse: (value: string) => void;
++}) {
++  if (!detectedValue?.trim()) return null;
++
++  if (currentValue.trim() === detectedValue.trim()) {
++    return (
++      <p className="text-[10.5px] text-zinc-400 dark:text-zinc-600 -mt-1 mb-1.5">
++        Pre-filled from {detectedFromLabel} — edit above if it's wrong.
++      </p>
++    );
++  }
++
++  if (currentValue.trim().length > 0) return null;
++
++  return (
++    <div className="flex items-center gap-2 -mt-1 mb-1.5 text-[11px]">
++      <span className="text-zinc-500 dark:text-zinc-500">
++        Detected from {detectedFromLabel}: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{detectedValue}</span>
++      </span>
++      <button
++        type="button"
++        onClick={() => onUse(detectedValue)}
++        className="text-amber-600 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
++      >
++        Use this
++      </button>
++    </div>
++  );
++}
+diff --git a/src/components/progressive-flow.tsx b/src/components/progressive-flow.tsx
+new file mode 100644
+index 0000000..5cd3d35
+--- /dev/null
++++ b/src/components/progressive-flow.tsx
+@@ -0,0 +1,118 @@
++"use client";
++
++// Phase 3's "Progressive, narrated flow" (see the "Worker Onboarding &
++// Gating: Plan" doc's Worker Dossier section): "one real judgment call at
++// a time, not a wall of fields... spotlight one focus block at a time
++// while building a glanceable summary card on the side as each decision
++// is made." Progressive disclosure is the named UX principle behind it
++// (see the doc's External Precedents section).
++//
++// A pure UI/navigation container — it owns which step is showing and
++// renders a summary sidebar, nothing else. It never owns form state, never
++// validates a field, and never calls a save endpoint itself: the caller
++// passes each step's already-built content (its own inputs, wired to
++// whatever state the caller already manages) and an isComplete flag per
++// step for the sidebar checklist, plus one onFinish callback that fires
++// from the last step's action button. This is deliberate: retrofitting an
++// existing, working form's actual field state and save/submit logic into
++// a new container is real, separate risk from building the container
++// itself — kept as its own later slice rather than doing both at once.
++
++import type { ReactNode } from "react";
++import { useState } from "react";
++import { Check, ArrowLeft, ArrowRight } from "lucide-react";
++
++export interface ProgressiveFlowStep {
++  id: string;
++  label: string;
++  content: ReactNode;
++  /** Drives the sidebar checkmark only — never blocks navigation. A step
++   * a user hasn't touched yet just shows unchecked; they can still move
++   * forward and back freely (this is a narration aid, not a wizard-style
++   * hard gate — real requiredness is the caller's own field validation,
++   * enforced the same way it already is before this container existed). */
++  isComplete: boolean;
++}
++
++export function ProgressiveFlow({
++  steps,
++  onFinish,
++  finishLabel = "Save",
++  finishDisabled = false,
++  finishing = false,
++}: {
++  steps: ProgressiveFlowStep[];
++  onFinish: () => void;
++  finishLabel?: string;
++  finishDisabled?: boolean;
++  finishing?: boolean;
++}) {
++  const [index, setIndex] = useState(0);
++  const current = steps[index];
++  const isLast = index === steps.length - 1;
++
++  return (
++    <div className="grid gap-6 md:grid-cols-[1fr_200px]">
++      <div className="space-y-4 min-w-0">
++        <div className="flex items-center justify-between">
++          <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
++            Step {index + 1} of {steps.length}
++          </p>
++        </div>
++        <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{current.label}</h3>
++        <div>{current.content}</div>
++
++        <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
++          <button
++            type="button"
++            onClick={() => setIndex((i) => Math.max(0, i - 1))}
++            disabled={index === 0}
++            className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
++          >
++            <ArrowLeft size={13} /> Back
++          </button>
++          {isLast ? (
++            <button
++              type="button"
++              onClick={onFinish}
++              disabled={finishDisabled || finishing}
++              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-xs font-bold text-white dark:text-zinc-900 cursor-pointer"
++            >
++              {finishing ? "Saving…" : finishLabel}
++            </button>
++          ) : (
++            <button
++              type="button"
++              onClick={() => setIndex((i) => Math.min(steps.length - 1, i + 1))}
++              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-4 py-2 text-xs font-bold text-white dark:text-zinc-900 cursor-pointer"
++            >
++              Next <ArrowRight size={13} />
++            </button>
++          )}
++        </div>
++      </div>
++
++      <div className="space-y-1.5">
++        {steps.map((step, i) => (
++          <button
++            key={step.id}
++            type="button"
++            onClick={() => setIndex(i)}
++            className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors cursor-pointer ${
++              i === index
++                ? "bg-zinc-100 dark:bg-zinc-800 font-semibold text-zinc-900 dark:text-zinc-100"
++                : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
++            }`}
++          >
++            {step.isComplete ? (
++              <Check size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
++            ) : (
++              <span className="shrink-0 w-[13px] h-[13px] rounded-full border border-zinc-300 dark:border-zinc-700" />
++            )}
++            <span className="truncate">{step.label}</span>
++          </button>
++        ))}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/worker-capability-matrix.tsx b/src/components/worker-capability-matrix.tsx
+new file mode 100644
+index 0000000..60b607e
+--- /dev/null
++++ b/src/components/worker-capability-matrix.tsx
+@@ -0,0 +1,84 @@
++"use client";
++
++// Phase 3's first real slice (see the "Worker Onboarding & Gating: Plan"
++// doc): the Live Capability Matrix — a checklist of a worker's real
++// capabilities that lights up as its dependent fields get filled in,
++// driven entirely by worker-registry.ts's WORKER_CAPABILITIES data
++// (Phase 2) and worker-capability-status.ts's live field reads.
++// Deliberately read-only and additive: this renders next to an existing
++// config form (icp-lock-config-form.tsx today), never replaces one — the
++// save/submit flow this app already relies on is untouched.
++//
++// Only renders anything for the 5 Phase 2 workers with real capability
++// data; for every other worker the API returns an empty capabilities
++// array and this component renders null rather than showing a
++// misleading empty checklist.
++
++import { useEffect, useState } from "react";
++import { CheckCircle2, Circle } from "lucide-react";
++import type { WorkerId } from "@/lib/worker-registry";
++
++interface CapabilityStatus {
++  name: string;
++  active: boolean;
++  missingFieldKeys: string[];
++}
++
++export function WorkerCapabilityMatrix({ workerId, engagementId }: { workerId: WorkerId; engagementId: string }) {
++  const [capabilities, setCapabilities] = useState<CapabilityStatus[] | null>(null);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    let cancelled = false;
++    (async () => {
++      try {
++        const res = await fetch(`/api/engagements/${engagementId}/workers/${workerId}/capabilities`);
++        const data = await res.json();
++        if (!res.ok) throw new Error(data.error ?? "Failed to load capabilities");
++        if (!cancelled) setCapabilities(data.capabilities ?? []);
++      } catch (e) {
++        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load capabilities");
++      }
++    })();
++    return () => {
++      cancelled = true;
++    };
++  }, [workerId, engagementId]);
++
++  // Silent, not an error state shown to the user — most workers genuinely
++  // have no capability data yet (only the 5 Phase 2 workers do), and that
++  // is a correct, expected state, not a failure.
++  if (error || !capabilities || capabilities.length === 0) return null;
++
++  const activeCount = capabilities.filter((c) => c.active).length;
++
++  return (
++    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
++      <div className="flex items-center justify-between">
++        <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Capabilities</h3>
++        <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">
++          {activeCount}/{capabilities.length} active
++        </span>
++      </div>
++      <div className="space-y-1.5">
++        {capabilities.map((cap) => (
++          <div key={cap.name} className="flex items-start gap-2">
++            {cap.active ? (
++              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
++            ) : (
++              <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-zinc-300 dark:text-zinc-700" />
++            )}
++            <div className="min-w-0">
++              <p className={`text-xs font-semibold ${cap.active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-600"}`}>{cap.name}</p>
++              {!cap.active && (
++                <p className="text-[10.5px] text-zinc-400 dark:text-zinc-600 leading-snug">
++                  Needs {cap.missingFieldKeys.length} more field{cap.missingFieldKeys.length === 1 ? "" : "s"}
++                </p>
++              )}
++            </div>
++          </div>
++        ))}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/icp-lock-config-form.tsx b/src/components/worker-config-forms/icp-lock-config-form.tsx
+index 31bd6b5..9a57ff4 100644
+--- a/src/components/worker-config-forms/icp-lock-config-form.tsx
++++ b/src/components/worker-config-forms/icp-lock-config-form.tsx
+@@ -20,8 +20,12 @@ import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useTour } from "@/components/tours/tour-provider";
+ import { useToast } from "@/components/toast/toast-provider";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
++import { InferredFieldBadge } from "@/components/inferred-field-badge";
++import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
++import { IcpLockLivePreview } from "./icp-lock-live-preview";
+ 
+-type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
++export type IcpRow = { slug: string; label: string; weight: string; teamSizeMin: string; teamSizeMax: string; disqualifyIf: string };
+ 
+ function emptyIcpRow(): IcpRow {
+   return { slug: "", label: "", weight: "", teamSizeMin: "", teamSizeMax: "", disqualifyIf: "" };
+@@ -161,6 +165,69 @@ export function IcpLockConfigForm({
+   if (loading) return <ConfigFormSkeleton />;
+   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
+ 
++  const steps: ProgressiveFlowStep[] = [
++    {
++      id: "product-identity",
++      label: "Product identity",
++      isComplete: Boolean(productName.trim() && productUrl.trim() && productValueProp.trim()),
++      content: (
++        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
++          <div>
++            <InferredFieldBadge
++              detectedValue={buyer}
++              currentValue={productName}
++              detectedFromLabel="the client's name on file"
++              onUse={setProductName}
++            />
++            <InputField label="Product / offer name" value={productName} onChange={setProductName} required />
++          </div>
++          <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
++          <InputField label="Price" value={productPrice} onChange={setProductPrice} placeholder="$99/mo" />
++          <InputField label="Value proposition" value={productValueProp} onChange={setProductValueProp} placeholder="one sentence" required />
++        </div>
++      ),
++    },
++    {
++      id: "icps",
++      label: "ICPs",
++      isComplete: cleanRows.length > 0,
++      content: (
++        <div className="space-y-3">
++          <div className="flex items-center justify-between">
++            <p className="text-xs text-zinc-500 dark:text-zinc-400">Who this client sells to, and the sizing/disqualify rules per segment.</p>
++            <button type="button" onClick={addRow} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer shrink-0">
++              + Add ICP
++            </button>
++          </div>
++          {icpRows.map((row, i) => (
++            <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
++              <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
++                <InputField label="Slug" value={row.slug} onChange={(v) => updateRow(i, { slug: v })} placeholder="boutique-agency" />
++                <InputField label="Label" value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Boutique agencies" />
++                <InputField label="Weight" value={row.weight} onChange={(v) => updateRow(i, { weight: v })} placeholder="0.6" />
++                <InputField label="Team size max" value={row.teamSizeMax} onChange={(v) => updateRow(i, { teamSizeMax: v })} placeholder="30" />
++              </div>
++              <InputField label="Disqualify if (comma-separated)" value={row.disqualifyIf} onChange={(v) => updateRow(i, { disqualifyIf: v })} placeholder="team_size > 50" />
++              {icpRows.length > 1 && (
++                <button type="button" onClick={() => removeRow(i)} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
++                  Remove
++                </button>
++              )}
++            </div>
++          ))}
++        </div>
++      ),
++    },
++    {
++      id: "review-settings",
++      label: "Review settings",
++      isComplete: true,
++      content: (
++        <InputField label="Review-required ICPs (comma-separated slugs, optional)" value={reviewRequiredIcps} onChange={setReviewRequiredIcps} placeholder="enterprise" />
++      ),
++    },
++  ];
++
+   return (
+     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
+       <div className="flex items-start justify-between gap-3">
+@@ -179,50 +246,13 @@ export function IcpLockConfigForm({
+         </p>
+       )}
+ 
+-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+-        <InputField label="Product / offer name" value={productName} onChange={setProductName} required />
+-        <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
+-        <InputField label="Price" value={productPrice} onChange={setProductPrice} placeholder="$99/mo" />
+-        <InputField label="Value proposition" value={productValueProp} onChange={setProductValueProp} placeholder="one sentence" required />
+-      </div>
++      <IcpLockLivePreview productName={productName} productValueProp={productValueProp} icpRows={icpRows} />
+ 
+-      <div className="space-y-3">
+-        <div className="flex items-center justify-between">
+-          <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICPs</h2>
+-          <button type="button" onClick={addRow} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
+-            + Add ICP
+-          </button>
+-        </div>
+-        {icpRows.map((row, i) => (
+-          <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+-            <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+-              <InputField label="Slug" value={row.slug} onChange={(v) => updateRow(i, { slug: v })} placeholder="boutique-agency" />
+-              <InputField label="Label" value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Boutique agencies" />
+-              <InputField label="Weight" value={row.weight} onChange={(v) => updateRow(i, { weight: v })} placeholder="0.6" />
+-              <InputField label="Team size max" value={row.teamSizeMax} onChange={(v) => updateRow(i, { teamSizeMax: v })} placeholder="30" />
+-            </div>
+-            <InputField label="Disqualify if (comma-separated)" value={row.disqualifyIf} onChange={(v) => updateRow(i, { disqualifyIf: v })} placeholder="team_size > 50" />
+-            {icpRows.length > 1 && (
+-              <button type="button" onClick={() => removeRow(i)} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
+-                Remove
+-              </button>
+-            )}
+-          </div>
+-        ))}
+-      </div>
++      <WorkerCapabilityMatrix workerId="icp-lock" engagementId={engagementId} />
+ 
+-      <InputField label="Review-required ICPs (comma-separated slugs, optional)" value={reviewRequiredIcps} onChange={setReviewRequiredIcps} placeholder="enterprise" />
++      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save & enable" finishDisabled={!canSubmit} finishing={saving} />
+ 
+       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
+-
+-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
+-        <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
+-          {cancelLabel}
+-        </button>
+-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
+-          {saving ? "Saving…" : "Save & enable"}
+-        </button>
+-      </div>
+     </div>
+   );
+ }
+diff --git a/src/components/worker-config-forms/icp-lock-live-preview.tsx b/src/components/worker-config-forms/icp-lock-live-preview.tsx
+new file mode 100644
+index 0000000..fc622cb
+--- /dev/null
++++ b/src/components/worker-config-forms/icp-lock-live-preview.tsx
+@@ -0,0 +1,91 @@
++"use client";
++
++// Phase 3's "preview-first entry point" for ICP Lock — a genuinely
++// different resolution from Pin-Down's (see pin-down-live-preview.tsx's
++// own header). ICP Lock has no rendered artifact at all: its output is
++// structured targeting data (ICP rows + sizing bounds) that Voice
++// Capture, Source Connect, Send Connect, and Daily Send read, not a
++// document a person looks at. So the honest "preview" here isn't a
++// generated page — it's a live-updating summary of the actual targeting
++// profile Cold Open will use, shown with placeholder example values
++// before any real ICP is entered, converging to the real thing as rows
++// are filled in. Same "placeholder result before any real input"
++// principle as Pin-Down's, applied to what this worker actually produces.
++
++import { Sparkles } from "lucide-react";
++import type { IcpRow } from "./icp-lock-config-form";
++
++const PLACEHOLDER_ROW: IcpRow = {
++  slug: "boutique-agency",
++  label: "Boutique agencies",
++  weight: "0.6",
++  teamSizeMin: "",
++  teamSizeMax: "30",
++  disqualifyIf: "team_size > 50",
++};
++
++function describeRow(row: IcpRow): string {
++  const parts: string[] = [];
++  if (row.teamSizeMin || row.teamSizeMax) {
++    const min = row.teamSizeMin || "0";
++    const max = row.teamSizeMax || "any";
++    parts.push(`${min}–${max} team members`);
++  }
++  if (row.disqualifyIf.trim()) {
++    parts.push(`disqualify if ${row.disqualifyIf.trim()}`);
++  }
++  return parts.length > 0 ? parts.join(" · ") : "no sizing rules set yet";
++}
++
++export function IcpLockLivePreview({
++  productName,
++  productValueProp,
++  icpRows,
++}: {
++  productName: string;
++  productValueProp: string;
++  icpRows: IcpRow[];
++}) {
++  const cleanRows = icpRows.filter((r) => r.slug.trim() && r.label.trim());
++  const rowsToShow = cleanRows.length > 0 ? cleanRows : [PLACEHOLDER_ROW];
++  const usingPlaceholder = cleanRows.length === 0;
++
++  return (
++    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
++      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
++        <div className="flex items-center gap-1.5 min-w-0">
++          <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
++          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Who Cold Open will target — live preview</span>
++        </div>
++        {usingPlaceholder && (
++          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">using a placeholder example</span>
++        )}
++      </div>
++      <div className="px-3 py-2.5 space-y-2">
++        <p className="text-xs text-zinc-600 dark:text-zinc-400">
++          Prospects hear about{" "}
++          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{productName || "Growth Accelerator"}</span>
++          {" — "}
++          {productValueProp || "helps B2B teams close more deals faster"}.
++        </p>
++        <div className="space-y-1.5">
++          {rowsToShow.map((row, i) => (
++            <div key={row.slug || i} className="flex items-start gap-2 text-xs">
++              <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
++              <span className="text-zinc-700 dark:text-zinc-300">
++                <span className="font-semibold">{row.label || row.slug}</span>
++                {row.weight && <span className="text-zinc-400 dark:text-zinc-600"> ({Math.round(Number(row.weight) * 100) || row.weight}%)</span>}
++                {" — "}
++                {describeRow(row)}
++              </span>
++            </div>
++          ))}
++        </div>
++      </div>
++      <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed border-t border-zinc-100 dark:border-zinc-900">
++        Voice Capture, Source Connect, Send Connect, and Daily Send all read this once it's saved — nothing runs
++        against it until then.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/pin-down-config-form.tsx b/src/components/worker-config-forms/pin-down-config-form.tsx
+index 5ecf872..6244bf2 100644
+--- a/src/components/worker-config-forms/pin-down-config-form.tsx
++++ b/src/components/worker-config-forms/pin-down-config-form.tsx
+@@ -18,6 +18,10 @@ import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new
+ import { DEFAULT_FORM } from "@/app/dashboard/engagements/new/constants";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useTour } from "@/components/tours/tour-provider";
++import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
++import { PinDownLivePreview } from "./pin-down-live-preview";
++import type { TemplateId } from "@/features/pin-down/server/templates";
+ 
+ export function PinDownConfigForm({
+   engagementId,
+@@ -149,198 +153,226 @@ export function PinDownConfigForm({
+     );
+   }
+ 
+-  return (
+-    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
+-      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+-        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+-          Configure Pin-Down{buyer ? ` for ${buyer}` : ""}
+-        </h1>
+-        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
+-          How to learn the brand voice, and which confirmation page design to ship. Saving turns Pin-Down on and runs it
+-          immediately — you&apos;ll land on a live status page right after.
+-        </p>
+-      </div>
++  const steps: ProgressiveFlowStep[] = [
++    {
++      id: "brand-voice",
++      label: "Brand voice",
++      isComplete: canSubmit,
++      content: (
++        <div className="space-y-4">
++          <div className="space-y-2">
++            <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
++              How should we learn this client&apos;s voice?
++            </label>
++            <div className="flex gap-2">
++              <button
++                type="button"
++                onClick={() => setVoiceSource("scrape")}
++                className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
++                  voiceSource === "scrape"
++                    ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
++                    : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
++                }`}
++              >
++                <span className="font-bold uppercase tracking-wider font-mono block">Scrape their website</span>
++                <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "scrape" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
++                  We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample too still helps if the crawl comes up short.
++                </p>
++              </button>
++              <button
++                type="button"
++                onClick={() => setVoiceSource("manual")}
++                className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
++                  voiceSource === "manual"
++                    ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
++                    : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
++                }`}
++              >
++                <span className="font-bold uppercase tracking-wider font-mono block">Paste a writing sample</span>
++                <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "manual" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
++                  Sales copy, call transcripts, or email examples — ready to use right now.
++                </p>
++              </button>
++            </div>
++          </div>
+ 
+-      <div className="space-y-2">
+-        <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+-          How should we learn this client&apos;s voice?
+-        </label>
+-        <div className="flex gap-2">
+-          <button
+-            type="button"
+-            onClick={() => setVoiceSource("scrape")}
+-            className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+-              voiceSource === "scrape"
+-                ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+-                : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+-            }`}
+-          >
+-            <span className="font-bold uppercase tracking-wider font-mono block">Scrape their website</span>
+-            <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "scrape" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+-              We crawl their site (and recent broadcast emails, if Klaviyo is connected) automatically. Pasting a sample too still helps if the crawl comes up short.
+-            </p>
+-          </button>
+-          <button
+-            type="button"
+-            onClick={() => setVoiceSource("manual")}
+-            className={`flex-1 text-left px-4 py-3 rounded-lg text-xs transition-all cursor-pointer shadow-xs border ${
+-              voiceSource === "manual"
+-                ? "bg-zinc-100 border-zinc-900 text-zinc-900 dark:bg-zinc-800 dark:border-zinc-100 dark:text-zinc-100 font-semibold"
+-                : "bg-white border-zinc-200 text-zinc-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700"
+-            }`}
+-          >
+-            <span className="font-bold uppercase tracking-wider font-mono block">Paste a writing sample</span>
+-            <p className={`mt-1 leading-relaxed font-normal ${voiceSource === "manual" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+-              Sales copy, call transcripts, or email examples — ready to use right now.
++          {voiceSource === "scrape" && (
++            <InputField
++              label="Marketing website"
++              value={marketingDomain}
++              onChange={setMarketingDomain}
++              placeholder="yoursite.com"
++              helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
++              required
++            />
++          )}
++
++          <div className="space-y-1.5 w-full">
++            <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
++              Sales copy, scripts, or call transcripts (500 words minimum)
++            </label>
++            <textarea
++              value={rawVoiceCorpus}
++              onChange={(e) => setRawVoiceCorpus(e.target.value)}
++              placeholder="Paste sales call transcripts, email copy, or scripts here..."
++              rows={8}
++              className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
++              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
++            />
++            <p className="text-[11px] font-mono font-bold" style={{ color: "var(--text-muted)" }}>
++              {wordCount} words pasted.{" "}
++              {voiceSource === "manual" && wordCount < 50
++                ? "Add more — at least 500 words are needed to learn the brand voice accurately."
++                : voiceSource === "manual"
++                ? "✓ That's enough to learn the brand voice."
++                : "Optional — helps if the crawl comes up short."}
+             </p>
+-          </button>
++          </div>
+         </div>
+-      </div>
++      ),
++    },
++    {
++      id: "confirmation-page",
++      label: "Confirmation page",
++      isComplete: true,
++      content: (
++        <div className="space-y-4">
++          <InputField
++            label="Existing confirmation page (if any)"
++            value={existingConfirmationPageUrl}
++            onChange={setExistingConfirmationPageUrl}
++            placeholder="https://yoursite.com/thank-you"
++            helpText="If the client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one."
++          />
+ 
+-      {voiceSource === "scrape" && (
+-        <InputField
+-          label="Marketing website"
+-          value={marketingDomain}
+-          onChange={setMarketingDomain}
+-          placeholder="yoursite.com"
+-          helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
+-          required
+-        />
+-      )}
++          {existingConfirmationPageUrl && (
++            <label className="flex items-start gap-2 text-xs cursor-pointer -mt-2" style={{ color: "var(--text-secondary)" }}>
++              <input
++                type="checkbox"
++                checked={existingConfirmationPageReuse}
++                onChange={(e) => setExistingConfirmationPageReuse(e.target.checked)}
++                className="mt-0.5"
++              />
++              <span>
++                Keep using this page — don&apos;t build or publish a new one. We&apos;ll still run the audit above so
++                you can see what&apos;s missing, but nothing gets deployed to {buyer || "the client"}&apos;s site.
++              </span>
++            </label>
++          )}
+ 
+-      <InputField
+-        label="Existing confirmation page (if any)"
+-        value={existingConfirmationPageUrl}
+-        onChange={setExistingConfirmationPageUrl}
+-        placeholder="https://yoursite.com/thank-you"
+-        helpText="If the client already has a post-booking confirmation page live, paste its URL — we'll audit it against the new one."
+-      />
++          {!existingConfirmationPageReuse && (
++            <div className="space-y-3">
++              <div>
++                <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
++                  Choose a confirmation page design
++                </h2>
++                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
++                  The page {buyer || "the client"}&apos;s prospects land on after booking. It regenerates with real
++                  call data once Pin-Down runs.
++                </p>
++              </div>
++              <TemplatePicker form={{ ...previewData, confirmationPageTemplate }} onSelect={setConfirmationPageTemplate} />
++            </div>
++          )}
++        </div>
++      ),
++    },
++    {
++      id: "pile-on-leak-map",
++      label: "Pile-On & Leak Map",
++      isComplete: true,
++      content: (
++        <div className="space-y-3">
++          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
++            A few things Pin-Down checks once, during setup, on behalf of Pile-On and Leak Map — so their results are
++            ready before you ever turn those on.
++          </p>
+ 
+-      {existingConfirmationPageUrl && (
+-        <label className="flex items-start gap-2 text-xs cursor-pointer -mt-2" style={{ color: "var(--text-secondary)" }}>
+-          <input
+-            type="checkbox"
+-            checked={existingConfirmationPageReuse}
+-            onChange={(e) => setExistingConfirmationPageReuse(e.target.checked)}
+-            className="mt-0.5"
+-          />
+-          <span>
+-            Keep using this page — don&apos;t build or publish a new one. We&apos;ll still run the audit above so you
+-            can see what&apos;s missing, but nothing gets deployed to {buyer || "the client"}&apos;s site.
+-          </span>
+-        </label>
+-      )}
++          <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
++            <input
++              type="checkbox"
++              checked={existingPileOnSequenceFlagged}
++              onChange={(e) => setExistingPileOnSequenceFlagged(e.target.checked)}
++              className="mt-0.5"
++            />
++            <span>
++              This client already has a pre-call email sequence running on {emailPlatform || "their ESP"}.{" "}
++              We&apos;ll audit it (Klaviyo/HubSpot only) and show a keep/replace/merge/drop recommendation per email
++              before anything new goes live.
++            </span>
++          </label>
+ 
+-      <div className="space-y-1.5 w-full">
+-        <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+-          Sales copy, scripts, or call transcripts (500 words minimum)
+-        </label>
+-        <textarea
+-          value={rawVoiceCorpus}
+-          onChange={(e) => setRawVoiceCorpus(e.target.value)}
+-          placeholder="Paste sales call transcripts, email copy, or scripts here..."
+-          rows={8}
+-          className="w-full rounded-lg px-3 py-2 text-xs resize-y transition-colors shadow-xs placeholder:text-zinc-400 dark:placeholder:text-zinc-600 font-medium"
+-          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+-        />
+-        <p className="text-[11px] font-mono font-bold" style={{ color: "var(--text-muted)" }}>
+-          {wordCount} words pasted.{" "}
+-          {voiceSource === "manual" && wordCount < 50
+-            ? "Add more — at least 500 words are needed to learn the brand voice accurately."
+-            : voiceSource === "manual"
+-            ? "✓ That's enough to learn the brand voice."
+-            : "Optional — helps if the crawl comes up short."}
+-        </p>
+-      </div>
++          <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
++            <input
++              type="checkbox"
++              checked={existingAuditFlagged}
++              onChange={(e) => setExistingAuditFlagged(e.target.checked)}
++              className="mt-0.5"
++            />
++            <span>This client already has a dashboard, KPI report, or audit process we should know about.</span>
++          </label>
++          {existingAuditFlagged && (
++            <InputField
++              label="Describe their existing report"
++              value={existingAuditDescription}
++              onChange={setExistingAuditDescription}
++              placeholder="e.g. A weekly Google Sheet tracking show-rate and close-rate, reviewed manually every Monday."
++              helpText="We'll compare it against what Leak Map covers and show the overlap — never replaces or modifies what's already there."
++            />
++          )}
+ 
+-      {!existingConfirmationPageReuse && (
+-      <div className="space-y-3">
+-        <div>
+-          <h2 className="text-sm font-bold uppercase tracking-wider font-mono" style={{ color: "var(--text-primary)" }}>
+-            Choose a confirmation page design
+-          </h2>
+-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+-            The page {buyer || "the client"}&apos;s prospects land on after booking. It regenerates with real call data
+-            once Pin-Down runs.
+-          </p>
++          <div>
++            <label className="text-xs font-semibold block mb-2" style={{ color: "var(--text-primary)" }}>
++              Notification pack (optional)
++            </label>
++            <p className="text-[11px] font-mono mb-2" style={{ color: "var(--text-muted)" }}>
++              Curated Leak Map alerts you can activate now — nothing fires unless checked. Thresholds can be adjusted later.
++            </p>
++            <div className="space-y-2">
++              {[
++                { id: "low_identity_confidence", label: "Identity match confidence dropping below 70" },
++                { id: "show_rate_drop", label: "Booking show-rate falling below 50%" },
++                { id: "email_open_rate_drop", label: "Email open-rate falling below 25%" },
++                { id: "pipeline_win_rate_drop", label: "CRM pipeline win-rate falling below 20%" },
++                { id: "brief_volume_drop", label: "Brief delivery volume dropping 10%+ week over week" },
++              ].map((pack) => (
++                <label key={pack.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
++                  <input
++                    type="checkbox"
++                    checked={notificationPackSelections.includes(pack.id)}
++                    onChange={(e) =>
++                      setNotificationPackSelections((prev) =>
++                        e.target.checked ? [...prev, pack.id] : prev.filter((id) => id !== pack.id)
++                      )
++                    }
++                  />
++                  {pack.label}
++                </label>
++              ))}
++            </div>
++          </div>
+         </div>
+-      <TemplatePicker
+-  form={{ ...previewData, confirmationPageTemplate }}
+-  onSelect={setConfirmationPageTemplate}
+-/>
+-      </div>
+-      )}
++      ),
++    },
++  ];
+ 
+-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+-          A few things Pin-Down checks once, during setup, on behalf of Pile-On and Leak Map — so their results are
+-          ready before you ever turn those on.
++  return (
++    <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
++      <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
++        <h1 className="text-lg font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
++          Configure Pin-Down{buyer ? ` for ${buyer}` : ""}
++        </h1>
++        <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
++          How to learn the brand voice, and which confirmation page design to ship. Saving turns Pin-Down on and runs it
++          immediately — you&apos;ll land on a live status page right after.
+         </p>
++      </div>
+ 
+-        <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+-          <input
+-            type="checkbox"
+-            checked={existingPileOnSequenceFlagged}
+-            onChange={(e) => setExistingPileOnSequenceFlagged(e.target.checked)}
+-            className="mt-0.5"
+-          />
+-          <span>
+-            This client already has a pre-call email sequence running on {emailPlatform || "their ESP"}.{" "}
+-            We&apos;ll audit it (Klaviyo/HubSpot only) and show a keep/replace/merge/drop recommendation per email
+-            before anything new goes live.
+-          </span>
+-        </label>
++      <PinDownLivePreview form={{ ...previewData, confirmationPageTemplate }} confirmationPageTemplate={confirmationPageTemplate as TemplateId} />
+ 
+-        <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+-          <input
+-            type="checkbox"
+-            checked={existingAuditFlagged}
+-            onChange={(e) => setExistingAuditFlagged(e.target.checked)}
+-            className="mt-0.5"
+-          />
+-          <span>This client already has a dashboard, KPI report, or audit process we should know about.</span>
+-        </label>
+-        {existingAuditFlagged && (
+-          <InputField
+-            label="Describe their existing report"
+-            value={existingAuditDescription}
+-            onChange={setExistingAuditDescription}
+-            placeholder="e.g. A weekly Google Sheet tracking show-rate and close-rate, reviewed manually every Monday."
+-            helpText="We'll compare it against what Leak Map covers and show the overlap — never replaces or modifies what's already there."
+-          />
+-        )}
++      <WorkerCapabilityMatrix workerId="pin-down" engagementId={engagementId} />
+ 
+-        <div>
+-          <label className="text-xs font-semibold block mb-2" style={{ color: "var(--text-primary)" }}>
+-            Notification pack (optional)
+-          </label>
+-          <p className="text-[11px] font-mono mb-2" style={{ color: "var(--text-muted)" }}>
+-            Curated Leak Map alerts you can activate now — nothing fires unless checked. Thresholds can be adjusted later.
+-          </p>
+-          <div className="space-y-2">
+-            {[
+-              { id: "low_identity_confidence", label: "Identity match confidence dropping below 70" },
+-              { id: "show_rate_drop", label: "Booking show-rate falling below 50%" },
+-              { id: "email_open_rate_drop", label: "Email open-rate falling below 25%" },
+-              { id: "pipeline_win_rate_drop", label: "CRM pipeline win-rate falling below 20%" },
+-              { id: "brief_volume_drop", label: "Brief delivery volume dropping 10%+ week over week" },
+-            ].map((pack) => (
+-              <label key={pack.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+-                <input
+-                  type="checkbox"
+-                  checked={notificationPackSelections.includes(pack.id)}
+-                  onChange={(e) =>
+-                    setNotificationPackSelections((prev) =>
+-                      e.target.checked ? [...prev, pack.id] : prev.filter((id) => id !== pack.id)
+-                    )
+-                  }
+-                />
+-                {pack.label}
+-              </label>
+-            ))}
+-          </div>
+-        </div>
+-      </div>
++      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save & Run Pin-Down" finishDisabled={!canSubmit} finishing={saving} />
+ 
+       {saveError && (
+         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
+@@ -348,20 +380,13 @@ export function PinDownConfigForm({
+         </p>
+       )}
+ 
+-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++      <div className="pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+         <button
+           onClick={onCancel}
+           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
+         >
+           {cancelLabel}
+         </button>
+-        <button
+-          onClick={save}
+-          disabled={saving || !canSubmit}
+-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+-        >
+-          {saving ? "Saving..." : "Save & Run Pin-Down"}
+-        </button>
+       </div>
+     </div>
+   );
+diff --git a/src/components/worker-config-forms/pin-down-live-preview.tsx b/src/components/worker-config-forms/pin-down-live-preview.tsx
+new file mode 100644
+index 0000000..fad6a5f
+--- /dev/null
++++ b/src/components/worker-config-forms/pin-down-live-preview.tsx
+@@ -0,0 +1,102 @@
++"use client";
++
++// Phase 3's "preview-first entry point" (see the "Worker Onboarding &
++// Gating: Plan" doc's Worker Dossier section): "the preview-first
++// placeholder result before any real input." Pin-Down is the one worker
++// with a real, deterministic, reusable generator for its artifact —
++// previewTemplateHtml() already renders a confirmation page from whatever
++// real fields are filled in, falling back to sample copy for anything
++// still blank (see TemplatePicker's own comment on the same mechanic,
++// which this reuses rather than re-implements).
++//
++// Placed above the ProgressiveFlow, not inside it — visible from the
++// moment the form loads, before any of the flow's own steps are touched.
++// Read-only: selecting a different template still happens in the
++// "Confirmation page" step's TemplatePicker; this always reflects
++// whichever template is currently selected there.
++
++import { useMemo } from "react";
++import { Sparkles } from "lucide-react";
++import { previewTemplateHtml, TEMPLATE_META, type TemplateId, type PageBuilderInput } from "@/features/pin-down/server/templates";
++import type { FormData as WizardFormData } from "@/app/dashboard/engagements/new/types";
++
++const PREVIEW_W = 900;
++const PREVIEW_H = 1400;
++const THUMB_SCALE = 0.32;
++
++export function PinDownLivePreview({
++  form,
++  confirmationPageTemplate,
++}: {
++  form: WizardFormData;
++  confirmationPageTemplate: TemplateId;
++}) {
++  const sampleInput = useMemo<PageBuilderInput>(
++    () => ({
++      buyer: form.buyerName || "Alex Rivera",
++      offerDetails: {
++        name: form.offerName || "Growth Accelerator",
++        price: form.offerPrice || "8000",
++        icp: form.offerIcp || "B2B SaaS founders",
++        traffic_temperature: (form.trafficTemperature as "cold" | "warm" | "hot") || "warm",
++      },
++      topCallQuestions: form.topCallQuestions
++        ? form.topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean)
++        : [],
++      prospectMeets: form.prospectMeets || "founder",
++      existingProof: {
++        testimonials: form.testimonials.filter((t) => t.name && t.role && t.quote),
++      },
++      designSignal: form.designSignal,
++    }),
++    [
++      form.buyerName,
++      form.offerName,
++      form.offerPrice,
++      form.offerIcp,
++      form.trafficTemperature,
++      form.topCallQuestions,
++      form.prospectMeets,
++      form.testimonials,
++      form.designSignal,
++    ]
++  );
++
++  const html = useMemo(() => previewTemplateHtml(sampleInput, confirmationPageTemplate), [sampleInput, confirmationPageTemplate]);
++  const meta = TEMPLATE_META[confirmationPageTemplate];
++  const hasRealOffer = Boolean(form.offerName && form.offerPrice);
++
++  return (
++    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
++      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
++        <div className="flex items-center gap-1.5 min-w-0">
++          <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
++          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{meta.name} — live preview</span>
++        </div>
++        {!hasRealOffer && (
++          <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">using placeholder offer details</span>
++        )}
++      </div>
++      <div className="relative overflow-hidden bg-zinc-100 dark:bg-zinc-900" style={{ height: PREVIEW_H * THUMB_SCALE }}>
++        <div
++          className="absolute top-0 left-1/2"
++          style={{ width: PREVIEW_W, height: PREVIEW_H, transform: `translateX(-50%) scale(${THUMB_SCALE})`, transformOrigin: "top center" }}
++        >
++          <iframe
++            title="Confirmation page live preview"
++            srcDoc={html}
++            className="border-0"
++            style={{ width: PREVIEW_W, height: PREVIEW_H }}
++            tabIndex={-1}
++            aria-hidden="true"
++          />
++        </div>
++        <div className="absolute inset-0" />
++      </div>
++      <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
++        This updates as the offer details on file change and as a different design is picked below — nothing here is
++        published until Pin-Down actually runs.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/pre-call-read-config-form.tsx b/src/components/worker-config-forms/pre-call-read-config-form.tsx
+index f32eda7..cd2dce0 100644
+--- a/src/components/worker-config-forms/pre-call-read-config-form.tsx
++++ b/src/components/worker-config-forms/pre-call-read-config-form.tsx
+@@ -8,6 +8,10 @@ import { useEffect, useState } from "react";
+ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
++import { ChoiceCardGroup } from "@/components/choice-card-group";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
++import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
++import { PreCallReadLivePreview } from "./pre-call-read-live-preview";
+ 
+ export function PreCallReadConfigForm({
+   engagementId,
+@@ -107,6 +111,104 @@ export function PreCallReadConfigForm({
+     );
+   }
+ 
++  const steps: ProgressiveFlowStep[] = [
++    {
++      id: "brief-schedule",
++      label: "Brief schedule",
++      isComplete: true,
++      content: (
++        <SelectField
++          label="Pre-Call Brief Schedule"
++          value={briefTriggerType}
++          onChange={(v) => setBriefTriggerType(v as "nightly" | "dynamic_webhook")}
++          options={[
++            { value: "nightly", label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" },
++            { value: "dynamic_webhook", label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" },
++          ]}
++          helpText="Choose 'Dynamic' if your sales reps require briefs generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
++        />
++      ),
++    },
++    {
++      id: "video-engagement",
++      label: "Video engagement",
++      isComplete: videoEngagementPlatform !== "none",
++      content: (
++        <div className="space-y-3">
++          <ChoiceCardGroup
++            label="Confirmation-page video platform"
++            value={videoEngagementPlatform}
++            onChange={setVideoEngagementPlatform}
++            options={[
++              { value: "none", label: "None" },
++              { value: "vidalytics", label: "Vidalytics" },
++              { value: "wistia", label: "Wistia" },
++              { value: "youtube_analytics", label: "YouTube" },
++              { value: "loom", label: "Loom" },
++            ]}
++            helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
++          />
++          {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
++            <CredentialRow
++              engagementId={engagementId}
++              provider={videoEngagementPlatform}
++              label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} key`}
++            />
++          )}
++          {videoEngagementPlatform === "vidalytics" && (
++            <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
++          )}
++          {videoEngagementPlatform === "wistia" && (
++            <InputField label="Wistia video ID" value={videoEngagementWistiaVideoId} onChange={setVideoEngagementWistiaVideoId} />
++          )}
++          {videoEngagementPlatform === "youtube_analytics" && (
++            <>
++              <InputField label="YouTube channel ID" value={videoEngagementYoutubeChannelId} onChange={setVideoEngagementYoutubeChannelId} />
++              <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
++            </>
++          )}
++        </div>
++      ),
++    },
++    {
++      id: "prospect-research",
++      label: "Prospect research",
++      isComplete: prospectResearchSourcesUsed.length > 0,
++      content: (
++        <div className="space-y-3">
++          <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
++            If the client already has their own Apollo or PDL subscription, it layers on top of standard web
++            research — never a required cost.
++          </p>
++          <div className="flex gap-4">
++            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
++              <input
++                type="checkbox"
++                checked={prospectResearchSourcesUsed.includes("apollo")}
++                onChange={(e) => toggleSource("apollo", e.target.checked)}
++              />
++              Apollo
++            </label>
++            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
++              <input
++                type="checkbox"
++                checked={prospectResearchSourcesUsed.includes("pdl")}
++                onChange={(e) => toggleSource("pdl", e.target.checked)}
++              />
++              People Data Labs
++            </label>
++          </div>
++          {prospectResearchSourcesUsed.includes("apollo") && (
++            <CredentialRow engagementId={engagementId} provider="apollo" label="Apollo key" />
++          )}
++          {prospectResearchSourcesUsed.includes("pdl") && (
++            <CredentialRow engagementId={engagementId} provider="pdl" label="PDL key" />
++          )}
++        </div>
++      ),
++    },
++  ];
++
+   return (
+     <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
+       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+@@ -119,88 +221,15 @@ export function PreCallReadConfigForm({
+         </p>
+       </div>
+ 
+-      <SelectField
+-        label="Pre-Call Brief Schedule"
+-        value={briefTriggerType}
+-        onChange={(v) => setBriefTriggerType(v as "nightly" | "dynamic_webhook")}
+-        options={[
+-          { value: "nightly", label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" },
+-          { value: "dynamic_webhook", label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" },
+-        ]}
+-        helpText="Choose 'Dynamic' if your sales reps require briefs generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
++      <PreCallReadLivePreview
++        briefTriggerType={briefTriggerType}
++        videoEngagementPlatform={videoEngagementPlatform}
++        prospectResearchSourcesUsed={prospectResearchSourcesUsed}
+       />
+ 
+-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+-        <label className="text-xs font-bold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
+-          Video Engagement (optional)
+-        </label>
+-        <SelectField
+-          label="Confirmation-page video platform"
+-          value={videoEngagementPlatform}
+-          onChange={setVideoEngagementPlatform}
+-          options={[
+-            { value: "none", label: "No video engagement tracking" },
+-            { value: "vidalytics", label: "Vidalytics" },
+-            { value: "wistia", label: "Wistia" },
+-            { value: "youtube_analytics", label: "YouTube (aggregate stats only)" },
+-            { value: "loom", label: "Loom (no analytics API available)" },
+-          ]}
+-          helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
+-        />
+-        {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
+-          <CredentialRow
+-            engagementId={engagementId}
+-            provider={videoEngagementPlatform}
+-            label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} key`}
+-          />
+-        )}
+-        {videoEngagementPlatform === "vidalytics" && (
+-          <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
+-        )}
+-        {videoEngagementPlatform === "wistia" && (
+-          <InputField label="Wistia video ID" value={videoEngagementWistiaVideoId} onChange={setVideoEngagementWistiaVideoId} />
+-        )}
+-        {videoEngagementPlatform === "youtube_analytics" && (
+-          <>
+-            <InputField label="YouTube channel ID" value={videoEngagementYoutubeChannelId} onChange={setVideoEngagementYoutubeChannelId} />
+-            <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
+-          </>
+-        )}
+-      </div>
++      <WorkerCapabilityMatrix workerId="pre-call-read" engagementId={engagementId} />
+ 
+-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+-        <label className="text-xs font-bold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
+-          Prospect Research BYOK (optional)
+-        </label>
+-        <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
+-          If the client already has their own Apollo or PDL subscription, it layers on top of standard web research
+-          — never a required cost.
+-        </p>
+-        <div className="flex gap-4">
+-          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+-            <input
+-              type="checkbox"
+-              checked={prospectResearchSourcesUsed.includes("apollo")}
+-              onChange={(e) => toggleSource("apollo", e.target.checked)}
+-            />
+-            Apollo
+-          </label>
+-          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+-            <input
+-              type="checkbox"
+-              checked={prospectResearchSourcesUsed.includes("pdl")}
+-              onChange={(e) => toggleSource("pdl", e.target.checked)}
+-            />
+-            People Data Labs
+-          </label>
+-        </div>
+-        {prospectResearchSourcesUsed.includes("apollo") && (
+-          <CredentialRow engagementId={engagementId} provider="apollo" label="Apollo key" />
+-        )}
+-        {prospectResearchSourcesUsed.includes("pdl") && (
+-          <CredentialRow engagementId={engagementId} provider="pdl" label="PDL key" />
+-        )}
+-      </div>
++      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save" finishing={saving} />
+ 
+       {saveError && (
+         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
+@@ -213,20 +242,13 @@ export function PreCallReadConfigForm({
+         </p>
+       )}
+ 
+-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
++      <div className="pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+         <button
+           onClick={onCancel}
+           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
+         >
+           {cancelLabel}
+         </button>
+-        <button
+-          onClick={save}
+-          disabled={saving}
+-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
+-        >
+-          {saving ? "Saving..." : "Save"}
+-        </button>
+       </div>
+     </div>
+   );
+diff --git a/src/components/worker-config-forms/pre-call-read-live-preview.tsx b/src/components/worker-config-forms/pre-call-read-live-preview.tsx
+new file mode 100644
+index 0000000..87c4ba8
+--- /dev/null
++++ b/src/components/worker-config-forms/pre-call-read-live-preview.tsx
+@@ -0,0 +1,79 @@
++"use client";
++
++// Phase 3's "preview-first entry point" for Pre-Call Read — the third and
++// last of the 3-worker resolution (see pin-down-live-preview.tsx and
++// icp-lock-live-preview.tsx for the other two, each resolved on its own
++// honest terms rather than copied from one another).
++//
++// Pre-Call Read's real artifact is LLM-generated per real prospect/CRM
++// data at send time (buildBriefSystemPrompt in brief-service.ts, called
++// from a real Inngest run) — there is no cheap, deterministic template to
++// preview the way Pin-Down's confirmation page has. Calling the real model
++// speculatively from a config screen would be slow and, on a credit-billed
++// product, a real cost for zero value. So this is deliberately NOT a
++// generator: it's a static, clearly-labeled example brief using a
++// fictional prospect, built from the exact 7 sections
++// buildBriefSystemPrompt actually requires (Prospect Overview, Company
++// Context, Engagement History, Likely Objections, Recommended Opening,
++// Red Flags, Conversation Notes) — not invented, read straight from that
++// prompt — with the parts that vary by real configuration (delivery
++// timing, which optional add-ons are on) spliced in from the form's own
++// live state, same as Pin-Down's preview reflects real offer details.
++
++import { Sparkles } from "lucide-react";
++
++const SECTIONS: { title: string; body: string }[] = [
++  { title: "Prospect Overview", body: "Jordan Kim, VP of Sales at Northwind Robotics. Booked via the confirmation page, no prior contact on file." },
++  { title: "Company Context", body: "Northwind Robotics — 40-person industrial automation startup, raised a Series A 6 months ago per public research." },
++  { title: "Engagement History", body: "Opened 2 of 3 Pile-On sequence emails. No confirmation-page video watched yet." },
++  { title: "Likely Objections", body: "Budget timing (just raised, may want to wait for board sign-off) and implementation bandwidth." },
++  { title: "Recommended Opening", body: "Lead with the Series A — ask what changes for their ops team in the next 2 quarters." },
++  { title: "Red Flags", body: "None on file yet — this section stays empty unless something real turns up." },
++  { title: "Conversation Notes", body: "Booking notes: “Looking to cut manual QA time before we scale headcount.”" },
++];
++
++export function PreCallReadLivePreview({
++  briefTriggerType,
++  videoEngagementPlatform,
++  prospectResearchSourcesUsed,
++}: {
++  briefTriggerType: "nightly" | "dynamic_webhook";
++  videoEngagementPlatform: string;
++  prospectResearchSourcesUsed: string[];
++}) {
++  const addOns: string[] = [];
++  if (videoEngagementPlatform !== "none") addOns.push("confirmation-page video engagement");
++  if (prospectResearchSourcesUsed.length > 0) addOns.push(`${prospectResearchSourcesUsed.join(" + ")} enrichment`);
++
++  return (
++    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
++      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
++        <div className="flex items-center gap-1.5 min-w-0">
++          <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
++          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Example brief — not live-generated</span>
++        </div>
++        <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">fictional prospect</span>
++      </div>
++      <div className="px-3 py-2.5 space-y-2">
++        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
++          {briefTriggerType === "nightly"
++            ? "Delivered as a nightly batch at 20:00 UTC for tomorrow's roster."
++            : "Delivered individually within 15 minutes of entering the lead window."}
++          {addOns.length > 0 && ` Includes ${addOns.join(" and ")}.`}
++        </p>
++        <div className="space-y-1.5">
++          {SECTIONS.map((s) => (
++            <div key={s.title} className="text-xs">
++              <span className="font-semibold text-zinc-800 dark:text-zinc-200">{s.title}: </span>
++              <span className="text-zinc-500 dark:text-zinc-400">{s.body}</span>
++            </div>
++          ))}
++        </div>
++      </div>
++      <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed border-t border-zinc-100 dark:border-zinc-900">
++        The real brief is written per prospect from actual booking/CRM/research data once Pre-Call Read runs — this
++        is a fixed example of its shape, not a preview of real upcoming content.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/components/worker-config-forms/rep-onboarding-config-form.tsx b/src/components/worker-config-forms/rep-onboarding-config-form.tsx
+index 24dd072..75435cd 100644
+--- a/src/components/worker-config-forms/rep-onboarding-config-form.tsx
++++ b/src/components/worker-config-forms/rep-onboarding-config-form.tsx
+@@ -22,6 +22,7 @@ import type { RepCollision } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useTour } from "@/components/tours/tour-provider";
+ import { useToast } from "@/components/toast/toast-provider";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
+   const router = useRouter();
+@@ -129,8 +130,12 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
+         </p>
+       )}
+ 
++      <div className="mt-4">
++        <WorkerCapabilityMatrix workerId="rep-onboarding" engagementId={engagementId} />
++      </div>
++
+       <div className={wasDisabled ? "" : "mt-8"}>
+-        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} />
++        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} detectedOperatorName={buyer || undefined} />
+       </div>
+ 
+       {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}
+diff --git a/src/features/reputation-manager/identity-graph-form.tsx b/src/features/reputation-manager/identity-graph-form.tsx
+index 06f8887..7517065 100644
+--- a/src/features/reputation-manager/identity-graph-form.tsx
++++ b/src/features/reputation-manager/identity-graph-form.tsx
+@@ -4,6 +4,7 @@ import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-
+ import { Plus, Trash2 } from "lucide-react";
+ import type { RepEntity, RepCompetitor, RepCollision, RepEngineId } from "@/models/schema";
+ import { REP_ENGINE_IDS, REP_ENGINE_LABELS } from "@/features/reputation-manager/engine-models";
++import { InferredFieldBadge } from "@/components/inferred-field-badge";
+ 
+ /**
+  * Everything rep-onboarding's form needs to hold, in the shape the save
+@@ -190,6 +191,7 @@ export function IdentityGraphForm({
+   form,
+   onChange,
+   readOnlyCollisions,
++  detectedOperatorName,
+ }: {
+   form: IdentityGraphFormState;
+   onChange: (next: IdentityGraphFormState) => void;
+@@ -198,6 +200,12 @@ export function IdentityGraphForm({
+    * form never touches them (see fromSavedGraph's comment). Empty until
+    * rep-onboarding has actually run once for this engagement. */
+   readOnlyCollisions?: (RepCollision & { source: "collision_check" })[];
++  /** Optional — the client's own buyer name, if the caller has one.
++   * Omitted entirely by any caller that doesn't pass it (identical to
++   * this component's behavior before this prop existed); when passed,
++   * shows the Phase 3 Inferred Card above operatorName instead of a
++   * silent pre-fill with no visible provenance. */
++  detectedOperatorName?: string;
+ }) {
+   function set<K extends keyof IdentityGraphFormState>(key: K, value: IdentityGraphFormState[K]) {
+     onChange({ ...form, [key]: value });
+@@ -209,6 +217,14 @@ export function IdentityGraphForm({
+         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
+           Operator
+         </h2>
++        {detectedOperatorName !== undefined && (
++          <InferredFieldBadge
++            detectedValue={detectedOperatorName}
++            currentValue={form.operatorName}
++            detectedFromLabel="the client's name on file"
++            onUse={(v) => set("operatorName", v)}
++          />
++        )}
+         <InputField
+           label="Operator name"
+           required
+diff --git a/src/lib/composio.ts b/src/lib/composio.ts
+index 1312d52..cb875ad 100644
+--- a/src/lib/composio.ts
++++ b/src/lib/composio.ts
+@@ -184,11 +184,31 @@ export async function deleteComposioConnection(connectedAccountId: string): Prom
+  * Composio-hosted page and this app should never trust it blindly as an
+  * open redirect target. Exact-match only, no prefix matching: add a new
+  * entry here deliberately rather than widening the check.
++ *
++ * /dashboard/engagements/new is dead — that route is a permanent redirect
++ * to /home/new (see its own page.tsx), and nothing live renders
++ * CredentialField's "Connect" tab from there anymore. Left in place rather
++ * than removed: it's inert (isAllowedComposioReturnPath is the only thing
++ * that reads it, and a dead route matching it changes nothing), and
++ * deleting the entry is a separate cleanup from what this change is for.
+  */
+ const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new", "/dashboard/teammates"];
+ 
++/**
++ * The 4 worker config forms that render CredentialRow with a live "Connect"
++ * option (see update-credentials-form.tsx) — each is a real, standalone,
++ * bookmarkable route at /dashboard/engagements/<id>/bridges/<worker>, but
++ * <id> is per-engagement and can't be exact-matched the way the static
++ * paths above are. Still a closed, explicit set — not "anything under
++ * /bridges/" — so this stays a real allowlist, not a prefix check.
++ */
++const COMPOSIO_RETURN_BRIDGE_WORKERS = ["pin-down", "pre-call-read", "icp-lock", "rep-onboarding"];
++const COMPOSIO_RETURN_BRIDGE_PATTERN = new RegExp(
++  `^/dashboard/engagements/[^/]+/bridges/(${COMPOSIO_RETURN_BRIDGE_WORKERS.join("|")})$`
++);
++
+ export function isAllowedComposioReturnPath(path: string): boolean {
+-  return COMPOSIO_RETURN_ALLOWLIST.includes(path);
++  return COMPOSIO_RETURN_ALLOWLIST.includes(path) || COMPOSIO_RETURN_BRIDGE_PATTERN.test(path);
+ }
+ 
+ export const COMPOSIO_VAULT_REFKEY_PREFIX = "composio:";
+diff --git a/src/lib/credential-test-providers.ts b/src/lib/credential-test-providers.ts
+new file mode 100644
+index 0000000..380da6c
+--- /dev/null
++++ b/src/lib/credential-test-providers.ts
+@@ -0,0 +1,36 @@
++/**
++ * Providers /api/credentials/test has a real, verified "am I still
++ * authenticated" check for — split out as a client-safe list (mirrors
++ * composio-providers.ts's own reasoning) so CredentialRow can decide
++ * whether to show a "Test connection" action without importing the route's
++ * VALIDATORS map itself, which pulls in server-only platform clients.
++ *
++ * Hand-kept in sync with the VALIDATORS keys in
++ * src/app/api/credentials/test/route.ts — there's no way around that
++ * without exporting real validator functions into a shared client+server
++ * module, which isn't worth it for a list this short. If that route's
++ * VALIDATORS map changes, update this list in the same commit.
++ *
++ * Deliberately narrower than credential-health.ts's own VALIDATORS map
++ * (the daily cron): that one also covers ghl_calendar and
++ * whop_bot_api_key, which /api/credentials/test does not yet — a real,
++ * pre-existing gap between the manual "test now" button and the automatic
++ * daily check, noted here rather than silently worked around by claiming
++ * those two are testable when the route would 400 on them today.
++ */
++export const TESTABLE_CREDENTIAL_PROVIDERS = [
++  "calendly",
++  "cal_com",
++  "mailchimp",
++  "convertkit",
++  "smtp",
++  "cold_open_instantly",
++  "cold_open_smartlead",
++  "cold_open_lemlist",
++  "cold_open_reply_io",
++  "cold_open_apify",
++];
++
++export function isTestableCredentialProvider(provider: string): boolean {
++  return TESTABLE_CREDENTIAL_PROVIDERS.includes(provider);
++}
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+new file mode 100644
+index 0000000..d171abf
+--- /dev/null
++++ b/src/lib/worker-capability-status.ts
+@@ -0,0 +1,158 @@
++// src/lib/worker-capability-status.ts
++//
++// Phase 3's first real slice (see the "Worker Onboarding & Gating: Plan"
++// doc): the Live Capability Matrix needs to know, per field, whether it's
++// actually filled in — not just what its real storage key is
++// (worker-config-completeness.ts already solved that for the fields that
++// block a run) but a broader "is there a value here at all" read across
++// every field WORKER_CAPABILITIES (worker-registry.ts) names, blocking or
++// not. Scoped to the same 5 Phase 2 workers, for the same reason: a field
++// key with no verified storage mapping here would silently show a
++// capability as dim (or worse, lit) on a guess.
++//
++// Deliberately read-only. This module never writes — it exists to power
++// a matrix that reads what's already true, not to duplicate the save
++// paths in onboarding-service.ts / icp-lock.ts / the bridge routes.
++
++import { db } from "@/lib/db";
++import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
++import { eq } from "drizzle-orm";
++import { getColdOpenConfig } from "@/features/cold-open/server/config";
++import { WORKER_CAPABILITIES, type WorkerId } from "@/lib/worker-registry";
++
++function truthy(value: unknown): boolean {
++  if (value === null || value === undefined) return false;
++  if (typeof value === "string") return value.trim().length > 0;
++  if (Array.isArray(value)) return value.length > 0;
++  if (typeof value === "object") return Object.keys(value).length > 0;
++  return true;
++}
++
++async function filledKeysForPinDown(engagementId: string): Promise<Set<string>> {
++  const [row] = await db
++    .select({ stack: engagements.stack, offerDetails: engagements.offerDetails, rawVoiceCorpus: engagements.rawVoiceCorpus, castingChoice: engagements.castingChoice, heroVideoUrl: engagements.heroVideoUrl, confirmationPageAnimationsEnabled: engagements.confirmationPageAnimationsEnabled })
++    .from(engagements)
++    .where(eq(engagements.engagementId, engagementId))
++    .limit(1);
++  if (!row) return new Set();
++  const stack = (row.stack as EngagementStack | null) ?? null;
++  const offer = row.offerDetails;
++  const filled = new Set<string>();
++  if (truthy(stack?.buyer_domain)) filled.add("buyerDomain");
++  if (truthy(row.rawVoiceCorpus)) filled.add("rawVoiceCorpus");
++  if (truthy(offer?.name)) filled.add("offerName");
++  if (truthy(offer?.price)) filled.add("offerPrice");
++  if (truthy(offer?.vertical)) filled.add("offerVertical");
++  if (truthy(offer?.icp)) filled.add("offerIcp");
++  if (truthy(offer?.traffic_temperature)) filled.add("trafficTemperature");
++  if (truthy(row.castingChoice)) filled.add("castingChoice");
++  if (truthy(row.heroVideoUrl)) filled.add("heroVideoUrl");
++  if (offer?.hybrid_mode_enabled) filled.add("hybridModeEnabled");
++  if (row.confirmationPageAnimationsEnabled) filled.add("confirmationPageAnimationsEnabled");
++  if (truthy(stack?.booking_platform)) filled.add("bookingPlatform");
++  if (truthy(stack?.booking_platform_credentials_ref)) filled.add("bookingPlatformCredential");
++  if (truthy(stack?.email_platform)) filled.add("emailPlatform");
++  if (truthy(stack?.email_platform_credentials_ref)) filled.add("emailPlatformCredential");
++  if (truthy(stack?.hosting_platform)) filled.add("hostingPlatform");
++  if (truthy(stack?.hosting_platform_credentials_ref)) filled.add("hostingPlatformCredential");
++  return filled;
++}
++
++async function filledKeysForPreCallRead(engagementId: string): Promise<Set<string>> {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  if (!stack) return new Set();
++  const filled = new Set<string>();
++  if (truthy(stack.brief_landing_destination)) filled.add("briefLandingDestination");
++  if (truthy(stack.slack_webhook_url)) filled.add("slackWebhookUrl");
++  if (truthy(stack.video_engagement_platform) && stack.video_engagement_platform !== "none") filled.add("videoEngagementPlatform");
++  if (truthy(stack.video_engagement_credentials_ref)) filled.add("videoEngagementCredential");
++  if (truthy(stack.prospect_research_sources_used)) filled.add("prospectResearchSourcesUsed");
++  if (stack.conversation_intelligence_provider === "recall_ai") filled.add("conversationIntelligenceProvider");
++  if (truthy(stack.conversation_intelligence_credentials_ref)) filled.add("conversationIntelligenceCredential");
++  if (truthy(stack.conversation_intelligence_meta?.recall_region)) filled.add("recallRegion");
++  if (stack.show_rate_scoring_enabled) filled.add("showRateScoringEnabled");
++  return filled;
++}
++
++async function filledKeysForRepOnboarding(engagementId: string): Promise<Set<string>> {
++  const [row] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
++  if (!row) return new Set();
++  const filled = new Set<string>();
++  if (truthy(row.operatorName)) filled.add("operatorName");
++  if (truthy(row.operatorDomains)) filled.add("operatorDomains");
++  if (truthy(row.operatorAliases)) filled.add("operatorAliases");
++  if (truthy(row.operatorHandles)) filled.add("operatorHandles");
++  if (truthy(row.competitors)) filled.add("competitors");
++  if (truthy(row.trustedSources)) filled.add("trustedSources");
++  if (row.crisisThresholdOverride !== null) filled.add("crisisThresholdOverride");
++  if (truthy(row.entities)) filled.add("entities");
++  if (truthy(row.seedPanelPrompts)) filled.add("seedPanelPrompts");
++  if (row.activeEngines !== null) filled.add("activeEngines");
++  if (truthy(row.soleAuthorityName)) filled.add("soleAuthorityName");
++  if (truthy(row.operatorPagePhone)) filled.add("operatorPagePhone");
++  return filled;
++}
++
++async function filledKeysForIcpLock(engagementId: string): Promise<Set<string>> {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config) return new Set();
++  const filled = new Set<string>();
++  if (truthy(config.productIdentity?.name)) filled.add("productName");
++  if (truthy(config.productIdentity?.url)) filled.add("productUrl");
++  if (truthy(config.productIdentity?.price)) filled.add("productPrice");
++  if (truthy(config.productIdentity?.valueProp)) filled.add("productValueProp");
++  if (truthy(config.icps)) filled.add("icps");
++  if (truthy(config.sizingBounds)) filled.add("sizingBounds");
++  if (truthy(config.reviewRequiredIcps)) filled.add("reviewRequiredIcps");
++  return filled;
++}
++
++async function filledKeysForPileOn(engagementId: string): Promise<Set<string>> {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  if (!stack) return new Set();
++  const filled = new Set<string>();
++  if (stack.sms_platform !== undefined) filled.add("smsPlatform");
++  if (truthy(stack.sms_platform_credentials_ref)) filled.add("smsPlatformCredential");
++  if (truthy(stack.sms_a2p_10dlc_status)) filled.add("smsA2p10dlcStatus");
++  if (truthy(stack.sms_compliance_footer_variant)) filled.add("smsComplianceFooterVariant");
++  if (stack.ad_data_platform !== undefined) filled.add("adDataPlatform");
++  if (truthy(stack.ad_data_platform_credentials_ref)) filled.add("adDataPlatformCredential");
++  if (stack.existing_pile_on_sequence_flagged) filled.add("existingPileOnSequenceFlagged");
++  return filled;
++}
++
++const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
++  "pin-down": filledKeysForPinDown,
++  "pre-call-read": filledKeysForPreCallRead,
++  "rep-onboarding": filledKeysForRepOnboarding,
++  "icp-lock": filledKeysForIcpLock,
++  "pile-on": filledKeysForPileOn,
++};
++
++/** Which of this worker's own configFields have a real value on file right
++ * now. Fails safe: an empty set for any worker without a reader here,
++ * same convention worker-config-completeness.ts's CHECKERS map uses. */
++export async function getFilledFieldKeys(workerId: WorkerId, engagementId: string): Promise<Set<string>> {
++  const reader = FIELD_READERS[workerId];
++  if (!reader) return new Set();
++  return reader(engagementId);
++}
++
++export interface CapabilityStatus {
++  name: string;
++  active: boolean;
++  missingFieldKeys: string[];
++}
++
++/** Pure function over already-fetched data — the actual matrix-rendering
++ * logic, kept separate from the DB reads above so it's trivially testable
++ * and so an API route can fetch once and compute for every capability. */
++export function computeCapabilityStatus(workerId: WorkerId, filledKeys: Set<string>): CapabilityStatus[] {
++  const capabilities = WORKER_CAPABILITIES[workerId] ?? [];
++  return capabilities.map((cap) => {
++    const missingFieldKeys = cap.requiredFieldKeys.filter((key) => !filledKeys.has(key));
++    return { name: cap.name, active: missingFieldKeys.length === 0, missingFieldKeys };
++  });
++}
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 97141fb..aa2b6a7 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -67,6 +67,34 @@ export type WorkerConfigFieldKind = "derivable" | "ask" | "secret";
+  */
+ export type ClientProfileFact = "primaryDomain" | "buyerName";
+ 
++/**
++ * Phase 2 of the onboarding-gating plan ("Worker Onboarding & Gating:
++ * Plan" doc) — field-risk tiering, encoded as real data instead of left
++ * as doc prose a human would have to retype into code later (that
++ * retyping step is exactly the kind of translation-error risk this app's
++ * own audits keep finding elsewhere):
++ *   - "blocking": the Dossier can't Arm the worker without it. Must match
++ *     what worker-config-completeness.ts's real checker actually blocks
++ *     on for that worker — this type doesn't drive the gate (the
++ *     checkers do, since they need real conditional DB reads a static
++ *     tier can't express), but the two must never silently diverge.
++ *   - "deferrable": Save & Defer now; becomes blocking only once a run
++ *     actually needs it (Stripe Connect's currently_due/eventually_due
++ *     pattern) — typically an opt-in feature's own fields, bundled
++ *     together.
++ *   - "visible-default": has a real, safe default already in the schema,
++ *     shown with the default pre-filled and never blocks (Stripe Radar's
++ *     exposed-but-tunable risk threshold pattern) — used when a wrong
++ *     silent default has real cost (e.g. personMatchConfidenceThreshold).
++ *   - "hidden-default": has a real, safe default, Advanced-only, never
++ *     surfaced in the main flow — used when a wrong default is genuinely
++ *     low-cost (e.g. confirmationPageAnimationsEnabled).
++ * Only populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
++ * rep-onboarding, icp-lock, pile-on) today — undefined for every other
++ * field, not a claim that field has been classified and found tier-less.
++ */
++export type WorkerFieldTier = "blocking" | "deferrable" | "visible-default" | "hidden-default";
++
+ export interface WorkerConfigField {
+   key: string;
+   label: string;
+@@ -77,6 +105,21 @@ export interface WorkerConfigField {
+    * it. A "derivable" field with no derivableFrom is a claim nothing
+    * actually fulfills; treat it as a bug to fix, not a valid state. */
+   derivableFrom?: ClientProfileFact;
++  /** See WorkerFieldTier's own doc comment. Undefined = not yet
++   * classified (most fields, until Phase 2 extends past the top 5). */
++  tier?: WorkerFieldTier;
++}
++
++/**
++ * A real capability a worker unlocks, and exactly which of its own
++ * configFields (by key) have to be satisfied before that capability
++ * lights up — the data the Dossier's Live Capability Matrix (Phase 3)
++ * renders directly, rather than a human inventing badge-to-field wiring
++ * ad hoc in a component. Only populated for the Phase 2 top-5 workers.
++ */
++export interface WorkerCapability {
++  name: string;
++  requiredFieldKeys: string[];
+ }
+ 
+ /**
+@@ -152,6 +195,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       kind: "derivable",
+       description: "Pre-fillable from the client profile's shared primaryDomain — also what smart pre-fill and brand voice extraction crawl.",
+       derivableFrom: "primaryDomain",
++      tier: "blocking",
+     },
+     {
+       key: "rawVoiceCorpus",
+@@ -159,6 +203,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       kind: "derivable",
+       description: "Derived by crawling the client's domain — the exact mechanism chat-skill-trigger.ts's extract_brand_voice already runs standalone, not a new capability.",
+       derivableFrom: "primaryDomain",
++      tier: "blocking",
+     },
+     {
+       key: "publishDomain",
+@@ -172,84 +217,105 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       label: "What they're selling",
+       kind: "ask",
+       description: "A real business fact only the operator knows — no seed to derive it from.",
++      tier: "blocking",
+     },
+     {
+       key: "offerPrice",
+       label: "Price",
+       kind: "ask",
+       description: "Not derivable — the operator's own pricing.",
++      tier: "blocking",
+     },
+     {
+       key: "offerVertical",
+       label: "Industry / vertical",
+       kind: "ask",
+       description: "Powers Leak Map's cross-client benchmarks — a real classification call, not inferred.",
++      tier: "blocking",
+     },
+     {
+       key: "offerIcp",
+       label: "Ideal customer",
+       kind: "ask",
+       description: "A judgment call about who the offer targets.",
++      tier: "blocking",
+     },
+     {
+       key: "trafficTemperature",
+       label: "Lead source temperature",
+       kind: "ask",
+       description: "Cold/warm/hot — a real classification, not derivable from a domain.",
++      tier: "blocking",
+     },
+     {
+       key: "prospectMeets",
+       label: "Who runs the calls",
+       kind: "ask",
+-      description: "A role/person fact, not derivable.",
++      description: "A role/person fact, not derivable. script-builder.ts falls back to founder_on_camera when unset — real and consequential, but doesn't block.",
++      tier: "visible-default",
+     },
+     {
+       key: "topCallQuestions",
+       label: "Common call questions",
+       kind: "ask",
+-      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability.",
++      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability. Enriches call-prep once available; the confirmation page doesn't need it to go live.",
++      tier: "deferrable",
+     },
+     {
+       key: "topObjections",
+       label: "Common objections",
+       kind: "ask",
+       description: "Same reasoning as topCallQuestions — real content only the operator has today.",
++      tier: "deferrable",
+     },
+     {
+       key: "bookingPlatform",
+       label: "Booking platform",
+       kind: "ask",
+       description: "Which calendar tool the client uses — a real choice.",
++      tier: "blocking",
+     },
+     {
+       key: "bookingPlatformCredential",
+       label: "Booking platform credential",
+       kind: "secret",
+       description: "Routes to the credential reuse/OAuth/paste-a-key path — never a plain text field, never sent through chat.",
++      tier: "blocking",
+     },
+     {
+       key: "emailPlatform",
+       label: "Email platform",
+       kind: "ask",
+       description: "Which email/CRM tool follow-ups send from — a real choice.",
++      tier: "blocking",
+     },
+     {
+       key: "emailPlatformCredential",
+       label: "Email platform credential",
+       kind: "secret",
+       description: "Same secret path as the booking credential.",
++      tier: "blocking",
+     },
+     {
+       key: "hostingPlatform",
+       label: "Confirmation page hosting",
+       kind: "ask",
+       description: "Where the confirmation page publishes — a real choice, each option branching into its own mechanical sub-fields once picked.",
++      tier: "blocking",
++    },
++    {
++      key: "hostingPlatformCredential",
++      label: "Hosting platform credential",
++      kind: "secret",
++      description: "Found missing as its own entry during the full 34-worker audit — booking/email credentials already get their own entry per this file's convention, hosting's didn't. Only actually needed for platforms with a real publish API (webflow, wordpress, nextjs_vercel) — ghl/lovable/plain_html/discover_from_docs have none to authenticate against (worker-config-completeness.ts's checkPinDown encodes this conditional).",
++      tier: "blocking",
+     },
+     {
+       key: "confirmationPageTemplate",
+       label: "Confirmation page template",
+       kind: "ask",
+-      description: "A style preference, not derivable.",
++      description: "A style preference, not derivable. DB default \"signal\" — can never actually be blank.",
++      tier: "hidden-default",
+     },
+     // The 4 fields below were found missing entirely from this list during
+     // the full 34-worker audit (worker-config-completeness.ts's own header
+@@ -266,24 +332,28 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       label: "Who's on camera",
+       kind: "ask",
+       description: "Drives which of 4 script archetypes generates (founder_on_camera/coach_on_camera/animation/other) — a real, consequential choice, but script-builder.ts's own comment documents it falling back to founder_on_camera when unset, same default prospectMeets uses. Does not block.",
++      tier: "visible-default",
+     },
+     {
+       key: "heroVideoUrl",
+       label: "Hero video",
+       kind: "ask",
+       description: "Embedded once the buyer has actually recorded the hero script — until then the confirmation page ships its own 'recording in progress' placeholder. Genuinely optional, not a gap to fill before launch. Does not block.",
++      tier: "deferrable",
+     },
+     {
+       key: "confirmationPageAnimationsEnabled",
+       label: "Entrance animations",
+       kind: "ask",
+       description: "Opt-in cosmetic preference, defaults to off. Does not block.",
++      tier: "hidden-default",
+     },
+     {
+       key: "hybridModeEnabled",
+       label: "AI-personalized intro paragraph",
+       kind: "ask",
+       description: "Collected in this same wizard (offer-step.tsx), but consumed by pile-on and win-back's own enrollment logic, not pin-down itself — reused, not re-collected, same convention as the booking/email credentials below. Defaults to off (templated email, no AI paragraph) when unset. Does not block.",
++      tier: "hidden-default",
+     },
+   ],
+   // Traced against brief-service.ts's real reads (gatherEngagementContext,
+@@ -297,72 +367,84 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       label: "Where briefs land",
+       kind: "ask",
+       description: "Real operator choice of delivery destination for finished briefs — not derivable.",
++      tier: "blocking",
+     },
+     {
+       key: "slackWebhookUrl",
+       label: "Slack webhook URL",
+       kind: "ask",
+       description: "Where briefs post if Slack is the landing destination — a real per-workspace URL only the operator has, entered as a plain field matching this codebase's existing convention for it.",
++      tier: "blocking",
+     },
+     {
+       key: "briefTriggerType",
+       label: "Nightly vs. dynamic briefing",
+       kind: "ask",
+-      description: "A real operational cadence preference, not derivable.",
++      description: "A real operational cadence preference, not derivable. Defaults to \"nightly\".",
++      tier: "hidden-default",
+     },
+     {
+       key: "videoEngagementPlatform",
+       label: "Video engagement tracking",
+       kind: "ask",
+       description: "Optional platform choice (Wistia/YouTube) for hero-video watch-time signals — a real preference, not derivable.",
++      tier: "deferrable",
+     },
+     {
+       key: "videoEngagementCredential",
+       label: "Video engagement credential",
+       kind: "secret",
+       description: "Routes to the credential path — confirmed via storeCredential in the pre-call-read bridge route, never a plain field.",
++      tier: "deferrable",
+     },
+     {
+       key: "prospectResearchSourcesUsed",
+       label: "Prospect research sources",
+       kind: "ask",
+       description: "Real BYOK opt-in list (Apollo/PDL) — which external enrichment sources to use, a preference not a lookup.",
++      tier: "deferrable",
+     },
+     {
+       key: "apolloCredential",
+       label: "Apollo credential",
+       kind: "secret",
+       description: "Routes to the credential path, gated on prospectResearchSourcesUsed including apollo.",
++      tier: "deferrable",
+     },
+     {
+       key: "pdlCredential",
+       label: "People Data Labs credential",
+       kind: "secret",
+       description: "Routes to the credential path, gated on prospectResearchSourcesUsed including pdl.",
++      tier: "deferrable",
+     },
+     {
+       key: "conversationIntelligenceProvider",
+       label: "Call intelligence provider",
+       kind: "ask",
+       description: "Real opt-in choice (currently Recall.ai) — set in the generic Edit Stack Settings drawer rather than this skill's own hinges panel, an inconsistency worth normalizing in a later pass, not fixed here.",
++      tier: "deferrable",
+     },
+     {
+       key: "conversationIntelligenceCredential",
+       label: "Call intelligence credential",
+       kind: "secret",
+       description: "Routes to the credential path per its own drawer copy ('entered separately under Update credentials').",
++      tier: "deferrable",
+     },
+     {
+       key: "recallRegion",
+       label: "Recall.ai workspace region",
+       kind: "ask",
+-      description: "Must match the operator's actual Recall.ai account region — a real fact only they know, not derivable.",
++      description: "Must match the operator's actual Recall.ai account region — a real fact only they know, not derivable. The adapter defaults to us-east-1 when unset, but a wrong silent default here 404s every call rather than degrading gracefully — bundled with the Call Intelligence opt-in (deferrable), not left as a hidden default, precisely because wrong-but-silent is actively harmful here.",
++      tier: "deferrable",
+     },
+     {
+       key: "recallBotName",
+       label: "Recall bot display name",
+       kind: "ask",
+       description: "Cosmetic preference, optional.",
++      tier: "hidden-default",
+     },
+     {
+       key: "recallWebhookSigningSecret",
+@@ -370,30 +452,35 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       kind: "secret",
+       description:
+         "A real secret (verifies inbound Recall webhooks) — currently entered via a password-typed field but stored directly in the stack jsonb rather than routed through the actual credential vault. Classified as secret because that's what it is, not because today's storage matches that classification; worth a real fix separate from this pass.",
++      tier: "deferrable",
+     },
+     {
+       key: "personMatchConfidenceThreshold",
+       label: "Person-match confidence threshold",
+       kind: "ask",
+-      description: "Real risk-tolerance knob gating whether a brief sends (Rule 14) — currently hardcoded to 70 with no UI anywhere to change it. Ask, not derivable, flagged unbuilt rather than silently defaulted.",
++      description: "Real risk-tolerance knob gating whether a brief sends (Rule 14) — currently hardcoded to 70 with no UI anywhere to change it, but has a real stack column (person_match_confidence_threshold) with that exact default already documented. High-blast-radius (see Open Risks) — shown, never blocking.",
++      tier: "visible-default",
+     },
+     {
+       key: "briefLeadTimeHours",
+       label: "Brief lead time",
+       kind: "ask",
+-      description: "How far ahead of a call a brief should send — currently hardcoded to 12 hours with no UI setter. Ask, flagged unbuilt.",
++      description: "How far ahead of a call a brief should send — currently hardcoded to 12 hours with no UI setter, but has a real stack column with that default already documented. Low-blast-radius — hidden.",
++      tier: "hidden-default",
+     },
+     {
+       key: "showRateScoringEnabled",
+       label: "Show-rate scoring",
+       kind: "ask",
+-      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt.",
++      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt. Defaults off.",
++      tier: "hidden-default",
+     },
+     {
+       key: "slackSigningSecret",
+       label: "Slack app signing secret",
+       kind: "secret",
+-      description: "Needed to verify the Slack interactions webhook once the Slack landing-destination button is real — no UI setter exists yet anywhere. Secret, flagged unbuilt.",
++      description: "Needed to verify the Slack interactions webhook once the Slack landing-destination button is real — no UI setter exists yet anywhere. Secret, flagged unbuilt. Only relevant once Slack interactive buttons are used.",
++      tier: "deferrable",
+     },
+   ],
+   // Traced against audit-engine.ts's real reads. No credential of its own —
+@@ -475,43 +562,50 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       key: "smsPlatform",
+       label: "SMS platform",
+       kind: "ask",
+-      description: "Real platform choice (none/Twilio/GHL SMS/HubSpot SMS) for the pre-call text sequence — not derivable.",
++      description: "Real platform choice (none/Twilio/GHL SMS/HubSpot SMS) for the pre-call text sequence — not derivable. \"None\" is a legitimate explicit choice, not a gap — only truly-unset blocks.",
++      tier: "blocking",
+     },
+     {
+       key: "smsPlatformCredential",
+       label: "SMS platform credential",
+       kind: "secret",
+-      description: "Routes to the credential path — a genuinely new provider (Twilio auth token / HubSpot key) distinct from the booking/email credentials, confirmed via CredentialField in the setup wizard.",
++      description: "Routes to the credential path — a genuinely new provider (Twilio auth token / HubSpot key) distinct from the booking/email credentials, confirmed via CredentialField in the setup wizard. Only required once smsPlatform isn't \"none\".",
++      tier: "blocking",
+     },
+     {
+       key: "smsA2p10dlcStatus",
+       label: "A2P 10DLC registration status",
+       kind: "ask",
+-      description: "Real US SMS compliance-registration status only the Twilio account holder knows — sends are refused until this is 'Campaign approved,' per the setup screen's own copy.",
++      description: "Real US SMS compliance-registration status only the Twilio account holder knows — sends are refused until this is 'Campaign approved,' per the setup screen's own copy. Only relevant once Twilio is chosen — bundled with that path.",
++      tier: "deferrable",
+     },
+     {
+       key: "smsComplianceFooterVariant",
+       label: "SMS compliance footer",
+       kind: "ask",
+-      description: "Real compliance-copy choice (standard vs. custom opt-out language) — not derivable.",
++      description: "Real compliance-copy choice (standard vs. custom opt-out language) — not derivable. Only relevant once smsPlatform isn't \"none\" — bundled with that path.",
++      tier: "deferrable",
+     },
+     {
+       key: "adDataPlatform",
+       label: "Ad-data cohort platform",
+       kind: "ask",
+-      description: "Real platform choice (none/Hyros/Sheets/native CRM tag) for syncing booked leads into ad-spend attribution — not derivable.",
++      description: "Real platform choice (none/Hyros/Sheets/native CRM tag) for syncing booked leads into ad-spend attribution — not derivable. \"None\" is a legitimate explicit choice — only truly-unset blocks.",
++      tier: "blocking",
+     },
+     {
+       key: "adDataPlatformCredential",
+       label: "Ad-data platform credential",
+       kind: "secret",
+-      description: "Routes to the credential path — a new provider (Hyros account / Google Sheets token) distinct from booking/email, unless native_crm is chosen (no separate credential needed).",
++      description: "Routes to the credential path — a new provider (Hyros account / Google Sheets token) distinct from booking/email, unless native_crm is chosen (no separate credential needed). Only required once a platform needing one is chosen.",
++      tier: "blocking",
+     },
+     {
+       key: "existingPileOnSequenceFlagged",
+       label: "Existing pre-call sequence on file",
+       kind: "ask",
+-      description: "Collected on pin-down's own setup screen on Pile-On's behalf — whether the operator already has a pre-call sequence worth referencing.",
++      description: "Collected on pin-down's own setup screen on Pile-On's behalf — whether the operator already has a pre-call sequence worth referencing. Informational, defaults to \"no existing sequence,\" doesn't gate whether pile-on can run.",
++      tier: "hidden-default",
+     },
+   ],
+   // Traced against enrollProspectInWinBack (chat-winback.ts), the
+@@ -571,45 +665,52 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+       key: "operatorName",
+       label: "Operator / brand name",
+       kind: "derivable",
+-      description: "Pre-fillable from the client's own buyer name (engagements.buyer, always set) — a starting suggestion to confirm or edit, not forced to always match it.",
++      description: "Pre-fillable from the client's own buyer name (engagements.buyer, always set) — a starting suggestion to confirm or edit, not forced to always match it. Confirmed working (rep-onboarding-config-form.tsx pre-fills from the bridge GET's raw buyer field), just not via the named resolver.",
+       derivableFrom: "buyerName",
++      tier: "blocking",
+     },
+     {
+       key: "operatorDomains",
+       label: "Domains",
+       kind: "derivable",
+-      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one.",
++      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one — honestly unbuilt today (the resolver exists, nothing calls it yet), same caveat as every other derivable field in this file. Shown as a confirm card once wired; ask field until then.",
+       derivableFrom: "primaryDomain",
++      tier: "hidden-default",
+     },
+     {
+       key: "operatorAliases",
+       label: "Known aliases",
+       kind: "ask",
+       description: "Not reliably derivable — other names the operator is known by, best answered directly.",
++      tier: "deferrable",
+     },
+     {
+       key: "operatorHandles",
+       label: "Social handles",
+       kind: "ask",
+-      description: "Plausibly derivable from a domain in a future pass, but not verified yet — treated as ask for now.",
++      description: "Plausibly derivable from a domain in a future pass, but not verified yet — treated as ask for now. Enriches rep-twitter-watch's matching once available, not required to start watching.",
++      tier: "deferrable",
+     },
+     {
+       key: "competitors",
+       label: "Competitors",
+       kind: "ask",
+       description: "A judgment call about who counts as a competitor — not something to infer silently.",
++      tier: "blocking",
+     },
+     {
+       key: "trustedSources",
+       label: "Trusted sources",
+       kind: "ask",
+       description: "Which review/mention sources actually matter to this client — a real preference, not a lookup.",
++      tier: "blocking",
+     },
+     {
+       key: "crisisThresholdOverride",
+       label: "Crisis threshold",
+       kind: "ask",
+-      description: "A subjective risk-tolerance call — has a sane default, only needs asking if they want to tune it.",
++      description: "A subjective risk-tolerance call — inherits REP_THRESHOLD_DEFAULTS.crisisScoreFloor (80) when unset, a real documented default. Shown per the same reasoning as personMatchConfidenceThreshold, never blocking.",
++      tier: "visible-default",
+     },
+     // The 3 fields below were confirmed missing from this list (Phase 5's
+     // own verification pass) despite being real, currently-collected
+@@ -623,18 +724,21 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+       label: "Tracked entities / sub-brands",
+       kind: "ask",
+       description: "Which companies, brands, products, or publications this operator is publicly associated with — a real judgment call, not inferable from a domain.",
++      tier: "blocking",
+     },
+     {
+       key: "seedPanelPrompts",
+       label: "Seed AI-engine prompts",
+       kind: "ask",
+-      description: "The 5-8 starting prompts the AI Engine Watch panel checks — real content only the operator can specify. Plausibly AI-suggestible from the operator name/domain in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
++      description: "The 5-8 starting prompts the AI Engine Watch panel checks — real content only the operator can specify. Plausibly AI-suggestible from the operator name/domain in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry. Can start blank and be tuned later — rep-engine-panel doesn't need it to begin watching.",
++      tier: "deferrable",
+     },
+     {
+       key: "activeEngines",
+       label: "Which AI engines to check",
+       kind: "ask",
+-      description: "Real preference narrowing the panel to specific engines — not derivable.",
++      description: "Real preference narrowing the panel to specific engines — not derivable. engine-panel-service.ts's own real fallback is \"null means check every platform-configured engine\" — a genuine default.",
++      tier: "deferrable",
+     },
+     // The 2 fields below were found missing entirely from this list during
+     // the full 34-worker audit — real, DB-backed, UI-collected
+@@ -649,12 +753,14 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
+       label: "Sole authority name",
+       kind: "ask",
+       description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation, so this can never actually be blank once a row exists. Read directly by rep-crisis-response's escalation logic.",
++      tier: "blocking",
+     },
+     {
+       key: "operatorPagePhone",
+       label: "Crisis SMS paging number",
+       kind: "ask",
+       description: "Destination for rep-crisis-response's SMS paging fallback — optional, paging still happens via in-app/Slack/email without it. Read directly by rep-crisis-response.",
++      tier: "hidden-default",
+     },
+   ],
+   // The 5 workers below were traced (Phase 5) and confirmed to need
+@@ -692,42 +798,49 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       kind: "derivable",
+       description: "Pre-fillable from the client's own buyer name (engagements.buyer) — a starting suggestion to confirm or edit.",
+       derivableFrom: "buyerName",
++      tier: "blocking",
+     },
+     {
+       key: "productUrl",
+       label: "Product URL",
+       kind: "ask",
+       description: "Audited and reclassified from derivable — unlike pin-down's buyerDomain/rawVoiceCorpus (which have real, running extraction code, just not reused across products yet), no live crawl or resolver path exists anywhere for this field. The icp-lock bridge route never reads engagements.primaryDomain and the form only pre-fills from a previously-saved value. A 100% manual ask field today, not just an unwired one.",
++      tier: "blocking",
+     },
+     {
+       key: "productPrice",
+       label: "Price",
+       kind: "ask",
+       description: "Not derivable — the operator's own pricing.",
++      tier: "blocking",
+     },
+     {
+       key: "productValueProp",
+       label: "Value proposition",
+       kind: "ask",
+       description: "One sentence on what the offer actually does for a buyer — a real business fact only the operator knows.",
++      tier: "blocking",
+     },
+     {
+       key: "icps",
+       label: "ICPs (slug, label, weight)",
+       kind: "ask",
+-      description: "Who this client sells to, and the traffic-allocation weight across each ICP if there's more than one — a judgment call, not inferred.",
++      description: "Who this client sells to, and the traffic-allocation weight across each ICP if there's more than one — a judgment call, not inferred. validateIcpSeed's own save-path already hard-requires at least one, weights summing to ~1.0.",
++      tier: "blocking",
+     },
+     {
+       key: "sizingBounds",
+       label: "Sizing bounds + disqualifiers",
+       kind: "ask",
+-      description: "Per-ICP sizing sweet spot and who to skip — real business rules, paired one-to-one with the ICPs above.",
++      description: "Per-ICP sizing sweet spot and who to skip — real business rules, paired one-to-one with the ICPs above. validateIcpSeed requires a sizing-bounds entry per ICP.",
++      tier: "blocking",
+     },
+     {
+       key: "reviewRequiredIcps",
+       label: "Review-required ICPs",
+       kind: "ask",
+       description: "Which ICPs (if any) hold for manual review before a push instead of auto-pushing — a real risk-tolerance preference, defaults to none held.",
++      tier: "visible-default",
+     },
+   ],
+   "voice-capture": [
+@@ -885,6 +998,49 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
+   ],
+ };
+ 
++// Phase 2's capability map (see WorkerCapability's own doc comment) —
++// only the top-5 workers this pass covers (pin-down, pre-call-read,
++// rep-onboarding, icp-lock, pile-on). Every requiredFieldKeys entry is a
++// real key from that worker's own configFields above, cross-checked by
++// hand, not invented — a capability naming a key that doesn't exist in
++// that worker's own field list would be exactly the kind of unverified
++// claim this file's other doc comments (ClientProfileFact, configFields)
++// already guard against.
++export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>> = {
++  "pin-down": [
++    { name: "Confirmation Page", requiredFieldKeys: ["offerName", "offerPrice", "offerVertical", "offerIcp", "trafficTemperature", "hostingPlatform", "hostingPlatformCredential"] },
++    { name: "Brand Voice", requiredFieldKeys: ["buyerDomain", "rawVoiceCorpus"] },
++    { name: "Booking Sync", requiredFieldKeys: ["bookingPlatform", "bookingPlatformCredential"] },
++    { name: "Follow-up Email", requiredFieldKeys: ["emailPlatform", "emailPlatformCredential"] },
++  ],
++  "pre-call-read": [
++    { name: "Dispatch Briefs", requiredFieldKeys: ["briefLandingDestination", "slackWebhookUrl"] },
++    { name: "Video Engagement Signal", requiredFieldKeys: ["videoEngagementPlatform", "videoEngagementCredential"] },
++    { name: "Enriched Prospect Research", requiredFieldKeys: ["prospectResearchSourcesUsed"] },
++    { name: "Call Intelligence", requiredFieldKeys: ["conversationIntelligenceProvider", "conversationIntelligenceCredential", "recallRegion"] },
++    { name: "Show-Rate Scoring", requiredFieldKeys: ["showRateScoringEnabled"] },
++  ],
++  // This worker IS onboarding — its capabilities are what it unlocks for
++  // the rest of the product, not itself.
++  "rep-onboarding": [
++    { name: "AI Engine Watch", requiredFieldKeys: ["seedPanelPrompts", "activeEngines"] },
++    { name: "Trustpilot Watch", requiredFieldKeys: ["operatorDomains", "operatorName"] },
++    { name: "Reddit/Twitter Watch", requiredFieldKeys: ["entities", "operatorHandles"] },
++    { name: "Crisis Response", requiredFieldKeys: ["soleAuthorityName", "operatorPagePhone", "crisisThresholdOverride"] },
++  ],
++  // Same reasoning — "ICP Targeting Locked" is the one capability that
++  // gates the rest of the Cold Open pipeline (confirmed directly from
++  // runIcpLock's own summary: "Run Voice Capture, Source Connect, and
++  // Send Connect next").
++  "icp-lock": [
++    { name: "ICP Targeting Locked", requiredFieldKeys: ["productName", "productUrl", "productPrice", "productValueProp", "icps", "sizingBounds"] },
++  ],
++  "pile-on": [
++    { name: "SMS Follow-ups", requiredFieldKeys: ["smsPlatform", "smsPlatformCredential", "smsA2p10dlcStatus", "smsComplianceFooterVariant"] },
++    { name: "Ad-Cohort Sync", requiredFieldKeys: ["adDataPlatform", "adDataPlatformCredential"] },
++  ],
++};
++
+ // Single source of truth for category, kept out of skill-manifest.ts and
+ // rep-skill-manifest.ts on purpose — those files stay each product's own
+ // id/name/description authority (see this module's header), while

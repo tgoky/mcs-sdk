@@ -8,6 +8,10 @@ import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { PreCallReadLivePreview } from "./pre-call-read-live-preview";
 
 export function PreCallReadConfigForm({
   engagementId,
@@ -107,6 +111,104 @@ export function PreCallReadConfigForm({
     );
   }
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "brief-schedule",
+      label: "Brief schedule",
+      isComplete: true,
+      content: (
+        <SelectField
+          label="Pre-Call Brief Schedule"
+          value={briefTriggerType}
+          onChange={(v) => setBriefTriggerType(v as "nightly" | "dynamic_webhook")}
+          options={[
+            { value: "nightly", label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" },
+            { value: "dynamic_webhook", label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" },
+          ]}
+          helpText="Choose 'Dynamic' if your sales reps require briefs generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
+        />
+      ),
+    },
+    {
+      id: "video-engagement",
+      label: "Video engagement",
+      isComplete: videoEngagementPlatform !== "none",
+      content: (
+        <div className="space-y-3">
+          <ChoiceCardGroup
+            label="Confirmation-page video platform"
+            value={videoEngagementPlatform}
+            onChange={setVideoEngagementPlatform}
+            options={[
+              { value: "none", label: "None" },
+              { value: "vidalytics", label: "Vidalytics" },
+              { value: "wistia", label: "Wistia" },
+              { value: "youtube_analytics", label: "YouTube" },
+              { value: "loom", label: "Loom" },
+            ]}
+            helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
+          />
+          {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
+            <CredentialRow
+              engagementId={engagementId}
+              provider={videoEngagementPlatform}
+              label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} key`}
+            />
+          )}
+          {videoEngagementPlatform === "vidalytics" && (
+            <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
+          )}
+          {videoEngagementPlatform === "wistia" && (
+            <InputField label="Wistia video ID" value={videoEngagementWistiaVideoId} onChange={setVideoEngagementWistiaVideoId} />
+          )}
+          {videoEngagementPlatform === "youtube_analytics" && (
+            <>
+              <InputField label="YouTube channel ID" value={videoEngagementYoutubeChannelId} onChange={setVideoEngagementYoutubeChannelId} />
+              <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "prospect-research",
+      label: "Prospect research",
+      isComplete: prospectResearchSourcesUsed.length > 0,
+      content: (
+        <div className="space-y-3">
+          <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
+            If the client already has their own Apollo or PDL subscription, it layers on top of standard web
+            research — never a required cost.
+          </p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={prospectResearchSourcesUsed.includes("apollo")}
+                onChange={(e) => toggleSource("apollo", e.target.checked)}
+              />
+              Apollo
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={prospectResearchSourcesUsed.includes("pdl")}
+                onChange={(e) => toggleSource("pdl", e.target.checked)}
+              />
+              People Data Labs
+            </label>
+          </div>
+          {prospectResearchSourcesUsed.includes("apollo") && (
+            <CredentialRow engagementId={engagementId} provider="apollo" label="Apollo key" />
+          )}
+          {prospectResearchSourcesUsed.includes("pdl") && (
+            <CredentialRow engagementId={engagementId} provider="pdl" label="PDL key" />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -119,88 +221,15 @@ export function PreCallReadConfigForm({
         </p>
       </div>
 
-      <SelectField
-        label="Pre-Call Brief Schedule"
-        value={briefTriggerType}
-        onChange={(v) => setBriefTriggerType(v as "nightly" | "dynamic_webhook")}
-        options={[
-          { value: "nightly", label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" },
-          { value: "dynamic_webhook", label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" },
-        ]}
-        helpText="Choose 'Dynamic' if your sales reps require briefs generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
+      <PreCallReadLivePreview
+        briefTriggerType={briefTriggerType}
+        videoEngagementPlatform={videoEngagementPlatform}
+        prospectResearchSourcesUsed={prospectResearchSourcesUsed}
       />
 
-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-        <label className="text-xs font-bold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
-          Video Engagement (optional)
-        </label>
-        <SelectField
-          label="Confirmation-page video platform"
-          value={videoEngagementPlatform}
-          onChange={setVideoEngagementPlatform}
-          options={[
-            { value: "none", label: "No video engagement tracking" },
-            { value: "vidalytics", label: "Vidalytics" },
-            { value: "wistia", label: "Wistia" },
-            { value: "youtube_analytics", label: "YouTube (aggregate stats only)" },
-            { value: "loom", label: "Loom (no analytics API available)" },
-          ]}
-          helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
-        />
-        {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
-          <CredentialRow
-            engagementId={engagementId}
-            provider={videoEngagementPlatform}
-            label={`${videoEngagementPlatform === "youtube_analytics" ? "Google" : videoEngagementPlatform === "vidalytics" ? "Vidalytics" : "Wistia"} key`}
-          />
-        )}
-        {videoEngagementPlatform === "vidalytics" && (
-          <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
-        )}
-        {videoEngagementPlatform === "wistia" && (
-          <InputField label="Wistia video ID" value={videoEngagementWistiaVideoId} onChange={setVideoEngagementWistiaVideoId} />
-        )}
-        {videoEngagementPlatform === "youtube_analytics" && (
-          <>
-            <InputField label="YouTube channel ID" value={videoEngagementYoutubeChannelId} onChange={setVideoEngagementYoutubeChannelId} />
-            <InputField label="Confirmation-page video ID" value={heroVideoId} onChange={setHeroVideoId} />
-          </>
-        )}
-      </div>
+      <WorkerCapabilityMatrix workerId="pre-call-read" engagementId={engagementId} />
 
-      <div className="space-y-3 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-        <label className="text-xs font-bold uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
-          Prospect Research BYOK (optional)
-        </label>
-        <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
-          If the client already has their own Apollo or PDL subscription, it layers on top of standard web research
-          — never a required cost.
-        </p>
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-            <input
-              type="checkbox"
-              checked={prospectResearchSourcesUsed.includes("apollo")}
-              onChange={(e) => toggleSource("apollo", e.target.checked)}
-            />
-            Apollo
-          </label>
-          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-            <input
-              type="checkbox"
-              checked={prospectResearchSourcesUsed.includes("pdl")}
-              onChange={(e) => toggleSource("pdl", e.target.checked)}
-            />
-            People Data Labs
-          </label>
-        </div>
-        {prospectResearchSourcesUsed.includes("apollo") && (
-          <CredentialRow engagementId={engagementId} provider="apollo" label="Apollo key" />
-        )}
-        {prospectResearchSourcesUsed.includes("pdl") && (
-          <CredentialRow engagementId={engagementId} provider="pdl" label="PDL key" />
-        )}
-      </div>
+      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save" finishing={saving} />
 
       {saveError && (
         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
@@ -213,19 +242,12 @@ export function PreCallReadConfigForm({
         </p>
       )}
 
-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
         >
           {cancelLabel}
-        </button>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-        >
-          {saving ? "Saving..." : "Save"}
         </button>
       </div>
     </div>

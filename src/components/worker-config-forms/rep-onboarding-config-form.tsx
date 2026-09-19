@@ -22,6 +22,7 @@ import type { RepCollision } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagementId: string; onCancel: () => void }) {
   const router = useRouter();
@@ -129,8 +130,12 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
         </p>
       )}
 
+      <div className="mt-4">
+        <WorkerCapabilityMatrix workerId="rep-onboarding" engagementId={engagementId} />
+      </div>
+
       <div className={wasDisabled ? "" : "mt-8"}>
-        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} />
+        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} detectedOperatorName={buyer || undefined} />
       </div>
 
       {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}

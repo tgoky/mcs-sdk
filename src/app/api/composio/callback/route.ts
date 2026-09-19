@@ -35,6 +35,17 @@ export async function GET(request: Request) {
     return NextResponse.redirect(returnUrl);
   }
 
+  // Echoed on every outcome from here on (success and failure alike) so a
+  // caller rendering several credential rows on one page at once — e.g.
+  // Pre-Call Read's video/research/call-intelligence keys, each a
+  // potentially-different provider — can tell which row's own connect
+  // attempt this particular return belongs to, instead of every row on the
+  // page reacting to composio_connected/composio_error alike. Purely
+  // additive: existing readers of this route (apps-page-client.tsx,
+  // teammates-workspace.tsx) only ever looked at composio_connected/
+  // composio_error and stay unaffected by this extra param.
+  returnUrl.searchParams.set("composio_provider", provider);
+
   if (status !== "success" || !connectedAccountId) {
     returnUrl.searchParams.set("composio_error", `Connecting ${provider} was cancelled or failed.`);
     return NextResponse.redirect(returnUrl);

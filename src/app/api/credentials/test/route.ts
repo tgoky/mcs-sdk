@@ -18,6 +18,11 @@ import {
  * Same verified-endpoint set as runCredentialHealthCheck() in
  * src/features/notifications/server/credential-health.ts — see the
  * comment there for why this list isn't just "every provider we support."
+ *
+ * Keys here are duplicated as a client-safe list in
+ * src/lib/credential-test-providers.ts (TESTABLE_CREDENTIAL_PROVIDERS),
+ * which CredentialRow uses to decide whether to show a "Test connection"
+ * action at all — keep both in sync when this map changes.
  */
 const VALIDATORS: Record<string, (secret: string) => Promise<void>> = {
   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
