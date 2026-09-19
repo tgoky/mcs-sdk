@@ -28,6 +28,7 @@ import { enrollInWinBackSequence } from "@/lib/platforms/email";
 import { startRun, finishRun, emptySummary } from "@/lib/run-log";
 import { inngest, winBackEmailSmtpSequenceStart } from "@/lib/inngest";
 import { missingWinBackMetaFor } from "@/lib/win-back-platform-readiness";
+import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 import type { EngagementStack } from "@/models/schema";
 import crypto from "crypto";
 
@@ -131,6 +132,14 @@ export async function enrollProspectInWinBack(opts: {
     )
     .limit(1);
   if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence.` };
+
+  // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
+  // Same gate the real cancellation-webhook path checks
+  // (enrollment-service.ts) — a manual enrollment shouldn't be able to
+  // route around a pause that exists specifically to stop new sends.
+  const blockingReasons = await getBlockingReasons(opts.engagementId);
+  const pauseReason = blockingReasons.find((r) => r.conditionId === "win-back-bounce-complaint-pause");
+  if (pauseReason) return { ok: false, error: pauseReason.reason };
 
   const prospectName = opts.prospectName?.trim() || opts.prospectEmail;
   const enrollmentId = crypto.randomUUID();

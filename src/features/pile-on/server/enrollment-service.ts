@@ -14,6 +14,7 @@ import { extractFreshRescheduleLink } from "@/lib/platforms/reschedule";
 import { runWinBackHybridPersonalization } from "@/features/win-back/server/hybrid-personalizer";
 import { gateOrExecute } from "@/lib/approval-gate";
 import { deriveProspectName } from "@/lib/prospect-identity";
+import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -417,6 +418,21 @@ export async function handleInboundBookingEvent(
 
   // ── booking.cancelled / no-showed → Win-Back ─────────────────────────
   else if (eventKind === "cancelled") {
+    // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
+    // Checked before the atomic-claim insert below, so a paused
+    // engagement never creates an enrollment row at all — "pause the
+    // whole cadence" means email AND the SMS/SMTP legs that key off the
+    // same enrollment row further down, not just the email platform
+    // call. Cleared only by an operator's explicit resume action.
+    const blockingReasons = await getBlockingReasons(tenant.engagementId);
+    if (blockingReasons.some((r) => r.conditionId === "win-back-bounce-complaint-pause")) {
+      const reason = blockingReasons.find((r) => r.conditionId === "win-back-bounce-complaint-pause")!.reason;
+      summary.openItems.push(`Win-back enrollment skipped for ${prospectName} (${prospectEmail}): ${reason}`);
+      await logStep(runId, { phase: "recovery_enrollment", status: "skipped", detail: reason });
+      await finishRun(runId, { summary });
+      return;
+    }
+
     // ── Fresh reschedule link capture (Win-Back recovery gap 3) ───────────
     // Only meaningful in "fresh_link" mode; extracted here (once, at
     // cancellation time) rather than on-demand later, since the

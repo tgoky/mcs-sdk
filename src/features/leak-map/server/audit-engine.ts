@@ -575,7 +575,10 @@ async function pullCrmPipelineMetrics(
   sampleSizeMinimum: number,
   gaps: string[]
 ): Promise<MetricResult | null> {
-  const AGING_THRESHOLD_DAYS = 30; // deals open longer than this get flagged
+  // Phase 6 — previously a bare hardcoded const with no override anywhere;
+  // now a real schema slot (EngagementStack.aging_threshold_days), same
+  // default (30) preserved when unset.
+  const AGING_THRESHOLD_DAYS: number = stack?.aging_threshold_days ?? 30;
 
   if (stack.email_platform === "hubspot") {
     const accessToken = await resolveCredential(engagementId, "hubspot");

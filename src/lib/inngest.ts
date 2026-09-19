@@ -172,6 +172,18 @@ export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement
   schema: staticSchema<BookingPollEngagementData>(),
 });
 
+// Phase 6 — HubSpot has no webhook for marketing-email bounce/complaint
+// (the legacy Email Events API is poll-only, see esp-delivery-poll.ts's
+// own module comment) — a poll fan-out, same shape as
+// bookingPollEngagement above, is the honest architecture for this one
+// platform rather than a fabricated webhook route.
+export type HubspotDeliveryPollEngagementData = {
+  engagementId: string;
+};
+export const hubspotDeliveryPollEngagement = eventType("win-back/hubspot-delivery-poll-engagement", {
+  schema: staticSchema<HubspotDeliveryPollEngagementData>(),
+});
+
 // Pile-On recovery gap 1 — durable multi-message SMS sequence for the
 // direct-send platforms (Twilio, GHL SMS). Only prospect identifiers ship
 // here, not credentials — same secret-hygiene principle as

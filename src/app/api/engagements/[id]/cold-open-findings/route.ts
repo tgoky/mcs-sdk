@@ -26,8 +26,13 @@ const ROW_LIMIT = 200;
 // query (not derived from the possibly-truncated ROW_LIMIT lists above,
 // which can miss rows once a client has more than 200 recent leads) so
 // the page's "last 7 days" strip reports the same numbers Send Report
-// itself would, not an approximation.
-const REPORT_WINDOW_DAYS = 7;
+// itself would, not an approximation. Phase 6 — this used to be its own
+// separate hardcoded `const REPORT_WINDOW_DAYS = 7`, silently divergeable
+// from send-report.ts's own copy of the same constant. Now both read the
+// same coldOpenConfig.reportWindowDays column (schema.ts) — see the
+// config fetch below, which happens before `since` is computed for
+// exactly this reason.
+const DEFAULT_REPORT_WINDOW_DAYS = 7;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -53,10 +58,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Client not found." }, { status: 404 });
     }
 
-    const since = new Date(Date.now() - REPORT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const config = await db.select().from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1);
+    const reportWindowDays = config[0]?.reportWindowDays ?? DEFAULT_REPORT_WINDOW_DAYS;
+    const since = new Date(Date.now() - reportWindowDays * 24 * 60 * 60 * 1000);
 
-    const [config, leads, replies, leadRows7d, replyRows7d] = await Promise.all([
-      db.select().from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1),
+    const [leads, replies, leadRows7d, replyRows7d] = await Promise.all([
       db.select().from(coldOpenLeads).where(eq(coldOpenLeads.engagementId, engagementId)).orderBy(desc(coldOpenLeads.createdAt)).limit(ROW_LIMIT),
       db.select().from(coldOpenReplies).where(eq(coldOpenReplies.engagementId, engagementId)).orderBy(desc(coldOpenReplies.classifiedAt)).limit(ROW_LIMIT),
       db

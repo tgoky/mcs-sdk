@@ -49,6 +49,8 @@ import {
   assumedNoShowSweepCron,
   processAssumedNoShowSweepEngagementCron,
   pendingActionDigestCron,
+  hubspotDeliveryPollCron,
+  processHubspotDeliveryPollEngagementCron,
 } from "@/inngest/crons";
 
 // Explicit duration floor for this route, paired with checkpointing's
@@ -132,6 +134,13 @@ export const { GET, POST, PUT } = serve({
     // engagement — see the module comment on pendingActionDigestCron in
     // crons.ts.
     pendingActionDigestCron,
+    // Phase 6 — HubSpot's marketing-email bounce/complaint events have no
+    // webhook subscription type, only a poll-only legacy API. Same
+    // polling-fallback shape as bookingPollCron above, for a different
+    // reason (no webhook capability at all, not "this platform doesn't
+    // support webhooks in general") — see esp-delivery-poll.ts.
+    hubspotDeliveryPollCron,
+    processHubspotDeliveryPollEngagementCron,
     // Halts a win-back cadence when a prospect replies — see
     // src/inngest/win-back-reply.ts (Win-Back recovery gap 6).
     processInboundReply,

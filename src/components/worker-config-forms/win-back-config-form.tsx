@@ -8,6 +8,26 @@ import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+
+// Phase 6 — the webhook URL each platform's bounce/complaint events get
+// registered against, engagement-scoped (see each route's own module
+// comment in src/app/api/webhooks/*-delivery/[engagementId]/route.ts).
+// HubSpot and SMTP deliberately have no entry here: HubSpot is polled,
+// not webhooked (esp-delivery-poll.ts), and SMTP's bounce detection
+// reuses the existing reply-forwarding catcher URL shown below, not a
+// second URL.
+const DELIVERY_WEBHOOK_PATH: Record<string, string> = {
+  klaviyo: "klaviyo-delivery",
+  activecampaign: "activecampaign-delivery",
+  mailchimp: "mailchimp-delivery",
+  convertkit: "convertkit-delivery",
+};
+const DELIVERY_WEBHOOK_SECRET_PROVIDER: Record<string, string> = {
+  klaviyo: "klaviyo_webhook_secret",
+  activecampaign: "activecampaign_webhook_secret",
+  mailchimp: "mailchimp_webhook_secret",
+};
 
 export function WinBackConfigForm({
   engagementId,
@@ -28,6 +48,14 @@ export function WinBackConfigForm({
   const [inboundReplyMode, setInboundReplyMode] = useState<"native" | "forwarding" | "none">("none");
   const [hubspotPortalId, setHubspotPortalId] = useState("");
 
+  // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
+  const [autoPaused, setAutoPaused] = useState(false);
+  const [autoPausedAt, setAutoPausedAt] = useState<string | null>(null);
+  const [autoPausedReason, setAutoPausedReason] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [activecampaignWebhookSignatureHeader, setActivecampaignWebhookSignatureHeader] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -47,6 +75,10 @@ export function WinBackConfigForm({
         setRecoveredFromNoShowTaggingEnabled(data.recoveredFromNoShowTaggingEnabled ?? true);
         setInboundReplyMode(data.inboundReplyMode ?? "none");
         setHubspotPortalId(data.hubspotPortalId ?? "");
+        setAutoPaused(Boolean(data.autoPaused));
+        setAutoPausedAt(data.autoPausedAt ?? null);
+        setAutoPausedReason(data.autoPausedReason ?? null);
+        setActivecampaignWebhookSignatureHeader(data.activecampaignWebhookSignatureHeader ?? "");
       } catch (e: unknown) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -71,6 +103,7 @@ export function WinBackConfigForm({
           recoveredFromNoShowTaggingEnabled,
           inboundReplyMode,
           hubspotPortalId,
+          activecampaignWebhookSignatureHeader,
         }),
       });
       const data = await res.json();
@@ -85,6 +118,23 @@ export function WinBackConfigForm({
       const message = e instanceof Error ? e.message : "Unknown error";
       setSaveError(message === "Failed to fetch" ? "Couldn't reach the server. Check your connection and try again." : message);
       setSaving(false);
+    }
+  }
+
+  async function resume() {
+    setResuming(true);
+    setResumeError(null);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/win-back/resume-sends`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to resume.");
+      setAutoPaused(false);
+      setAutoPausedAt(null);
+      setAutoPausedReason(null);
+    } catch (e: unknown) {
+      setResumeError(e instanceof Error ? e.message : "Failed to resume.");
+    } finally {
+      setResuming(false);
     }
   }
 
@@ -110,6 +160,39 @@ export function WinBackConfigForm({
           anytime to change how it reschedules or detects replies.
         </p>
       </div>
+
+      {autoPaused && (
+        <div className="rounded-lg border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 p-3 space-y-2">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-rose-800 dark:text-rose-300">
+              Auto-paused{autoPausedAt ? ` — ${new Date(autoPausedAt).toLocaleString()}` : ""}
+            </h2>
+            <p className="text-[11px] text-rose-700 dark:text-rose-400 mt-0.5">
+              {autoPausedReason ?? "A deliverability threshold was crossed."} Every active enrollment was unenrolled from{" "}
+              {emailPlatform || "the ESP"}. No new prospects will be enrolled until you resume.
+            </p>
+          </div>
+          {resumeError && <p className="text-[11px] font-mono font-semibold text-rose-700 dark:text-rose-400">⚠ {resumeError}</p>}
+          <button
+            type="button"
+            onClick={resume}
+            disabled={resuming}
+            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-400 dark:border-rose-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 disabled:opacity-40 cursor-pointer"
+          >
+            {resuming ? "Resuming…" : "Resume Win-Back sends"}
+          </button>
+        </div>
+      )}
+
+      {emailPlatform === "ghl" && !autoPaused && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3">
+          <p className="text-[11px] text-amber-800 dark:text-amber-400">
+            <span className="font-bold">Bounce/complaint auto-pause isn&apos;t available for GHL yet.</span> GHL&apos;s
+            bounce/complaint data requires a Marketplace OAuth app this integration doesn&apos;t use today — not
+            monitored, not silently assumed healthy.
+          </p>
+        </div>
+      )}
 
       <WorkerCapabilityMatrix workerId="win-back" engagementId={engagementId} />
 
@@ -168,6 +251,49 @@ export function WinBackConfigForm({
         >
           A unique catcher URL generates once this is saved — point your client&apos;s Postmark/SendGrid inbound-parse
           bridge (or a forwarding rule through one) at it.
+        </div>
+      )}
+
+      {DELIVERY_WEBHOOK_PATH[emailPlatform] && (
+        <div className="space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+              Bounce/complaint monitoring
+            </h2>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Register this URL as a webhook in your client&apos;s {emailPlatform} account to enable auto-pause.
+              Optional — Win-Back runs fine without it, just without deliverability protection.
+            </p>
+          </div>
+          <div
+            className="rounded-lg p-2 text-[11px] font-mono break-all"
+            style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+          >
+            {`${typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/${DELIVERY_WEBHOOK_PATH[emailPlatform]}/${engagementId}`}
+          </div>
+          {emailPlatform === "activecampaign" && (
+            <InputField
+              label="Signature header name"
+              value={activecampaignWebhookSignatureHeader}
+              onChange={setActivecampaignWebhookSignatureHeader}
+              placeholder="X-My-Signature"
+              helpText="The custom header name you chose when creating this webhook in ActiveCampaign's UI — whichever one you flagged is_signature."
+            />
+          )}
+          {emailPlatform === "mailchimp" && (
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Mailchimp has no signature header — the secret goes directly in the URL. Pick your own secret value
+              first, append <code>?secret=&lt;that value&gt;</code> to the URL above before pasting it into Mailchimp,
+              then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
+            </p>
+          )}
+          {DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform] && (
+            <CredentialRow
+              engagementId={engagementId}
+              provider={DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform]}
+              label="Webhook secret"
+            />
+          )}
         </div>
       )}
 

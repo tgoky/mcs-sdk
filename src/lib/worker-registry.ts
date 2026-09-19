@@ -547,15 +547,13 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       tier: "visible-default",
       description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block. High-blast-radius per this plan's own Open Risks section (feeds a client-facing claim directly) — stays visible, not hidden, even though it never blocks.",
     },
-    // AGING_THRESHOLD_DAYS = 30 (audit-engine.ts) was found during the
-    // full 34-worker audit as a real gap distinct from sampleSizeMinimum
-    // above: a pure hardcoded literal with NO storage slot anywhere in the
-    // schema, not even a stack-config fallback. It feeds a finding shown
-    // directly to the client ("N deals have been in the pipeline longer
-    // than 30 days"), and sales-cycle length varies enormously by
-    // vertical. Not added as a WorkerConfigField entry here — there's
-    // nothing to point one at yet. Needs a schema migration first, tracked
-    // as Phase 6 / Open Risks in the plan doc.
+    {
+      key: "agingThresholdDays",
+      label: "Pipeline aging threshold (days)",
+      kind: "ask",
+      tier: "hidden-default",
+      description: "Phase 6 — was a pure hardcoded literal in audit-engine.ts (AGING_THRESHOLD_DAYS = 30) with NO storage slot anywhere in the schema, not even a stack-config fallback, found during the 34-worker audit. Now a real stack column (aging_threshold_days, schema.ts) with that exact default preserved. Feeds a finding shown directly to the client (\"N deals have been in the pipeline longer than 30 days\"), and sales-cycle length varies enormously by vertical — genuinely per-client-variable, but never blocks a run, so hidden-default until a UI setter exists.",
+    },
   ],
   // Traced against enrollment-service.ts's handleInboundBookingEvent
   // (eventKind === "created" branch). No hinges panel — every field below
@@ -984,20 +982,15 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
   // file, there's no evidence anywhere in the code that these need to vary
   // per client.
   //
-  // send-report has one real gap the audit found: REPORT_WINDOW_DAYS = 7
-  // (send-report.ts), a hardcoded rolling-window constant with zero
-  // override anywhere — not in coldOpenConfig's schema, not in any UI
-  // form. Low severity (advisory rollup only, no money/sends at stake),
-  // but genuinely per-client-variable (a 5-leads/day client and a
-  // 500-leads/day client likely want different rollup cadences). Left as
-  // an empty array here deliberately, not populated with a fake entry —
-  // unlike every other "ask, flagged unbuilt" field in this file, this
-  // one has NO storage slot anywhere in the schema to point a
-  // WorkerConfigField at, so adding one here would claim a real field
-  // that doesn't exist yet. Needs a schema migration before it can be a
-  // real registry entry, tracked as Phase 6 / Open Risks in the plan doc,
-  // not silently treated as covered by this empty array.
-  "send-report": [],
+  "send-report": [
+    {
+      key: "reportWindowDays",
+      label: "Rollup window (days)",
+      kind: "ask",
+      tier: "hidden-default",
+      description: "Phase 6 — was a hardcoded rolling-window constant (REPORT_WINDOW_DAYS = 7 in send-report.ts, duplicated a second time in cold-open-findings/route.ts) with zero override anywhere. Now a real coldOpenConfig column (reportWindowDays, schema.ts) with that exact default preserved, and both call sites read the same column instead of two independently hardcoded copies. Low severity (advisory rollup only, no money/sends at stake) but genuinely per-client-variable (a 5-leads/day client and a 500-leads/day client likely want different rollup cadences). No UI collects it yet; does not block.",
+    },
+  ],
 };
 
 // Traced against connect-service.ts's real writes and the whop-connect
@@ -1030,6 +1023,26 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
       label: "Cooldown between offers (days)",
       kind: "ask",
       description: "Same finding as min-tenure-days — real stack column, documented default (90), real code-level fallback. No UI collects it yet; does not block.",
+    },
+  ],
+  "whop-refund-dispute-velocity": [
+    {
+      key: "whop_refund_dispute_rate_threshold",
+      label: "Refund/dispute rate alert threshold",
+      kind: "ask",
+      description: "Phase 6 — found as a bare hardcoded const (REFUND_RATE_THRESHOLD = 0.08 in refund-dispute-velocity-service.ts) with NO storage slot anywhere, during the full 34-worker audit. Now a real stack column (refund_dispute_rate_threshold, schema.ts) with that exact default preserved. The service compares both refund rate AND dispute rate against this one value (no separate dispute-rate constant exists in the code) — this field honestly reflects that shared behavior. No UI collects it yet; does not block, hasHingesPanel stays false.",
+    },
+    {
+      key: "whop_dispute_alert_threshold",
+      label: "Dispute-alert count threshold",
+      kind: "ask",
+      description: "Same finding as the rate threshold above — real stack column (dispute_alert_threshold), documented default (3 per rolling 7-day window), real code-level fallback. No UI collects it yet; does not block.",
+    },
+    {
+      key: "whop_min_payment_sample_size",
+      label: "Minimum payment sample size",
+      kind: "ask",
+      description: "Same finding — real stack column (min_payment_sample_size), documented default (10 payments in the rolling window), real code-level fallback. No UI collects it yet; does not block. reconciliation_cooldown_hours (also previously hardcoded in the same file) is deliberately NOT given a field here — it's an internal alert-spam guard, not a business threshold a buyer would tune.",
     },
   ],
   "whop-bridge-manager": [

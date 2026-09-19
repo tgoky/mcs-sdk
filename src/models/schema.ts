@@ -293,6 +293,61 @@ export type EngagementStack = {
   // Leak-Map sample-size floor (LEAK-002). Below this, a metric's delta is
   // suppressed rather than reported, regardless of how large it looks.
   sample_size_minimum?: number; // default 5
+  // Phase 6 — was a bare hardcoded local const in audit-engine.ts
+  // (pullCrmPipelineMetrics) with no override anywhere. Deals/opportunities
+  // open longer than this many days get flagged as aging in the pipeline.
+  aging_threshold_days?: number; // default 30
+  // Phase 6 — whop-refund-dispute-velocity's thresholds, previously 4 bare
+  // hardcoded module-level consts in refund-dispute-velocity-service.ts
+  // with no override anywhere. Named refund_dispute_rate_threshold (not
+  // refund_rate_threshold) because the service's own code compares BOTH
+  // refund rate and dispute rate against this one value today (line 97:
+  // `disputeRate >= REFUND_RATE_THRESHOLD`, no separate dispute-rate
+  // constant exists) — this field honestly reflects that shared behavior
+  // rather than implying a distinct dispute-rate override that doesn't
+  // exist in the code. reconciliation_cooldown_hours is deliberately NOT
+  // exposed here — it's an internal alert-spam guard, not a business
+  // threshold a buyer would tune.
+  refund_dispute_rate_threshold?: number; // default 0.08 (8%)
+  dispute_alert_threshold?: number; // default 3 (count per rolling 7-day window)
+  min_payment_sample_size?: number; // default 10 (payments in the rolling window)
+  // Phase 6 — Win-Back bounce/complaint monitoring with auto-pause. See
+  // esp-delivery-monitor.ts for the rate computation and pause/resume
+  // logic. Defaults match common ESP-recommended risk thresholds (most
+  // ESPs themselves warn/restrict senders above ~5% bounce or ~0.1%
+  // complaint) — genuinely per-client-tunable, but these are sane
+  // industry-standard starting points, not arbitrary guesses.
+  win_back_bounce_rate_threshold?: number; // default 0.05 (5%)
+  win_back_complaint_rate_threshold?: number; // default 0.001 (0.1%)
+  // Minimum sends in the rolling window before either rate above
+  // evaluates — same "small sample = noise" reasoning as Leak-Map's
+  // sample_size_minimum and whop-refund-dispute-velocity's
+  // min_payment_sample_size.
+  win_back_delivery_sample_minimum?: number; // default 20
+  // Set by esp-delivery-monitor.ts when a threshold is crossed; cleared
+  // only by an operator's explicit resume action (never auto-clears on
+  // its own — a rate dropping back under threshold doesn't undo whatever
+  // caused the spike). Checked by the "win-back-bounce-complaint-pause"
+  // blocking condition (worker-blocking-conditions.ts) before any new
+  // enrollment.
+  win_back_auto_paused?: boolean;
+  win_back_auto_paused_at?: string; // ISO timestamp
+  win_back_auto_paused_reason?: string; // human-readable, e.g. "Bounce rate 7.2% over last 7 days (threshold 5%)"
+  // ActiveCampaign's webhook signature is a custom header the OPERATOR
+  // names when creating the webhook in AC's own UI (help.activecampaign.
+  // com/hc/en-us/articles/115001403484) — there's no fixed header name to
+  // check the way Klaviyo/HubSpot/Kit each have one, so the operator's
+  // choice has to be stored somewhere. This is a real per-client config
+  // fact, not a secret (the secret VALUE lives in the credential vault
+  // as "activecampaign_webhook_secret") — same split every other
+  // platform/credential pair in this file already uses.
+  activecampaign_webhook_signature_header?: string;
+  // Phase 6 — HubSpot's legacy Email Events API is poll-only (no
+  // bounce/complaint webhook exists, see esp-delivery-poll.ts). This is
+  // the watermark the poller advances past each run so it never
+  // re-processes the same event twice — same idempotency intent as
+  // webhookEvents' unique index, just for a poll loop instead of a push.
+  hubspot_delivery_poll_watermark_ms?: number;
   // ── Leak Map recovery gap 1: buyer-configurable, timezone-aware cadence ──
   // Both default to Monday/1st-of-month, 09:00, UTC (matching the OG
   // SKILL.md's stated defaults) when unset. Checked hourly by
@@ -1131,6 +1186,13 @@ export const briefedCallsLog = pgTable(
   briefDeliveredAt: timestamp("brief_delivered_at"),
   destinationDelivered: text("destination_delivered"),
   personMatchScore: integer("person_match_score"),
+  // Phase 6 — evaluatePersonMatch (person-match.ts) already computes this
+  // per-signal breakdown (domain/name/LinkedIn/company points, plus total
+  // and threshold) as `trace`, but only `totalScore` above was ever
+  // persisted — the margin explanation (why it passed/failed, how close
+  // to threshold) was discarded the moment the run finished. This
+  // surfaces it instead of throwing it away.
+  personMatchTrace: jsonb("person_match_trace").$type<Record<string, number | string> | null>(),
   // The actual synthesized 7-section brief text (llmResult.text in
   // brief-service.ts). Previously generated, delivered to Slack/CRM, and
   // then discarded — never queryable again once the delivery happened.
@@ -1462,6 +1524,39 @@ export const webhookEvents = pgTable(
     // treats that as "already processed" and returns early instead of
     // re-enrolling the prospect. See booking-event/route.ts.
     uniqueIndex("webhook_events_source_key_uidx").on(table.eventSource, table.idempotencyKey),
+  ]
+);
+
+// ── ESP Delivery Events (Phase 6 — bounce/complaint monitoring) ──────────
+// Normalized log of bounce/spam-complaint events ingested from any ESP's
+// webhook, feeding the rolling bounce/complaint rate computation that
+// drives Win-Back's auto-pause (see esp-delivery-monitor.ts). Idempotency
+// is NOT this table's job — every webhook route inserts into
+// webhookEvents FIRST (eventSource e.g. "klaviyo-delivery", the ESP's own
+// event id as idempotencyKey), same convention every other webhook route
+// in this app already follows; a row only lands here once that insert
+// has already claimed uniqueness. This table is purely the normalized,
+// query-ready event log the rate computation reads.
+export const espDeliveryEvents = pgTable(
+  "esp_delivery_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    platform: text("platform").notNull(), // "klaviyo" | "hubspot" | "activecampaign" | "ghl" | "mailchimp" | "convertkit" | "smtp"
+    eventType: text("event_type").notNull(), // "bounced" | "complained"
+    prospectEmail: text("prospect_email"),
+    // The ESP's own event timestamp when the payload carries one;
+    // receivedAt (below) is always this app's own clock and is what the
+    // rolling-window rate computation actually filters on, so a delayed
+    // or backfilled webhook still lands in the window it was received,
+    // not silently in the past.
+    occurredAt: timestamp("occurred_at"),
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("esp_delivery_events_engagement_idx").on(table.engagementId, table.receivedAt),
   ]
 );
 
@@ -2779,6 +2874,15 @@ export const coldOpenConfig = pgTable(
     // once before any real send happens, rather than every scheduled run
     // defaulting to dry-run forever.
     dailySendSettings: jsonb("daily_send_settings").$type<{ volume: number; localHour: number; timezone?: string; copyMode: "generate" | "upload"; liveSendEnabled: boolean } | null>(),
+
+    // ── send-report ──────────────────────────────────────────────────
+    // Phase 6 — was a bare hardcoded const (REPORT_WINDOW_DAYS = 7 in
+    // send-report.ts, duplicated a second time in
+    // cold-open-findings/route.ts) with no override anywhere. Low severity
+    // (advisory rollup only, no money/sends at stake) but genuinely
+    // per-client-variable — a 5-leads/day client and a 500-leads/day
+    // client likely want different rollup cadences.
+    reportWindowDays: integer("report_window_days").notNull().default(7),
 
     phaseState: jsonb("phase_state")
       .$type<Record<ColdOpenPhaseKey, ColdOpenPhaseState>>()

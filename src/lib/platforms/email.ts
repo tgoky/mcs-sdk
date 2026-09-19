@@ -599,6 +599,52 @@ export class HubSpotClient {
     return String(data.id);
   }
 
+  /**
+   * Phase 6 — polls HubSpot's legacy Email Events API
+   * (api.hubapi.com/email/public/v1/events) for BOUNCE/SPAMREPORT events
+   * since a given timestamp. This is the honest architecture for
+   * HubSpot's bounce/complaint monitoring: unlike every other platform
+   * in this file, HubSpot exposes no webhook subscription type for
+   * marketing-email delivery events (its Webhooks API is CRM-object-
+   * change-based only — contact/deal/association changes, not email
+   * events) — this legacy endpoint is poll-only, confirmed via multiple
+   * independent HubSpot Community threads (not WebFetch-verified against
+   * developers.hubspot.com directly, see esp-delivery-poll.ts's own
+   * module comment). Defensive about pagination shape since the exact
+   * cursor field name isn't independently confirmed — tries `hasMore` +
+   * `offset` (the commonly-documented legacy pattern) and stops after
+   * maxPages rather than looping indefinitely on an unexpected shape.
+   */
+  async pollDeliveryEvents(eventType: "BOUNCE" | "SPAMREPORT", sinceMs: number): Promise<{ email: string | null; occurredAtMs: number | null }[]> {
+    const results: { email: string | null; occurredAtMs: number | null }[] = [];
+    let offset: number | undefined;
+    const maxPages = 10;
+    for (let page = 0; page < maxPages; page++) {
+      const url = new URL("https://api.hubapi.com/email/public/v1/events");
+      url.searchParams.set("eventType", eventType);
+      url.searchParams.set("startTimestamp", String(sinceMs));
+      if (offset !== undefined) url.searchParams.set("offset", String(offset));
+      const res = await fetchWithTimeout(url.toString(), { headers: this.headers });
+      if (!res.ok) {
+        console.warn(`[hubspot] Email Events poll failed [${res.status}] for ${eventType}: ${await res.text().catch(() => "")}`);
+        break;
+      }
+      const data = await res.json();
+      const events: unknown[] = Array.isArray(data?.events) ? data.events : [];
+      for (const e of events) {
+        const ev = e as Record<string, unknown>;
+        results.push({
+          email: typeof ev.recipient === "string" ? ev.recipient : null,
+          occurredAtMs: typeof ev.created === "number" ? ev.created : null,
+        });
+      }
+      if (!data?.hasMore || events.length === 0) break;
+      offset = typeof data.offset === "number" ? data.offset : undefined;
+      if (offset === undefined) break; // can't safely page further — stop rather than loop
+    }
+    return results;
+  }
+
   async enrollInRecoveryWorkflow(email: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) {
@@ -1305,13 +1351,14 @@ export class MailchimpClient {
    * automation product that would run a recovery cadence) exits contacts
    * off tag add/remove, not a numeric field.
    */
-  async markRebooked(listId: string, email: string, reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"): Promise<void> {
+  async markRebooked(listId: string, email: string, reason: "rebooked" | "reply_exited" | "manual_override" | "auto_paused" = "rebooked"): Promise<void> {
     const hash = this.subscriberHash(email);
+    const tagName = reason === "reply_exited" ? "showtime_reply_exited" : reason === "auto_paused" ? "showtime_auto_paused" : "showtime_rebooked";
     await fetchWithTimeout(`${this.baseUrl}/lists/${listId}/members/${hash}/tags`, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
-        tags: [{ name: reason === "reply_exited" ? "showtime_reply_exited" : "showtime_rebooked", status: "active" }],
+        tags: [{ name: tagName, status: "active" }],
       }),
     }).catch(() => {});
   }
@@ -1402,7 +1449,7 @@ export class ConvertKitClient {
    * itself, others off a field, and this app has no way to know which
    * without asking during onboarding.
    */
-  async markRebooked(tagId: string | undefined, email: string, reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"): Promise<void> {
+  async markRebooked(tagId: string | undefined, email: string, reason: "rebooked" | "reply_exited" | "manual_override" | "auto_paused" = "rebooked"): Promise<void> {
     if (tagId) {
       await this.untagSubscriber(email, tagId);
     }
@@ -1802,18 +1849,22 @@ export async function enrollInWinBackSequence(
  * Removes a prospect from the active win-back cadence. `reason` controls
  * what actually gets written as the buyer-facing status — "rebooked"
  * (default, backward-compatible with the original rebook-exit call site
- * in enrollment-service.ts) or "reply_exited" (Win-Back recovery gap 6 —
+ * in enrollment-service.ts), "reply_exited" (Win-Back recovery gap 6 —
  * a prospect who replied didn't necessarily rebook, and telling the
- * buyer's CRM they did would be actively misleading). The mechanical
- * side of exiting — removing from the workflow/automation — is identical
- * either way; only the label differs.
+ * buyer's CRM they did would be actively misleading), or "auto_paused"
+ * (Phase 6 — a bounce/complaint-rate auto-pause exit, see
+ * esp-delivery-monitor.ts; same "don't mislabel why this stopped"
+ * reasoning as reply_exited — a contact auto-paused for a deliverability
+ * problem is not "rebooked" either). The mechanical side of exiting —
+ * removing from the workflow/automation — is identical across every
+ * reason; only the label differs.
  */
 export async function exitWinBackSequence(
   platform: string,
   apiKey: string,
   email: string,
   meta: EmailRoutingMeta,
-  reason: "rebooked" | "reply_exited" | "manual_override" = "rebooked"
+  reason: "rebooked" | "reply_exited" | "manual_override" | "auto_paused" = "rebooked"
 ): Promise<void> {
   switch (platform) {
     case "klaviyo":
@@ -1830,7 +1881,7 @@ export async function exitWinBackSequence(
       return new ActiveCampaignClient(meta.activecampaign_base_url, apiKey).markRebooked(
         email,
         meta.recovery_automation_id,
-        reason === "reply_exited" ? "showtime_reply_exited" : "showtime_rebooked"
+        reason === "reply_exited" ? "showtime_reply_exited" : reason === "auto_paused" ? "showtime_auto_paused" : "showtime_rebooked"
       );
 
     case "ghl":

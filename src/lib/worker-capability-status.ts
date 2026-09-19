@@ -174,6 +174,7 @@ async function filledKeysForLeakMap(engagementId: string): Promise<Set<string>> 
   if (stack.existing_audit_flagged) filled.add("existingAuditFlagged");
   if (truthy(stack.notification_pack_selections)) filled.add("notificationPackSelections");
   if (truthy(stack.sample_size_minimum)) filled.add("sampleSizeMinimum");
+  if (truthy(stack.aging_threshold_days)) filled.add("agingThresholdDays");
   return filled;
 }
 

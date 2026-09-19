@@ -19,9 +19,15 @@ import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { listConnectedEngagementIds } from "./receiver-health-service";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
-const REFUND_RATE_THRESHOLD = 0.08; // 8% over a rolling 7-day window per product
-const DISPUTE_ALERT_THRESHOLD = 3; // per product per rolling 7-day window
-const MIN_SAMPLE_SIZE = 10; // payments in the rolling window
+// Phase 6 — these were 4 bare hardcoded module-level consts with no
+// per-engagement override anywhere; the first 3 now have a real schema
+// slot (EngagementStack, schema.ts), same defaults preserved when unset.
+// RECONCILIATION_COOLDOWN_HOURS stays a hardcoded const on purpose — it's
+// an internal alert-spam guard, not a business threshold a buyer would
+// tune (see the schema field's own comment for the same reasoning).
+const DEFAULT_REFUND_DISPUTE_RATE_THRESHOLD = 0.08; // 8% over a rolling 7-day window per product
+const DEFAULT_DISPUTE_ALERT_THRESHOLD = 3; // per product per rolling 7-day window
+const DEFAULT_MIN_SAMPLE_SIZE = 10; // payments in the rolling window
 const RECONCILIATION_COOLDOWN_HOURS = 4;
 
 function latestValue(response: { data: Array<[string, ...(number | string)[]]> } | null): number | null {
@@ -65,6 +71,16 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
   const client = await WhopAgentClient.forEngagement(engagementId).catch(() => null);
   if (!client) return;
 
+  const [tenant] = await db
+    .select({ stack: engagements.stack })
+    .from(engagements)
+    .where(eq(engagements.engagementId, engagementId))
+    .limit(1);
+  const stack = (tenant?.stack as EngagementStack | null) ?? null;
+  const refundDisputeRateThreshold = stack?.refund_dispute_rate_threshold ?? DEFAULT_REFUND_DISPUTE_RATE_THRESHOLD;
+  const disputeAlertThreshold = stack?.dispute_alert_threshold ?? DEFAULT_DISPUTE_ALERT_THRESHOLD;
+  const minSampleSize = stack?.min_payment_sample_size ?? DEFAULT_MIN_SAMPLE_SIZE;
+
   const [refundRateRes, disputeRateRes, disputeAlertsRes, paymentsRes] = await Promise.all([
     client.statsMetric("receipts/refunds:refund_rate", { granularity: "weekly" }).catch(() => null),
     client.statsMetric("receipts/disputes:dispute_rate", { granularity: "weekly" }).catch(() => null),
@@ -73,7 +89,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
   ]);
 
   const paymentCount = latestValue(paymentsRes);
-  if (paymentCount === null || paymentCount < MIN_SAMPLE_SIZE) {
+  if (paymentCount === null || paymentCount < minSampleSize) {
     // Section 5.7: "Minimum sample size before any percentage threshold
     // evaluates: 10 payments in the rolling window. Two refunds on four
     // payments is 50 percent and is noise." Dispute-alert count is an
@@ -81,35 +97,35 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
     // still evaluated below independent of this early return.
   } else {
     const refundRate = latestValue(refundRateRes);
-    if (refundRate !== null && refundRate >= REFUND_RATE_THRESHOLD) {
+    if (refundRate !== null && refundRate >= refundDisputeRateThreshold) {
       const source = `whop:refund-velocity:${engagementId}`;
-      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "refund_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "warning" })) {
+      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "refund_rate", threshold: String(refundDisputeRateThreshold), severity: "warning" })) {
         await alertOperator(
           engagementId,
           "Refund velocity above threshold",
-          `Refund rate is ${(refundRate * 100).toFixed(1)}% over the last week (threshold ${(REFUND_RATE_THRESHOLD * 100).toFixed(0)}%, ${paymentCount} payments in window).`,
+          `Refund rate is ${(refundRate * 100).toFixed(1)}% over the last week (threshold ${(refundDisputeRateThreshold * 100).toFixed(0)}%, ${paymentCount} payments in window).`,
           "warning"
         );
       }
     }
 
     const disputeRate = latestValue(disputeRateRes);
-    if (disputeRate !== null && disputeRate >= REFUND_RATE_THRESHOLD) {
+    if (disputeRate !== null && disputeRate >= refundDisputeRateThreshold) {
       const source = `whop:dispute-rate-velocity:${engagementId}`;
-      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_rate", threshold: String(REFUND_RATE_THRESHOLD), severity: "critical" })) {
+      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_rate", threshold: String(refundDisputeRateThreshold), severity: "critical" })) {
         await alertOperator(engagementId, "Dispute velocity above threshold", `Dispute rate is ${(disputeRate * 100).toFixed(1)}% over the last week.`, "critical");
       }
     }
   }
 
   const disputeAlertCount = latestValue(disputeAlertsRes);
-  if (disputeAlertCount !== null && disputeAlertCount >= DISPUTE_ALERT_THRESHOLD) {
+  if (disputeAlertCount !== null && disputeAlertCount >= disputeAlertThreshold) {
     const source = `whop:dispute-alert-velocity:${engagementId}`;
-    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_alerts", threshold: String(DISPUTE_ALERT_THRESHOLD), severity: "critical" })) {
+    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_alerts", threshold: String(disputeAlertThreshold), severity: "critical" })) {
       await alertOperator(
         engagementId,
         "Dispute-alert velocity above threshold",
-        `${disputeAlertCount} dispute alerts in the last week (threshold ${DISPUTE_ALERT_THRESHOLD}) — each can carry a fee_charged cost directly.`,
+        `${disputeAlertCount} dispute alerts in the last week (threshold ${disputeAlertThreshold}) — each can carry a fee_charged cost directly.`,
         "critical"
       );
     }

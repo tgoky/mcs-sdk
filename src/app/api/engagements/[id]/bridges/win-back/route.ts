@@ -57,6 +57,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // emailPlatform itself is a shared connection, owned by the general
     // wizard / edit-stack-settings, not this route.
     emailPlatform: row.stack?.email_platform ?? "",
+    // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
+    autoPaused: row.stack?.win_back_auto_paused ?? false,
+    autoPausedAt: row.stack?.win_back_auto_paused_at ?? null,
+    autoPausedReason: row.stack?.win_back_auto_paused_reason ?? null,
+    activecampaignWebhookSignatureHeader: row.stack?.activecampaign_webhook_signature_header ?? "",
   });
 }
 
@@ -76,6 +81,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const inboundReplyMode: "native" | "forwarding" | "none" =
       body.inboundReplyMode === "native" || body.inboundReplyMode === "forwarding" ? body.inboundReplyMode : "none";
     const hubspotPortalId: string = typeof body.hubspotPortalId === "string" ? body.hubspotPortalId.trim() : "";
+    const activecampaignWebhookSignatureHeader: string =
+      typeof body.activecampaignWebhookSignatureHeader === "string" ? body.activecampaignWebhookSignatureHeader.trim() : "";
 
     const [row] = await db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
@@ -106,6 +113,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       recovered_from_no_show_tagging_enabled: recoveredFromNoShowTaggingEnabled,
       inbound_reply_mode: inboundReplyMode,
       ...(inboundReplyMode === "native" ? { hubspot_portal_id: hubspotPortalId } : {}),
+      // Phase 6 — only relevant on ActiveCampaign, where the signature
+      // header name is the operator's own choice, made when they create
+      // the webhook in AC's UI (see schema.ts's own comment on this
+      // field). Saved unconditionally when present so it isn't lost if
+      // the operator switches email_platform and back.
+      ...(activecampaignWebhookSignatureHeader ? { activecampaign_webhook_signature_header: activecampaignWebhookSignatureHeader } : {}),
     } as EngagementStack;
 
     await db

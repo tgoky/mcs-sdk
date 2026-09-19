@@ -26,7 +26,8 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement } from "@/lib/inngest";
+import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
 import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
@@ -516,6 +517,34 @@ export const processBookingPollEngagementCron = inngest.createFunction(
   { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement], retries: 1 },
   async ({ event, step }) => {
     return pollBookingsForEngagement(event.data.engagementId, step);
+  }
+);
+
+/**
+ * Phase 6 — HubSpot bounce/complaint poll fan-out. Same shape as
+ * bookingPollCron above, for the same reason (booking-poller.ts's own
+ * header explains OnceHub's identical situation): HubSpot's marketing-
+ * email delivery events have no webhook subscription type, only a
+ * poll-only legacy API (see esp-delivery-poll.ts).
+ */
+export const hubspotDeliveryPollCron = inngest.createFunction(
+  { id: "hubspot-delivery-poll-cron", triggers: [{ cron: "*/15 * * * *" }], retries: 1 },
+  async ({ step }) => {
+    const due = await step.run("find-engagements-due-for-hubspot-delivery-poll", () => findEngagementsDueForHubspotDeliveryPoll());
+    if (due.length > 0) {
+      await step.sendEvent(
+        "dispatch-hubspot-delivery-polls",
+        due.map((engagementId) => hubspotDeliveryPollEngagement.create({ engagementId }))
+      );
+    }
+    return { dispatched: due.length };
+  }
+);
+
+export const processHubspotDeliveryPollEngagementCron = inngest.createFunction(
+  { id: "process-hubspot-delivery-poll-engagement", triggers: [hubspotDeliveryPollEngagement], retries: 1 },
+  async ({ event }) => {
+    return pollHubspotDeliveryForEngagement(event.data.engagementId);
   }
 );
 

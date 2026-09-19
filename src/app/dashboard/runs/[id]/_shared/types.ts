@@ -108,6 +108,7 @@ export interface BriefedCall {
   briefDeliveredAt: string | null;
   destinationDelivered: string | null;
   personMatchScore: number | null;
+  personMatchTrace: Record<string, number | string> | null;
   briefText: string | null;
   researchStatus: string | null;
   aiSynthesisStatus: string | null;

@@ -4,6 +4,9 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { normalizeInboundReplyPayload } from "@/lib/platforms/inbound-reply";
 import { inngest, inboundReplyReceived } from "@/lib/inngest";
+import { looksLikeBounceNotification, extractBouncedRecipient } from "@/features/win-back/server/smtp-bounce-classifier";
+import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
+import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
 
 /**
  * Win-Back recovery gap 6 — forwarding path. The operator sets up an
@@ -53,6 +56,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
   if (!normalized) {
     console.warn(`[inbound-reply] Unrecognized payload shape for engagement ${engagementId} — neither Postmark nor SendGrid format.`);
     return NextResponse.json({ error: "Unrecognized inbound-reply payload shape." }, { status: 400 });
+  }
+
+  // Phase 6 — SMTP bounce detection (smtp-bounce-classifier.ts). Only
+  // meaningful when this app owns the actual send loop (email_platform
+  // === "smtp") — for the 6 ESP platforms, a message landing on this
+  // bridge is a genuine reply candidate, not this app's own bounce
+  // traffic, so the classifier is deliberately not run for them.
+  if (stack.email_platform === "smtp" && looksLikeBounceNotification(normalized.fromEmail, normalized.subject ?? "", normalized.textBody ?? "")) {
+    await recordDeliveryEvent(engagementId, "smtp", "bounced", extractBouncedRecipient(normalized.textBody ?? ""), new Date());
+    await checkAndApplyAutoPause(engagementId);
+    return NextResponse.json({ success: true, classified: "bounce" });
   }
 
   await inngest.send(

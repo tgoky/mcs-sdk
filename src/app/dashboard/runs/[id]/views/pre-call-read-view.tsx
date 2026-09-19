@@ -75,6 +75,17 @@ function findDeliveryFailureDetail(steps: RunStep[], call: BriefedCall): string 
   return step?.detail ?? null;
 }
 
+// Mirrors evaluatePersonMatch's own trace keys (person-match.ts) exactly —
+// not re-derived or guessed, since a label naming a key that doesn't
+// actually exist in the trace would silently render nothing (points ===
+// undefined skips the row above) rather than fail loudly.
+const MATCH_TRACE_SIGNALS: { pointsKey: string; typeKey?: string; label: string }[] = [
+  { pointsKey: "input_1_domain", typeKey: "input_1_type", label: "Email domain" },
+  { pointsKey: "input_2_name", typeKey: "input_2_type", label: "Name" },
+  { pointsKey: "input_3_linkedin", label: "LinkedIn URL" },
+  { pointsKey: "input_4_company", label: "Company cross-signal" },
+];
+
 const DESTINATION_ICON: Record<string, typeof MessageSquare> = {
   slack: MessageSquare,
   crm_note: StickyNote,
@@ -343,6 +354,13 @@ function CallCard({
 
   const [deliveryState, setDeliveryState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  // Phase 6 — the Rule 14 per-signal margin breakdown (personMatchTrace)
+  // used to be computed and discarded. Kept behind an explicit toggle
+  // rather than shown by default: matchLabel's own comment above explains
+  // why a raw score/breakdown reads as a data-quality problem to someone
+  // who doesn't know what Rule 14 is — this is for whoever needs to
+  // actually debug a skip, not the default glance.
+  const [showMatchDetail, setShowMatchDetail] = useState(false);
 
   const handleCopyText = () => {
     navigator.clipboard.writeText(editableText || call.briefText || "");
@@ -431,7 +449,18 @@ function CallCard({
         <div className="grid grid-cols-2 gap-2 text-xs">
          <div className="space-y-0.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
-            <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
+              {call.personMatchTrace && (
+                <button
+                  type="button"
+                  onClick={() => setShowMatchDetail((v) => !v)}
+                  className="text-[10px] font-mono text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 underline decoration-dotted cursor-pointer"
+                >
+                  {showMatchDetail ? "hide" : "why?"}
+                </button>
+              )}
+            </div>
           </div>
  <div className="space-y-0.5">
             <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
@@ -445,6 +474,31 @@ function CallCard({
             )}
           </div>
         </div>
+
+        {showMatchDetail && call.personMatchTrace && (
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-2.5 text-[11px] font-mono space-y-1">
+            {MATCH_TRACE_SIGNALS.map(({ pointsKey, typeKey, label }) => {
+              const points = call.personMatchTrace![pointsKey];
+              const type = typeKey ? call.personMatchTrace![typeKey] : undefined;
+              if (points === undefined) return null;
+              return (
+                <div key={pointsKey} className="flex items-center justify-between gap-2">
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {label}
+                    {type ? ` (${type})` : ""}
+                  </span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200">+{points}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-zinc-500 dark:text-zinc-400">Total / threshold</span>
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                {call.personMatchTrace.total}/100 (needed {call.personMatchTrace.threshold})
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Brief text — real failure/undelivered reason, never a hardcoded
             fallback string that could disagree with the step timeline. */}

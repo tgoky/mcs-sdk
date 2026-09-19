@@ -17,6 +17,9 @@
 // open reputation incident, rather than sending automated, cheerful sales
 // copy with zero awareness of a live crisis.
 
+import { db } from "@/lib/db";
+import { engagements, type EngagementStack } from "@/models/schema";
+import { eq } from "drizzle-orm";
 import { getCrisisContext } from "@/lib/worker-context-registry";
 
 export interface BlockingReason {
@@ -33,6 +36,21 @@ export const WORKER_BLOCKING_CONDITIONS: Record<string, BlockingCondition> = {
     return {
       conditionId: "rep-open-incident",
       reason: `This client has an open reputation incident (severity ${context.severityScore ?? "?"}) — automated tone-sensitive copy is on hold until it's resolved.`,
+    };
+  },
+  // Phase 6 — Win-Back's bounce/complaint-rate auto-pause
+  // (esp-delivery-monitor.ts). That module already unenrolls every
+  // ACTIVE prospect the moment the threshold crosses; this condition is
+  // what stops any NEW enrollment from being created while the pause is
+  // still in effect. Cleared only by an operator's explicit resume
+  // action (resumeWinBackSends), never automatically.
+  "win-back-bounce-complaint-pause": async (engagementId) => {
+    const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+    const stack = (row?.stack as EngagementStack | null) ?? null;
+    if (!stack?.win_back_auto_paused) return null;
+    return {
+      conditionId: "win-back-bounce-complaint-pause",
+      reason: stack.win_back_auto_paused_reason ?? "Win-Back is auto-paused pending a deliverability review.",
     };
   },
 };

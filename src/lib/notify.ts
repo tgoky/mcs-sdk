@@ -119,7 +119,17 @@ export type NotificationType =
   // one Whop has already disabled. Confirmed against this file's own
   // "both real consumers use array membership checks" note above: safe to
   // add without an exhaustive-switch break.
-  | "whop_webhook_health";
+  | "whop_webhook_health"
+  // Phase 6 — Win-Back's bounce/complaint-rate auto-pause
+  // (esp-delivery-monitor.ts). Not reused from an existing type: this is
+  // a deliverability/reputation-of-the-sending-domain alert, distinct in
+  // kind from a run failure or a credential problem, and distinct from
+  // reputation_crisis_declared too (that's about the CLIENT's public
+  // reputation; this is about their ESP account's sending reputation).
+  // Confirmed both real consumers of this union use array membership
+  // checks, not an exhaustive switch (see whop_webhook_health's own note
+  // above) — safe to add.
+  | "win_back_delivery_auto_paused";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 

@@ -480,6 +480,7 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
         briefDeliveredAt: deliveredNow ? new Date() : null,
         destinationDelivered: deliveredNow ? stack.brief_landing_destination ?? "slack" : null,
         personMatchScore: matchResult!.totalScore,
+        personMatchTrace: matchResult!.trace,
         // Persisted regardless of delivery outcome — see the comment
         // above this block. This is the fix for the drawer/card showing
         // "Brief generation failed" while the step timeline showed a
@@ -501,6 +502,7 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
           briefDeliveredAt: deliveredNow ? new Date() : null,
           destinationDelivered: deliveredNow ? stack.brief_landing_destination ?? "slack" : null,
           personMatchScore: matchResult!.totalScore,
+          personMatchTrace: matchResult!.trace,
           briefText: llmResult.text,
           researchStatus,
           aiSynthesisStatus: "completed",
@@ -575,6 +577,7 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
           briefDeliveredAt: null,
           destinationDelivered: null,
           personMatchScore: matchResult?.totalScore ?? null,
+          personMatchTrace: matchResult?.trace ?? null,
           briefText: null,
           researchStatus,
           aiSynthesisStatus: "failed",

@@ -17,8 +17,6 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-const REPORT_WINDOW_DAYS = 7;
-
 export async function runSendReport(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
   const summary = emptySummary();
   const engagementId: string = tenant.engagementId;
@@ -33,6 +31,11 @@ export async function runSendReport(tenant: any, runId: string, step: StepTools 
     }
 
     const config = await getColdOpenConfig(engagementId);
+    // Phase 6 — was a bare hardcoded const with no per-engagement
+    // override anywhere; now a real column (coldOpenConfig.reportWindowDays,
+    // schema.ts) with the same default (7) preserved when the row predates
+    // this column (Drizzle's own NOT NULL DEFAULT backfills existing rows).
+    const REPORT_WINDOW_DAYS = config?.reportWindowDays ?? 7;
     const since = new Date(Date.now() - REPORT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
     const leadRows = await db
