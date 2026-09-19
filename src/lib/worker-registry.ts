@@ -89,9 +89,10 @@ export type ClientProfileFact = "primaryDomain" | "buyerName";
  *   - "hidden-default": has a real, safe default, Advanced-only, never
  *     surfaced in the main flow — used when a wrong default is genuinely
  *     low-cost (e.g. confirmationPageAnimationsEnabled).
- * Only populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
- * rep-onboarding, icp-lock, pile-on) today — undefined for every other
- * field, not a claim that field has been classified and found tier-less.
+ * Populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
+ * rep-onboarding, icp-lock, pile-on) plus, as of Phase 5, voice-capture —
+ * undefined for every other field, not a claim that field has been
+ * classified and found tier-less.
  */
 export type WorkerFieldTier = "blocking" | "deferrable" | "visible-default" | "hidden-default";
 
@@ -494,49 +495,57 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "auditOutputFormat",
       label: "Report delivery format",
       kind: "ask",
-      description: "Real delivery-format choice (Slack/email/both) — not derivable.",
+      tier: "visible-default",
+      description: "Real delivery-format choice (Slack/email/both) — not derivable. checkLeakMap never blocks on this itself (defaults to dashboard_only), but it gates whether leakMapReportEmail becomes required below — worth showing, not hiding.",
     },
     {
       key: "leakMapReportEmail",
       label: "Report email address",
       kind: "ask",
-      description: "Only needed when the email format is chosen — a real address only the operator has.",
+      tier: "blocking",
+      description: "Only needed when the email format is chosen — a real address only the operator has. checkLeakMap's own conditional: blocks only when auditOutputFormat === \"email\" and this is unset — the only field this checker ever actually blocks on.",
     },
     {
       key: "weeklySummarySchedule",
       label: "Weekly summary schedule",
       kind: "ask",
-      description: "Real per-client day/hour/timezone cadence preference.",
+      tier: "hidden-default",
+      description: "Real per-client day/hour/timezone cadence preference. Has a real, documented default (Monday 09:00 UTC) and never blocks — low blast radius the same way pin-down's low-risk defaults are, per this plan's own \"lead time, recovery window\" precedent.",
     },
     {
       key: "monthlyDeepDiveSchedule",
       label: "Monthly deep-dive schedule",
       kind: "ask",
-      description: "Same reasoning as the weekly schedule — a real cadence preference.",
+      tier: "hidden-default",
+      description: "Same reasoning as the weekly schedule — a real cadence preference with a real default (1st-of-month 09:00 UTC), low blast radius.",
     },
     {
       key: "timezone",
       label: "Client timezone",
       kind: "ask",
-      description: "Needed to anchor the schedules above correctly — a real fact, not derivable from a domain.",
+      tier: "hidden-default",
+      description: "Needed to anchor the schedules above correctly — a real fact, not derivable from a domain. Defaults to UTC, low blast radius if wrong (reports just land at a slightly odd local hour, not a correctness failure).",
     },
     {
       key: "existingAuditFlagged",
       label: "Existing funnel data on file",
       kind: "ask",
-      description: "Collected on pin-down's own setup screen on Leak Map's behalf, per that page's own comment — whether the operator already has funnel-audit data worth referencing.",
+      tier: "hidden-default",
+      description: "Collected on pin-down's own setup screen on Leak Map's behalf, per that page's own comment — whether the operator already has funnel-audit data worth referencing. Purely informational, defaults to false/unflagged, never blocks.",
     },
     {
       key: "notificationPackSelections",
       label: "Alert opt-ins",
       kind: "ask",
-      description: "Curated alert selections, also collected on pin-down's setup screen — a real preference, not a default to assume.",
+      tier: "visible-default",
+      description: "Curated alert selections, also collected on pin-down's setup screen — a real preference, not a default to assume. Same reasoning as icp-lock's reviewRequiredIcps: a real opt-in worth seeing, defaults to none selected, never blocks.",
     },
     {
       key: "sampleSizeMinimum",
       label: "Minimum sample size for a metric to be trusted",
       kind: "ask",
-      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block.",
+      tier: "visible-default",
+      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block. High-blast-radius per this plan's own Open Risks section (feeds a client-facing claim directly) — stays visible, not hidden, even though it never blocks.",
     },
     // AGING_THRESHOLD_DAYS = 30 (audit-engine.ts) was found during the
     // full 34-worker audit as a real gap distinct from sampleSizeMinimum
@@ -625,36 +634,59 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       label: "Reschedule link mode",
       kind: "ask",
       description: "Real workflow choice — fresh_link only works for Calendly/Cal.com, time_slots is the platform-agnostic fallback. Not derivable.",
+      tier: "hidden-default",
+      // checkWinBack (worker-config-completeness.ts) never blocks on this —
+      // it has a real, documented default (time_slots) per the checker's
+      // own comment, and win-back-config-form.tsx's SelectField already
+      // marks time_slots "(default)".
     },
     {
       key: "recoveredFromNoShowTaggingEnabled",
       label: "Tag recovered no-shows",
       kind: "ask",
       description: "Real judgment call (default true) on whether a rebook after a no-show gets CRM-tagged — a sane default, not something to silently assume without asking.",
+      tier: "hidden-default",
+      // Real default (true), never blocks per checkWinBack's own comment.
     },
     {
       key: "inboundReplyMode",
       label: "Inbound reply handling",
       kind: "ask",
       description: "Real choice (none/forwarding/native) — native is restricted to HubSpot per the setup screen's own copy.",
+      tier: "visible-default",
+      // Real default ("none", per win-back-config-form.tsx) and never
+      // blocks by itself — but it's the switch that determines whether
+      // hubspotPortalId becomes required below, so it stays visible
+      // rather than hidden, same reasoning as leak-map's auditOutputFormat.
     },
     {
       key: "hubspotPortalId",
       label: "HubSpot portal ID",
       kind: "ask",
       description: "Only needed for native inbound-reply mode on HubSpot — a real per-client fact found in the operator's own HubSpot admin, not derivable from anything on file.",
+      tier: "blocking",
+      // The one field checkWinBack actually blocks on, and only
+      // conditionally: inboundReplyMode === "native" && emailPlatform ===
+      // "hubspot" && !hubspotPortalId.
     },
     {
       key: "recoveryWindowDays",
       label: "Recovery cadence length",
       kind: "ask",
       description: "Real per-client cadence-length preference — currently hardcoded to 30 days with no UI setter anywhere. Ask, flagged unbuilt.",
+      tier: "hidden-default",
+      // Real default (30), never blocks, and win-back-config-form.tsx has
+      // no field for it at all today — hidden is the only honest tier
+      // until a setter exists.
     },
     {
       key: "dailySendTolerance",
       label: "Daily send tolerance",
       kind: "ask",
       description: "Real per-client rate-limiting preference — currently hardcoded to 2 with no UI setter anywhere. Ask, flagged unbuilt.",
+      tier: "hidden-default",
+      // Same as recoveryWindowDays — real default (2), never blocks, no
+      // UI setter exists yet.
     },
   ],
 };
@@ -848,19 +880,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       key: "voiceProfile",
       label: "Greeting, sign-off, and tone",
       kind: "ask",
-      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried.",
+      tier: "blocking",
+      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried. checkVoiceCapture blocks on exactly this field (\"mirrors runVoiceCapture's own guard\") — the other two below are registry-listed but not actually gate-checked.",
     },
     {
       key: "subjectVariants",
       label: "Subject line pool",
       kind: "ask",
-      description: "AI-assisted drafting from the captured voice is plausible in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
+      tier: "deferrable",
+      description: "AI-assisted drafting from the captured voice is plausible in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry. Not checked by checkVoiceCapture at all — Pile-On's own email sequence is what actually needs this, so it defers to that opt-in rather than blocking Voice Capture itself.",
     },
     {
       key: "bodyVariantPools",
       label: "Body variant pool(s)",
       kind: "ask",
-      description: "At least 2 variants per ICP are required before Daily Send can run in upload mode (see body-variants.ts) — same reasoning as subjectVariants above.",
+      tier: "deferrable",
+      description: "At least 2 variants per ICP are required before Daily Send can run in upload mode (see body-variants.ts) — same reasoning as subjectVariants above. Not checked by checkVoiceCapture; bundled with Daily Send's own copyMode=upload choice instead, since that's the thing that actually needs it.",
     },
   ],
   "source-connect": [
@@ -868,19 +903,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       key: "leadSourceType",
       label: "Lead source",
       kind: "ask",
-      description: "CSV upload, Apify actor, or a Sales Navigator export — a real choice. Only CSV and Apify have a working verification pull today; Sales Navigator is accepted as a config choice and flagged unbuilt.",
+      tier: "blocking",
+      description: "CSV upload, Apify actor, or a Sales Navigator export — a real choice. Only CSV and Apify have a working verification pull today; Sales Navigator is accepted as a config choice and flagged unbuilt. checkSourceConnect blocks on leadSources.length === 0 — at least one source with a real fetcherType is what actually satisfies that.",
     },
     {
       key: "leadSourceCredential",
       label: "Apify API token",
       kind: "secret",
-      description: "Routes to the credential vault path — only needed when leadSourceType is apify.",
+      tier: "deferrable",
+      description: "Routes to the credential vault path — only needed when leadSourceType is apify. Not checked by checkSourceConnect at all today (it only verifies the array is non-empty, not that a given entry's own requirements are met) — a real, honest gap in the gate's granularity, not something this tiering pass silently patches over.",
     },
     {
       key: "csvMapping",
       label: "CSV column mapping",
       kind: "ask",
-      description: "Which of the client's own CSV column headers map to email/company/name/etc — real per-file mapping, not derivable.",
+      tier: "deferrable",
+      description: "Which of the client's own CSV column headers map to email/company/name/etc — real per-file mapping, not derivable. Same as leadSourceCredential above: only needed when leadSourceType is csv, and not independently checked by the gate.",
     },
   ],
   "send-connect": [
@@ -888,24 +926,28 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       key: "sendPlatform",
       label: "Sending platform",
       kind: "ask",
-      description: "Instantly, SmartLead, Reply.io, or Lemlist — a real choice.",
+      tier: "blocking",
+      description: "Instantly, SmartLead, Reply.io, or Lemlist — a real choice. checkSendConnect blocks on exactly this field (\"mirrors runSendConnect's own guard\").",
     },
     {
       key: "sendPlatformCredential",
       label: "Sending platform API key",
       kind: "secret",
-      description: "Routes to the credential vault path — never a plain text field.",
+      tier: "deferrable",
+      description: "Routes to the credential vault path — never a plain text field. Not checked by checkSendConnect today (only sendPlatform's presence is verified) — same honest gap shape as Source Connect's leadSourceCredential.",
     },
     {
       key: "campaignMap",
       label: "ICP -> campaign mapping",
       kind: "ask",
-      description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable.",
+      tier: "deferrable",
+      description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable. Not checked by checkSendConnect — real per-ICP setup that can follow once the platform choice itself is made.",
     },
     {
       key: "autoPushIcps",
       label: "Auto-push ICPs",
       kind: "ask",
+      tier: "hidden-default",
       description: "Found missing entirely during the full 34-worker audit — a real, UI-collected, database-persisted field (send-connect-config-form.tsx, coldOpenConfig.autoPushIcps) that daily-send.ts reads directly to decide whether a matched lead auto-pushes or holds for human review. Defaults to empty (nothing auto-pushed, everything review-required-and-held) when unset — a safe default, so this does not block, but was previously undisclosed in this registry.",
     },
   ],
@@ -914,19 +956,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       key: "dailySendVolume",
       label: "Daily send volume",
       kind: "ask",
-      description: "Real per-client throughput preference, bounded by their own inbox warm-up state — not a sane global default.",
+      tier: "blocking",
+      description: "Real per-client throughput preference, bounded by their own inbox warm-up state — not a sane global default. checkDailySend blocks on dailySendSettings as a whole object (\"mirrors runDailySend's own guard\") — this and the two fields below all save together in one write (daily-send-config-form.tsx's handleSubmit), so all three are what actually satisfies that check, even though the form itself pre-fills sane starting values (volume defaults to 20, which is why canSubmit is true before any edit — the gate cares whether a row exists at all, not whether the defaults were changed).",
     },
     {
       key: "dailySendLocalHour",
       label: "Send hour (client-local time)",
       kind: "ask",
-      description: "Real per-client cadence preference, same pattern leak-map's weeklySummarySchedule already uses.",
+      tier: "blocking",
+      description: "Real per-client cadence preference, same pattern leak-map's weeklySummarySchedule already uses. Part of the same atomic dailySendSettings save as dailySendVolume above.",
     },
     {
       key: "copyMode",
       label: "Copy mode",
       kind: "ask",
-      description: "generate (fresh LLM copy per lead) or upload (the buyer's own fixed templates, rotated) — a real workflow choice.",
+      tier: "blocking",
+      description: "generate (fresh LLM copy per lead) or upload (the buyer's own fixed templates, rotated) — a real workflow choice. Part of the same atomic dailySendSettings save as dailySendVolume above.",
     },
   ],
   "reply-sort": [],
@@ -1039,6 +1084,39 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>> 
     { name: "SMS Follow-ups", requiredFieldKeys: ["smsPlatform", "smsPlatformCredential", "smsA2p10dlcStatus", "smsComplianceFooterVariant"] },
     { name: "Ad-Cohort Sync", requiredFieldKeys: ["adDataPlatform", "adDataPlatformCredential"] },
   ],
+  // Phase 5's first Cold Open pipeline worker — same "one gating
+  // capability" shape as icp-lock, since checkVoiceCapture only blocks on
+  // voiceProfile itself (subjectVariants/bodyVariantPools are deferred to
+  // whichever downstream worker actually needs them, see their own tier
+  // comments above).
+  "voice-capture": [{ name: "Brand Voice Captured", requiredFieldKeys: ["voiceProfile"] }],
+  // Same reasoning as voice-capture's own entry — checkSourceConnect only
+  // verifies leadSources.length > 0, so this gates on leadSourceType
+  // alone, not the two deferrable per-fetcher-type fields beside it.
+  "source-connect": [{ name: "Lead Sourcing Configured", requiredFieldKeys: ["leadSourceType"] }],
+  // Same reasoning again — checkSendConnect only verifies sendPlatform's
+  // presence.
+  "send-connect": [{ name: "Sending Configured", requiredFieldKeys: ["sendPlatform"] }],
+  // checkDailySend blocks on sendPlatform (already Send Connect's own
+  // field) AND its own dailySendSettings object — the 3 fields below all
+  // save atomically in one write, so all 3 together are this worker's own
+  // real gating requirement.
+  "daily-send": [{ name: "Daily Send Scheduled", requiredFieldKeys: ["dailySendVolume", "dailySendLocalHour", "copyMode"] }],
+  // checkLeakMap only ever blocks on leakMapReportEmail, and only
+  // conditionally (when auditOutputFormat === "email"). Rather than list
+  // auditOutputFormat here too — which would show this capability inactive
+  // by default, since the default output format never requires an email —
+  // the conditionality is folded into filledKeysForLeakMap's own read
+  // below: it marks leakMapReportEmail "filled" whenever the real checker
+  // wouldn't block, not only when the field itself has a value.
+  "leak-map": [{ name: "Report Delivery Configured", requiredFieldKeys: ["leakMapReportEmail"] }],
+  // Same shape as leak-map's own capability: checkWinBack only ever blocks
+  // on hubspotPortalId, and only conditionally (native inbound-reply mode
+  // + HubSpot). inboundReplyMode isn't listed here for the same reason
+  // auditOutputFormat isn't listed for leak-map — its real default
+  // ("none") never requires hubspotPortalId, so requiring it here would
+  // show this capability inactive by default.
+  "win-back": [{ name: "Inbound Reply Handling Configured", requiredFieldKeys: ["hubspotPortalId"] }],
 };
 
 // Single source of truth for category, kept out of skill-manifest.ts and

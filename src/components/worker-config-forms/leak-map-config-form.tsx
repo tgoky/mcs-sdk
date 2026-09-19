@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 const DAY_OPTIONS = [
   { value: "0", label: "Sunday" },
@@ -135,6 +136,8 @@ export function LeakMapConfigForm({
           to change the audit schedule or where reports land.
         </p>
       </div>
+
+      <WorkerCapabilityMatrix workerId="leak-map" engagementId={engagementId} />
 
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <SelectField

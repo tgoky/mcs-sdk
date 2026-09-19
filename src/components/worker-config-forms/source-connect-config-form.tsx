@@ -11,6 +11,7 @@ import { InputField, TextAreaField, SelectField } from "@/app/dashboard/engageme
 import type { ColdOpenLeadSource, ColdOpenLeadSourceType } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 type SourceRow = {
   icp: string;
@@ -152,6 +153,8 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
           {cancelLabel}
         </button>
       </div>
+
+      <WorkerCapabilityMatrix workerId="source-connect" engagementId={engagementId} />
 
       <div className="flex items-end gap-2">
         <div className="flex-1">

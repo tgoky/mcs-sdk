@@ -1,0 +1,1103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 13:55:54 +0000
+Subject: [PATCH] Phase 5, first slice: Live Capability Matrix for Pile-On
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Phase 5's real scope, corrected against this session's own 34-worker
+audit rather than the doc's stale original line (see the plan doc's
+latest entry): the doc names "leak-map, win-back, pile-on's remainder,
+the Cold Open pipeline, and the Whop workers" as Phase 5 targets, but
+14 of the 15 Whop Agent workers are confirmed zero-config and
+explicitly flagged as workers that "should never get a setup flow, only
+a toggle" — building Dossier UI for them would contradict this exact
+doc's own finding. Real Phase 5 scope: leak-map, win-back, pile-on,
+voice-capture, source-connect, send-connect, daily-send. (The 15th Whop
+worker, whop-refund-dispute-velocity, needs schema migrations before
+any UI is possible — that's Phase 6, not Phase 5.)
+
+Pile-On chosen first because it's not a blank slate: Phase 2 already
+tiered its fields and built its capability map (SMS Follow-ups,
+Ad-Cohort Sync) in the "Encode Phase 2's field-risk tiers" commit, and
+worker-capability-status.ts already has a filledKeysForPileOn reader
+from Phase 3 slice 1 — none of that backend work has any UI consuming
+it yet. This slice closes exactly that gap: wires the existing,
+already-generic WorkerCapabilityMatrix component (its own API route
+dispatches by workerId with no hardcoded worker list — confirmed by
+reading it, not assumed) into pile-on-config-form.tsx, the same
+one-line pattern already proven three times this session for
+rep-onboarding/pre-call-read/icp-lock. Read-only, additive, above the
+existing SMS/ad-data dropdowns — the existing save/enable logic is
+completely untouched.
+
+Verification:
+- npx tsc --noEmit: 5 errors, unchanged baseline
+- npx next build: "Compiled successfully" + "Finished TypeScript", clean
+- npx vitest run: 59 failed / 191 passed / 18 skipped — matches
+  origin/main's current baseline exactly, zero regressions
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ src/components/worker-config-forms/pile-on-config-form.tsx | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/components/worker-config-forms/pile-on-config-form.tsx b/src/components/worker-config-forms/pile-on-config-form.tsx
+index ed5c967..bbc3d3c 100644
+--- a/src/components/worker-config-forms/pile-on-config-form.tsx
++++ b/src/components/worker-config-forms/pile-on-config-form.tsx
+@@ -17,6 +17,7 @@
+ import { useState } from "react";
+ import { SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS, skillName } from "@/lib/copy";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ const SMS_OPTIONS = Object.entries(SMS_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
+ const AD_DATA_OPTIONS = Object.entries(AD_DATA_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
+@@ -66,6 +67,8 @@ export function PileOnConfigForm({
+         </p>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="pile-on" engagementId={engagementId} />
++
+       <SelectField label="SMS follow-ups" value={smsPlatform} onChange={setSmsPlatform} options={SMS_OPTIONS} />
+       <SelectField label="Ad-data cohort sync" value={adDataPlatform} onChange={setAdDataPlatform} options={AD_DATA_OPTIONS} />
+ 
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:00:00 +0000
+Subject: [PATCH] Phase 5, second slice: Phase 2 tiers + Live Capability Matrix
+ for Voice Capture
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+First Cold Open pipeline worker on the corrected Phase 5 scope. Unlike
+Pile-On (which already had Phase 2 data from earlier this session),
+Voice Capture had none — this slice builds both layers from scratch,
+same order Phase 2 originally went through for the top-5 workers.
+
+Tiered against checkVoiceCapture's real gate logic, not the registry's
+field list alone (Phase 2's own rule: tier must match what the real
+checker actually blocks on, never silently diverge): checkVoiceCapture
+blocks on exactly voiceProfile ("mirrors runVoiceCapture's own guard")
+— subjectVariants and bodyVariantPools are registry-listed but not
+actually gate-checked at all today. Tiered voiceProfile as blocking,
+the other two as deferrable (bundled with whichever downstream worker
+actually needs them — Pile-On's sequence for subject variants, Daily
+Send's upload copyMode for body variant pools — rather than blocking
+Voice Capture itself for fields it doesn't need to Arm).
+
+WORKER_CAPABILITIES gets one capability, "Brand Voice Captured",
+gating on voiceProfile alone — same one-capability shape as icp-lock's
+own "ICP Targeting Locked", for the same reason (the gate only
+requires the one field). worker-capability-status.ts gets
+filledKeysForVoiceCapture, reading straight from getColdOpenConfig
+(the same real source checkVoiceCapture itself reads). Both files'
+header comments corrected — they claimed "only the Phase 2 top-5" /
+"scoped to the same 5 Phase 2 workers," no longer true as of this
+commit.
+
+Wired the existing, already-generic WorkerCapabilityMatrix into
+voice-capture-config-form.tsx — read-only, additive, existing
+load/save logic completely untouched.
+
+Verification:
+- npx tsc --noEmit: 5 errors, unchanged baseline
+- npx next build: "Compiled successfully" + "Finished TypeScript", clean
+- npx vitest run: 59 failed / 191 passed / 18 skipped — matches
+  origin/main's current baseline exactly, zero regressions
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../voice-capture-config-form.tsx             |  3 +++
+ src/lib/worker-capability-status.ts           | 17 +++++++++++---
+ src/lib/worker-registry.ts                    | 22 ++++++++++++++-----
+ 3 files changed, 33 insertions(+), 9 deletions(-)
+
+diff --git a/src/components/worker-config-forms/voice-capture-config-form.tsx b/src/components/worker-config-forms/voice-capture-config-form.tsx
+index 61f6f8e..0bc181b 100644
+--- a/src/components/worker-config-forms/voice-capture-config-form.tsx
++++ b/src/components/worker-config-forms/voice-capture-config-form.tsx
+@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
+ import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useToast } from "@/components/toast/toast-provider";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ type Touchset = { subject: string; body1: string; body2: string; body3: string };
+ function emptyTouchset(): Touchset {
+@@ -116,6 +117,8 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
+         </button>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="voice-capture" engagementId={engagementId} />
++
+       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+         <InputField label="Greeting" value={greeting} onChange={setGreeting} placeholder="Hi" required />
+         <InputField label="Sign-off" value={signOff} onChange={setSignOff} placeholder="Best" required />
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index d171abf..3613f5c 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -6,9 +6,9 @@
+ // (worker-config-completeness.ts already solved that for the fields that
+ // block a run) but a broader "is there a value here at all" read across
+ // every field WORKER_CAPABILITIES (worker-registry.ts) names, blocking or
+-// not. Scoped to the same 5 Phase 2 workers, for the same reason: a field
+-// key with no verified storage mapping here would silently show a
+-// capability as dim (or worse, lit) on a guess.
++// not. Scoped to exactly the workers with a real reader below, for the
++// same reason: a field key with no verified storage mapping here would
++// silently show a capability as dim (or worse, lit) on a guess.
+ //
+ // Deliberately read-only. This module never writes — it exists to power
+ // a matrix that reads what's already true, not to duplicate the save
+@@ -123,12 +123,23 @@ async function filledKeysForPileOn(engagementId: string): Promise<Set<string>> {
+   return filled;
+ }
+ 
++async function filledKeysForVoiceCapture(engagementId: string): Promise<Set<string>> {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config) return new Set();
++  const filled = new Set<string>();
++  if (truthy(config.voiceProfile)) filled.add("voiceProfile");
++  if (truthy(config.subjectVariants)) filled.add("subjectVariants");
++  if (truthy(config.bodyVariantPools)) filled.add("bodyVariantPools");
++  return filled;
++}
++
+ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
+   "pin-down": filledKeysForPinDown,
+   "pre-call-read": filledKeysForPreCallRead,
+   "rep-onboarding": filledKeysForRepOnboarding,
+   "icp-lock": filledKeysForIcpLock,
+   "pile-on": filledKeysForPileOn,
++  "voice-capture": filledKeysForVoiceCapture,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index aa2b6a7..27598df 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -89,9 +89,10 @@ export type ClientProfileFact = "primaryDomain" | "buyerName";
+  *   - "hidden-default": has a real, safe default, Advanced-only, never
+  *     surfaced in the main flow — used when a wrong default is genuinely
+  *     low-cost (e.g. confirmationPageAnimationsEnabled).
+- * Only populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
+- * rep-onboarding, icp-lock, pile-on) today — undefined for every other
+- * field, not a claim that field has been classified and found tier-less.
++ * Populated for the Phase 2 top-5 workers (pin-down, pre-call-read,
++ * rep-onboarding, icp-lock, pile-on) plus, as of Phase 5, voice-capture —
++ * undefined for every other field, not a claim that field has been
++ * classified and found tier-less.
+  */
+ export type WorkerFieldTier = "blocking" | "deferrable" | "visible-default" | "hidden-default";
+ 
+@@ -848,19 +849,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       key: "voiceProfile",
+       label: "Greeting, sign-off, and tone",
+       kind: "ask",
+-      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried.",
++      tier: "blocking",
++      description: "Audited and reclassified from derivable — the claimed reuse of pin-down's voice-extraction code never actually happens; voice-capture.ts never imports or calls extractVoiceProfile, and greeting/signOff/tone start as static defaults for a new engagement. No cross-product reuse exists today, unlike the description this field previously carried. checkVoiceCapture blocks on exactly this field (\"mirrors runVoiceCapture's own guard\") — the other two below are registry-listed but not actually gate-checked.",
+     },
+     {
+       key: "subjectVariants",
+       label: "Subject line pool",
+       kind: "ask",
+-      description: "AI-assisted drafting from the captured voice is plausible in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry.",
++      tier: "deferrable",
++      description: "AI-assisted drafting from the captured voice is plausible in a future pass, but not built — honestly ask for now, same reasoning as pin-down's topCallQuestions entry. Not checked by checkVoiceCapture at all — Pile-On's own email sequence is what actually needs this, so it defers to that opt-in rather than blocking Voice Capture itself.",
+     },
+     {
+       key: "bodyVariantPools",
+       label: "Body variant pool(s)",
+       kind: "ask",
+-      description: "At least 2 variants per ICP are required before Daily Send can run in upload mode (see body-variants.ts) — same reasoning as subjectVariants above.",
++      tier: "deferrable",
++      description: "At least 2 variants per ICP are required before Daily Send can run in upload mode (see body-variants.ts) — same reasoning as subjectVariants above. Not checked by checkVoiceCapture; bundled with Daily Send's own copyMode=upload choice instead, since that's the thing that actually needs it.",
+     },
+   ],
+   "source-connect": [
+@@ -1039,6 +1043,12 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+     { name: "SMS Follow-ups", requiredFieldKeys: ["smsPlatform", "smsPlatformCredential", "smsA2p10dlcStatus", "smsComplianceFooterVariant"] },
+     { name: "Ad-Cohort Sync", requiredFieldKeys: ["adDataPlatform", "adDataPlatformCredential"] },
+   ],
++  // Phase 5's first Cold Open pipeline worker — same "one gating
++  // capability" shape as icp-lock, since checkVoiceCapture only blocks on
++  // voiceProfile itself (subjectVariants/bodyVariantPools are deferred to
++  // whichever downstream worker actually needs them, see their own tier
++  // comments above).
++  "voice-capture": [{ name: "Brand Voice Captured", requiredFieldKeys: ["voiceProfile"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:02:08 +0000
+Subject: [PATCH] Phase 5, third slice: Phase 2 tiers + Live Capability Matrix
+ for Source Connect
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Third Cold Open pipeline worker on the corrected Phase 5 scope.
+
+Tiered against checkSourceConnect's real gate (Phase 1), same
+discipline as Voice Capture's slice: it blocks on leadSources.length
+=== 0 alone — not on any per-entry field being complete. Tiered
+leadSourceType as blocking (at least one source with a real fetcherType
+is what actually produces a non-empty array) and both
+leadSourceCredential/csvMapping as deferrable, with an honest note in
+each: neither is independently checked by the gate today, even though
+both are functionally required once fetcherType is apify/csv
+respectively — a real gap in the gate's per-entry granularity, named
+plainly rather than silently smoothed over by this tiering pass.
+
+WORKER_CAPABILITIES gets one capability, "Lead Sourcing Configured",
+gating on leadSourceType alone, same one-field shape as Voice Capture's
+"Brand Voice Captured" for the same reason. filledKeysForSourceConnect
+reads getColdOpenConfig's leadSources array directly (any source with a
+real fetcherType marks leadSourceType filled; a csv source with real
+csvMapping marks that field; hasCredential(engagementId,
+"cold_open_apify") — the same provider key Source Connect's own form
+already saves the Apify token under — marks leadSourceCredential).
+
+Wired the existing WorkerCapabilityMatrix into
+source-connect-config-form.tsx — read-only, additive, existing
+load/save logic untouched.
+
+Verification:
+- npx tsc --noEmit: 5 errors, unchanged baseline
+- npx next build: "Compiled successfully" + "Finished TypeScript", clean
+- npx vitest run: 59 failed / 191 passed / 18 skipped — matches
+  origin/main's current baseline exactly, zero regressions
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../source-connect-config-form.tsx                  |  3 +++
+ src/lib/worker-capability-status.ts                 | 12 ++++++++++++
+ src/lib/worker-registry.ts                          | 13 ++++++++++---
+ 3 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/worker-config-forms/source-connect-config-form.tsx b/src/components/worker-config-forms/source-connect-config-form.tsx
+index 3e8fc7f..924389d 100644
+--- a/src/components/worker-config-forms/source-connect-config-form.tsx
++++ b/src/components/worker-config-forms/source-connect-config-form.tsx
+@@ -11,6 +11,7 @@ import { InputField, TextAreaField, SelectField } from "@/app/dashboard/engageme
+ import type { ColdOpenLeadSource, ColdOpenLeadSourceType } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useToast } from "@/components/toast/toast-provider";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ type SourceRow = {
+   icp: string;
+@@ -153,6 +154,8 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel =
+         </button>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="source-connect" engagementId={engagementId} />
++
+       <div className="flex items-end gap-2">
+         <div className="flex-1">
+           <InputField label="Apify API token (only needed for an apify source)" value={apifyToken} onChange={setApifyToken} placeholder="apify_api_..." />
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index 3613f5c..ad053de 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -18,6 +18,7 @@ import { db } from "@/lib/db";
+ import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
+ import { eq } from "drizzle-orm";
+ import { getColdOpenConfig } from "@/features/cold-open/server/config";
++import { hasCredential } from "@/lib/credentials";
+ import { WORKER_CAPABILITIES, type WorkerId } from "@/lib/worker-registry";
+ 
+ function truthy(value: unknown): boolean {
+@@ -133,6 +134,16 @@ async function filledKeysForVoiceCapture(engagementId: string): Promise<Set<stri
+   return filled;
+ }
+ 
++async function filledKeysForSourceConnect(engagementId: string): Promise<Set<string>> {
++  const config = await getColdOpenConfig(engagementId);
++  const filled = new Set<string>();
++  const sources = config?.leadSources ?? [];
++  if (sources.some((s) => truthy(s.fetcherType))) filled.add("leadSourceType");
++  if (sources.some((s) => s.fetcherType === "csv" && truthy(s.csvMapping))) filled.add("csvMapping");
++  if (await hasCredential(engagementId, "cold_open_apify")) filled.add("leadSourceCredential");
++  return filled;
++}
++
+ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
+   "pin-down": filledKeysForPinDown,
+   "pre-call-read": filledKeysForPreCallRead,
+@@ -140,6 +151,7 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
+   "icp-lock": filledKeysForIcpLock,
+   "pile-on": filledKeysForPileOn,
+   "voice-capture": filledKeysForVoiceCapture,
++  "source-connect": filledKeysForSourceConnect,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 27598df..a2744ea 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -872,19 +872,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       key: "leadSourceType",
+       label: "Lead source",
+       kind: "ask",
+-      description: "CSV upload, Apify actor, or a Sales Navigator export — a real choice. Only CSV and Apify have a working verification pull today; Sales Navigator is accepted as a config choice and flagged unbuilt.",
++      tier: "blocking",
++      description: "CSV upload, Apify actor, or a Sales Navigator export — a real choice. Only CSV and Apify have a working verification pull today; Sales Navigator is accepted as a config choice and flagged unbuilt. checkSourceConnect blocks on leadSources.length === 0 — at least one source with a real fetcherType is what actually satisfies that.",
+     },
+     {
+       key: "leadSourceCredential",
+       label: "Apify API token",
+       kind: "secret",
+-      description: "Routes to the credential vault path — only needed when leadSourceType is apify.",
++      tier: "deferrable",
++      description: "Routes to the credential vault path — only needed when leadSourceType is apify. Not checked by checkSourceConnect at all today (it only verifies the array is non-empty, not that a given entry's own requirements are met) — a real, honest gap in the gate's granularity, not something this tiering pass silently patches over.",
+     },
+     {
+       key: "csvMapping",
+       label: "CSV column mapping",
+       kind: "ask",
+-      description: "Which of the client's own CSV column headers map to email/company/name/etc — real per-file mapping, not derivable.",
++      tier: "deferrable",
++      description: "Which of the client's own CSV column headers map to email/company/name/etc — real per-file mapping, not derivable. Same as leadSourceCredential above: only needed when leadSourceType is csv, and not independently checked by the gate.",
+     },
+   ],
+   "send-connect": [
+@@ -1049,6 +1052,10 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+   // whichever downstream worker actually needs them, see their own tier
+   // comments above).
+   "voice-capture": [{ name: "Brand Voice Captured", requiredFieldKeys: ["voiceProfile"] }],
++  // Same reasoning as voice-capture's own entry — checkSourceConnect only
++  // verifies leadSources.length > 0, so this gates on leadSourceType
++  // alone, not the two deferrable per-fetcher-type fields beside it.
++  "source-connect": [{ name: "Lead Sourcing Configured", requiredFieldKeys: ["leadSourceType"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:04:22 +0000
+Subject: [PATCH] Phase 5, fourth slice: Phase 2 tiers + Live Capability Matrix
+ for Send Connect
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fourth Cold Open pipeline worker on the corrected Phase 5 scope.
+
+checkSendConnect blocks on sendPlatform alone ("mirrors runSendConnect's
+own guard"). Tiered sendPlatform as blocking; sendPlatformCredential and
+campaignMap as deferrable (neither independently checked by the gate,
+same honest-gap shape already named for Source Connect's leadSourceCredential/
+csvMapping); autoPushIcps as hidden-default, since it genuinely has a
+real, safe, documented default (empty = nothing auto-pushed, everything
+held for review) and was the field the full 34-worker audit found
+completely undisclosed in this registry.
+
+Caught and fixed a real mistake before verifying: first pass wrote
+`kind: "hidden-default"` on autoPushIcps instead of `tier:
+"hidden-default"` — kind and tier are two different fields on
+WorkerConfigField (kind is "ask"/"secret"/etc, tier is the Phase 2 risk
+tier), and tsc caught the type mismatch immediately. Fixed to `kind:
+"ask", tier: "hidden-default"` before re-verifying.
+
+WORKER_CAPABILITIES gets "Sending Configured", gating on sendPlatform
+alone. filledKeysForSendConnect reads getColdOpenConfig's sendPlatform/
+campaignMap/autoPushIcps directly, plus hasCredential(engagementId,
+`cold_open_${platform}`) for sendPlatformCredential — the exact same
+provider-key convention send-connect-config-form.tsx's own CredentialRow
+already uses.
+
+Wired WorkerCapabilityMatrix into send-connect-config-form.tsx —
+read-only, additive, existing load/save logic untouched.
+
+Verification:
+- npx tsc --noEmit: 5 errors, unchanged baseline (confirmed clean only
+  after fixing the kind/tier mistake above — the broken version was
+  caught here, never shipped)
+- npx next build: "Compiled successfully" + "Finished TypeScript", clean
+- npx vitest run: 59 failed / 191 passed / 18 skipped — matches
+  origin/main's current baseline exactly, zero regressions
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../send-connect-config-form.tsx                   |  3 +++
+ src/lib/worker-capability-status.ts                | 14 ++++++++++++++
+ src/lib/worker-registry.ts                         | 13 ++++++++++---
+ 3 files changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/worker-config-forms/send-connect-config-form.tsx b/src/components/worker-config-forms/send-connect-config-form.tsx
+index 7d510fc..55c1a15 100644
+--- a/src/components/worker-config-forms/send-connect-config-form.tsx
++++ b/src/components/worker-config-forms/send-connect-config-form.tsx
+@@ -7,6 +7,7 @@ import type { ColdOpenSendPlatformId } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useToast } from "@/components/toast/toast-provider";
+ import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ const SEND_PLATFORM_LABELS: Record<ColdOpenSendPlatformId, string> = {
+   instantly: "Instantly",
+@@ -101,6 +102,8 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+         </button>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="send-connect" engagementId={engagementId} />
++
+       <SelectField
+         label="Sending platform"
+         value={platform}
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index ad053de..e146d7f 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -144,6 +144,19 @@ async function filledKeysForSourceConnect(engagementId: string): Promise<Set<str
+   return filled;
+ }
+ 
++async function filledKeysForSendConnect(engagementId: string): Promise<Set<string>> {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config) return new Set();
++  const filled = new Set<string>();
++  if (truthy(config.sendPlatform?.platform)) {
++    filled.add("sendPlatform");
++    if (await hasCredential(engagementId, `cold_open_${config.sendPlatform!.platform}`)) filled.add("sendPlatformCredential");
++  }
++  if (truthy(config.campaignMap)) filled.add("campaignMap");
++  if (truthy(config.autoPushIcps)) filled.add("autoPushIcps");
++  return filled;
++}
++
+ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
+   "pin-down": filledKeysForPinDown,
+   "pre-call-read": filledKeysForPreCallRead,
+@@ -152,6 +165,7 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
+   "pile-on": filledKeysForPileOn,
+   "voice-capture": filledKeysForVoiceCapture,
+   "source-connect": filledKeysForSourceConnect,
++  "send-connect": filledKeysForSendConnect,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index a2744ea..b7cb357 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -895,24 +895,28 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       key: "sendPlatform",
+       label: "Sending platform",
+       kind: "ask",
+-      description: "Instantly, SmartLead, Reply.io, or Lemlist — a real choice.",
++      tier: "blocking",
++      description: "Instantly, SmartLead, Reply.io, or Lemlist — a real choice. checkSendConnect blocks on exactly this field (\"mirrors runSendConnect's own guard\").",
+     },
+     {
+       key: "sendPlatformCredential",
+       label: "Sending platform API key",
+       kind: "secret",
+-      description: "Routes to the credential vault path — never a plain text field.",
++      tier: "deferrable",
++      description: "Routes to the credential vault path — never a plain text field. Not checked by checkSendConnect today (only sendPlatform's presence is verified) — same honest gap shape as Source Connect's leadSourceCredential.",
+     },
+     {
+       key: "campaignMap",
+       label: "ICP -> campaign mapping",
+       kind: "ask",
+-      description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable.",
++      tier: "deferrable",
++      description: "Which real campaign in the client's own ESP account each ICP pushes into — only knowable from their account, not derivable. Not checked by checkSendConnect — real per-ICP setup that can follow once the platform choice itself is made.",
+     },
+     {
+       key: "autoPushIcps",
+       label: "Auto-push ICPs",
+       kind: "ask",
++      tier: "hidden-default",
+       description: "Found missing entirely during the full 34-worker audit — a real, UI-collected, database-persisted field (send-connect-config-form.tsx, coldOpenConfig.autoPushIcps) that daily-send.ts reads directly to decide whether a matched lead auto-pushes or holds for human review. Defaults to empty (nothing auto-pushed, everything review-required-and-held) when unset — a safe default, so this does not block, but was previously undisclosed in this registry.",
+     },
+   ],
+@@ -1056,6 +1060,9 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+   // verifies leadSources.length > 0, so this gates on leadSourceType
+   // alone, not the two deferrable per-fetcher-type fields beside it.
+   "source-connect": [{ name: "Lead Sourcing Configured", requiredFieldKeys: ["leadSourceType"] }],
++  // Same reasoning again — checkSendConnect only verifies sendPlatform's
++  // presence.
++  "send-connect": [{ name: "Sending Configured", requiredFieldKeys: ["sendPlatform"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:06:26 +0000
+Subject: [PATCH] Phase 5, fifth slice: Phase 2 tiers + Live Capability Matrix
+ for Daily Send
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fifth slice, and completes the Cold Open pipeline (icp-lock, voice-capture,
+source-connect, send-connect, daily-send all now have Phase 2 tiers,
+capability maps, and Live Capability Matrix UI — icp-lock had this
+from Phase 3 already).
+
+checkDailySend blocks on sendPlatform (already tiered under Send
+Connect) AND its own dailySendSettings — a single object bundling
+dailySendVolume/dailySendLocalHour/copyMode, saved atomically in one
+write by daily-send-config-form.tsx's own handleSubmit. Tiered all
+three as blocking, since a non-null dailySendSettings row is what
+actually satisfies the gate and that row either has all three or
+doesn't exist at all. Noted honestly in the field descriptions: the
+form itself pre-fills sane starting values (volume defaults to "20",
+which is why canSubmit is already true before any edit) — the gate
+cares whether a row was ever saved, not whether the defaults were
+changed, so "blocking" here describes the gate's real requirement, not
+a claim that every value needs deliberate tuning.
+
+WORKER_CAPABILITIES gets "Daily Send Scheduled", gating on all three
+fields together (matches the atomic save). filledKeysForDailySend
+reads getColdOpenConfig's dailySendSettings once and returns all three
+keys together when it's non-null, rather than checking each sub-field
+independently — correctly reflects that they can't exist separately.
+
+Wired WorkerCapabilityMatrix into daily-send-config-form.tsx —
+read-only, additive, existing load/save logic (including the
+HeldLeadsPanel and live-send toggle) completely untouched.
+
+Verification:
+- npx tsc --noEmit: 5 errors, unchanged baseline
+- npx next build: "Compiled successfully" + "Finished TypeScript", clean
+- npx vitest run: 59 failed / 191 passed / 18 skipped — matches
+  origin/main's current baseline exactly, zero regressions
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../worker-config-forms/daily-send-config-form.tsx |  3 +++
+ src/lib/worker-capability-status.ts                | 10 ++++++++++
+ src/lib/worker-registry.ts                         | 14 +++++++++++---
+ 3 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/worker-config-forms/daily-send-config-form.tsx b/src/components/worker-config-forms/daily-send-config-form.tsx
+index ad0bf3f..8965a99 100644
+--- a/src/components/worker-config-forms/daily-send-config-form.tsx
++++ b/src/components/worker-config-forms/daily-send-config-form.tsx
+@@ -6,6 +6,7 @@ import { Check, X, Loader2 } from "lucide-react";
+ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useToast } from "@/components/toast/toast-provider";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
+ 
+@@ -203,6 +204,8 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
+         </button>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="daily-send" engagementId={engagementId} />
++
+       <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+         <InputField label="Daily volume" value={volume} onChange={setVolume} placeholder="20" required />
+         <SelectField label="Send hour (client-local time)" value={String(localHour)} onChange={(v) => setLocalHour(Number(v))} options={HOUR_OPTIONS} />
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index e146d7f..283f314 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -157,6 +157,15 @@ async function filledKeysForSendConnect(engagementId: string): Promise<Set<strin
+   return filled;
+ }
+ 
++async function filledKeysForDailySend(engagementId: string): Promise<Set<string>> {
++  const config = await getColdOpenConfig(engagementId);
++  if (!config?.dailySendSettings) return new Set();
++  // Saved atomically (daily-send-config-form.tsx's handleSubmit writes
++  // volume/localHour/copyMode together in one call) — a non-null
++  // dailySendSettings row means all three are on file.
++  return new Set(["dailySendVolume", "dailySendLocalHour", "copyMode"]);
++}
++
+ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
+   "pin-down": filledKeysForPinDown,
+   "pre-call-read": filledKeysForPreCallRead,
+@@ -166,6 +175,7 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
+   "voice-capture": filledKeysForVoiceCapture,
+   "source-connect": filledKeysForSourceConnect,
+   "send-connect": filledKeysForSendConnect,
++  "daily-send": filledKeysForDailySend,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index b7cb357..448be03 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -925,19 +925,22 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
+       key: "dailySendVolume",
+       label: "Daily send volume",
+       kind: "ask",
+-      description: "Real per-client throughput preference, bounded by their own inbox warm-up state — not a sane global default.",
++      tier: "blocking",
++      description: "Real per-client throughput preference, bounded by their own inbox warm-up state — not a sane global default. checkDailySend blocks on dailySendSettings as a whole object (\"mirrors runDailySend's own guard\") — this and the two fields below all save together in one write (daily-send-config-form.tsx's handleSubmit), so all three are what actually satisfies that check, even though the form itself pre-fills sane starting values (volume defaults to 20, which is why canSubmit is true before any edit — the gate cares whether a row exists at all, not whether the defaults were changed).",
+     },
+     {
+       key: "dailySendLocalHour",
+       label: "Send hour (client-local time)",
+       kind: "ask",
+-      description: "Real per-client cadence preference, same pattern leak-map's weeklySummarySchedule already uses.",
++      tier: "blocking",
++      description: "Real per-client cadence preference, same pattern leak-map's weeklySummarySchedule already uses. Part of the same atomic dailySendSettings save as dailySendVolume above.",
+     },
+     {
+       key: "copyMode",
+       label: "Copy mode",
+       kind: "ask",
+-      description: "generate (fresh LLM copy per lead) or upload (the buyer's own fixed templates, rotated) — a real workflow choice.",
++      tier: "blocking",
++      description: "generate (fresh LLM copy per lead) or upload (the buyer's own fixed templates, rotated) — a real workflow choice. Part of the same atomic dailySendSettings save as dailySendVolume above.",
+     },
+   ],
+   "reply-sort": [],
+@@ -1063,6 +1066,11 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+   // Same reasoning again — checkSendConnect only verifies sendPlatform's
+   // presence.
+   "send-connect": [{ name: "Sending Configured", requiredFieldKeys: ["sendPlatform"] }],
++  // checkDailySend blocks on sendPlatform (already Send Connect's own
++  // field) AND its own dailySendSettings object — the 3 fields below all
++  // save atomically in one write, so all 3 together are this worker's own
++  // real gating requirement.
++  "daily-send": [{ name: "Daily Send Scheduled", requiredFieldKeys: ["dailySendVolume", "dailySendLocalHour", "copyMode"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:46:14 +0000
+Subject: [PATCH] Phase 5, sixth slice: Phase 2 tiers + Live Capability Matrix
+ for Leak Map
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+worker-registry.ts: tiered all 8 leak-map configFields against
+checkLeakMap's actual real rule (worker-config-completeness.ts:131-148)
+rather than the field list alone. checkLeakMap blocks on exactly one
+thing: leakMapReportEmail, and only conditionally, when
+auditOutputFormat === "email". Every other field (weeklySummarySchedule,
+monthlyDeepDiveSchedule, timezone, sampleSizeMinimum) has a real,
+documented default and never blocks — tiered hidden-default, except
+auditOutputFormat itself (visible-default, since it's the switch that
+determines whether the email field becomes required) and
+notificationPackSelections/sampleSizeMinimum (visible-default: a real
+opt-in and a high-blast-radius value respectively, per the plan doc's own
+Open Risks section, even though neither ever blocks).
+
+WORKER_CAPABILITIES["leak-map"]: added "Report Delivery Configured",
+gated on leakMapReportEmail alone — NOT auditOutputFormat, despite the
+field's own conditionality being about both. Listing auditOutputFormat
+as a required key too would show the capability inactive by default,
+since the default output format (dashboard_only) never requires an
+email; the one-field list keeps this consistent with how
+voice-capture/source-connect/send-connect each gate on their own single
+real blocking field.
+
+worker-capability-status.ts: added filledKeysForLeakMap, reading the
+engagement's stack and checking all 8 fields. leakMapReportEmail's own
+read folds in the same conditionality checkLeakMap applies server-side
+(stack.audit_output_format !== "email" || truthy(stack.leak_map_report_email))
+rather than just checking whether the field itself has a value — so the
+capability reflects the real gate, not a naive "is this field set" read.
+
+leak-map-config-form.tsx: wired in WorkerCapabilityMatrix, same additive
+placement pattern used in every prior Phase 5 slice.
+
+Verification: npx tsc --noEmit stayed at the established baseline of 5
+pre-existing errors in unrelated test files. `next build`'s page-data
+collection step fails in this sandbox on DATABASE_URL not being set —
+confirmed via git stash that this failure is identical on the prior
+commit (14b14bd) with none of this slice's changes applied, i.e. a
+pre-existing sandbox limitation, not a regression introduced here.
+npx vitest run stayed at the established baseline: 59 failed / 191
+passed / 18 skipped, unchanged.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../leak-map-config-form.tsx                  |  3 ++
+ src/lib/worker-capability-status.ts           | 21 ++++++++++++
+ src/lib/worker-registry.ts                    | 32 ++++++++++++++-----
+ 3 files changed, 48 insertions(+), 8 deletions(-)
+
+diff --git a/src/components/worker-config-forms/leak-map-config-form.tsx b/src/components/worker-config-forms/leak-map-config-form.tsx
+index ae9d5c0..5cbc8a3 100644
+--- a/src/components/worker-config-forms/leak-map-config-form.tsx
++++ b/src/components/worker-config-forms/leak-map-config-form.tsx
+@@ -13,6 +13,7 @@
+ import { useEffect, useState } from "react";
+ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ const DAY_OPTIONS = [
+   { value: "0", label: "Sunday" },
+@@ -136,6 +137,8 @@ export function LeakMapConfigForm({
+         </p>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="leak-map" engagementId={engagementId} />
++
+       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+         <SelectField
+           label="Weekly summary — day"
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index 283f314..a732d51 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -157,6 +157,26 @@ async function filledKeysForSendConnect(engagementId: string): Promise<Set<strin
+   return filled;
+ }
+ 
++async function filledKeysForLeakMap(engagementId: string): Promise<Set<string>> {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  if (!stack) return new Set();
++  const filled = new Set<string>();
++  if (truthy(stack.audit_output_format)) filled.add("auditOutputFormat");
++  // checkLeakMap only blocks on leakMapReportEmail when
++  // audit_output_format === "email" and it's unset — mirror that
++  // conditionality here rather than requiring an email address
++  // unconditionally, so the capability reflects the real gate.
++  if (stack.audit_output_format !== "email" || truthy(stack.leak_map_report_email)) filled.add("leakMapReportEmail");
++  if (truthy(stack.weekly_summary_schedule)) filled.add("weeklySummarySchedule");
++  if (truthy(stack.monthly_deep_dive_schedule)) filled.add("monthlyDeepDiveSchedule");
++  if (truthy(stack.timezone)) filled.add("timezone");
++  if (stack.existing_audit_flagged) filled.add("existingAuditFlagged");
++  if (truthy(stack.notification_pack_selections)) filled.add("notificationPackSelections");
++  if (truthy(stack.sample_size_minimum)) filled.add("sampleSizeMinimum");
++  return filled;
++}
++
+ async function filledKeysForDailySend(engagementId: string): Promise<Set<string>> {
+   const config = await getColdOpenConfig(engagementId);
+   if (!config?.dailySendSettings) return new Set();
+@@ -176,6 +196,7 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
+   "source-connect": filledKeysForSourceConnect,
+   "send-connect": filledKeysForSendConnect,
+   "daily-send": filledKeysForDailySend,
++  "leak-map": filledKeysForLeakMap,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index 448be03..aa8fb3c 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -495,49 +495,57 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       key: "auditOutputFormat",
+       label: "Report delivery format",
+       kind: "ask",
+-      description: "Real delivery-format choice (Slack/email/both) — not derivable.",
++      tier: "visible-default",
++      description: "Real delivery-format choice (Slack/email/both) — not derivable. checkLeakMap never blocks on this itself (defaults to dashboard_only), but it gates whether leakMapReportEmail becomes required below — worth showing, not hiding.",
+     },
+     {
+       key: "leakMapReportEmail",
+       label: "Report email address",
+       kind: "ask",
+-      description: "Only needed when the email format is chosen — a real address only the operator has.",
++      tier: "blocking",
++      description: "Only needed when the email format is chosen — a real address only the operator has. checkLeakMap's own conditional: blocks only when auditOutputFormat === \"email\" and this is unset — the only field this checker ever actually blocks on.",
+     },
+     {
+       key: "weeklySummarySchedule",
+       label: "Weekly summary schedule",
+       kind: "ask",
+-      description: "Real per-client day/hour/timezone cadence preference.",
++      tier: "hidden-default",
++      description: "Real per-client day/hour/timezone cadence preference. Has a real, documented default (Monday 09:00 UTC) and never blocks — low blast radius the same way pin-down's low-risk defaults are, per this plan's own \"lead time, recovery window\" precedent.",
+     },
+     {
+       key: "monthlyDeepDiveSchedule",
+       label: "Monthly deep-dive schedule",
+       kind: "ask",
+-      description: "Same reasoning as the weekly schedule — a real cadence preference.",
++      tier: "hidden-default",
++      description: "Same reasoning as the weekly schedule — a real cadence preference with a real default (1st-of-month 09:00 UTC), low blast radius.",
+     },
+     {
+       key: "timezone",
+       label: "Client timezone",
+       kind: "ask",
+-      description: "Needed to anchor the schedules above correctly — a real fact, not derivable from a domain.",
++      tier: "hidden-default",
++      description: "Needed to anchor the schedules above correctly — a real fact, not derivable from a domain. Defaults to UTC, low blast radius if wrong (reports just land at a slightly odd local hour, not a correctness failure).",
+     },
+     {
+       key: "existingAuditFlagged",
+       label: "Existing funnel data on file",
+       kind: "ask",
+-      description: "Collected on pin-down's own setup screen on Leak Map's behalf, per that page's own comment — whether the operator already has funnel-audit data worth referencing.",
++      tier: "hidden-default",
++      description: "Collected on pin-down's own setup screen on Leak Map's behalf, per that page's own comment — whether the operator already has funnel-audit data worth referencing. Purely informational, defaults to false/unflagged, never blocks.",
+     },
+     {
+       key: "notificationPackSelections",
+       label: "Alert opt-ins",
+       kind: "ask",
+-      description: "Curated alert selections, also collected on pin-down's setup screen — a real preference, not a default to assume.",
++      tier: "visible-default",
++      description: "Curated alert selections, also collected on pin-down's setup screen — a real preference, not a default to assume. Same reasoning as icp-lock's reviewRequiredIcps: a real opt-in worth seeing, defaults to none selected, never blocks.",
+     },
+     {
+       key: "sampleSizeMinimum",
+       label: "Minimum sample size for a metric to be trusted",
+       kind: "ask",
+-      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block.",
++      tier: "visible-default",
++      description: "Real statistical-floor preference gating which deltas count as signal — currently hardcoded to 5 with no UI setter, but has a real stack column (sample_size_minimum, schema.ts) with that exact default already documented. Ask, flagged unbuilt, does not block. High-blast-radius per this plan's own Open Risks section (feeds a client-facing claim directly) — stays visible, not hidden, even though it never blocks.",
+     },
+     // AGING_THRESHOLD_DAYS = 30 (audit-engine.ts) was found during the
+     // full 34-worker audit as a real gap distinct from sampleSizeMinimum
+@@ -1071,6 +1079,14 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+   // save atomically in one write, so all 3 together are this worker's own
+   // real gating requirement.
+   "daily-send": [{ name: "Daily Send Scheduled", requiredFieldKeys: ["dailySendVolume", "dailySendLocalHour", "copyMode"] }],
++  // checkLeakMap only ever blocks on leakMapReportEmail, and only
++  // conditionally (when auditOutputFormat === "email"). Rather than list
++  // auditOutputFormat here too — which would show this capability inactive
++  // by default, since the default output format never requires an email —
++  // the conditionality is folded into filledKeysForLeakMap's own read
++  // below: it marks leakMapReportEmail "filled" whenever the real checker
++  // wouldn't block, not only when the field itself has a value.
++  "leak-map": [{ name: "Report Delivery Configured", requiredFieldKeys: ["leakMapReportEmail"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 19 Sep 2026 14:49:26 +0000
+Subject: [PATCH] Phase 5, seventh and final slice: Phase 2 tiers + Live
+ Capability Matrix for Win-Back
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+worker-registry.ts: tiered all 6 win-back configFields against
+checkWinBack's actual real rule (worker-config-completeness.ts:116-129).
+checkWinBack blocks on exactly one thing: hubspotPortalId, and only
+conditionally, when inboundReplyMode === "native" && emailPlatform ===
+"hubspot". rescheduleMode and recoveredFromNoShowTaggingEnabled have
+real, documented defaults (time_slots / true) per the checker's own
+comment — tiered hidden-default. recoveryWindowDays and
+dailySendTolerance also have real defaults (30 / 2) but additionally
+have no UI setter anywhere in win-back-config-form.tsx at all (confirmed
+by reading the form directly) — hidden-default is the only honest tier
+until a setter exists. inboundReplyMode itself never blocks (real
+default "none", confirmed in the form's own useState), but tiered
+visible-default since it's the switch that determines whether
+hubspotPortalId becomes required — same reasoning as leak-map's
+auditOutputFormat.
+
+WORKER_CAPABILITIES["win-back"]: added "Inbound Reply Handling
+Configured", gated on hubspotPortalId alone, not inboundReplyMode — same
+reasoning as leak-map's capability: listing the switch field too would
+show this capability inactive by default, since the real default
+("none") never requires a portal id.
+
+worker-capability-status.ts: added filledKeysForWinBack, reading the
+engagement's stack and checking all 6 fields. hubspotPortalId's own read
+folds in the same conditionality checkWinBack applies server-side
+(stack.inbound_reply_mode === "native" && stack.email_platform ===
+"hubspot" implies a portal id is needed) rather than checking whether
+the field itself has a value, so the capability reflects the real gate.
+
+win-back-config-form.tsx: wired in WorkerCapabilityMatrix, same additive
+placement pattern used in every prior Phase 5 slice.
+
+This completes Phase 5's corrected 7-worker scope: pile-on,
+voice-capture, source-connect, send-connect, daily-send, leak-map,
+win-back.
+
+Verification: npx tsc --noEmit stayed at the established baseline of 5
+pre-existing errors in unrelated test files. `next build`'s compile and
+TypeScript phases both pass cleanly; its page-data collection step still
+fails in this sandbox on DATABASE_URL not being set, confirmed via git
+stash on the leak-map slice's commit to be a pre-existing sandbox
+limitation, not a regression from Phase 5's own changes. npx vitest run
+stayed at the established baseline: 59 failed / 191 passed / 18 skipped,
+unchanged.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QVWhaC6hTtT9UCKS7Dub7w
+---
+ .../win-back-config-form.tsx                  |  3 ++
+ src/lib/worker-capability-status.ts           | 19 ++++++++++++
+ src/lib/worker-registry.ts                    | 30 +++++++++++++++++++
+ 3 files changed, 52 insertions(+)
+
+diff --git a/src/components/worker-config-forms/win-back-config-form.tsx b/src/components/worker-config-forms/win-back-config-form.tsx
+index e3e3455..dda1891 100644
+--- a/src/components/worker-config-forms/win-back-config-form.tsx
++++ b/src/components/worker-config-forms/win-back-config-form.tsx
+@@ -7,6 +7,7 @@
+ import { useEffect, useState } from "react";
+ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
++import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ 
+ export function WinBackConfigForm({
+   engagementId,
+@@ -110,6 +111,8 @@ export function WinBackConfigForm({
+         </p>
+       </div>
+ 
++      <WorkerCapabilityMatrix workerId="win-back" engagementId={engagementId} />
++
+       <SelectField
+         label="Reschedule link mode"
+         value={rescheduleMode}
+diff --git a/src/lib/worker-capability-status.ts b/src/lib/worker-capability-status.ts
+index a732d51..6fcd942 100644
+--- a/src/lib/worker-capability-status.ts
++++ b/src/lib/worker-capability-status.ts
+@@ -177,6 +177,24 @@ async function filledKeysForLeakMap(engagementId: string): Promise<Set<string>>
+   return filled;
+ }
+ 
++async function filledKeysForWinBack(engagementId: string): Promise<Set<string>> {
++  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
++  const stack = (row?.stack as EngagementStack | null) ?? null;
++  if (!stack) return new Set();
++  const filled = new Set<string>();
++  if (truthy(stack.reschedule_mode)) filled.add("rescheduleMode");
++  if (stack.recovered_from_no_show_tagging_enabled !== undefined) filled.add("recoveredFromNoShowTaggingEnabled");
++  if (truthy(stack.inbound_reply_mode)) filled.add("inboundReplyMode");
++  // checkWinBack only blocks on hubspotPortalId when inbound_reply_mode
++  // === "native" and email_platform === "hubspot" — mirror that
++  // conditionality here rather than requiring a portal id unconditionally.
++  const needsHubspotPortalId = stack.inbound_reply_mode === "native" && stack.email_platform === "hubspot";
++  if (!needsHubspotPortalId || truthy(stack.hubspot_portal_id)) filled.add("hubspotPortalId");
++  if (stack.recovery_window_days !== undefined) filled.add("recoveryWindowDays");
++  if (stack.daily_send_tolerance !== undefined) filled.add("dailySendTolerance");
++  return filled;
++}
++
+ async function filledKeysForDailySend(engagementId: string): Promise<Set<string>> {
+   const config = await getColdOpenConfig(engagementId);
+   if (!config?.dailySendSettings) return new Set();
+@@ -197,6 +215,7 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
+   "send-connect": filledKeysForSendConnect,
+   "daily-send": filledKeysForDailySend,
+   "leak-map": filledKeysForLeakMap,
++  "win-back": filledKeysForWinBack,
+ };
+ 
+ /** Which of this worker's own configFields have a real value on file right
+diff --git a/src/lib/worker-registry.ts b/src/lib/worker-registry.ts
+index aa8fb3c..e9f86a2 100644
+--- a/src/lib/worker-registry.ts
++++ b/src/lib/worker-registry.ts
+@@ -634,36 +634,59 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
+       label: "Reschedule link mode",
+       kind: "ask",
+       description: "Real workflow choice — fresh_link only works for Calendly/Cal.com, time_slots is the platform-agnostic fallback. Not derivable.",
++      tier: "hidden-default",
++      // checkWinBack (worker-config-completeness.ts) never blocks on this —
++      // it has a real, documented default (time_slots) per the checker's
++      // own comment, and win-back-config-form.tsx's SelectField already
++      // marks time_slots "(default)".
+     },
+     {
+       key: "recoveredFromNoShowTaggingEnabled",
+       label: "Tag recovered no-shows",
+       kind: "ask",
+       description: "Real judgment call (default true) on whether a rebook after a no-show gets CRM-tagged — a sane default, not something to silently assume without asking.",
++      tier: "hidden-default",
++      // Real default (true), never blocks per checkWinBack's own comment.
+     },
+     {
+       key: "inboundReplyMode",
+       label: "Inbound reply handling",
+       kind: "ask",
+       description: "Real choice (none/forwarding/native) — native is restricted to HubSpot per the setup screen's own copy.",
++      tier: "visible-default",
++      // Real default ("none", per win-back-config-form.tsx) and never
++      // blocks by itself — but it's the switch that determines whether
++      // hubspotPortalId becomes required below, so it stays visible
++      // rather than hidden, same reasoning as leak-map's auditOutputFormat.
+     },
+     {
+       key: "hubspotPortalId",
+       label: "HubSpot portal ID",
+       kind: "ask",
+       description: "Only needed for native inbound-reply mode on HubSpot — a real per-client fact found in the operator's own HubSpot admin, not derivable from anything on file.",
++      tier: "blocking",
++      // The one field checkWinBack actually blocks on, and only
++      // conditionally: inboundReplyMode === "native" && emailPlatform ===
++      // "hubspot" && !hubspotPortalId.
+     },
+     {
+       key: "recoveryWindowDays",
+       label: "Recovery cadence length",
+       kind: "ask",
+       description: "Real per-client cadence-length preference — currently hardcoded to 30 days with no UI setter anywhere. Ask, flagged unbuilt.",
++      tier: "hidden-default",
++      // Real default (30), never blocks, and win-back-config-form.tsx has
++      // no field for it at all today — hidden is the only honest tier
++      // until a setter exists.
+     },
+     {
+       key: "dailySendTolerance",
+       label: "Daily send tolerance",
+       kind: "ask",
+       description: "Real per-client rate-limiting preference — currently hardcoded to 2 with no UI setter anywhere. Ask, flagged unbuilt.",
++      tier: "hidden-default",
++      // Same as recoveryWindowDays — real default (2), never blocks, no
++      // UI setter exists yet.
+     },
+   ],
+ };
+@@ -1087,6 +1110,13 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>>
+   // below: it marks leakMapReportEmail "filled" whenever the real checker
+   // wouldn't block, not only when the field itself has a value.
+   "leak-map": [{ name: "Report Delivery Configured", requiredFieldKeys: ["leakMapReportEmail"] }],
++  // Same shape as leak-map's own capability: checkWinBack only ever blocks
++  // on hubspotPortalId, and only conditionally (native inbound-reply mode
++  // + HubSpot). inboundReplyMode isn't listed here for the same reason
++  // auditOutputFormat isn't listed for leak-map — its real default
++  // ("none") never requires hubspotPortalId, so requiring it here would
++  // show this capability inactive by default.
++  "win-back": [{ name: "Inbound Reply Handling Configured", requiredFieldKeys: ["hubspotPortalId"] }],
+ };
+ 
+ // Single source of truth for category, kept out of skill-manifest.ts and
+-- 
+2.43.0
+

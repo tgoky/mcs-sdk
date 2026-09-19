@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 type Touchset = { subject: string; body1: string; body2: string; body3: string };
 function emptyTouchset(): Touchset {
@@ -115,6 +116,8 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
           {cancelLabel}
         </button>
       </div>
+
+      <WorkerCapabilityMatrix workerId="voice-capture" engagementId={engagementId} />
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
         <InputField label="Greeting" value={greeting} onChange={setGreeting} placeholder="Hi" required />

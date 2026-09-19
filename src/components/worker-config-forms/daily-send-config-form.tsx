@@ -6,6 +6,7 @@ import { Check, X, Loader2 } from "lucide-react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
 
@@ -202,6 +203,8 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
           {cancelLabel}
         </button>
       </div>
+
+      <WorkerCapabilityMatrix workerId="daily-send" engagementId={engagementId} />
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         <InputField label="Daily volume" value={volume} onChange={setVolume} placeholder="20" required />

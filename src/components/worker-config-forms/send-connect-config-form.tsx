@@ -7,6 +7,7 @@ import type { ColdOpenSendPlatformId } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 const SEND_PLATFORM_LABELS: Record<ColdOpenSendPlatformId, string> = {
   instantly: "Instantly",
@@ -100,6 +101,8 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
           {cancelLabel}
         </button>
       </div>
+
+      <WorkerCapabilityMatrix workerId="send-connect" engagementId={engagementId} />
 
       <SelectField
         label="Sending platform"

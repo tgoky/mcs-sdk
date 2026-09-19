@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 export function WinBackConfigForm({
   engagementId,
@@ -109,6 +110,8 @@ export function WinBackConfigForm({
           anytime to change how it reschedules or detects replies.
         </p>
       </div>
+
+      <WorkerCapabilityMatrix workerId="win-back" engagementId={engagementId} />
 
       <SelectField
         label="Reschedule link mode"

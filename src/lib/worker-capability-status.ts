@@ -6,9 +6,9 @@
 // (worker-config-completeness.ts already solved that for the fields that
 // block a run) but a broader "is there a value here at all" read across
 // every field WORKER_CAPABILITIES (worker-registry.ts) names, blocking or
-// not. Scoped to the same 5 Phase 2 workers, for the same reason: a field
-// key with no verified storage mapping here would silently show a
-// capability as dim (or worse, lit) on a guess.
+// not. Scoped to exactly the workers with a real reader below, for the
+// same reason: a field key with no verified storage mapping here would
+// silently show a capability as dim (or worse, lit) on a guess.
 //
 // Deliberately read-only. This module never writes — it exists to power
 // a matrix that reads what's already true, not to duplicate the save
@@ -18,6 +18,7 @@ import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
+import { hasCredential } from "@/lib/credentials";
 import { WORKER_CAPABILITIES, type WorkerId } from "@/lib/worker-registry";
 
 function truthy(value: unknown): boolean {
@@ -123,12 +124,98 @@ async function filledKeysForPileOn(engagementId: string): Promise<Set<string>> {
   return filled;
 }
 
+async function filledKeysForVoiceCapture(engagementId: string): Promise<Set<string>> {
+  const config = await getColdOpenConfig(engagementId);
+  if (!config) return new Set();
+  const filled = new Set<string>();
+  if (truthy(config.voiceProfile)) filled.add("voiceProfile");
+  if (truthy(config.subjectVariants)) filled.add("subjectVariants");
+  if (truthy(config.bodyVariantPools)) filled.add("bodyVariantPools");
+  return filled;
+}
+
+async function filledKeysForSourceConnect(engagementId: string): Promise<Set<string>> {
+  const config = await getColdOpenConfig(engagementId);
+  const filled = new Set<string>();
+  const sources = config?.leadSources ?? [];
+  if (sources.some((s) => truthy(s.fetcherType))) filled.add("leadSourceType");
+  if (sources.some((s) => s.fetcherType === "csv" && truthy(s.csvMapping))) filled.add("csvMapping");
+  if (await hasCredential(engagementId, "cold_open_apify")) filled.add("leadSourceCredential");
+  return filled;
+}
+
+async function filledKeysForSendConnect(engagementId: string): Promise<Set<string>> {
+  const config = await getColdOpenConfig(engagementId);
+  if (!config) return new Set();
+  const filled = new Set<string>();
+  if (truthy(config.sendPlatform?.platform)) {
+    filled.add("sendPlatform");
+    if (await hasCredential(engagementId, `cold_open_${config.sendPlatform!.platform}`)) filled.add("sendPlatformCredential");
+  }
+  if (truthy(config.campaignMap)) filled.add("campaignMap");
+  if (truthy(config.autoPushIcps)) filled.add("autoPushIcps");
+  return filled;
+}
+
+async function filledKeysForLeakMap(engagementId: string): Promise<Set<string>> {
+  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const stack = (row?.stack as EngagementStack | null) ?? null;
+  if (!stack) return new Set();
+  const filled = new Set<string>();
+  if (truthy(stack.audit_output_format)) filled.add("auditOutputFormat");
+  // checkLeakMap only blocks on leakMapReportEmail when
+  // audit_output_format === "email" and it's unset — mirror that
+  // conditionality here rather than requiring an email address
+  // unconditionally, so the capability reflects the real gate.
+  if (stack.audit_output_format !== "email" || truthy(stack.leak_map_report_email)) filled.add("leakMapReportEmail");
+  if (truthy(stack.weekly_summary_schedule)) filled.add("weeklySummarySchedule");
+  if (truthy(stack.monthly_deep_dive_schedule)) filled.add("monthlyDeepDiveSchedule");
+  if (truthy(stack.timezone)) filled.add("timezone");
+  if (stack.existing_audit_flagged) filled.add("existingAuditFlagged");
+  if (truthy(stack.notification_pack_selections)) filled.add("notificationPackSelections");
+  if (truthy(stack.sample_size_minimum)) filled.add("sampleSizeMinimum");
+  return filled;
+}
+
+async function filledKeysForWinBack(engagementId: string): Promise<Set<string>> {
+  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const stack = (row?.stack as EngagementStack | null) ?? null;
+  if (!stack) return new Set();
+  const filled = new Set<string>();
+  if (truthy(stack.reschedule_mode)) filled.add("rescheduleMode");
+  if (stack.recovered_from_no_show_tagging_enabled !== undefined) filled.add("recoveredFromNoShowTaggingEnabled");
+  if (truthy(stack.inbound_reply_mode)) filled.add("inboundReplyMode");
+  // checkWinBack only blocks on hubspotPortalId when inbound_reply_mode
+  // === "native" and email_platform === "hubspot" — mirror that
+  // conditionality here rather than requiring a portal id unconditionally.
+  const needsHubspotPortalId = stack.inbound_reply_mode === "native" && stack.email_platform === "hubspot";
+  if (!needsHubspotPortalId || truthy(stack.hubspot_portal_id)) filled.add("hubspotPortalId");
+  if (stack.recovery_window_days !== undefined) filled.add("recoveryWindowDays");
+  if (stack.daily_send_tolerance !== undefined) filled.add("dailySendTolerance");
+  return filled;
+}
+
+async function filledKeysForDailySend(engagementId: string): Promise<Set<string>> {
+  const config = await getColdOpenConfig(engagementId);
+  if (!config?.dailySendSettings) return new Set();
+  // Saved atomically (daily-send-config-form.tsx's handleSubmit writes
+  // volume/localHour/copyMode together in one call) — a non-null
+  // dailySendSettings row means all three are on file.
+  return new Set(["dailySendVolume", "dailySendLocalHour", "copyMode"]);
+}
+
 const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
   "pin-down": filledKeysForPinDown,
   "pre-call-read": filledKeysForPreCallRead,
   "rep-onboarding": filledKeysForRepOnboarding,
   "icp-lock": filledKeysForIcpLock,
   "pile-on": filledKeysForPileOn,
+  "voice-capture": filledKeysForVoiceCapture,
+  "source-connect": filledKeysForSourceConnect,
+  "send-connect": filledKeysForSendConnect,
+  "daily-send": filledKeysForDailySend,
+  "leak-map": filledKeysForLeakMap,
+  "win-back": filledKeysForWinBack,
 };
 
 /** Which of this worker's own configFields have a real value on file right

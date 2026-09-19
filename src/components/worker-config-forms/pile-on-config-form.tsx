@@ -17,6 +17,7 @@
 import { useState } from "react";
 import { SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS, skillName } from "@/lib/copy";
+import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 
 const SMS_OPTIONS = Object.entries(SMS_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
 const AD_DATA_OPTIONS = Object.entries(AD_DATA_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
@@ -65,6 +66,8 @@ export function PileOnConfigForm({
           Selecting &quot;none&quot; turns that channel back off. Finer setup continues from Edit Stack Settings.
         </p>
       </div>
+
+      <WorkerCapabilityMatrix workerId="pile-on" engagementId={engagementId} />
 
       <SelectField label="SMS follow-ups" value={smsPlatform} onChange={setSmsPlatform} options={SMS_OPTIONS} />
       <SelectField label="Ad-data cohort sync" value={adDataPlatform} onChange={setAdDataPlatform} options={AD_DATA_OPTIONS} />
