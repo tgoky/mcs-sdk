@@ -730,7 +730,7 @@ export function UnifiedActivityPanel({
               <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">
                 {bannerSlide.productLabel} · {bannerSlide.worker.description}
               </span>
-              <span className="shrink-0 text-zinc-700 dark:text-zinc-200 font-bold">Enable →</span>
+              <span className="shrink-0 text-zinc-700 dark:text-zinc-200 font-bold">Enable</span>
             </div>
           ) : (
             <span className="flex items-center h-full text-zinc-400 dark:text-zinc-500 font-normal">Nothing needs attention right now.</span>
