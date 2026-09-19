@@ -608,6 +608,38 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void 
   const [rotateValue, setRotateValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  // Composio-managed rows have no plaintext value to rotate (see the
+  // hidden Rotate button below) — this is their equivalent: a fresh OAuth
+  // round trip that updates THIS row in place (rotateComposioVaultCredential,
+  // via vaultId in the request) rather than creating an unrelated new vault
+  // row. Matters most once healthStatus is "invalid": before this existed,
+  // an invalid Composio credential shared by several clients had no fix at
+  // all — Delete refuses while any engagement is still linked, and
+  // reconnecting via any one client's own CredentialRow only ever created
+  // a separate new row that client alone got linked to.
+  async function reconnect() {
+    setReconnecting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/composio/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: item.provider, vaultId: item.id, returnTo: "/dashboard/settings/apps" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Couldn't start reconnecting.");
+        setReconnecting(false);
+        return;
+      }
+      window.location.assign(data.redirectUrl);
+    } catch {
+      setError("Network error. Try again.");
+      setReconnecting(false);
+    }
+  }
 
   async function rotate() {
     if (!rotateValue.trim()) return;
@@ -659,7 +691,18 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void 
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {!item.isComposioManaged && (
+          {item.isComposioManaged ? (
+            <button
+              type="button"
+              onClick={reconnect}
+              disabled={reconnecting}
+              title="Reconnect"
+              className="p-2 rounded-md cursor-pointer disabled:opacity-50"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <RotateCw size={14} />
+            </button>
+          ) : (
             <button
               type="button"
               onClick={() => setRotating((r) => !r)}

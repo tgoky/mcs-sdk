@@ -191,8 +191,26 @@ export async function deleteComposioConnection(connectedAccountId: string): Prom
  * than removed: it's inert (isAllowedComposioReturnPath is the only thing
  * that reads it, and a dead route matching it changes nothing), and
  * deleting the entry is a separate cleanup from what this change is for.
+ *
+ * /dashboard/queue, /dashboard/reputation-manager, /dashboard/showtime:
+ * the 3 real, static pages that render <QueuePanel> directly (confirmed
+ * by grep, not assumed — dashboard/page.tsx does not), which renders
+ * QueueFixDrawer, which renders CredentialRow/UpdateCredentialsForm for
+ * whatever provider a stuck run's credential fix is for. Closes the gap
+ * CredentialRow's Connect return-handling effect flagged as a known
+ * limit when it first shipped: reconnecting from this drawer used to
+ * silently fall back to landing on Settings > Apps (the credential still
+ * linked correctly server-side since the fix earlier this phase, just
+ * with no inline confirmation on the page the person was actually on).
  */
-const COMPOSIO_RETURN_ALLOWLIST = ["/dashboard/settings/apps", "/dashboard/engagements/new", "/dashboard/teammates"];
+const COMPOSIO_RETURN_ALLOWLIST = [
+  "/dashboard/settings/apps",
+  "/dashboard/engagements/new",
+  "/dashboard/teammates",
+  "/dashboard/queue",
+  "/dashboard/reputation-manager",
+  "/dashboard/showtime",
+];
 
 /**
  * The 4 worker config forms that render CredentialRow with a live "Connect"
@@ -207,8 +225,24 @@ const COMPOSIO_RETURN_BRIDGE_PATTERN = new RegExp(
   `^/dashboard/engagements/[^/]+/bridges/(${COMPOSIO_RETURN_BRIDGE_WORKERS.join("|")})$`
 );
 
+/**
+ * The engagement detail page itself — /dashboard/engagements/<id>, no
+ * further segment. Confirmed (grep, not assumed) that
+ * engagement-actions-menu.tsx renders UpdateCredentialsForm directly from
+ * this exact page.tsx, and workers-panel.tsx (also rendered here) is
+ * where pin-down/pre-call-read/icp-lock/rep-onboarding's own config forms
+ * can appear embedded instead of via their standalone bridges/<worker>
+ * routes above. Same closed-set reasoning as the bridge pattern: matches
+ * only the bare detail page, not anything nested under it.
+ */
+const COMPOSIO_RETURN_ENGAGEMENT_DETAIL_PATTERN = /^\/dashboard\/engagements\/[^/]+$/;
+
 export function isAllowedComposioReturnPath(path: string): boolean {
-  return COMPOSIO_RETURN_ALLOWLIST.includes(path) || COMPOSIO_RETURN_BRIDGE_PATTERN.test(path);
+  return (
+    COMPOSIO_RETURN_ALLOWLIST.includes(path) ||
+    COMPOSIO_RETURN_BRIDGE_PATTERN.test(path) ||
+    COMPOSIO_RETURN_ENGAGEMENT_DETAIL_PATTERN.test(path)
+  );
 }
 
 export const COMPOSIO_VAULT_REFKEY_PREFIX = "composio:";

@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { credentialsRefs, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
-import { connectedAccountIdFromRefKey, deleteComposioConnection, getComposioCredentialValue } from "@/lib/composio";
+import { connectedAccountIdFromRefKey, composioVaultRefKey, deleteComposioConnection, getComposioCredentialValue } from "@/lib/composio";
 
 // Either the module-level pooled db, or the `tx` handle inside a
 // db.transaction() callback — both expose the same select/insert/update
@@ -264,6 +264,65 @@ export async function rotateVaultCredential(
     set.label = updates.label;
   }
   await db.update(credentialVault).set(set).where(eq(credentialVault.id, vaultId));
+}
+
+/**
+ * rotateVaultCredential's Composio-managed equivalent — reconnects an
+ * EXISTING shared vault row to a fresh connected account, instead of
+ * storeComposioVaultCredential's always-insert-a-new-row behavior. This is
+ * the fix for a real gap: rotateVaultCredential only accepts a plaintext
+ * value, so a Composio-managed row (whose "value" is a composio:<id>
+ * pointer, not a rotatable secret) had no rotate path at all — confirmed
+ * by apps-page-client.tsx's VaultRow explicitly hiding its Rotate button
+ * for isComposioManaged rows. That meant once a shared Composio credential
+ * went invalid (the buyer revoked app access, the underlying token expired
+ * past refresh), there was no way to fix it for the engagements already
+ * linked to it: deleteVaultCredential refuses to delete a row still in
+ * use, and reconnecting via a *different* CredentialRow just creates an
+ * unrelated new vault row that only that one engagement gets linked to —
+ * every other client sharing the original row stayed silently broken.
+ *
+ * Deliberately does NOT touch encryptedValue/iv/keyVersion — those hold
+ * only the harmless Composio placeholder (see storeComposioVaultCredential)
+ * and are never read back for a composio:-refKey row (resolveCredential's
+ * composio: branch bypasses decrypt() entirely). Resets healthStatus back
+ * to "unknown" so the next daily check (or a manual Test connection)
+ * re-establishes it as ok, rather than leaving the old "invalid" verdict
+ * sitting stale against a token that's actually fresh again.
+ *
+ * Also revokes the OLD connection at Composio before overwriting refKey —
+ * same reasoning and same swallow-errors-never-block pattern as
+ * deleteVaultCredential's own revoke-then-delete below: a reconnect
+ * replaces which connection this row points at, so the one it's replacing
+ * should stop being valid too, not linger as a forgotten-but-still-active
+ * grant at Composio (and, through it, at the underlying platform). If the
+ * row's current refKey isn't Composio-managed (shouldn't happen — the
+ * callback route only calls this after confirming the row's provider
+ * matches, and every Composio-managed row's refKey is always a
+ * composio:<id> pointer) connectedAccountIdFromRefKey simply returns null
+ * and this is a no-op, same as an already-broken/never-connected row.
+ */
+export async function rotateComposioVaultCredential(vaultId: string, connectedAccountId: string): Promise<void> {
+  const [row] = await db.select({ refKey: credentialVault.refKey }).from(credentialVault).where(eq(credentialVault.id, vaultId)).limit(1);
+  const oldConnectedAccountId = row ? connectedAccountIdFromRefKey(row.refKey) : null;
+  if (oldConnectedAccountId && oldConnectedAccountId !== connectedAccountId) {
+    try {
+      await deleteComposioConnection(oldConnectedAccountId);
+    } catch (err) {
+      console.error(`[credential-vault] Failed to revoke old Composio connection ${oldConnectedAccountId} while reconnecting vault row ${vaultId}:`, err);
+    }
+  }
+
+  await db
+    .update(credentialVault)
+    .set({
+      refKey: composioVaultRefKey(connectedAccountId),
+      healthStatus: "unknown",
+      lastCheckedAt: null,
+      lastCheckError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(credentialVault.id, vaultId));
 }
 
 /**

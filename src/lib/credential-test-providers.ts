@@ -11,12 +11,23 @@
  * module, which isn't worth it for a list this short. If that route's
  * VALIDATORS map changes, update this list in the same commit.
  *
- * Deliberately narrower than credential-health.ts's own VALIDATORS map
- * (the daily cron): that one also covers ghl_calendar and
- * whop_bot_api_key, which /api/credentials/test does not yet — a real,
- * pre-existing gap between the manual "test now" button and the automatic
- * daily check, noted here rather than silently worked around by claiming
- * those two are testable when the route would 400 on them today.
+ * Was deliberately narrower than credential-health.ts's own VALIDATORS map
+ * (the daily cron) — missing ghl_calendar, whop_bot_api_key, twilio, then
+ * hyros — until each gap was closed in the route directly; now matches it
+ * exactly. Each of those had a real checkCredentialHealth() already
+ * written on its platform client (booking.ts, whop-agent/probe.ts,
+ * sms.ts, ad-data.ts respectively) that just was never wired into either
+ * health check path — not new/unverified code, just closing real gaps.
+ *
+ * Left out deliberately, not missed: apollo and pdl (pre-call-read's
+ * prospect-research BYOK sources) have no cheap liveness endpoint in this
+ * codebase — their only real calls (enrichViaApollo/enrichViaPdl) are
+ * paid, per-lookup enrichment requests billed against the buyer's own
+ * account. Wiring either into a health check that runs daily (and on
+ * every manual "Test connection" click) would mean silently spending the
+ * buyer's own money just to confirm a key works — the same silent-cost
+ * risk this whole plan exists to prevent, not something to introduce
+ * while closing an unrelated gap.
  */
 export const TESTABLE_CREDENTIAL_PROVIDERS = [
   "calendly",
@@ -24,6 +35,10 @@ export const TESTABLE_CREDENTIAL_PROVIDERS = [
   "mailchimp",
   "convertkit",
   "smtp",
+  "ghl_calendar",
+  "twilio",
+  "hyros",
+  "whop_bot_api_key",
   "cold_open_instantly",
   "cold_open_smartlead",
   "cold_open_lemlist",

@@ -108,23 +108,31 @@ export function CredentialRow({
 
   // Landing back from a real Composio OAuth redirect for THIS row's own
   // provider (composio/callback route.ts echoes ?composio_provider=<provider>
-  // alongside either ?composio_connected=<provider> or ?composio_error=...,
-  // added specifically so a page rendering several CredentialRows at once —
-  // e.g. Pre-Call Read's video/research/call-intelligence keys — can tell
-  // which row's own connect attempt this return belongs to, the same way
-  // apps-page-client.tsx and teammates-workspace.tsx already read the two
-  // older params). Auto-links rather than making the person switch to
-  // "Reuse saved" and pick it themselves — the whole point of Connect is
-  // skipping that manual step.
+  // alongside ?composio_connected=<provider>/?composio_error=..., and — since
+  // /api/composio/connect below now passes engagementId through —
+  // ?composio_linked_engagement=<id>&composio_vault_id=<id> once the
+  // callback route has already linked the new credential to this exact
+  // engagement server-side. That server-side link is what makes Connect
+  // work correctly no matter which page or drawer this row was opened
+  // from (the engagement detail page, queue-fix-drawer, a bridge route's
+  // own page, …) — this effect's job now is just to reflect that already-
+  // done link in the UI, not to redo it. The one exception (fetch-then-link
+  // fallback below) only fires if the server-side link didn't happen for
+  // some reason — a defensive path, not the normal one anymore.
   useEffect(() => {
     if (searchParams.get("composio_provider") !== provider) return;
     const status = searchParams.get("composio_connected");
     const err = searchParams.get("composio_error");
+    const linkedEngagementId = searchParams.get("composio_linked_engagement");
+    const vaultId = searchParams.get("composio_vault_id");
 
     const url = new URL(window.location.href);
     url.searchParams.delete("composio_connected");
     url.searchParams.delete("composio_error");
     url.searchParams.delete("composio_provider");
+    url.searchParams.delete("composio_linked_engagement");
+    url.searchParams.delete("composio_vault_id");
+    url.searchParams.delete("composio_context_engagement");
     window.history.replaceState({}, "", url.toString());
 
     if (err) {
@@ -134,6 +142,20 @@ export function CredentialRow({
     }
     if (status !== provider) return;
 
+    if (linkedEngagementId === engagementId && vaultId) {
+      setVaultOptions(null);
+      setSelectedVaultId(vaultId);
+      setMode("reuse");
+      setLinked(true);
+      toast.success(`${label} connected.`);
+      router.refresh();
+      return;
+    }
+
+    // Defensive fallback — the server-side link either wasn't requested
+    // (shouldn't happen, connect() below always passes engagementId) or
+    // failed its own ownership check. Same fetch-newest-then-link this
+    // effect used to always do, kept only as a safety net now.
     (async () => {
       setLinking(true);
       setLinkError(null);
@@ -175,7 +197,7 @@ export function CredentialRow({
       const res = await fetch("/api/composio/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, returnTo: window.location.pathname }),
+        body: JSON.stringify({ provider, returnTo: window.location.pathname, engagementId }),
       });
       const data = await res.json();
       if (!res.ok) {

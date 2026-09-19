@@ -4,6 +4,8 @@ import { eq, isNull } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { CalendlyClient, CalComClient, GHLCalendarClient } from "@/lib/platforms/booking";
 import { MailchimpClient, ConvertKitClient, createDirectSendClient } from "@/lib/platforms/email";
+import { TwilioClient } from "@/lib/platforms/sms";
+import { HyrosClient } from "@/lib/platforms/ad-data";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
@@ -54,8 +56,18 @@ const CREDENTIAL_HEALTH_LOCAL_HOUR = 13;
  * every request to a location rather than the token alone identifying
  * one — checkSingleCredential resolves that from the engagement's stack
  * before calling in.
+ *
+ * twilio is the same shape of gap as ghl_calendar: TwilioClient.checkCredentialHealth()
+ * (src/lib/platforms/sms.ts) already existed — a plain GET on the account
+ * resource, Twilio's own documented liveness probe — but was never wired
+ * into this map. It needs the Account SID as second context, same reason
+ * as GHL's locationId: this app's "twilio credential" is only the Auth
+ * Token (resolveCredential(engagementId, "twilio")); the Account SID
+ * lives in stack.sms_platform_meta as a plain, non-secret field (see
+ * sendSmsForTenant's own twilio branch in sms.ts, which resolves the pair
+ * the same way).
  */
-const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) => Promise<void>> = {
+const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string; twilioAccountSid?: string }) => Promise<void>> = {
   calendly: (token) => new CalendlyClient(token).checkCredentialHealth(),
   cal_com: (token) => new CalComClient(token).checkCredentialHealth(),
   mailchimp: (key) => new MailchimpClient(key).checkCredentialHealth(),
@@ -69,6 +81,14 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) 
       return Promise.reject(new Error("No GHL Location ID on file for this engagement."));
     }
     return new GHLCalendarClient(token, ctx.locationId).checkCredentialHealth();
+  },
+  twilio: (authToken, ctx) => {
+    if (!ctx.twilioAccountSid?.trim()) {
+      // Same "incomplete setup, not a broken credential" reasoning as
+      // ghl_calendar above — findCredentialsNeedingCheck skips these too.
+      return Promise.reject(new Error("No Twilio Account SID on file for this engagement."));
+    }
+    return new TwilioClient(ctx.twilioAccountSid, authToken).checkCredentialHealth();
   },
   // Cold Open's per-engagement ESP + lead-source credentials — added once
   // real, verified "am I still authenticated" probes existed for each
@@ -87,6 +107,12 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string }) 
   // to a named scope). GET /v1/accounts is the spec's own hard-stop probe,
   // meaningful regardless of which scopes the key was ever granted.
   whop_bot_api_key: (secret) => checkWhopBotApiKeyCredential(secret),
+  // Ad-data cohort sync's Hyros credential — same shape of gap as
+  // ghl_calendar/twilio above, minus the extra context argument: Hyros's
+  // checkCredentialHealth() (src/lib/platforms/ad-data.ts) is a cheap read
+  // (GET /leads?limit=1, not a billed action) that already existed but was
+  // never wired into either health check path.
+  hyros: (key) => new HyrosClient(key).checkCredentialHealth(),
 };
 
 export interface CredentialHealthResult {
@@ -134,6 +160,12 @@ export async function findCredentialsNeedingCheck(): Promise<string[]> {
         const stack = r.stack as EngagementStack | null;
         return Boolean(stack?.booking_platform_meta?.location_id?.trim());
       }
+      if (r.provider === "twilio") {
+        // Same reasoning as ghl_calendar — no Account SID on file means
+        // an incomplete setup, not a credential worth flagging as broken.
+        const stack = r.stack as EngagementStack | null;
+        return Boolean(stack?.sms_platform_meta?.twilio_account_sid?.trim());
+      }
       return true;
     })
     .map((r) => r.id);
@@ -156,9 +188,9 @@ export async function checkSingleCredential(
   const validate = VALIDATORS[row.provider];
   if (!validate) return { flagged: false, skipped: true };
 
-  // Fetched once, up front — needed for ghl_calendar's locationId context
-  // before validate() runs, and reused below for the notify-on-failure
-  // block instead of a second query.
+  // Fetched once, up front — needed for ghl_calendar's locationId and
+  // twilio's twilioAccountSid context before validate() runs, and reused
+  // below for the notify-on-failure block instead of a second query.
   const [tenant] = await db
     .select({ whopUserId: engagements.whopUserId, stack: engagements.stack })
     .from(engagements)
@@ -182,7 +214,10 @@ export async function checkSingleCredential(
   }
 
   try {
-    await validate(secret, { locationId: tenantStack?.booking_platform_meta?.location_id });
+    await validate(secret, {
+      locationId: tenantStack?.booking_platform_meta?.location_id,
+      twilioAccountSid: tenantStack?.sms_platform_meta?.twilio_account_sid,
+    });
     await db
       .update(credentialsRefs)
       .set({ healthStatus: "ok", lastCheckedAt: new Date(), lastCheckError: null })

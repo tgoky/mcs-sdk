@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Check,
   X,
@@ -744,6 +745,34 @@ export function QueuePanel({
     type: "stack" | "credentials";
     section?: string | null;
   } | null>(null);
+
+  // Landing back from a real Composio OAuth redirect started from inside
+  // QueueFixDrawer (see queue-fix-drawer.tsx / update-credentials-form.tsx's
+  // CredentialRow). Unlike the 4 standalone bridge routes and the
+  // engagement detail page, this drawer's open/engagementId/type state is
+  // plain React state with no URL involvement at all — a full-page
+  // navigation away and back (which the OAuth round trip always is) wipes
+  // it, so without this the person would land back on this page with the
+  // credential already correctly linked server-side (see
+  // /api/composio/connect and /api/composio/callback) but no visual trace
+  // of it at all: drawer closed, nothing to look at.
+  //
+  // composio_context_engagement is echoed by the callback route on every
+  // outcome (success and failure alike, unlike composio_linked_engagement
+  // which only appears on success) — reopening the drawer here for either
+  // case lets CredentialRow's own existing return-handling effect (which
+  // will mount once the drawer renders UpdateCredentialsForm) show the
+  // real success or error state itself, exactly as it already does on the
+  // bridge routes. Nothing here needs to duplicate that logic or strip
+  // the query params itself — CredentialRow's effect already does both
+  // once it mounts.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const contextEngagementId = searchParams.get("composio_context_engagement");
+    if (!contextEngagementId) return;
+    setActiveFix({ engagementId: contextEngagementId, type: "credentials", section: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Rail Scope State
   const [railView, setRailView] = useState<ClientScopeView>("all");
