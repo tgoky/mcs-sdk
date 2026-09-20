@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { runBulkPromoCodes, type PromoCodeSpec } from "@/features/whop-agent/server/bulk-promo-codes-service";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,6 +13,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await getSession();
   if (!session?.whopUserId || !(await isAuthorizedForEngagement(session, id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Fix (found by this session's own Whop Agent audit): creates real,
+  // live promo codes — previously reachable even with the skill toggled
+  // off in the dashboard. See chat-whop-agent.ts's requireSkillEnabled.
+  if (!(await isSkillEnabledForEngagement(id, "whop-bulk-promo-codes"))) {
+    return NextResponse.json({ error: "Bulk Promo Code Generation is currently turned off for this client." }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   const specs: PromoCodeSpec[] = Array.isArray(body?.codes) ? body.codes : [];

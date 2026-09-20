@@ -14,6 +14,9 @@ import { useEffect, useState } from "react";
 import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { LeakMapLivePreview } from "./leak-map-live-preview";
 
 const DAY_OPTIONS = [
   { value: "0", label: "Sunday" },
@@ -125,6 +128,82 @@ export function LeakMapConfigForm({
     );
   }
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "schedule",
+      label: "Schedule",
+      isComplete: true,
+      content: (
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+          <SelectField
+            label="Weekly summary — day"
+            value={String(weeklyScheduleDayOfWeek)}
+            onChange={(v) => setWeeklyScheduleDayOfWeek(Number(v))}
+            options={DAY_OPTIONS}
+          />
+          <SelectField
+            label="Report hour (local)"
+            value={String(weeklyScheduleHour)}
+            onChange={(v) => setWeeklyScheduleHour(Number(v))}
+            options={HOUR_OPTIONS}
+            helpText="Used for both the weekly summary and monthly deep-dive."
+          />
+          <SelectField
+            label="Monthly deep-dive — day of month"
+            value={String(monthlyScheduleDayOfMonth)}
+            onChange={(v) => setMonthlyScheduleDayOfMonth(Number(v))}
+            options={DAY_OF_MONTH_OPTIONS}
+            helpText="Capped at 28 so it fires reliably every month, including February."
+          />
+          <InputField
+            label="Timezone"
+            value={leakMapTimezone}
+            onChange={setLeakMapTimezone}
+            placeholder="America/New_York"
+            helpText="IANA timezone name. Defaults to UTC."
+          />
+        </div>
+      ),
+    },
+    {
+      id: "delivery",
+      label: "Report delivery",
+      isComplete: Boolean(canSubmit),
+      content: (
+        <div className="space-y-4">
+          <ChoiceCardGroup
+            label="Report delivery"
+            value={auditOutputFormat}
+            onChange={(v) => setAuditOutputFormat(v as "email" | "slack" | "dashboard_only")}
+            options={[
+              { value: "dashboard_only", label: "Dashboard only" },
+              { value: "slack", label: "Slack" },
+              { value: "email", label: "Email" },
+            ]}
+          />
+          {auditOutputFormat === "email" && (
+            <InputField
+              label="Report recipient email"
+              value={leakMapReportEmail}
+              onChange={setLeakMapReportEmail}
+              placeholder="ops@client.com"
+              required
+            />
+          )}
+          {auditOutputFormat === "slack" && !slackWebhookUrl && (
+            <div
+              className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
+              style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+            >
+              Slack delivery uses the Slack webhook URL from Pre-Call Read&apos;s brief settings — add one there if you
+              haven&apos;t yet.
+            </div>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -139,63 +218,9 @@ export function LeakMapConfigForm({
 
       <WorkerCapabilityMatrix workerId="leak-map" engagementId={engagementId} />
 
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        <SelectField
-          label="Weekly summary — day"
-          value={String(weeklyScheduleDayOfWeek)}
-          onChange={(v) => setWeeklyScheduleDayOfWeek(Number(v))}
-          options={DAY_OPTIONS}
-        />
-        <SelectField
-          label="Report hour (local)"
-          value={String(weeklyScheduleHour)}
-          onChange={(v) => setWeeklyScheduleHour(Number(v))}
-          options={HOUR_OPTIONS}
-          helpText="Used for both the weekly summary and monthly deep-dive."
-        />
-        <SelectField
-          label="Monthly deep-dive — day of month"
-          value={String(monthlyScheduleDayOfMonth)}
-          onChange={(v) => setMonthlyScheduleDayOfMonth(Number(v))}
-          options={DAY_OF_MONTH_OPTIONS}
-          helpText="Capped at 28 so it fires reliably every month, including February."
-        />
-        <InputField
-          label="Timezone"
-          value={leakMapTimezone}
-          onChange={setLeakMapTimezone}
-          placeholder="America/New_York"
-          helpText="IANA timezone name. Defaults to UTC."
-        />
-        <SelectField
-          label="Report delivery"
-          value={auditOutputFormat}
-          onChange={(v) => setAuditOutputFormat(v as "email" | "slack" | "dashboard_only")}
-          options={[
-            { value: "dashboard_only", label: "Dashboard only" },
-            { value: "slack", label: "Slack" },
-            { value: "email", label: "Email" },
-          ]}
-        />
-        {auditOutputFormat === "email" && (
-          <InputField
-            label="Report recipient email"
-            value={leakMapReportEmail}
-            onChange={setLeakMapReportEmail}
-            placeholder="ops@client.com"
-            required
-          />
-        )}
-      </div>
-      {auditOutputFormat === "slack" && !slackWebhookUrl && (
-        <div
-          className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
-          style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
-        >
-          Slack delivery uses the Slack webhook URL from Pre-Call Read&apos;s brief settings — add one there if you
-          haven&apos;t yet.
-        </div>
-      )}
+      <LeakMapLivePreview engagementId={engagementId} />
+
+      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save" finishDisabled={saving || !canSubmit} finishing={saving} />
 
       {saveError && (
         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
@@ -208,19 +233,12 @@ export function LeakMapConfigForm({
         </p>
       )}
 
-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="flex justify-end pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
         >
           {cancelLabel}
-        </button>
-        <button
-          onClick={save}
-          disabled={saving || !canSubmit}
-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-        >
-          {saving ? "Saving..." : "Save"}
         </button>
       </div>
     </div>

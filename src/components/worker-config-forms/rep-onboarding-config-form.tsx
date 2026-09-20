@@ -135,20 +135,21 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
       </div>
 
       <div className={wasDisabled ? "" : "mt-8"}>
-        <IdentityGraphForm form={form} onChange={setForm} readOnlyCollisions={foundCollisions} detectedOperatorName={buyer || undefined} />
+        <IdentityGraphForm
+          form={form}
+          onChange={setForm}
+          readOnlyCollisions={foundCollisions}
+          detectedOperatorName={buyer || undefined}
+          layout="steps"
+          onFinish={handleSubmit}
+          finishLabel="Save & enable"
+          finishDisabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
+          finishing={saving}
+        />
       </div>
 
       {saveError && <p className="text-xs text-red-600 dark:text-red-400 mt-4">{saveError}</p>}
       {saved && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-4">Saved.</p>}
-
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={saving || !form.operatorName.trim() || !form.soleAuthorityName.trim()}
-        className="mt-6 px-4 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? "Saving…" : "Save & enable"}
-      </button>
     </div>
   );
 }

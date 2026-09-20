@@ -5,6 +5,7 @@ import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { queueAdsFlipToActive } from "@/features/whop-agent/server/whop-ads-service";
 import { startRun } from "@/lib/run-log";
 import { inngest, whopAdsDraftProcess } from "@/lib/inngest";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -17,6 +18,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await getSession();
   if (!session?.whopUserId || !(await isAuthorizedForEngagement(session, id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Fix (found by this session's own Whop Agent audit): this route
+  // dispatches real, billable Meta ad-media generation and previously had
+  // no check that the skill is actually turned on for this client — a
+  // disabled toggle in the dashboard didn't stop it. See
+  // chat-whop-agent.ts's requireSkillEnabled for the full bug.
+  if (!(await isSkillEnabledForEngagement(id, "whop-ads-draft-approve"))) {
+    return NextResponse.json({ error: "Whop Ads Draft-and-Approve is currently turned off for this client." }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   if (typeof body?.productId !== "string" || typeof body?.creativeBrief !== "string" || typeof body?.budgetCents !== "number") {
@@ -44,6 +53,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await getSession();
   if (!session?.whopUserId || !(await isAuthorizedForEngagement(session, id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await isSkillEnabledForEngagement(id, "whop-ads-draft-approve"))) {
+    return NextResponse.json({ error: "Whop Ads Draft-and-Approve is currently turned off for this client." }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   if (typeof body?.adId !== "string" || typeof body?.budgetCents !== "number") {

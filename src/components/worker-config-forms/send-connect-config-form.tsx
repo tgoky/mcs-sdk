@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { BehaviorSummary } from "./behavior-summary";
 
 const SEND_PLATFORM_LABELS: Record<ColdOpenSendPlatformId, string> = {
   instantly: "Instantly",
@@ -90,6 +93,73 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
   if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "platform",
+      label: "Sending platform",
+      isComplete: true,
+      content: (
+        <div className="space-y-4">
+          <ChoiceCardGroup
+            label="Sending platform"
+            value={platform}
+            onChange={(v) => setPlatform(v as ColdOpenSendPlatformId)}
+            options={[
+              { value: "instantly", label: "Instantly" },
+              { value: "smartlead", label: "SmartLead" },
+              { value: "lemlist", label: "Lemlist" },
+              { value: "reply_io", label: "Reply.io" },
+            ]}
+          />
+          <CredentialRow engagementId={engagementId} provider={`cold_open_${platform}`} label={`${SEND_PLATFORM_LABELS[platform]} key`} />
+        </div>
+      ),
+    },
+    {
+      id: "campaign-map",
+      label: "Campaign map",
+      isComplete: Boolean(canSubmit),
+      content: (
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICP → campaign map</h2>
+            {mapRows.map((row, i) => (
+              <div key={i} className="grid gap-2 grid-cols-1 md:grid-cols-2 items-end">
+                <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <InputField label="Campaign id" value={row.campaignId} onChange={(v) => updateRow(i, { campaignId: v })} placeholder="the real campaign id from your ESP" />
+                  </div>
+                  {mapRows.length > 1 && (
+                    <button type="button" onClick={() => setMapRows((rows) => rows.filter((_, idx) => idx !== i))} className="mb-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={() => setMapRows((rows) => [...rows, { icp: "", campaignId: "" }])} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
+              + Add mapping
+            </button>
+          </div>
+
+          <InputField label="Auto-push ICPs (comma-separated, optional)" value={autoPushIcps} onChange={setAutoPushIcps} placeholder="boutique-agency" helpText="Bypasses the review-required hold for these ICPs, if any are set in ICP Lock." />
+        </div>
+      ),
+    },
+  ];
+
+  const pushIcpList = autoPushIcps.split(",").map((s) => s.trim()).filter(Boolean);
+  const summaryLines: string[] = [
+    `Outbound sends go through ${SEND_PLATFORM_LABELS[platform]}.`,
+    cleanRows.length === 0
+      ? "No ICP has a campaign mapped yet — nothing will send until at least one is."
+      : `${cleanRows.length} ICP${cleanRows.length === 1 ? "" : "s"} mapped to a live campaign.`,
+    pushIcpList.length === 0
+      ? "Every matched lead is held for human review before sending."
+      : `Leads for ${pushIcpList.join(", ")} auto-push without review; every other ICP is still held.`,
+  ];
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -104,53 +174,16 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
 
       <WorkerCapabilityMatrix workerId="send-connect" engagementId={engagementId} />
 
-      <SelectField
-        label="Sending platform"
-        value={platform}
-        onChange={(v) => setPlatform(v as ColdOpenSendPlatformId)}
-        options={[
-          { value: "instantly", label: "Instantly" },
-          { value: "smartlead", label: "SmartLead" },
-          { value: "lemlist", label: "Lemlist" },
-          { value: "reply_io", label: "Reply.io" },
-        ]}
-      />
+      <BehaviorSummary lines={summaryLines} />
 
-      <CredentialRow engagementId={engagementId} provider={`cold_open_${platform}`} label={`${SEND_PLATFORM_LABELS[platform]} key`} />
-
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICP → campaign map</h2>
-        {mapRows.map((row, i) => (
-          <div key={i} className="grid gap-2 grid-cols-1 md:grid-cols-2 items-end">
-            <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <InputField label="Campaign id" value={row.campaignId} onChange={(v) => updateRow(i, { campaignId: v })} placeholder="the real campaign id from your ESP" />
-              </div>
-              {mapRows.length > 1 && (
-                <button type="button" onClick={() => setMapRows((rows) => rows.filter((_, idx) => idx !== i))} className="mb-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        <button type="button" onClick={() => setMapRows((rows) => [...rows, { icp: "", campaignId: "" }])} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
-          + Add mapping
-        </button>
-      </div>
-
-      <InputField label="Auto-push ICPs (comma-separated, optional)" value={autoPushIcps} onChange={setAutoPushIcps} placeholder="boutique-agency" helpText="Bypasses the review-required hold for these ICPs, if any are set in ICP Lock." />
+      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save" finishDisabled={saving || !canSubmit} finishing={saving} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
       {saved && !saveError && <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">✓ Saved.</p>}
 
-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-800">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
           {cancelLabel}
-        </button>
-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

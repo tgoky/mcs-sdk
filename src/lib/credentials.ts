@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { credentialsRefs, credentialVault } from "@/models/schema";
+import { credentialsRefs, credentialVault, engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { connectedAccountIdFromRefKey, composioVaultRefKey, deleteComposioConnection, getComposioCredentialValue } from "@/lib/composio";
 
@@ -305,14 +305,17 @@ export async function rotateVaultCredential(
 export async function rotateComposioVaultCredential(vaultId: string, connectedAccountId: string): Promise<void> {
   const [row] = await db.select({ refKey: credentialVault.refKey }).from(credentialVault).where(eq(credentialVault.id, vaultId)).limit(1);
   const oldConnectedAccountId = row ? connectedAccountIdFromRefKey(row.refKey) : null;
-  if (oldConnectedAccountId && oldConnectedAccountId !== connectedAccountId) {
-    try {
-      await deleteComposioConnection(oldConnectedAccountId);
-    } catch (err) {
-      console.error(`[credential-vault] Failed to revoke old Composio connection ${oldConnectedAccountId} while reconnecting vault row ${vaultId}:`, err);
-    }
-  }
 
+  // Ordering fix (found by this session's own adversarial review): the DB
+  // write now happens BEFORE the old-connection revoke, not after. If the
+  // DB write throws (network blip, DB error), the old connection is still
+  // untouched and valid — nothing is broken. The old ordering could revoke
+  // the old connection successfully and then have the DB write throw,
+  // leaving the vault row pointing at a connection that no longer exists,
+  // silently broken for every engagement sharing it until the next daily
+  // health check surfaces it. This ordering fails safe instead: worst case
+  // on a revoke failure (already caught below, non-fatal) is a lingering
+  // un-revoked old connection at Composio, not a broken credential.
   await db
     .update(credentialVault)
     .set({
@@ -323,6 +326,14 @@ export async function rotateComposioVaultCredential(vaultId: string, connectedAc
       updatedAt: new Date(),
     })
     .where(eq(credentialVault.id, vaultId));
+
+  if (oldConnectedAccountId && oldConnectedAccountId !== connectedAccountId) {
+    try {
+      await deleteComposioConnection(oldConnectedAccountId);
+    } catch (err) {
+      console.error(`[credential-vault] Failed to revoke old Composio connection ${oldConnectedAccountId} while reconnecting vault row ${vaultId}:`, err);
+    }
+  }
 }
 
 /**
@@ -541,6 +552,86 @@ export async function unlinkEngagementFromVault(engagementId: string, provider: 
   await db
     .delete(credentialsRefs)
     .where(and(eq(credentialsRefs.engagementId, engagementId), eq(credentialsRefs.provider, provider)));
+}
+
+// Which of engagements.stack's platform-choice fields have their own
+// "<platform>_credentials_ref" marker, keyed by the platform field whose
+// value selects the provider. Kept as a plain lookup, not a StackField
+// union like chat-credentials.ts's smaller booking/email-only one, since
+// every caller here already knows the provider string but NOT which
+// platform slot it fills — see syncStackCredentialMarkers below.
+const STACK_CREDENTIAL_MARKERS: ReadonlyArray<{
+  platform: keyof EngagementStack;
+  ref: keyof EngagementStack;
+}> = [
+  { platform: "booking_platform", ref: "booking_platform_credentials_ref" },
+  { platform: "email_platform", ref: "email_platform_credentials_ref" },
+  { platform: "hosting_platform", ref: "hosting_platform_credentials_ref" },
+  { platform: "sms_platform", ref: "sms_platform_credentials_ref" },
+  { platform: "ad_data_platform", ref: "ad_data_platform_credentials_ref" },
+  { platform: "conversation_intelligence_provider", ref: "conversation_intelligence_credentials_ref" },
+  { platform: "video_engagement_platform", ref: "video_engagement_credentials_ref" },
+];
+
+/**
+ * Fixes a real bug found by this session's own Showtime audit: storeCredential/
+ * linkEngagementToVault/unlinkEngagementFromVault above only ever touch the
+ * credentialsRefs table — but worker-config-completeness.ts's checkers and
+ * worker-capability-status.ts's readers gate booking/email/hosting/sms/
+ * ad-data/recall/video credentials on a separate boolean marker string on
+ * engagements.stack (e.g. stack.booking_platform_credentials_ref), which
+ * was previously only ever written once, during the new-engagement wizard
+ * (submit-payload.ts) or chat's own booking/email-only linkReusableCredential.
+ * The one general-purpose post-creation UI for this (CredentialRow in
+ * update-credentials-form.tsx, reachable from every engagement's own page)
+ * called storeCredential/linkEngagementToVault and never touched this
+ * marker at all — so any client whose credential wasn't captured at
+ * creation time (platform left unset, or changed later) could connect a
+ * real, working key through this UI, get a success toast, and stay
+ * permanently blocked by the completeness gate regardless, since nothing
+ * ever flipped the marker it actually checks.
+ *
+ * Call this right after storeCredential/linkEngagementToVault (linked=true)
+ * or unlinkEngagementFromVault (linked=false) for the same engagementId/
+ * provider. Cross-references the CURRENT stack's own platform-choice
+ * fields (booking_platform, email_platform, …) against `provider` — not a
+ * caller-supplied field name — since none of the routes calling this know
+ * which slot a given provider string fills; the engagement's stack is the
+ * only place that mapping actually lives. Updates every matching slot (in
+ * the rare case one provider is picked for more than one role, e.g. the
+ * same ESP used for both email and ad-data), and silently no-ops for a
+ * provider that isn't currently selected in any slot (recall_ai's own
+ * provider string just happens to equal its field's value, apollo/pdl have
+ * no stack marker at all — hasCredential checks credentialsRefs directly
+ * for those two, so they're correctly untouched here).
+ */
+export async function syncStackCredentialMarkers(
+  engagementId: string,
+  provider: string,
+  linked: boolean,
+  dbClient: DbClient = db
+): Promise<void> {
+  const [row] = await dbClient.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  if (!row?.stack) return;
+  const stack = row.stack as Partial<EngagementStack>;
+
+  const patch: Partial<Record<keyof EngagementStack, string | undefined>> = {};
+  let changed = false;
+  for (const { platform, ref } of STACK_CREDENTIAL_MARKERS) {
+    if (stack[platform] !== provider) continue;
+    const nextValue = linked ? `secrets://${engagementId}/${provider}_key` : undefined;
+    if (stack[ref] !== nextValue) {
+      patch[ref] = nextValue;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+
+  const mergedStack = { ...stack, ...patch };
+  await dbClient
+    .update(engagements)
+    .set({ stack: mergedStack as EngagementStack, updatedAt: new Date() })
+    .where(eq(engagements.engagementId, engagementId));
 }
 
 /**

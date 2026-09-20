@@ -703,9 +703,9 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "operatorDomains",
       label: "Domains",
       kind: "derivable",
-      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one — honestly unbuilt today (the resolver exists, nothing calls it yet), same caveat as every other derivable field in this file. Shown as a confirm card once wired; ask field until then.",
+      description: "Pre-fillable from the client profile's shared primaryDomain once any product has captured one — honestly unbuilt today (the resolver exists, nothing calls it yet), same caveat as every other derivable field in this file. Shown as a confirm card once wired; ask field until then. Tier corrected from \"hidden-default\" (found by this session's own Reputation Manager audit): it's rendered as a plain, always-visible field in identity-graph-form.tsx's main Operator section, not gated behind any Advanced toggle the way \"hidden-default\" implies — cosmetic-only correction, trustpilot-watch-service.ts already skips gracefully (not blocks) when it's empty either way.",
       derivableFrom: "primaryDomain",
-      tier: "hidden-default",
+      tier: "visible-default",
     },
     {
       key: "operatorAliases",
@@ -725,15 +725,15 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "competitors",
       label: "Competitors",
       kind: "ask",
-      description: "A judgment call about who counts as a competitor — not something to infer silently.",
-      tier: "blocking",
+      description: "A judgment call about who counts as a competitor — not something to infer silently. Tier corrected from \"blocking\" (found by this session's own systematic audit): repIdentityGraphs.competitors is a real notNull().default([]) column and saveRepIdentityGraphIntake's own validator accepts an empty array — checkRepOnboarding only verifies a row exists, never this field individually, so \"blocking\" was never actually enforced by anything. An empty list is a legitimate, degrading-gracefully starting state, not a block.",
+      tier: "deferrable",
     },
     {
       key: "trustedSources",
       label: "Trusted sources",
       kind: "ask",
-      description: "Which review/mention sources actually matter to this client — a real preference, not a lookup.",
-      tier: "blocking",
+      description: "Which review/mention sources actually matter to this client — a real preference, not a lookup. Tier corrected from \"blocking\" for the same reason as competitors above — same audit also found this field is CURRENTLY read by nothing downstream (checked every Reputation Manager service file) — genuinely inert today, not just non-blocking. Kept in the registry (not silently dropped, unlike operatorEmailContacts' precedent) because it has a real, currently-used UI field in identity-graph-form.tsx; whether it should be wired into real logic is a real open product question, not resolved here.",
+      tier: "deferrable",
     },
     {
       key: "crisisThresholdOverride",
@@ -753,8 +753,8 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "entities",
       label: "Tracked entities / sub-brands",
       kind: "ask",
-      description: "Which companies, brands, products, or publications this operator is publicly associated with — a real judgment call, not inferable from a domain.",
-      tier: "blocking",
+      description: "Which companies, brands, products, or publications this operator is publicly associated with — a real judgment call, not inferable from a domain. Tier corrected from \"blocking\" (found by this session's own systematic audit): repIdentityGraphs.entities is a real notNull().default([]) column and checkRepOnboarding only verifies a row exists, never this field individually, so \"blocking\" was never actually enforced. Kept above competitors/trustedSources' \"deferrable\" rather than matching them exactly, because unlike those two this field IS read downstream — rep-reddit-watch and rep-twitter-watch both fold entities.filter(highPriority) into their search terms — an empty list degrades gracefully to operator-name-only search rather than breaking, so it's consequential but not blocking.",
+      tier: "visible-default",
     },
     {
       key: "seedPanelPrompts",
@@ -767,8 +767,8 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "activeEngines",
       label: "Which AI engines to check",
       kind: "ask",
-      description: "Real preference narrowing the panel to specific engines — not derivable. engine-panel-service.ts's own real fallback is \"null means check every platform-configured engine\" — a genuine default.",
-      tier: "deferrable",
+      description: "Real preference narrowing the panel to specific engines — not derivable. engine-panel-service.ts's own real fallback is \"null means check every platform-configured engine\" — a genuine, permanently-valid default (not a state that becomes blocking once a run needs it), and null is the majority real-world state since the intake form defaults to all-engines-checked and saves that back as null. Tier corrected from \"deferrable\" to \"visible-default\" (found by this session's own Reputation Manager audit) to match — same reasoning as crisisThresholdOverride below.",
+      tier: "visible-default",
     },
     // The 2 fields below were found missing entirely from this list during
     // the full 34-worker audit — real, DB-backed, UI-collected
@@ -841,8 +841,8 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
       key: "productPrice",
       label: "Price",
       kind: "ask",
-      description: "Not derivable — the operator's own pricing.",
-      tier: "blocking",
+      description: "Not derivable — the operator's own pricing. Tier corrected from \"blocking\" (found by this session's own Cold Open registry-consistency audit): validateIcpSeed checks productName/productUrl/productValueProp but never productPrice, and checkIcpLock only verifies config.productIdentity exists as an object, not this field individually — \"blocking\" was never actually enforced by anything. Also confirmed genuinely unread downstream (no reference anywhere under src/features/cold-open), same as rep-onboarding's trustedSources — an empty price is a legitimate, degrading-gracefully starting state, not a block.",
+      tier: "deferrable",
     },
     {
       key: "productValueProp",
@@ -1009,20 +1009,22 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
     },
   ],
   "whop-cancellation-save-offer": [
-    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes. No sane default — unset means nothing to propose yet, not a guessed discount (schema.ts's own comment). Blocks." },
-    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for. Same no-default reasoning as discount percentage. Blocks." },
-    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out. Blocks." },
+    { key: "whop_save_offer_discount_percentage", label: "Discount percentage", kind: "ask", description: "How much off the save offer proposes. No sane default — unset means nothing to propose yet, not a guessed discount (schema.ts's own comment). Blocks.", tier: "blocking" },
+    { key: "whop_save_offer_duration_months", label: "Duration (months)", kind: "ask", description: "How many billing cycles the discount applies for. Same no-default reasoning as discount percentage. Blocks.", tier: "blocking" },
+    { key: "whop_save_offer_message", label: "Offer message", kind: "ask", description: "Copy shown to the operator for approval before any offer goes out. Blocks.", tier: "blocking" },
     {
       key: "whop_save_offer_min_tenure_days",
       label: "Minimum tenure before eligible (days)",
       kind: "ask",
-      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). No UI collects it yet, but the safe default means it does not block.",
+      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). Now collected by whop-cancellation-save-offer-config-form.tsx — shown with the real default pre-filled, doesn't block (Stripe Radar's exposed-but-tunable pattern, same as personMatchConfidenceThreshold).",
+      tier: "visible-default",
     },
     {
       key: "whop_save_offer_cooldown_days",
       label: "Cooldown between offers (days)",
       kind: "ask",
-      description: "Same finding as min-tenure-days — real stack column, documented default (90), real code-level fallback. No UI collects it yet; does not block.",
+      description: "Same finding as min-tenure-days — real stack column, documented default (90), real code-level fallback, now collected with the default shown. Doesn't block.",
+      tier: "visible-default",
     },
   ],
   "whop-refund-dispute-velocity": [
@@ -1046,12 +1048,13 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
     },
   ],
   "whop-bridge-manager": [
-    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed. No sane default — unset means the bridge does nothing (schema.ts's own comment). Blocks." },
+    { key: "whop_bridge_destination_url", label: "Destination URL", kind: "ask", description: "Where verified Whop webhook events get routed. No sane default — unset means the bridge does nothing (schema.ts's own comment). Blocks.", tier: "blocking" },
     {
       key: "whop_bridge_field_mapping",
       label: "Field mapping",
       kind: "ask",
       description: "Found missing entirely during the full 34-worker audit — a real per-client payload-transformation object (attemptBridgeDelivery reads it via mapPayload) with a documented safe default: identity mapping (fields pass through unchanged) when unset. Does not block.",
+      tier: "deferrable",
     },
   ],
 };
@@ -1081,17 +1084,39 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>> 
   // This worker IS onboarding — its capabilities are what it unlocks for
   // the rest of the product, not itself.
   "rep-onboarding": [
-    { name: "AI Engine Watch", requiredFieldKeys: ["seedPanelPrompts", "activeEngines"] },
+    // activeEngines deliberately excluded (found by this session's own
+    // Reputation Manager audit): null is engine-panel-service.ts's real,
+    // permanently-valid "check every configured engine" default, not an
+    // incomplete state — the intake form's own default (all engines
+    // checked) saves back as null, so requiring it here meant this
+    // capability showed "not fully active" for the majority of real
+    // clients despite the worker being 100% functional. Same convention
+    // pin-down's castingChoice/heroVideoUrl already use.
+    { name: "AI Engine Watch", requiredFieldKeys: ["seedPanelPrompts"] },
     { name: "Trustpilot Watch", requiredFieldKeys: ["operatorDomains", "operatorName"] },
     { name: "Reddit/Twitter Watch", requiredFieldKeys: ["entities", "operatorHandles"] },
-    { name: "Crisis Response", requiredFieldKeys: ["soleAuthorityName", "operatorPagePhone", "crisisThresholdOverride"] },
+    // operatorPagePhone and crisisThresholdOverride deliberately excluded,
+    // same reasoning: both have real, always-applied fallbacks
+    // (resolveCrisisScoreFloor's default of 80, operatorPagePhone ??
+    // undefined just skipping SMS paging) — rep-crisis-response runs fully
+    // functional with both blank, so requiring them here misrepresented
+    // the capability as incomplete for nearly every client.
+    { name: "Crisis Response", requiredFieldKeys: ["soleAuthorityName"] },
   ],
   // Same reasoning — "ICP Targeting Locked" is the one capability that
   // gates the rest of the Cold Open pipeline (confirmed directly from
   // runIcpLock's own summary: "Run Voice Capture, Source Connect, and
   // Send Connect next").
   "icp-lock": [
-    { name: "ICP Targeting Locked", requiredFieldKeys: ["productName", "productUrl", "productPrice", "productValueProp", "icps", "sizingBounds"] },
+    // productPrice deliberately excluded (found by this session's own Cold
+    // Open audit): it's tiered "deferrable" and checkIcpLock never blocks
+    // on it — same "fold the real gate's conditionality into requiredFieldKeys"
+    // convention leak-map's leakMapReportEmail and win-back's hubspotPortalId
+    // already use below, so the Live Capability Matrix doesn't show this
+    // gating capability dim for a client who simply hasn't entered a price
+    // yet, when the worker (and every downstream Cold Open worker) already
+    // runs fine without it.
+    { name: "ICP Targeting Locked", requiredFieldKeys: ["productName", "productUrl", "productValueProp", "icps", "sizingBounds"] },
   ],
   "pile-on": [
     { name: "SMS Follow-ups", requiredFieldKeys: ["smsPlatform", "smsPlatformCredential", "smsA2p10dlcStatus", "smsComplianceFooterVariant"] },
@@ -1130,6 +1155,15 @@ export const WORKER_CAPABILITIES: Partial<Record<WorkerId, WorkerCapability[]>> 
   // ("none") never requires hubspotPortalId, so requiring it here would
   // show this capability inactive by default.
   "win-back": [{ name: "Inbound Reply Handling Configured", requiredFieldKeys: ["hubspotPortalId"] }],
+  // Whop Agent's fields never had any tier or capability data at all
+  // before this pass — found by this session's own Whop Agent audit
+  // (part 1). Both of these workers have real blocking fields (verified
+  // reachable via a real config form), so they're not exempt from the
+  // same tier/checker discipline every other configured worker gets.
+  "whop-cancellation-save-offer": [
+    { name: "Cancellation Save-Offer Ready", requiredFieldKeys: ["whop_save_offer_discount_percentage", "whop_save_offer_duration_months", "whop_save_offer_message"] },
+  ],
+  "whop-bridge-manager": [{ name: "Webhook Bridge Routed", requiredFieldKeys: ["whop_bridge_destination_url"] }],
 };
 
 // Single source of truth for category, kept out of skill-manifest.ts and

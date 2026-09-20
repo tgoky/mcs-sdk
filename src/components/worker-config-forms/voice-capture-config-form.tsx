@@ -13,6 +13,8 @@ import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { VoiceCaptureLivePreview } from "./voice-capture-live-preview";
 
 type Touchset = { subject: string; body1: string; body2: string; body3: string };
 function emptyTouchset(): Touchset {
@@ -105,6 +107,55 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
   if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "voice-basics",
+      label: "Voice basics",
+      isComplete: Boolean(canSubmit),
+      content: (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+          <InputField label="Greeting" value={greeting} onChange={setGreeting} placeholder="Hi" required />
+          <InputField label="Sign-off" value={signOff} onChange={setSignOff} placeholder="Best" required />
+          <InputField label="Tone" value={tone} onChange={setTone} placeholder="direct, plain-spoken" required />
+        </div>
+      ),
+    },
+    {
+      id: "subject-lines",
+      label: "Subject lines",
+      isComplete: subjectVariants.trim() !== "",
+      content: (
+        <TextAreaField
+          label="Subject line pool (one per line, 3-4+ recommended)"
+          value={subjectVariants}
+          onChange={setSubjectVariants}
+          placeholder={"chatgpt on {company_name}\n{company_name}'s show rate\nquick read on {company_name}"}
+          rows={4}
+          helpText="No em/en dashes, exclamation points, emoji, or {first_name} — these get rejected on save."
+        />
+      ),
+    },
+    {
+      id: "body-variants",
+      label: "Body variants",
+      isComplete: touchsets.some((t) => t.body1.trim()),
+      content: (
+        <div className="space-y-3">
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">At least 2 recommended, rotated per lead.</p>
+          {touchsets.map((t, i) => (
+            <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Variant {i + 1}</p>
+              <InputField label="Subject (optional override)" value={t.subject} onChange={(v) => updateTouchset(i, { subject: v })} />
+              <TextAreaField label="Touch 1" value={t.body1} onChange={(v) => updateTouchset(i, { body1: v })} rows={3} />
+              <TextAreaField label="Touch 2" value={t.body2} onChange={(v) => updateTouchset(i, { body2: v })} rows={3} />
+              <TextAreaField label="Touch 3" value={t.body3} onChange={(v) => updateTouchset(i, { body3: v })} rows={3} />
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -119,33 +170,9 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
 
       <WorkerCapabilityMatrix workerId="voice-capture" engagementId={engagementId} />
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <InputField label="Greeting" value={greeting} onChange={setGreeting} placeholder="Hi" required />
-        <InputField label="Sign-off" value={signOff} onChange={setSignOff} placeholder="Best" required />
-        <InputField label="Tone" value={tone} onChange={setTone} placeholder="direct, plain-spoken" required />
-      </div>
+      <VoiceCaptureLivePreview greeting={greeting} signOff={signOff} subjectVariants={subjectVariants} firstTouchsetBody={touchsets[0]?.body1 ?? ""} />
 
-      <TextAreaField
-        label="Subject line pool (one per line, 3-4+ recommended)"
-        value={subjectVariants}
-        onChange={setSubjectVariants}
-        placeholder={"chatgpt on {company_name}\n{company_name}'s show rate\nquick read on {company_name}"}
-        rows={4}
-        helpText="No em/en dashes, exclamation points, emoji, or {first_name} — these get rejected on save."
-      />
-
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Body variants (at least 2, rotated per lead)</h2>
-        {touchsets.map((t, i) => (
-          <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
-            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Variant {i + 1}</p>
-            <InputField label="Subject (optional override)" value={t.subject} onChange={(v) => updateTouchset(i, { subject: v })} />
-            <TextAreaField label="Touch 1" value={t.body1} onChange={(v) => updateTouchset(i, { body1: v })} rows={3} />
-            <TextAreaField label="Touch 2" value={t.body2} onChange={(v) => updateTouchset(i, { body2: v })} rows={3} />
-            <TextAreaField label="Touch 3" value={t.body3} onChange={(v) => updateTouchset(i, { body3: v })} rows={3} />
-          </div>
-        ))}
-      </div>
+      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save" finishDisabled={saving || !canSubmit} finishing={saving} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
       {warnings.length > 0 && (
@@ -157,12 +184,9 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
       )}
       {saved && !saveError && <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">✓ Saved.</p>}
 
-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-800">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
           {cancelLabel}
-        </button>
-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

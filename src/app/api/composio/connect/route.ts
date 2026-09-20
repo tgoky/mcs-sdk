@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { isComposioManagedProvider, startComposioConnect, isAllowedComposioReturnPath } from "@/lib/composio";
+import { isComposioManagedProvider, startComposioConnect, isAllowedComposioReturnPath, createComposioConnectAttempt } from "@/lib/composio";
 import { vaultCredentialBelongsToTenant } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { engagements, credentialVault } from "@/models/schema";
@@ -97,9 +97,18 @@ export async function POST(request: Request) {
       ownedVaultId = vaultId;
     }
 
+    // Security fix (found by this session's own adversarial review) — see
+    // composioConnectAttempts' schema comment and consumeComposioConnectAttempt's
+    // own doc comment for the CSRF/account-linking vulnerability this
+    // closes: the callback route used to trust "a session cookie is
+    // present" as proof it's the SAME session that started this flow.
+    // This state token is what lets it actually verify that.
+    const state = await createComposioConnectAttempt(activeWorkspace.workspaceId, provider);
+
     const origin = new URL(request.url).origin;
     const callbackUrl = new URL("/api/composio/callback", origin);
     callbackUrl.searchParams.set("provider", provider);
+    callbackUrl.searchParams.set("state", state);
     if (typeof returnTo === "string" && isAllowedComposioReturnPath(returnTo)) {
       callbackUrl.searchParams.set("returnTo", returnTo);
     }

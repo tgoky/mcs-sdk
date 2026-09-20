@@ -1,4 +1,8 @@
 import { Composio } from "@composio/core";
+import crypto from "crypto";
+import { db } from "@/lib/db";
+import { composioConnectAttempts } from "@/models/schema";
+import { eq } from "drizzle-orm";
 import { isComposioManagedProvider, toolkitSlugForProvider } from "@/lib/composio-providers";
 
 // Re-exported for backward compatibility — every existing import of these
@@ -243,6 +247,36 @@ export function isAllowedComposioReturnPath(path: string): boolean {
     COMPOSIO_RETURN_BRIDGE_PATTERN.test(path) ||
     COMPOSIO_RETURN_ENGAGEMENT_DETAIL_PATTERN.test(path)
   );
+}
+
+const CONNECT_ATTEMPT_MAX_AGE_MS = 15 * 60_000; // 15 minutes
+
+/** Mints a single-use OAuth state token binding a Composio connect
+ * attempt to the workspace that actually started it — see
+ * composioConnectAttempts' own schema comment for the vulnerability this
+ * closes. Call once, right before building the callbackUrl, and thread
+ * the returned state through as one more query param. */
+export async function createComposioConnectAttempt(workspaceId: string, provider: string): Promise<string> {
+  const state = crypto.randomBytes(32).toString("hex");
+  await db.insert(composioConnectAttempts).values({ id: crypto.randomUUID(), state, workspaceId, provider });
+  return state;
+}
+
+/** Validates and consumes (single-use, deleted on first lookup regardless
+ * of outcome — never replayable) a connect-attempt state. Returns the
+ * workspaceId that actually initiated the flow when the state is valid,
+ * unexpired, and for the right provider — or null otherwise. The caller
+ * MUST treat null as "reject the callback outright," never fall back to
+ * trusting the current session alone; that fallback is the exact bug
+ * this exists to close. */
+export async function consumeComposioConnectAttempt(state: string | null, provider: string): Promise<string | null> {
+  if (!state) return null;
+  const [row] = await db.select().from(composioConnectAttempts).where(eq(composioConnectAttempts.state, state)).limit(1);
+  if (!row) return null;
+  await db.delete(composioConnectAttempts).where(eq(composioConnectAttempts.state, state));
+  if (row.provider !== provider) return null;
+  if (Date.now() - row.createdAt.getTime() > CONNECT_ATTEMPT_MAX_AGE_MS) return null;
+  return row.workspaceId;
 }
 
 export const COMPOSIO_VAULT_REFKEY_PREFIX = "composio:";

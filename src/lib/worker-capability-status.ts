@@ -18,6 +18,7 @@ import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
+import { coldOpenCredentialProvider } from "@/features/cold-open/server/source-connect";
 import { hasCredential } from "@/lib/credentials";
 import { WORKER_CAPABILITIES, type WorkerId } from "@/lib/worker-registry";
 
@@ -55,7 +56,18 @@ async function filledKeysForPinDown(engagementId: string): Promise<Set<string>> 
   if (truthy(stack?.email_platform)) filled.add("emailPlatform");
   if (truthy(stack?.email_platform_credentials_ref)) filled.add("emailPlatformCredential");
   if (truthy(stack?.hosting_platform)) filled.add("hostingPlatform");
-  if (truthy(stack?.hosting_platform_credentials_ref)) filled.add("hostingPlatformCredential");
+  // Mirrors checkPinDown's own conditional (found by this session's own
+  // adversarial review) — only webflow/wordpress/nextjs_vercel have a
+  // publish API to authenticate against; ghl/lovable/plain_html/
+  // discover_from_docs never need this credential at all, and the old
+  // unconditional check meant "Confirmation Page" could never show
+  // active for any client on those 4 platforms no matter how complete.
+  const HOSTING_PLATFORMS_NEEDING_CREDENTIAL = ["webflow", "wordpress", "nextjs_vercel"];
+  if (!stack?.hosting_platform || HOSTING_PLATFORMS_NEEDING_CREDENTIAL.includes(stack.hosting_platform)) {
+    if (truthy(stack?.hosting_platform_credentials_ref)) filled.add("hostingPlatformCredential");
+  } else {
+    filled.add("hostingPlatformCredential"); // not applicable for this platform — treat as satisfied, not missing
+  }
   return filled;
 }
 
@@ -116,10 +128,18 @@ async function filledKeysForPileOn(engagementId: string): Promise<Set<string>> {
   const filled = new Set<string>();
   if (stack.sms_platform !== undefined) filled.add("smsPlatform");
   if (truthy(stack.sms_platform_credentials_ref)) filled.add("smsPlatformCredential");
-  if (truthy(stack.sms_a2p_10dlc_status)) filled.add("smsA2p10dlcStatus");
+  // Mirrors checkPileOn's own conditional (worker-config-completeness.ts:99)
+  // — A2P 10DLC registration is a Twilio-specific carrier requirement, so
+  // any other SMS platform (or none) should read as satisfied, not missing.
+  if (stack.sms_platform !== "twilio" || truthy(stack.sms_a2p_10dlc_status)) filled.add("smsA2p10dlcStatus");
   if (truthy(stack.sms_compliance_footer_variant)) filled.add("smsComplianceFooterVariant");
   if (stack.ad_data_platform !== undefined) filled.add("adDataPlatform");
-  if (truthy(stack.ad_data_platform_credentials_ref)) filled.add("adDataPlatformCredential");
+  // Mirrors checkPileOn's own conditional (worker-config-completeness.ts:109)
+  // — native_crm needs no separate credential, so it should never read as
+  // missing one (same bug class as the Showtime audit's pin-down finding).
+  if (stack.ad_data_platform === "none" || stack.ad_data_platform === "native_crm" || truthy(stack.ad_data_platform_credentials_ref)) {
+    filled.add("adDataPlatformCredential");
+  }
   if (stack.existing_pile_on_sequence_flagged) filled.add("existingPileOnSequenceFlagged");
   return filled;
 }
@@ -140,7 +160,7 @@ async function filledKeysForSourceConnect(engagementId: string): Promise<Set<str
   const sources = config?.leadSources ?? [];
   if (sources.some((s) => truthy(s.fetcherType))) filled.add("leadSourceType");
   if (sources.some((s) => s.fetcherType === "csv" && truthy(s.csvMapping))) filled.add("csvMapping");
-  if (await hasCredential(engagementId, "cold_open_apify")) filled.add("leadSourceCredential");
+  if (await hasCredential(engagementId, coldOpenCredentialProvider("apify"))) filled.add("leadSourceCredential");
   return filled;
 }
 
@@ -150,7 +170,7 @@ async function filledKeysForSendConnect(engagementId: string): Promise<Set<strin
   const filled = new Set<string>();
   if (truthy(config.sendPlatform?.platform)) {
     filled.add("sendPlatform");
-    if (await hasCredential(engagementId, `cold_open_${config.sendPlatform!.platform}`)) filled.add("sendPlatformCredential");
+    if (await hasCredential(engagementId, coldOpenCredentialProvider(config.sendPlatform!.platform))) filled.add("sendPlatformCredential");
   }
   if (truthy(config.campaignMap)) filled.add("campaignMap");
   if (truthy(config.autoPushIcps)) filled.add("autoPushIcps");
@@ -205,6 +225,37 @@ async function filledKeysForDailySend(engagementId: string): Promise<Set<string>
   return new Set(["dailySendVolume", "dailySendLocalHour", "copyMode"]);
 }
 
+// Whop Agent readers — new, found missing entirely by this session's own
+// Whop Agent audit (WHOP_AGENT_CONFIG_FIELDS had zero tier/capability data
+// at all before this pass, despite these 2 workers having real blocking
+// fields collected by a real config form).
+async function filledKeysForWhopCancellationSaveOffer(engagementId: string): Promise<Set<string>> {
+  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const stack = (row?.stack as EngagementStack | null) ?? null;
+  if (!stack) return new Set();
+  const filled = new Set<string>();
+  if (stack.whop_save_offer_discount_percentage !== undefined) filled.add("whop_save_offer_discount_percentage");
+  if (stack.whop_save_offer_duration_months !== undefined) filled.add("whop_save_offer_duration_months");
+  if (truthy(stack.whop_save_offer_message)) filled.add("whop_save_offer_message");
+  // Both have real, documented defaults (30 / 90) — treat unset as filled,
+  // same convention filledKeysForWinBack uses for recoveryWindowDays.
+  filled.add("whop_save_offer_min_tenure_days");
+  filled.add("whop_save_offer_cooldown_days");
+  return filled;
+}
+
+async function filledKeysForWhopBridgeManager(engagementId: string): Promise<Set<string>> {
+  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const stack = (row?.stack as EngagementStack | null) ?? null;
+  if (!stack) return new Set();
+  const filled = new Set<string>();
+  if (truthy(stack.whop_bridge_destination_url)) filled.add("whop_bridge_destination_url");
+  // Real default (identity pass-through mapping) — unset is a legitimate
+  // filled state, not a gap.
+  filled.add("whop_bridge_field_mapping");
+  return filled;
+}
+
 const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<Set<string>>>> = {
   "pin-down": filledKeysForPinDown,
   "pre-call-read": filledKeysForPreCallRead,
@@ -217,6 +268,8 @@ const FIELD_READERS: Partial<Record<WorkerId, (engagementId: string) => Promise<
   "daily-send": filledKeysForDailySend,
   "leak-map": filledKeysForLeakMap,
   "win-back": filledKeysForWinBack,
+  "whop-cancellation-save-offer": filledKeysForWhopCancellationSaveOffer,
+  "whop-bridge-manager": filledKeysForWhopBridgeManager,
 };
 
 /** Which of this worker's own configFields have a real value on file right

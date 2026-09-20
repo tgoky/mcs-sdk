@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { storeCredential } from "@/lib/credentials";
+import { storeCredential, syncStackCredentialMarkers } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -50,6 +50,12 @@ export async function POST(request: Request) {
       `secrets://${engagementId}/${provider}_key`,
       value
     );
+    // Fix (found by this session's own Showtime audit): without this, this
+    // route only ever wrote credentialsRefs — the completeness checkers and
+    // capability-status readers gate on a separate stack.*_credentials_ref
+    // marker that nothing here ever set. See syncStackCredentialMarkers'
+    // own doc comment for the full bug.
+    await syncStackCredentialMarkers(engagementId, provider, true);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -7,7 +7,7 @@ import {
   rotateComposioVaultCredential,
   vaultCredentialBelongsToTenant,
 } from "@/lib/credentials";
-import { composioVaultRefKey, finalizeComposioConnection, isAllowedComposioReturnPath } from "@/lib/composio";
+import { composioVaultRefKey, finalizeComposioConnection, isAllowedComposioReturnPath, consumeComposioConnectAttempt } from "@/lib/composio";
 import { db } from "@/lib/db";
 import { engagements, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -16,12 +16,22 @@ import { and, eq } from "drizzle-orm";
  * Composio redirects the browser here after its hosted connect page
  * finishes, appending its own query params to whatever callbackUrl
  * /api/composio/connect passed — see startComposioConnect's doc comment.
- * This is a plain browser navigation back to our own domain, so the
- * normal session cookie is present; no state needs threading through the
- * URL beyond `provider`, the optional `returnTo`, and the optional
- * `engagementId`/`vaultId`, all of which this app set itself in
- * /api/composio/connect (and ownership-checked there) rather than trusting
- * anything Composio-supplied for any of them.
+ *
+ * SECURITY: a session cookie being present here does NOT prove this
+ * callback belongs to the session that started the flow — this route
+ * previously assumed it did (a real CSRF/account-linking vulnerability
+ * found by this session's own adversarial review; see
+ * composioConnectAttempts' schema comment for the full attack). `state`
+ * is the fix: a single-use token minted per-attempt by
+ * /api/composio/connect and validated + consumed here, FIRST, before
+ * anything else in this handler touches connectedAccountId. A missing or
+ * invalid state is an outright reject, never a fallback to trusting the
+ * session alone.
+ *
+ * `provider`, the optional `returnTo`, and the optional
+ * `engagementId`/`vaultId` are, same as before, all set by this app
+ * itself in /api/composio/connect (and ownership-checked there) rather
+ * than trusted from anything Composio-supplied.
  *
  * Lands back on `returnTo` when one was supplied and is still on the
  * allowlist (re-checked here, never trusted from the round trip alone),
@@ -53,6 +63,7 @@ import { and, eq } from "drizzle-orm";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const provider = searchParams.get("provider");
+  const state = searchParams.get("state");
   const status = searchParams.get("status");
   const connectedAccountId = searchParams.get("connected_account_id");
   const returnToParam = searchParams.get("returnTo");
@@ -100,6 +111,20 @@ export async function GET(request: Request) {
       return NextResponse.redirect(returnUrl);
     }
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+
+    // Security check (see this route's own module comment and
+    // composioConnectAttempts' schema comment) — validated and consumed
+    // BEFORE anything below touches connectedAccountId. A missing/
+    // invalid/expired/already-used state, or one that maps to a
+    // DIFFERENT workspace than the one this browser is currently
+    // authenticated as, is an outright reject: this is exactly the check
+    // that stops a crafted link from linking an attacker's own connected
+    // account into a victim's session.
+    const originatingWorkspaceId = await consumeComposioConnectAttempt(state, provider);
+    if (!originatingWorkspaceId || originatingWorkspaceId !== activeWorkspace.workspaceId) {
+      returnUrl.searchParams.set("composio_error", "This connection link is invalid or expired — please start connecting again from the app.");
+      return NextResponse.redirect(returnUrl);
+    }
 
     const { status: connectionStatus, toolkitSlug } = await finalizeComposioConnection(connectedAccountId);
     if (connectionStatus !== "ACTIVE") {

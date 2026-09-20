@@ -19,6 +19,21 @@ import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
  * does it write back the right patch) is exactly what's under test.
  */
 
+// Pulls the actual runtime param values out of a drizzle sql`...` template
+// object (its .queryChunks alternates raw-string arrays and Param-ish
+// objects exposing .value) — needed because esp-delivery-monitor.ts writes
+// `stack` via raw SQL (jsonb_set for the atomic pause CAS, jsonb `-` for
+// resume), not a plain object patch, per this session's own race/
+// partial-failure/stranding fixes (see that file's own doc comment).
+function sqlParams(value: unknown): unknown[] | null {
+  if (!value || typeof value !== "object" || !Array.isArray((value as { queryChunks?: unknown }).queryChunks)) return null;
+  // Literal SQL text lands as StringChunk objects, embedded column
+  // references (e.g. ${engagements.stack}) as PgColumn objects — only a
+  // real interpolated JS value (the ISO timestamp, the reason text) shows
+  // up as a bare string in this array.
+  return (value as { queryChunks: unknown[] }).queryChunks.filter((c) => typeof c === "string");
+}
+
 function fakeEngagementsDb(initial: {
   whopUserId?: string | null;
   workspaceId?: string | null;
@@ -51,17 +66,51 @@ function fakeEngagementsDb(initial: {
         }),
       };
     }),
-    update: vi.fn((table: unknown) => ({
+    update: vi.fn((_table: unknown) => ({
       set: (patch: Record<string, unknown>) => {
         // Distinguish the two update() calls by shape: the engagements
-        // patch always carries `stack`, the enrollments patch never does.
-        if ("stack" in patch) {
-          stackUpdates.push(patch);
-          state.stack = patch.stack as Record<string, unknown>;
-        } else {
-          enrollmentUpdates.push(patch);
-        }
-        return { where: async () => {} };
+        // patch always carries `stack` (a raw sql`...` fragment, not a
+        // plain object — see sqlParams above), the enrollments patch
+        // never does.
+        const applyStackPatch = () => {
+          if (!("stack" in patch)) return;
+          const params = sqlParams(patch.stack);
+          if (params && params.length === 2) {
+            // Atomic pause CAS: jsonb_set(...to_jsonb(pausedAt)...to_jsonb(reason)) — params are [pausedAt, reason] in template order.
+            const [pausedAt, reason] = params;
+            state.stack = { ...state.stack, win_back_auto_paused: true, win_back_auto_paused_at: pausedAt, win_back_auto_paused_reason: reason };
+          } else if (params && params.length === 0) {
+            // resumeWinBackSends' jsonb `-` key removal — no dynamic params.
+            const { win_back_auto_paused: _p, win_back_auto_paused_at: _pa, win_back_auto_paused_reason: _pr, ...rest } = state.stack;
+            state.stack = rest;
+          } else {
+            // Not currently exercised by this module (kept as a fallback
+            // for a plain-object stack patch, same as before this fix).
+            state.stack = patch.stack as Record<string, unknown>;
+          }
+          stackUpdates.push({ ...patch, stack: state.stack });
+        };
+        return {
+          where: (_cond: unknown) => ({
+            // checkAndApplyAutoPause's CAS write is the only caller that
+            // chains .returning() — always "wins" the race in these tests
+            // (none of them exercise the lost-race branch).
+            returning: async () => {
+              applyStackPatch();
+              return [{ id: "eng-1" }];
+            },
+            // resumeWinBackSends and the enrollment-status update both just
+            // `await db.update(...).set(...).where(...)` with no .returning().
+            then: (resolve: (v: unknown) => void) => {
+              if ("stack" in patch) {
+                applyStackPatch();
+              } else {
+                enrollmentUpdates.push(patch);
+              }
+              resolve(undefined);
+            },
+          }),
+        };
       },
     })),
     __state: state,
@@ -99,7 +148,14 @@ describe("checkAndApplyAutoPause", () => {
     vi.resetModules();
   });
 
-  it("does nothing when already paused — never re-fires or re-sweeps", async () => {
+  it("when already paused, re-sweeps stragglers but never re-fires the stack write or the alert", async () => {
+    // Deliberate behavior (fix 3 in this file's own doc comment): ANY call
+    // — including on an already-paused engagement — re-sweeps for
+    // enrollments stranded "active" by an earlier interrupted/partially-
+    // failed sweep, so a killed process or an ESP outage doesn't strand
+    // them forever. It must NOT re-run the stats fetch, re-write the pause
+    // flag, or re-alert the operator (that would be alert spam on every
+    // subsequent webhook event while paused).
     const db = fakeEngagementsDb({
       stack: { win_back_auto_paused: true, email_platform: "klaviyo" },
       activeEnrollments: [{ id: "e1", prospectEmail: "a@b.com" }],
@@ -110,8 +166,11 @@ describe("checkAndApplyAutoPause", () => {
     await checkAndApplyAutoPause("eng-1");
 
     expect(getRollingDeliveryStats).not.toHaveBeenCalled();
-    expect(exitWinBackSequence).not.toHaveBeenCalled();
-    expect(db.__stackUpdates).toHaveLength(0);
+    expect(exitWinBackSequence).toHaveBeenCalledTimes(1);
+    expect(exitWinBackSequence).toHaveBeenCalledWith("klaviyo", "fake-api-key", "a@b.com", expect.any(Object), "auto_paused");
+    expect(db.__stackUpdates).toHaveLength(0); // no CAS write — already paused, nothing new to flip
+    expect(db.__enrollmentUpdates).toHaveLength(1); // straggler still gets marked stopped
+    expect(notifyUser).not.toHaveBeenCalled(); // no re-alert on a straggler-only sweep
   });
 
   it("does nothing below the sample-size floor, even with a high raw rate", async () => {

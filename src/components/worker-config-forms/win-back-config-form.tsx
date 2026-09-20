@@ -9,6 +9,9 @@ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fi
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { BehaviorSummary } from "./behavior-summary";
 
 // Phase 6 — the webhook URL each platform's bounce/complaint events get
 // registered against, engagement-scoped (see each route's own module
@@ -149,6 +152,126 @@ export function WinBackConfigForm({
     );
   }
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "reschedule-replies",
+      label: "Reschedule & replies",
+      isComplete: !(inboundReplyMode === "native" && emailPlatform === "hubspot" && !hubspotPortalId.trim()),
+      content: (
+        <div className="space-y-4">
+          <ChoiceCardGroup
+            label="Reschedule link mode"
+            value={rescheduleMode}
+            onChange={(v) => setRescheduleMode(v as "fresh_link" | "time_slots")}
+            options={[
+              { value: "time_slots", label: "Live available slots (default)" },
+              { value: "fresh_link", label: "Per-prospect single-use link (Calendly/Cal.com only)" },
+            ]}
+            helpText="fresh_link uses the platform's own per-booking reschedule link when available (Calendly, Cal.com), falling back to live slots per prospect when it isn't (GHL, OnceHub)."
+          />
+
+          <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={recoveredFromNoShowTaggingEnabled}
+              onChange={(e) => setRecoveredFromNoShowTaggingEnabled(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Tag prospects as &quot;recovered from no-show&quot; on {emailPlatform || "the ESP"} when they rebook during
+              an active recovery window.
+            </span>
+          </label>
+
+          <ChoiceCardGroup
+            label="Reply detection (exits the recovery cadence)"
+            value={inboundReplyMode}
+            onChange={(v) => setInboundReplyMode(v as "native" | "forwarding" | "none")}
+            options={[
+              { value: "none", label: "Off — cadence only stops on rebook or window elapse" },
+              { value: "forwarding", label: "Forwarding — client forwards replies through an inbound-parse bridge" },
+              { value: "native", label: "Native — HubSpot Conversations only" },
+            ]}
+            helpText={
+              inboundReplyMode === "native" && emailPlatform !== "hubspot"
+                ? "Native mode only works with HubSpot — Klaviyo and ActiveCampaign don't expose a stable reply webhook, use forwarding instead."
+                : "A reply of any kind halts the win-back cadence for that prospect — table stakes for anything calling itself win-back."
+            }
+          />
+          {inboundReplyMode === "native" && emailPlatform === "hubspot" && (
+            <InputField
+              label="HubSpot Portal ID"
+              value={hubspotPortalId}
+              onChange={setHubspotPortalId}
+              helpText="Settings → Account Setup → Account Defaults in your client's HubSpot account."
+              required
+            />
+          )}
+          {inboundReplyMode === "forwarding" && (
+            <div
+              className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
+              style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+            >
+              A unique catcher URL generates once this is saved — point your client&apos;s Postmark/SendGrid inbound-parse
+              bridge (or a forwarding rule through one) at it.
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "deliverability",
+      label: "Deliverability monitoring",
+      isComplete: true,
+      content: DELIVERY_WEBHOOK_PATH[emailPlatform] ? (
+        <div className="space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+              Bounce/complaint monitoring
+            </h2>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Register this URL as a webhook in your client&apos;s {emailPlatform} account to enable auto-pause.
+              Optional — Win-Back runs fine without it, just without deliverability protection.
+            </p>
+          </div>
+          <div
+            className="rounded-lg p-2 text-[11px] font-mono break-all"
+            style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
+          >
+            {`${typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/${DELIVERY_WEBHOOK_PATH[emailPlatform]}/${engagementId}`}
+          </div>
+          {emailPlatform === "activecampaign" && (
+            <InputField
+              label="Signature header name"
+              value={activecampaignWebhookSignatureHeader}
+              onChange={setActivecampaignWebhookSignatureHeader}
+              placeholder="X-My-Signature"
+              helpText="The custom header name you chose when creating this webhook in ActiveCampaign's UI — whichever one you flagged is_signature."
+            />
+          )}
+          {emailPlatform === "mailchimp" && (
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Mailchimp has no signature header — the secret goes directly in the URL. Pick your own secret value
+              first, append <code>?secret=&lt;that value&gt;</code> to the URL above before pasting it into Mailchimp,
+              then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
+            </p>
+          )}
+          {DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform] && (
+            <CredentialRow
+              engagementId={engagementId}
+              provider={DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform]}
+              label="Webhook secret"
+            />
+          )}
+        </div>
+      ) : (
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          Not available for {emailPlatform || "this platform"} — see the note above if applicable.
+        </p>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto px-4 py-6" style={{ color: "var(--text-secondary)" }}>
       <div className="pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -196,106 +319,23 @@ export function WinBackConfigForm({
 
       <WorkerCapabilityMatrix workerId="win-back" engagementId={engagementId} />
 
-      <SelectField
-        label="Reschedule link mode"
-        value={rescheduleMode}
-        onChange={(v) => setRescheduleMode(v as "fresh_link" | "time_slots")}
-        options={[
-          { value: "time_slots", label: "Live available slots (default)" },
-          { value: "fresh_link", label: "Per-prospect single-use link (Calendly/Cal.com only)" },
+      <BehaviorSummary
+        lines={[
+          rescheduleMode === "fresh_link"
+            ? "Prospects get a per-booking single-use reschedule link (falling back to live slots where the platform doesn't support it)."
+            : "Prospects see live available slots to rebook, pulled fresh each time.",
+          recoveredFromNoShowTaggingEnabled
+            ? `Prospects who rebook during recovery get tagged on ${emailPlatform || "the ESP"}.`
+            : "Rebooked prospects are not tagged on the ESP.",
+          inboundReplyMode === "none"
+            ? "A reply doesn't stop the cadence — only a rebook or the recovery window elapsing does."
+            : inboundReplyMode === "native"
+              ? "Any reply (via HubSpot Conversations) halts the recovery cadence for that prospect immediately."
+              : "Any forwarded reply halts the recovery cadence for that prospect immediately.",
         ]}
-        helpText="fresh_link uses the platform's own per-booking reschedule link when available (Calendly, Cal.com), falling back to live slots per prospect when it isn't (GHL, OnceHub)."
       />
 
-      <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
-        <input
-          type="checkbox"
-          checked={recoveredFromNoShowTaggingEnabled}
-          onChange={(e) => setRecoveredFromNoShowTaggingEnabled(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          Tag prospects as &quot;recovered from no-show&quot; on {emailPlatform || "the ESP"} when they rebook during
-          an active recovery window.
-        </span>
-      </label>
-
-      <SelectField
-        label="Reply detection (exits the recovery cadence)"
-        value={inboundReplyMode}
-        onChange={(v) => setInboundReplyMode(v as "native" | "forwarding" | "none")}
-        options={[
-          { value: "none", label: "Off — cadence only stops on rebook or window elapse" },
-          { value: "forwarding", label: "Forwarding — client forwards replies through an inbound-parse bridge" },
-          { value: "native", label: "Native — HubSpot Conversations only" },
-        ]}
-        helpText={
-          inboundReplyMode === "native" && emailPlatform !== "hubspot"
-            ? "Native mode only works with HubSpot — Klaviyo and ActiveCampaign don't expose a stable reply webhook, use forwarding instead."
-            : "A reply of any kind halts the win-back cadence for that prospect — table stakes for anything calling itself win-back."
-        }
-      />
-      {inboundReplyMode === "native" && emailPlatform === "hubspot" && (
-        <InputField
-          label="HubSpot Portal ID"
-          value={hubspotPortalId}
-          onChange={setHubspotPortalId}
-          helpText="Settings → Account Setup → Account Defaults in your client's HubSpot account."
-          required
-        />
-      )}
-      {inboundReplyMode === "forwarding" && (
-        <div
-          className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
-          style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
-        >
-          A unique catcher URL generates once this is saved — point your client&apos;s Postmark/SendGrid inbound-parse
-          bridge (or a forwarding rule through one) at it.
-        </div>
-      )}
-
-      {DELIVERY_WEBHOOK_PATH[emailPlatform] && (
-        <div className="space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-              Bounce/complaint monitoring
-            </h2>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Register this URL as a webhook in your client&apos;s {emailPlatform} account to enable auto-pause.
-              Optional — Win-Back runs fine without it, just without deliverability protection.
-            </p>
-          </div>
-          <div
-            className="rounded-lg p-2 text-[11px] font-mono break-all"
-            style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
-          >
-            {`${typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/${DELIVERY_WEBHOOK_PATH[emailPlatform]}/${engagementId}`}
-          </div>
-          {emailPlatform === "activecampaign" && (
-            <InputField
-              label="Signature header name"
-              value={activecampaignWebhookSignatureHeader}
-              onChange={setActivecampaignWebhookSignatureHeader}
-              placeholder="X-My-Signature"
-              helpText="The custom header name you chose when creating this webhook in ActiveCampaign's UI — whichever one you flagged is_signature."
-            />
-          )}
-          {emailPlatform === "mailchimp" && (
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              Mailchimp has no signature header — the secret goes directly in the URL. Pick your own secret value
-              first, append <code>?secret=&lt;that value&gt;</code> to the URL above before pasting it into Mailchimp,
-              then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
-            </p>
-          )}
-          {DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform] && (
-            <CredentialRow
-              engagementId={engagementId}
-              provider={DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform]}
-              label="Webhook secret"
-            />
-          )}
-        </div>
-      )}
+      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save" finishDisabled={saving || (inboundReplyMode === "native" && emailPlatform === "hubspot" && !hubspotPortalId.trim())} finishing={saving} />
 
       {saveError && (
         <p className="text-xs font-mono font-semibold" style={{ color: "var(--error)" }}>
@@ -308,19 +348,12 @@ export function WinBackConfigForm({
         </p>
       )}
 
-      <div className="flex justify-between pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="flex justify-end pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 shadow-xs"
         >
           {cancelLabel}
-        </button>
-        <button
-          onClick={save}
-          disabled={saving || (inboundReplyMode === "native" && emailPlatform === "hubspot" && !hubspotPortalId.trim())}
-          className="px-5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:translate-y-px"
-        >
-          {saving ? "Saving..." : "Save"}
         </button>
       </div>
     </div>

@@ -7,11 +7,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { InputField, TextAreaField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
 import type { ColdOpenLeadSource, ColdOpenLeadSourceType } from "@/models/schema";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { BehaviorSummary } from "./behavior-summary";
 
 type SourceRow = {
   icp: string;
@@ -142,6 +145,85 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
   if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "apify-token",
+      label: "Apify token",
+      isComplete: true,
+      content: (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <InputField label="Apify API token (only needed for an apify source)" value={apifyToken} onChange={setApifyToken} placeholder="apify_api_..." />
+          </div>
+          <button type="button" onClick={saveApifyToken} disabled={savingToken || !apifyToken.trim()} className="mb-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 disabled:opacity-40 cursor-pointer">
+            {savingToken ? "Saving…" : tokenSaved ? "Saved ✓" : "Save token"}
+          </button>
+        </div>
+      ),
+    },
+    {
+      id: "lead-sources",
+      label: "Lead sources",
+      isComplete: Boolean(canSubmit),
+      content: (
+        <div className="space-y-3">
+          {rows.map((row, i) => (
+            <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+              <div className="grid gap-2 grid-cols-1 md:grid-cols-[1fr_1fr]">
+                <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
+                <InputField label="Daily limit (optional)" value={row.dailyLimit} onChange={(v) => updateRow(i, { dailyLimit: v })} placeholder="20" />
+              </div>
+              <ChoiceCardGroup
+                label="Source type"
+                value={row.fetcherType}
+                onChange={(v) => updateRow(i, { fetcherType: v as ColdOpenLeadSourceType })}
+                options={[
+                  { value: "csv", label: "CSV upload" },
+                  { value: "apify", label: "Apify actor" },
+                  { value: "sales_nav", label: "Sales Navigator export" },
+                ]}
+              />
+
+              {row.fetcherType === "csv" && (
+                <>
+                  <TextAreaField label="Paste CSV content" value={row.csvContent} onChange={(v) => updateRow(i, { csvContent: v })} rows={4} placeholder={"Email,Company,First Name,Last Name\njane@acme.com,Acme,Jane,Doe"} />
+                  <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+                    <InputField label="Email column" value={row.mapEmail} onChange={(v) => updateRow(i, { mapEmail: v })} />
+                    <InputField label="Company column" value={row.mapCompany} onChange={(v) => updateRow(i, { mapCompany: v })} />
+                    <InputField label="First name column" value={row.mapFirstName} onChange={(v) => updateRow(i, { mapFirstName: v })} />
+                    <InputField label="Last name column" value={row.mapLastName} onChange={(v) => updateRow(i, { mapLastName: v })} />
+                  </div>
+                </>
+              )}
+              {row.fetcherType === "apify" && (
+                <InputField label="Apify actor id" value={row.apifyActorId} onChange={(v) => updateRow(i, { apifyActorId: v })} placeholder="code_crafter/leads-finder" helpText="Connect only today — a live verification pull isn't built yet." />
+              )}
+              {row.fetcherType === "sales_nav" && (
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">No automated verification for a hand-exported Sales Navigator source.</p>
+              )}
+
+              {rows.length > 1 && (
+                <button type="button" onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
+            + Add source
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const SOURCE_TYPE_LABEL: Record<ColdOpenLeadSourceType, string> = { csv: "a CSV upload", apify: "an Apify actor", sales_nav: "a Sales Navigator export" };
+  const namedRows = rows.filter((r) => r.icp.trim());
+  const summaryLines: string[] =
+    namedRows.length === 0
+      ? ["No ICP has a lead source yet — nothing will be fetched until at least one is set."]
+      : namedRows.map((r) => `Leads for "${r.icp.trim()}" will be sourced from ${SOURCE_TYPE_LABEL[r.fetcherType]}${r.dailyLimit ? `, capped at ${r.dailyLimit}/day` : ""}.`);
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -156,72 +238,16 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
 
       <WorkerCapabilityMatrix workerId="source-connect" engagementId={engagementId} />
 
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <InputField label="Apify API token (only needed for an apify source)" value={apifyToken} onChange={setApifyToken} placeholder="apify_api_..." />
-        </div>
-        <button type="button" onClick={saveApifyToken} disabled={savingToken || !apifyToken.trim()} className="mb-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 disabled:opacity-40 cursor-pointer">
-          {savingToken ? "Saving…" : tokenSaved ? "Saved ✓" : "Save token"}
-        </button>
-      </div>
+      <BehaviorSummary lines={summaryLines} />
 
-      <div className="space-y-3">
-        {rows.map((row, i) => (
-          <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
-            <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
-              <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
-              <SelectField
-                label="Source type"
-                value={row.fetcherType}
-                onChange={(v) => updateRow(i, { fetcherType: v as ColdOpenLeadSourceType })}
-                options={[
-                  { value: "csv", label: "CSV upload" },
-                  { value: "apify", label: "Apify actor" },
-                  { value: "sales_nav", label: "Sales Navigator export" },
-                ]}
-              />
-              <InputField label="Daily limit (optional)" value={row.dailyLimit} onChange={(v) => updateRow(i, { dailyLimit: v })} placeholder="20" />
-            </div>
-
-            {row.fetcherType === "csv" && (
-              <>
-                <TextAreaField label="Paste CSV content" value={row.csvContent} onChange={(v) => updateRow(i, { csvContent: v })} rows={4} placeholder={"Email,Company,First Name,Last Name\njane@acme.com,Acme,Jane,Doe"} />
-                <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-                  <InputField label="Email column" value={row.mapEmail} onChange={(v) => updateRow(i, { mapEmail: v })} />
-                  <InputField label="Company column" value={row.mapCompany} onChange={(v) => updateRow(i, { mapCompany: v })} />
-                  <InputField label="First name column" value={row.mapFirstName} onChange={(v) => updateRow(i, { mapFirstName: v })} />
-                  <InputField label="Last name column" value={row.mapLastName} onChange={(v) => updateRow(i, { mapLastName: v })} />
-                </div>
-              </>
-            )}
-            {row.fetcherType === "apify" && (
-              <InputField label="Apify actor id" value={row.apifyActorId} onChange={(v) => updateRow(i, { apifyActorId: v })} placeholder="code_crafter/leads-finder" helpText="Connect only today — a live verification pull isn't built yet." />
-            )}
-            {row.fetcherType === "sales_nav" && (
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">No automated verification for a hand-exported Sales Navigator source.</p>
-            )}
-
-            {rows.length > 1 && (
-              <button type="button" onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-        <button type="button" onClick={() => setRows((rs) => [...rs, emptyRow()])} className="text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer">
-          + Add source
-        </button>
-      </div>
+      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save" finishDisabled={saving || !canSubmit} finishing={saving} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
       {saved && !saveError && <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">✓ Saved.</p>}
 
-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-800">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
           {cancelLabel}
-        </button>
-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

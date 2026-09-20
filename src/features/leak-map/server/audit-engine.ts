@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { engagements, skillRuns, briefedCallsLog, auditRunsLog } from "@/models/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
-import { resolveCredential } from "@/lib/credentials";
+import { resolveCredential, hasCredential } from "@/lib/credentials";
 import { KlaviyoClient, HubSpotClient, GHLCRMClient } from "@/lib/platforms/email";
 import { CalendlyClient } from "@/lib/platforms/booking";
 import { deliverAuditReport } from "@/lib/platforms/audit-output";
@@ -679,4 +679,69 @@ async function pullCrmPipelineMetrics(
   }
 
   return null;
+}
+
+export interface PipelineAgingPreview {
+  ok: true;
+  platform: "hubspot" | "ghl";
+  agingThresholdDays: number;
+  openCount: number;
+  agingCount: number;
+}
+
+export type PipelineAgingPreviewResult =
+  | PipelineAgingPreview
+  | { ok: false; reason: "not_configured" | "no_credential" | "no_location_id" | "fetch_failed" };
+
+/** Real, read-only preview for Leak-Map's setup screen (Phase 3's
+ * "preview-first entry point," extended past the original 3 workers per
+ * this session's own follow-up review) — a live scan of the client's
+ * CURRENT open pipeline against their aging threshold, using the exact
+ * same credential and threshold logic pullCrmPipelineMetrics above uses
+ * for a real run. Deliberately narrower than a full audit: no win-rate
+ * delta (that needs a prior-comparison window and a sample-size floor
+ * that's meaningless for a brand-new client's first look), just "how many
+ * open deals/opportunities right now are past your aging threshold" —
+ * the one finding that's meaningful to show before Leak-Map has ever run.
+ *
+ * Never throws — every real failure mode (platform not hubspot/ghl,
+ * credential not yet connected, GHL location id missing, the CRM API call
+ * itself failing) returns a typed { ok: false, reason } instead, since
+ * this runs from a setup screen a user might be looking at with an
+ * incomplete or just-changed stack.
+ */
+export async function getPipelineAgingPreview(engagementId: string, stack: any): Promise<PipelineAgingPreviewResult> {
+  const agingThresholdDays: number = stack?.aging_threshold_days ?? 30;
+
+  if (stack?.email_platform === "hubspot") {
+    if (!(await hasCredential(engagementId, "hubspot"))) return { ok: false, reason: "no_credential" };
+    try {
+      const accessToken = await resolveCredential(engagementId, "hubspot");
+      const client = new HubSpotClient(accessToken);
+      const deals = await client.searchDealsCreatedSince(new Date(0));
+      const openDeals = deals.filter((d) => !d.isClosed);
+      const agingDeals = openDeals.filter((d) => (Date.now() - new Date(d.createdate).getTime()) / 86_400_000 > agingThresholdDays);
+      return { ok: true, platform: "hubspot", agingThresholdDays, openCount: openDeals.length, agingCount: agingDeals.length };
+    } catch {
+      return { ok: false, reason: "fetch_failed" };
+    }
+  }
+
+  if (stack?.email_platform === "ghl") {
+    const locationId = stack.booking_platform_meta?.location_id || stack.email_platform_meta?.location_id;
+    if (!locationId) return { ok: false, reason: "no_location_id" };
+    if (!(await hasCredential(engagementId, "ghl"))) return { ok: false, reason: "no_credential" };
+    try {
+      const apiKey = await resolveCredential(engagementId, "ghl");
+      const client = new GHLCRMClient(apiKey, locationId);
+      const opps = await client.searchOpportunitiesCreatedSince(new Date(0));
+      const openOpps = opps.filter((o) => o.status === "open");
+      const agingOpps = openOpps.filter((o) => (Date.now() - new Date(o.dateAdded).getTime()) / 86_400_000 > agingThresholdDays);
+      return { ok: true, platform: "ghl", agingThresholdDays, openCount: openOpps.length, agingCount: agingOpps.length };
+    } catch {
+      return { ok: false, reason: "fetch_failed" };
+    }
+  }
+
+  return { ok: false, reason: "not_configured" };
 }

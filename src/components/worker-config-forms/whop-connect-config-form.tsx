@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, ShieldAlert } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, ShieldAlert, KeyRound, Zap } from "lucide-react";
 import { useTour } from "@/components/tours/tour-provider";
 
 interface ScopeProbeResult {
@@ -123,10 +123,18 @@ export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId:
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-          {state?.connected ? "Reconnect with a new key" : "Paste your Whop API key"}
-        </label>
+      {/* Vault slot — same secure-input visual language as CredentialRow's
+          paste-a-key mode elsewhere in the app: a bordered card framing
+          the secret input, not a bare label+input pair. This worker's
+          field IS the credential (whop-connect has no other configFields),
+          so this single slot is the whole Dossier for it. */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+          <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+            {state?.connected ? "Reconnect with a new key" : "Whop API key"}
+          </label>
+        </div>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
           Generate one under Whop Dashboard → Developer → API keys. This runs a 15-call probe against your account —
           nothing is written to Whop.
@@ -151,26 +159,39 @@ export function WhopConnectConfigForm({ engagementId, onSaved }: { engagementId:
         {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
       </div>
 
+      {/* State-shift moment (Phase 3's "Live Operational Feedback" —
+          completing setup should visibly transition the worker from
+          Unconfigured to Armed, not just show a quiet toast). This is
+          whop-connect's own onboarding-worker equivalent of the "Armed
+          Worker" transition pin-down/pre-call-read/icp-lock already get
+          from arming their own Dossier. */}
       {state?.connected && (
-        <div className="space-y-1 text-xs">
-          <p>
-            <span className="text-zinc-500 dark:text-zinc-400">Whop account:</span>{" "}
-            <span className="font-mono">{state.whopAccountId ?? "—"}</span>
-          </p>
-          <p>
-            <span className="text-zinc-500 dark:text-zinc-400">Credential type:</span>{" "}
-            <span className="font-mono">{state.credentialType ?? "unknown"}</span>
-          </p>
-          <p>
-            <span className="text-zinc-500 dark:text-zinc-400">Pinned version date:</span>{" "}
-            <span className="font-mono">{state.pinnedVersionDate ?? "none — unpinned, resolve before enabling webhook skills"}</span>
-          </p>
+        <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/25 px-4 py-3">
+          <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          <div className="min-w-0 space-y-1 text-xs">
+            <p className="font-bold text-emerald-800 dark:text-emerald-300">Whop Agent armed — connected and watching.</p>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              <span className="text-zinc-500 dark:text-zinc-500">Account:</span>{" "}
+              <span className="font-mono">{state.whopAccountId ?? "—"}</span>
+              {" · "}
+              <span className="text-zinc-500 dark:text-zinc-500">Credential:</span>{" "}
+              <span className="font-mono">{state.credentialType ?? "unknown"}</span>
+              {" · "}
+              <span className="text-zinc-500 dark:text-zinc-500">Pinned version:</span>{" "}
+              <span className="font-mono">{state.pinnedVersionDate ?? "none — resolve before enabling webhook skills"}</span>
+            </p>
+          </div>
         </div>
       )}
 
       {state?.scopeProbeResults && (
         <div className="space-y-1.5">
-          <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">What unlocked</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Capabilities unlocked</h3>
+            <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">
+              {Object.values(state.scopeProbeResults).filter((r) => r.ok).length}/{Object.values(state.scopeProbeResults).length} active
+            </span>
+          </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800/80">
             {Object.entries(state.scopeProbeResults).map(([key, result]) => {
               const meta = PROBE_LABELS[key] ?? { label: key, locksWhat: "" };

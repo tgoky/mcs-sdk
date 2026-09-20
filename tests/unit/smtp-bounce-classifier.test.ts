@@ -16,8 +16,15 @@ describe("looksLikeBounceNotification", () => {
     ).toBe(true);
   });
 
-  it("matches a 550 SMTP rejection code in the body", () => {
-    expect(looksLikeBounceNotification("bounce@host.com", "Failure notice", "550 5.1.1 The email account does not exist")).toBe(true);
+  it("matches a mailbox-unavailable rejection in the body", () => {
+    // "550 " and phrases like "no such user"/"unknown user" were
+    // deliberately dropped from BOUNCE_SUBJECT_OR_BODY_RE (found by this
+    // session's own Phase 6 adversarial review) — too easy for a genuine
+    // prospect reply to false-positive-match, and because a match short-
+    // circuits the route before inngest.send(...), a false positive
+    // silently drops the reply from the pipeline entirely. This test now
+    // exercises a phrase the narrowed regex still recognizes.
+    expect(looksLikeBounceNotification("bounce@host.com", "Failure notice", "550 5.2.2 mailbox full")).toBe(true);
   });
 
   it("does NOT match a genuine reply", () => {

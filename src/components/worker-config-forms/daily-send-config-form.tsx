@@ -7,6 +7,9 @@ import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fi
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useToast } from "@/components/toast/toast-provider";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { BehaviorSummary } from "./behavior-summary";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${h.toString().padStart(2, "0")}:00` }));
 
@@ -31,19 +34,24 @@ function HeldLeadsPanel({ engagementId }: { engagementId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (cancelledRef?: { current: boolean }) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/engagements/${engagementId}/bridges/daily-send/held-leads`);
       const data = await res.json();
+      if (cancelledRef?.current) return;
       if (res.ok) setLeads(data.leads ?? []);
     } finally {
-      setLoading(false);
+      if (!cancelledRef?.current) setLoading(false);
     }
   }, [engagementId]);
 
   useEffect(() => {
-    load();
+    const cancelledRef = { current: false };
+    load(cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [load]);
 
   async function act(leadId: string, action: "approve" | "discard") {
@@ -163,7 +171,11 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
     };
   }, [engagementId]);
 
-  const canSubmit = Number(volume) > 0;
+  // Mirrors daily-send.ts's own validateDailySendInput bound (500/day) —
+  // found by this session's audit: without this, the button stayed enabled
+  // past the backend's real limit and the operator got a confusing server
+  // error instead of an immediate client-side block.
+  const canSubmit = Number(volume) > 0 && Number(volume) <= 500;
 
   async function handleSubmit() {
     setSaving(true);
@@ -190,6 +202,47 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
   if (loading) return <ConfigFormSkeleton />;
   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
 
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "schedule",
+      label: "Schedule",
+      isComplete: Boolean(canSubmit),
+      content: (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <InputField label="Daily volume" value={volume} onChange={setVolume} placeholder="20" required />
+          <SelectField label="Send hour (client-local time)" value={String(localHour)} onChange={(v) => setLocalHour(Number(v))} options={HOUR_OPTIONS} />
+          <InputField label="Timezone" value={timezone} onChange={setTimezone} placeholder="America/New_York" helpText="IANA timezone name. Defaults to UTC." />
+        </div>
+      ),
+    },
+    {
+      id: "send-mode",
+      label: "Send mode",
+      isComplete: true,
+      content: (
+        <div className="space-y-4">
+          <ChoiceCardGroup
+            label="Copy mode"
+            value={copyMode}
+            onChange={(v) => setCopyMode(v as "generate" | "upload")}
+            options={[
+              { value: "upload", label: "Upload — rotate your own variants" },
+              { value: "generate", label: "Generate — a fresh LLM draft per lead" },
+            ]}
+          />
+          <label className="flex items-start gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 cursor-pointer">
+            <input type="checkbox" checked={liveSendEnabled} onChange={(e) => setLiveSendEnabled(e.target.checked)} className="mt-0.5" />
+            <span className="text-xs text-zinc-700 dark:text-zinc-300">
+              <span className="font-bold">Send live.</span> Off by default — every run stays a dry run (leads fetched, copy assembled, nothing pushed to your ESP) until this is
+              checked. Turn it on once you&apos;ve confirmed a dry run looks right.
+            </span>
+          </label>
+          <HeldLeadsPanel engagementId={engagementId} />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -206,40 +259,22 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
 
       <WorkerCapabilityMatrix workerId="daily-send" engagementId={engagementId} />
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-        <InputField label="Daily volume" value={volume} onChange={setVolume} placeholder="20" required />
-        <SelectField label="Send hour (client-local time)" value={String(localHour)} onChange={(v) => setLocalHour(Number(v))} options={HOUR_OPTIONS} />
-        <InputField label="Timezone" value={timezone} onChange={setTimezone} placeholder="America/New_York" helpText="IANA timezone name. Defaults to UTC." />
-        <SelectField
-          label="Copy mode"
-          value={copyMode}
-          onChange={(v) => setCopyMode(v as "generate" | "upload")}
-          options={[
-            { value: "upload", label: "Upload — rotate your own variants" },
-            { value: "generate", label: "Generate — a fresh LLM draft per lead" },
-          ]}
-        />
-      </div>
+      <BehaviorSummary
+        lines={[
+          `Up to ${volume || "0"} leads/day, sent at ${String(localHour).padStart(2, "0")}:00 ${timezone || "UTC"}.`,
+          copyMode === "generate" ? "Copy is freshly generated per lead by an LLM call." : "Copy rotates through your uploaded subject/body variants.",
+          liveSendEnabled ? "Live sending is ON — real emails will go out." : "Live sending is OFF — every run stays a dry run until this is turned on.",
+        ]}
+      />
 
-      <label className="flex items-start gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 cursor-pointer">
-        <input type="checkbox" checked={liveSendEnabled} onChange={(e) => setLiveSendEnabled(e.target.checked)} className="mt-0.5" />
-        <span className="text-xs text-zinc-700 dark:text-zinc-300">
-          <span className="font-bold">Send live.</span> Off by default — every run stays a dry run (leads fetched, copy assembled, nothing pushed to your ESP) until this is
-          checked. Turn it on once you&apos;ve confirmed a dry run looks right.
-        </span>
-      </label>
-
-      <HeldLeadsPanel engagementId={engagementId} />
+      <ProgressiveFlow steps={steps} onFinish={handleSubmit} finishLabel="Save" finishDisabled={saving || !canSubmit} finishing={saving} />
 
       {saveError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
       {saved && !saveError && <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">✓ Saved.</p>}
 
-      <div className="flex justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-800">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer">
           {cancelLabel}
-        </button>
-        <button type="button" onClick={handleSubmit} disabled={saving || !canSubmit} className="px-5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

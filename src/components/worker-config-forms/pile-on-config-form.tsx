@@ -15,9 +15,11 @@
 // just updates the two stack fields.
 
 import { useState } from "react";
-import { SelectField } from "@/app/dashboard/engagements/new/form-fields";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS, skillName } from "@/lib/copy";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ChoiceCardGroup } from "@/components/choice-card-group";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
+import { BehaviorSummary } from "./behavior-summary";
 
 const SMS_OPTIONS = Object.entries(SMS_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
 const AD_DATA_OPTIONS = Object.entries(AD_DATA_PLATFORM_LABELS).map(([value, label]) => ({ value, label }));
@@ -58,23 +60,68 @@ export function PileOnConfigForm({
     }
   }
 
+  // 2 steps mirroring this worker's own 2 capabilities (SMS Follow-ups /
+  // Ad-Cohort Sync, worker-registry.ts's WORKER_CAPABILITIES entry) —
+  // narrating each channel's own choice separately instead of a flat
+  // 2-field stack, same treatment every other configured worker gets.
+  const steps: ProgressiveFlowStep[] = [
+    {
+      id: "sms",
+      label: "SMS follow-ups",
+      isComplete: true,
+      content: (
+        <ChoiceCardGroup
+          label="SMS follow-ups"
+          value={smsPlatform}
+          onChange={setSmsPlatform}
+          options={SMS_OPTIONS}
+          helpText='Selecting "none" turns this channel back off.'
+        />
+      ),
+    },
+    {
+      id: "ad-data",
+      label: "Ad-data sync",
+      isComplete: true,
+      content: (
+        <ChoiceCardGroup
+          label="Ad-data cohort sync"
+          value={adDataPlatform}
+          onChange={setAdDataPlatform}
+          options={AD_DATA_OPTIONS}
+          helpText='Selecting "none" turns this channel back off. Finer setup continues from Edit Stack Settings.'
+        />
+      ),
+    },
+  ];
+
+  // Real, live translation of the 2 choices above — pile-on has nothing
+  // to preview (no rendered artifact), so this states the actual
+  // consequence instead, computed from current state, not invented.
+  const summaryLines: string[] = [
+    smsPlatform === "none"
+      ? "SMS follow-ups are off — no text messages will be sent."
+      : `New leads matching your ICPs will get SMS follow-ups via ${SMS_PLATFORM_LABELS[smsPlatform as keyof typeof SMS_PLATFORM_LABELS] ?? smsPlatform}.`,
+    adDataPlatform === "none"
+      ? "Ad-data cohort sync is off — leads won't be pushed to an ad platform."
+      : `Leads will also be synced to ${AD_DATA_PLATFORM_LABELS[adDataPlatform as keyof typeof AD_DATA_PLATFORM_LABELS] ?? adDataPlatform} for ad-cohort targeting.`,
+  ];
+
   return (
-    <div className="space-y-4 w-full max-w-sm">
+    <div className="space-y-4 w-full max-w-md">
       <div className="pb-2.5 border-b border-zinc-200 dark:border-zinc-800">
         <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {skillName("pile-on")}</h2>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-          Selecting &quot;none&quot; turns that channel back off. Finer setup continues from Edit Stack Settings.
-        </p>
       </div>
 
       <WorkerCapabilityMatrix workerId="pile-on" engagementId={engagementId} />
 
-      <SelectField label="SMS follow-ups" value={smsPlatform} onChange={setSmsPlatform} options={SMS_OPTIONS} />
-      <SelectField label="Ad-data cohort sync" value={adDataPlatform} onChange={setAdDataPlatform} options={AD_DATA_OPTIONS} />
+      <BehaviorSummary lines={summaryLines} />
+
+      <ProgressiveFlow steps={steps} onFinish={save} finishLabel="Save changes" finishDisabled={saving} finishing={saving} />
 
       {saveError && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">⚠ {saveError}</p>}
 
-      <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-800">
         <button
           type="button"
           onClick={onCancel}
@@ -82,14 +129,6 @@ export function PileOnConfigForm({
           className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer disabled:opacity-40"
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
-        >
-          {saving ? "Saving…" : "Save changes"}
         </button>
       </div>
     </div>

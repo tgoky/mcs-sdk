@@ -58,12 +58,30 @@ import { runBulkPromoCodes, type PromoCodeSpec } from "@/features/whop-agent/ser
 import { dispatchPortfolioRollupRun } from "@/features/whop-agent/server/portfolio-rollup-service";
 import { dispatchWeeklyOpsReportRun } from "@/features/whop-agent/server/weekly-ops-report-service";
 import { dispatchAttributionReportRun } from "@/features/whop-agent/server/attribution-report-service";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 type Session = { whopUserId?: string; email: string };
 type ActionResult = { ok: true; message: string; runId?: string } | { ok: false; error: string };
 
 async function requireAccess(session: Session, engagementId: string): Promise<string | null> {
   if (!(await isAuthorizedForEngagement(session, engagementId))) return "Client not found or access denied.";
+  return null;
+}
+
+// Fix (found by this session's own Whop Agent audit): the direct dashboard
+// API routes AND these chat wrappers for whop-ads-draft-approve,
+// whop-bulk-promo-codes, and whop-dispute-response's manual path never
+// checked isSkillEnabledForEngagement before taking action — only the
+// webhook-auto-trigger paths in src/inngest/whop-agent.ts did. That meant
+// turning a skill off in the dashboard was a UI-only convention, not an
+// enforced gate: whop-ads-draft-approve in particular could still generate
+// real, billable Meta ad media through chat or the direct API route even
+// while toggled off. Every write-capable function below now checks this
+// first, same pattern whop-agent.ts's own webhook handlers already use.
+async function requireSkillEnabled(engagementId: string, skillId: string, label: string): Promise<string | null> {
+  if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
+    return `${label} is currently turned off for this client — enable it in the dashboard's Skills panel first.`;
+  }
   return null;
 }
 
@@ -162,6 +180,8 @@ export async function assemblePayoutHoldKitForEngagement(session: Session, engag
 export async function assembleDisputeResponseForEngagement(session: Session, engagementId: string, disputeId: string): Promise<ActionResult> {
   const denied = await requireAccess(session, engagementId);
   if (denied) return { ok: false, error: denied };
+  const skillOff = await requireSkillEnabled(engagementId, "whop-dispute-response", "Dispute Response");
+  if (skillOff) return { ok: false, error: skillOff };
   if (!disputeId) return { ok: false, error: "disputeId is required." };
   try {
     const result = await assembleDisputeResponse(engagementId, disputeId);
@@ -185,6 +205,8 @@ export async function submitDisputeEvidenceForEngagement(
 ): Promise<ActionResult> {
   const denied = await requireAccess(session, engagementId);
   if (denied) return { ok: false, error: denied };
+  const skillOff = await requireSkillEnabled(engagementId, "whop-dispute-response", "Dispute Response");
+  if (skillOff) return { ok: false, error: skillOff };
   if (!disputeId || !draft?.notes) return { ok: false, error: "disputeId and draft.notes are required." };
   try {
     const pendingActionId = await queueDisputeEvidenceSubmit(engagementId, disputeId, draft);
@@ -201,6 +223,8 @@ export async function draftWhopAdForEngagement(
 ): Promise<ActionResult> {
   const denied = await requireAccess(session, engagementId);
   if (denied) return { ok: false, error: denied };
+  const skillOff = await requireSkillEnabled(engagementId, "whop-ads-draft-approve", "Whop Ads Draft-and-Approve");
+  if (skillOff) return { ok: false, error: skillOff };
   if (!input.productId || !input.creativeBrief || !Number.isFinite(input.budgetCents) || input.budgetCents <= 0) {
     return { ok: false, error: "productId, creativeBrief, and a positive budgetCents are required." };
   }
@@ -225,6 +249,8 @@ export async function draftWhopAdForEngagement(
 export async function flipWhopAdActiveForEngagement(session: Session, engagementId: string, adId: string, budgetCents: number): Promise<ActionResult> {
   const denied = await requireAccess(session, engagementId);
   if (denied) return { ok: false, error: denied };
+  const skillOff = await requireSkillEnabled(engagementId, "whop-ads-draft-approve", "Whop Ads Draft-and-Approve");
+  if (skillOff) return { ok: false, error: skillOff };
   if (!adId || !Number.isFinite(budgetCents) || budgetCents <= 0) return { ok: false, error: "adId and a positive budgetCents are required." };
   try {
     const pendingActionId = await queueAdsFlipToActive(engagementId, adId, budgetCents);
@@ -242,6 +268,8 @@ export async function runBulkPromoCodesForEngagement(
 ): Promise<ActionResult> {
   const denied = await requireAccess(session, engagementId);
   if (denied) return { ok: false, error: denied };
+  const skillOff = await requireSkillEnabled(engagementId, "whop-bulk-promo-codes", "Bulk Promo Code Generation");
+  if (skillOff) return { ok: false, error: skillOff };
   if (!Array.isArray(specs) || specs.length === 0 || !specs.every((s) => typeof s?.code === "string" && Array.isArray(s?.planIds) && s.planIds.length > 0)) {
     return { ok: false, error: "At least one code is required, each with a code and planIds[]." };
   }

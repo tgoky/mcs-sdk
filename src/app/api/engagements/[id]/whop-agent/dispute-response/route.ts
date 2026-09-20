@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { assembleDisputeResponse, queueDisputeEvidenceSubmit } from "@/features/whop-agent/server/dispute-response-service";
+import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,6 +15,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const session = await getSession();
   if (!session?.whopUserId || !(await isAuthorizedForEngagement(session, id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Fix (found by this session's own Whop Agent audit): only the
+  // webhook-auto-trigger path checked this; the manual on-demand route
+  // didn't. See chat-whop-agent.ts's requireSkillEnabled.
+  if (!(await isSkillEnabledForEngagement(id, "whop-dispute-response"))) {
+    return NextResponse.json({ error: "Dispute Response is currently turned off for this client." }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   if (typeof body?.disputeId !== "string") {
@@ -37,6 +44,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await getSession();
   if (!session?.whopUserId || !(await isAuthorizedForEngagement(session, id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await isSkillEnabledForEngagement(id, "whop-dispute-response"))) {
+    return NextResponse.json({ error: "Dispute Response is currently turned off for this client." }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   if (typeof body?.disputeId !== "string" || typeof body?.draft !== "object") {

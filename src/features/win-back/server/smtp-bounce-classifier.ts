@@ -29,8 +29,21 @@
 // alone (bounce-rate monitoring still works for smtp).
 
 const BOUNCE_SENDER_RE = /mailer-daemon|postmaster|mail delivery subsystem|delivery status notification/i;
+// Narrowed after this session's own adversarial review found real
+// false-positive risk in the original, broader list: "returned to
+// sender" ("the package was returned to sender last week"), "permanent
+// failure" (too generic), a bare "550 " (matches a dollar amount or a
+// street address, not just an SMTP code), "unknown user"/"no such user"
+// (plausible in ordinary text) could all misclassify a genuine prospect
+// reply as a bounce — and because a match here causes the route to
+// return immediately without ever calling inngest.send(...), a
+// misclassified reply isn't just mistagged, it's silently dropped from
+// the reply pipeline entirely with no operator-visible trace. Kept to
+// phrases with materially lower collision risk in ordinary reply text,
+// matching (not exceeding) reply-classifier.ts's own already-proven
+// AUTO_RE set plus two narrow additions.
 const BOUNCE_SUBJECT_OR_BODY_RE =
-  /delivery (?:has )?failed|undeliverab|could not be delivered|returned to sender|delivery status notification|permanent failure|550 |mailbox (?:unavailable|full)|unknown user|no such user/i;
+  /delivery (?:has )?failed|undeliverab|could not be delivered|delivery status notification|mailbox (?:unavailable|full)/i;
 
 export function looksLikeBounceNotification(fromEmail: string, subject: string, textBody: string): boolean {
   if (BOUNCE_SENDER_RE.test(fromEmail)) return true;

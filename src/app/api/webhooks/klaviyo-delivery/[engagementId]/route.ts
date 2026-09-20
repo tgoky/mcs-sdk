@@ -70,13 +70,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
   const timestamp = req.headers.get("Klaviyo-Timestamp");
   const eventId = req.headers.get("Klaviyo-Webhook-Id");
 
-  if (signature && timestamp && (await hasCredential(engagementId, "klaviyo_webhook_secret"))) {
+  // Security fix (found by this session's own adversarial review): the
+  // original version of this check was `if (signature && timestamp &&
+  // hasSecret)` — gating verification on the ATTACKER-SUPPLIED headers
+  // being present, not just on whether a secret is configured. That meant
+  // an attacker could bypass verification entirely just by omitting the
+  // two headers, even with klaviyo_webhook_secret correctly configured —
+  // a full authentication bypass on the exact endpoint that feeds
+  // Win-Back's auto-pause. Gating on hasCredential ALONE, and treating a
+  // missing header as an automatic reject (not a skip), closes this: once
+  // a secret is configured, verification is mandatory, not optional.
+  if (await hasCredential(engagementId, "klaviyo_webhook_secret")) {
     const secret = await resolveCredential(engagementId, "klaviyo_webhook_secret");
-    const expected = crypto.createHmac("sha256", secret).update(rawBody + timestamp).digest("hex");
-    const sigBuf = Buffer.from(signature);
-    const expBuf = Buffer.from(expected);
-    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      console.warn(`[klaviyo-delivery] Rejected webhook with invalid signature for engagement ${engagementId}.`);
+    const expected = signature && timestamp ? crypto.createHmac("sha256", secret).update(rawBody + timestamp).digest("hex") : null;
+    const sigBuf = Buffer.from(signature ?? "");
+    const expBuf = Buffer.from(expected ?? "");
+    if (!expected || sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      console.warn(`[klaviyo-delivery] Rejected webhook with missing/invalid signature for engagement ${engagementId}.`);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
   }

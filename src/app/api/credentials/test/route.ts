@@ -8,6 +8,7 @@ import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } fr
 import { TwilioClient } from "@/lib/platforms/sms";
 import { HyrosClient } from "@/lib/platforms/ad-data";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import {
   checkInstantlyCredential,
   checkSmartleadCredential,
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
   if (!session?.whopUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
   const { engagementId, provider } = await request.json();
   if (!engagementId || !provider) {
@@ -95,10 +97,24 @@ export async function POST(request: Request) {
   // pulls stack for ghl_calendar's locationId / twilio's twilioAccountSid
   // context below; every other provider's validator ignores ctx entirely,
   // so this costs nothing extra for them.
+  //
+  // Security fix (found by this session's own adversarial review): this
+  // used to check whopUserId alone, missing the workspaceId scope every
+  // sibling route (composio/connect, credentials, engagements/[id]/
+  // credentials/link) already enforces — a single whopUserId can own
+  // multiple workspaces, so without this an engagement in a workspace
+  // the caller isn't currently active in could still have its credential
+  // resolved and live-probed against the real platform from here.
   const [owned] = await db
     .select({ id: engagements.id, stack: engagements.stack })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId)))
+    .where(
+      and(
+        eq(engagements.engagementId, engagementId),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
   if (!owned) {
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });

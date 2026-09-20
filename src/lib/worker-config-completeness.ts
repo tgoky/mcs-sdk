@@ -25,10 +25,51 @@
 //     This was not an open hole. What's added here is consistency (one
 //     system, one MissingField shape, for every product) and catching it
 //     before the worker's own step.run overhead, not closing a raw gap.
-//   - Whop Agent: whop-connect, whop-cancellation-save-offer, and
-//     whop-bridge-manager are covered; the other 12 need nothing (11
-//     verified zero-config) or take per-invocation action inputs, not
-//     persistent setup, per worker-registry.ts's own audit trail.
+//     Cold Open's other 2 workers (reply-sort, send-report) deliberately
+//     have NO entry here — found by this session's own Cold Open audit to
+//     be genuinely, if separately, guarded: both are gated at enable-time
+//     by isProductOnboarded("cold-open", ...) (requires icp-lock to have
+//     already run) AND at run-time by their own preconditionCheck (a
+//     second, pre-existing gate ported from the Cold Open skill pack's
+//     config.py — see src/features/cold-open/server/config.ts), which
+//     soft-skips (status: "skipped") rather than hard-failing. Not the
+//     same MissingField shape as this file's, but a real, functioning
+//     gate — not silently unguarded.
+//   - Whop Agent: whop-connect and whop-cancellation-save-offer have
+//     entries below, but this session's own Whop Agent audit traced every
+//     skillRunExecute.create call site in the repo and confirmed neither
+//     of these two workers ever dispatches through executeSkillRun
+//     (src/inngest/skill.ts) at all — both run entirely off their own
+//     route/webhook path (bridges/whop-connect/route.ts;
+//     src/inngest/whop-agent.ts's cancellation-intent handler). Their
+//     entries below are dead code at runtime, kept only for documentation
+//     and in case a future dispatch path is added, NOT the thing actually
+//     gating either worker today. Both are still genuinely protected —
+//     whop-connect's own route validates the key before writing anything;
+//     whop-cancellation-save-offer's real dispatch site (whop-agent.ts) has
+//     its own inline guard, byte-for-byte equivalent to the checker below,
+//     plus every actual Whop write goes through a human-approval queue
+//     regardless. whop-bridge-manager's entry is ALSO dead code at runtime
+//     for the same reason (confirmed by this session's audit part 2) —
+//     it's dispatched only from its own webhook handler in
+//     src/inngest/whop-agent.ts, never through executeSkillRun. Its
+//     checker logic was verified correct with no regression, but the real
+//     protection is getBridgeConfig's own null-return when
+//     whop_bridge_destination_url is unset, checked at both real call
+//     sites in whop-agent.ts. The other 12 Whop Agent workers need
+//     nothing beyond isProductOnboarded("whop-agent", ...) at the
+//     enable-toggle route plus WhopAgentClient.forEngagement's own hard
+//     throw on a missing connection — confirmed per-worker, not assumed —
+//     and none of them can take a real write action against a client's
+//     Whop account with missing config (read-only, dry-run-by-default, or
+//     approval-queued, verified per worker). A SEPARATE, real bug this
+//     same audit found and fixed: several of these workers (whop-ads-
+//     draft-approve, whop-bulk-promo-codes, whop-dispute-response's manual
+//     path) could take a real action even with the skill explicitly
+//     TOGGLED OFF, since only the webhook-auto-trigger paths checked
+//     isSkillEnabledForEngagement — see chat-whop-agent.ts's
+//     requireSkillEnabled for the fix. That's a disabled-skill gap, not a
+//     missing-config gap, so it lives outside this file's own system.
 //
 // Every field checked below is checked against its REAL stored default,
 // not just "is this field in the registry as kind: ask." Tracing the
@@ -51,12 +92,16 @@
 // the plan doc's discrepancy ledger; gating on a dead field would be
 // exactly the friction this plan removes, not adds.
 //
-// Fields with genuinely no storage slot anywhere in the schema
-// (leak-map's AGING_THRESHOLD_DAYS, whop-refund-dispute-velocity's 4
-// thresholds, send-report's REPORT_WINDOW_DAYS) can't be checked here —
-// there's nothing to check for presence/absence of. That's a schema-
-// migration gap, not a completeness gap; tracked separately (Phase 6 /
-// Open Risks in the plan doc), not silently treated as covered.
+// leak-map's AGING_THRESHOLD_DAYS (EngagementStack.aging_threshold_days),
+// whop-refund-dispute-velocity's 3 thresholds (refund_dispute_rate_threshold
+// / dispute_alert_threshold / min_payment_sample_size, also on
+// EngagementStack), and send-report's REPORT_WINDOW_DAYS
+// (coldOpenConfig.reportWindowDays, a real notNull().default(7) column) all
+// got real storage slots in Phase 6 — this comment previously said none of
+// them had one at all, which stopped being true then. All 4 still don't
+// block here, same as before, but now for the correct reason: each has a
+// real, safe default (30 / 0.08 / 3 / 10 / 7 respectively) applied wherever
+// it's actually read, not because there's nothing to check.
 
 import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, whopAgentConnections, type EngagementStack } from "@/models/schema";
@@ -96,12 +141,21 @@ const checkPileOn: Checker = async (engagementId) => {
     if (!stack.sms_platform_credentials_ref) {
       out.push(missing("smsPlatformCredential", "SMS platform credential", `${stack.sms_platform} is selected but has no connected credential.`));
     }
-    if (stack.sms_platform === "twilio" && !stack.sms_a2p_10dlc_status) {
-      out.push(missing("smsA2p10dlcStatus", "A2P 10DLC registration status", "Twilio requires this before it will send US marketing SMS."));
-    }
-    if (!stack.sms_compliance_footer_variant) {
-      out.push(missing("smsComplianceFooterVariant", "SMS compliance footer", "An SMS platform is selected but no compliance footer choice was made."));
-    }
+    // smsA2p10dlcStatus and smsComplianceFooterVariant are deliberately NOT
+    // included here, despite being real requirements once Twilio SMS
+    // actually sends — found by this session's own Showtime audit:
+    // skill.ts's completeness gate (the only thing that calls this
+    // checker) has no tier distinction and blocks the ENTIRE Pile-On run
+    // — including its unrelated ad-data cohort sync — on any non-empty
+    // result, which contradicts both fields' own "deferrable" tier
+    // ("becomes blocking only once a run actually needs it," not the
+    // moment an operator picks Twilio). Both already have a real,
+    // independent safety net exactly where they're actually needed:
+    // sendSmsForTenant (sms.ts) refuses per-send unless a2p status is
+    // "campaign_approved", and appendComplianceFooter (sms.ts) safely
+    // defaults an unset variant to "standard" rather than erroring. So an
+    // incomplete SMS compliance setup correctly blocks SMS sends
+    // specifically, without holding the whole worker hostage.
   }
 
   if (stack.ad_data_platform === undefined) {
@@ -136,10 +190,12 @@ const checkLeakMap: Checker = async (engagementId) => {
   // auditOutputFormat, weeklySummarySchedule, monthlyDeepDiveSchedule,
   // timezone, sampleSizeMinimum all have real, documented defaults
   // (dashboard_only / Monday 09:00 UTC / 1st-of-month 09:00 UTC / UTC / 5)
-  // — none of them block. Note: AGING_THRESHOLD_DAYS (audit-engine.ts) has
-  // no storage slot anywhere in the schema, so it genuinely can't be
-  // checked here — that's a schema-migration gap, not a completeness gap,
-  // and is tracked separately (see Open Risks / Phase 6 in the plan doc).
+  // — none of them block. Note: AGING_THRESHOLD_DAYS (audit-engine.ts) now
+  // reads a real schema slot (EngagementStack.aging_threshold_days,
+  // added Phase 6, defaulting to 30 — audit-engine.ts:581) — it still
+  // doesn't block, but now for the correct reason — it has a real safe
+  // default, same as the other fields in this comment — not because
+  // there's nothing to check.
   if (stack.audit_output_format === "email" && !stack.leak_map_report_email) {
     out.push(missing("leakMapReportEmail", "Report email address", "Email delivery is selected but no address is set."));
   }
@@ -160,21 +216,24 @@ const checkPreCallRead: Checker = async (engagementId) => {
 
   // videoEngagementPlatform, conversationIntelligenceProvider,
   // prospectResearchSourcesUsed are all real opt-in features — undefined
-  // means "not using this," a legitimate state, not a gap. Their
-  // credentials are only checked when the corresponding platform is
-  // actually selected.
-  if (stack.video_engagement_platform && stack.video_engagement_platform !== "none" && !stack.video_engagement_credentials_ref) {
-    out.push(missing("videoEngagementCredential", "Video engagement credential", `${stack.video_engagement_platform} is selected but has no connected credential.`));
-  }
-  if (stack.prospect_research_sources_used?.includes("apollo") && !(await hasCredential(engagementId, "apollo"))) {
-    out.push(missing("apolloCredential", "Apollo credential", "Apollo is selected as a research source but has no connected credential."));
-  }
-  if (stack.prospect_research_sources_used?.includes("pdl") && !(await hasCredential(engagementId, "pdl"))) {
-    out.push(missing("pdlCredential", "People Data Labs credential", "PDL is selected as a research source but has no connected credential."));
-  }
-  if (stack.conversation_intelligence_provider === "recall_ai" && !stack.conversation_intelligence_credentials_ref) {
-    out.push(missing("conversationIntelligenceCredential", "Call intelligence credential", "Recall.ai is selected but has no connected credential."));
-  }
+  // means "not using this," a legitimate state, not a gap.
+  //
+  // Their credentials are deliberately NOT included here as missing-field
+  // blockers, despite each being a real requirement to actually use that
+  // opt-in signal — found by this session's own Showtime audit: skill.ts's
+  // completeness gate has no tier distinction and blocks the ENTIRE
+  // nightly brief run, for every prospect, on any non-empty result, which
+  // contradicts all four fields' own "deferrable" tier ("becomes blocking
+  // only once a run actually needs it," not the moment an operator opts
+  // in). All four already have a real, independent soft-fail at the one
+  // place they're actually used, confirmed in brief-service.ts: video
+  // engagement lookup failures are caught and folded into the brief as a
+  // "couldn't be retrieved" note (line ~132); apollo/pdl resolution uses
+  // .catch(() => undefined) so a missing credential just skips that source
+  // (line ~266-270); Recall dispatch is wrapped in its own try/catch with
+  // the explicit comment "never let a Recall dispatch failure block the
+  // brief itself" (line ~370). So an incomplete opt-in correctly degrades
+  // that one signal, without holding the whole brief run hostage.
 
   return out;
 };

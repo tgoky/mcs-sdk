@@ -56,11 +56,23 @@ export async function POST(req: Request) {
 
   // HubSpot v3 signature verification: HMAC-SHA256 over
   // method + uri + body + timestamp, using the app's client secret.
-  // Skipped (not rejected) when HUBSPOT_APP_CLIENT_SECRET isn't
-  // configured, same "log and continue" posture the other webhook routes
-  // in this codebase take for optional verification.
+  // Skipped (not rejected) ONLY when HUBSPOT_APP_CLIENT_SECRET itself
+  // isn't configured — same "log and continue" posture the other webhook
+  // routes in this codebase take for optional verification. Security fix
+  // (found by this session's own adversarial review, same bug class as a
+  // Phase 6 Klaviyo route fix): this used to gate on `clientSecret &&
+  // signature` — i.e. on the ATTACKER-SUPPLIABLE header being present,
+  // not just on whether verification is even configured. An attacker
+  // could bypass the whole check by simply omitting the
+  // x-hubspot-signature-v3 header, even with the secret correctly set.
+  // Gating on the secret alone, and rejecting (not skipping) a missing
+  // header once a secret exists, closes this.
   const clientSecret = process.env.HUBSPOT_APP_CLIENT_SECRET;
-  if (clientSecret && signature) {
+  if (clientSecret) {
+    if (!signature) {
+      console.warn("[hubspot-conversations] Rejected webhook with missing signature header.");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
     const timestamp = req.headers.get("x-hubspot-request-timestamp") ?? "";
 
     // Replay protection — HubSpot's own v3 signature docs call for

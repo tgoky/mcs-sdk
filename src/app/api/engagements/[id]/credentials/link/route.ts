@@ -8,6 +8,7 @@ import {
   linkEngagementToVault,
   unlinkEngagementFromVault,
   vaultCredentialBelongsToTenant,
+  syncStackCredentialMarkers,
 } from "@/lib/credentials";
 
 /**
@@ -61,6 +62,12 @@ export async function POST(
 
     if (vaultId === null) {
       await unlinkEngagementFromVault(engagementId, provider);
+      // Fix (found by this session's own Showtime audit) — see
+      // syncStackCredentialMarkers' own doc comment: without this, the
+      // completeness gate could keep reading a now-unlinked credential as
+      // present, since it checks a separate stack marker this route never
+      // used to touch.
+      await syncStackCredentialMarkers(engagementId, provider, false);
       return NextResponse.json({ ok: true });
     }
 
@@ -74,6 +81,10 @@ export async function POST(
     }
 
     await linkEngagementToVault(engagementId, provider, vaultId);
+    // Fix (found by this session's own Showtime audit) — see
+    // syncStackCredentialMarkers' own doc comment for the full bug this
+    // closes.
+    await syncStackCredentialMarkers(engagementId, provider, true);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[engagements/[id]/credentials/link POST]", err);

@@ -1381,6 +1381,44 @@ export const credentialVault = pgTable("credential_vault", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ── Composio Connect Attempts (OAuth callback CSRF binding) ──────────────
+// Security fix (found by this session's own adversarial review): the
+// Composio connect/callback flow previously trusted "a valid session
+// cookie is present at callback time" as proof the callback belongs to
+// the session that started it — it doesn't. Any authenticated user could
+// complete their OWN legitimate Composio OAuth flow, capture their own
+// connected_account_id from the resulting redirect, then get a victim to
+// open a crafted /api/composio/callback?...&connected_account_id=<theirs>
+// link (a plain top-level GET navigation, which the session cookie's
+// sameSite=lax setting does NOT block) — the server would then link the
+// ATTACKER's own connected account into the VICTIM's engagement or
+// shared vault credential, silently routing the victim's business
+// integration (email, CRM writes, bookings) through the attacker's own
+// third-party account.
+//
+// Fixed with a standard OAuth state-token binding: /api/composio/connect
+// mints a random, single-use `state` here scoped to the workspace that
+// actually initiated the flow, threads it through Composio's callbackUrl
+// as one more query param (Composio only appends its own `status`/
+// `connected_account_id`, it never strips params this app already put on
+// the URL), and /api/composio/callback looks it up, confirms the
+// CURRENT session's workspace matches the one that started the flow, and
+// consumes (deletes) it before doing anything with connectedAccountId. A
+// crafted link using an attacker's own state fails this check — its
+// stored workspaceId is the attacker's, not the victim's, and the
+// attacker cannot forge a state whose stored workspaceId is the
+// victim's without already being authenticated as the victim, which is
+// exactly what this defends against.
+export const composioConnectAttempts = pgTable("composio_connect_attempts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  state: text("state").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  provider: text("provider").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("composio_connect_attempts_state_uidx").on(table.state),
+]);
+
 // ── Credentials Refs (encrypted value, not raw) ───────────────────────────
 export const credentialsRefs = pgTable("credentials_refs", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import type { RepEntity, RepCompetitor, RepCollision, RepEngineId } from "@/models/schema";
 import { REP_ENGINE_IDS, REP_ENGINE_LABELS } from "@/features/reputation-manager/engine-models";
 import { InferredFieldBadge } from "@/components/inferred-field-badge";
+import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
 
 /**
  * Everything rep-onboarding's form needs to hold, in the shape the save
@@ -192,6 +193,11 @@ export function IdentityGraphForm({
   onChange,
   readOnlyCollisions,
   detectedOperatorName,
+  layout = "flat",
+  onFinish,
+  finishLabel = "Save",
+  finishDisabled = false,
+  finishing = false,
 }: {
   form: IdentityGraphFormState;
   onChange: (next: IdentityGraphFormState) => void;
@@ -206,73 +212,99 @@ export function IdentityGraphForm({
    * shows the Phase 3 Inferred Card above operatorName instead of a
    * silent pre-fill with no visible provenance. */
   detectedOperatorName?: string;
+  /** "flat" (default, unchanged) renders every section in one long
+   * scroll — the shape this component always had, and what
+   * new/page.tsx's own onboarding wizard still gets since it wasn't
+   * asked to change. "steps" (rep-onboarding-config-form.tsx's own
+   * post-creation edit screen) narrates the same sections one at a time
+   * via ProgressiveFlow instead — found missing by this session's own
+   * review: this worker already had the Live Capability Matrix and
+   * Inferred Cards, but never the narrated flow every other configured
+   * worker on the platform got. No field, state, or save-payload logic
+   * changes between the two — this only changes how the sections below
+   * are arranged on screen. */
+  layout?: "flat" | "steps";
+  /** Only used when layout is "steps" — threaded straight through to
+   * ProgressiveFlow's own finish button, since that's what replaces the
+   * caller's separate Save button in that mode (rep-onboarding-config-form.tsx
+   * owns the actual save() call and passes it here; new/page.tsx's flat
+   * layout still renders its own Save button below this component,
+   * unaffected). */
+  onFinish?: () => void;
+  finishLabel?: string;
+  finishDisabled?: boolean;
+  finishing?: boolean;
 }) {
   function set<K extends keyof IdentityGraphFormState>(key: K, value: IdentityGraphFormState[K]) {
     onChange({ ...form, [key]: value });
   }
 
-  return (
-    <div className="space-y-8">
-      <div className="space-y-4">
+  const operatorSection = (
+    <div className="space-y-4">
+      {layout === "flat" && (
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
           Operator
         </h2>
-        {detectedOperatorName !== undefined && (
-          <InferredFieldBadge
-            detectedValue={detectedOperatorName}
-            currentValue={form.operatorName}
-            detectedFromLabel="the client's name on file"
-            onUse={(v) => set("operatorName", v)}
-          />
-        )}
-        <InputField
-          label="Operator name"
-          required
-          value={form.operatorName}
-          onChange={(v) => set("operatorName", v)}
-          placeholder="Marvo Roofing Co."
-          helpText="The name every downstream monitor and prompt panel is built around."
+      )}
+      {detectedOperatorName !== undefined && (
+        <InferredFieldBadge
+          detectedValue={detectedOperatorName}
+          currentValue={form.operatorName}
+          detectedFromLabel="the client's name on file"
+          onUse={(v) => set("operatorName", v)}
         />
-        <InputField
-          label="Sole authority"
-          required
-          value={form.soleAuthorityName}
-          onChange={(v) => set("soleAuthorityName", v)}
-          placeholder="Full name of the one person who can declare a crisis or approve a public response"
-          helpText="Reputation Manager never publishes or approves anything on its own — this is who it always defers to."
-        />
-        <TextAreaField
-          label="Aliases"
-          value={form.operatorAliases}
-          onChange={(v) => set("operatorAliases", v)}
-          placeholder={"Marvo\nMarvo Roofing\nMarvo Co"}
-          rows={2}
-          helpText="One per line. Other names AI engines or reviewers might use for this operator."
-        />
-        <TextAreaField
-          label="Domains"
-          value={form.operatorDomains}
-          onChange={(v) => set("operatorDomains", v)}
-          placeholder={"marvoroofing.com"}
-          rows={2}
-        />
-        <TextAreaField
-          label="Handles"
-          value={form.operatorHandles}
-          onChange={(v) => set("operatorHandles", v)}
-          placeholder={"x: @marvoroofing\nlinkedin: /company/marvo-roofing"}
-          rows={2}
-          helpText={'One per line, as "platform: handle".'}
-        />
-        <TextAreaField
-          label="Email contacts"
-          value={form.operatorEmailContacts}
-          onChange={(v) => set("operatorEmailContacts", v)}
-          placeholder={"hello@marvoroofing.com"}
-          rows={2}
-        />
-      </div>
+      )}
+      <InputField
+        label="Operator name"
+        required
+        value={form.operatorName}
+        onChange={(v) => set("operatorName", v)}
+        placeholder="Marvo Roofing Co."
+        helpText="The name every downstream monitor and prompt panel is built around."
+      />
+      <InputField
+        label="Sole authority"
+        required
+        value={form.soleAuthorityName}
+        onChange={(v) => set("soleAuthorityName", v)}
+        placeholder="Full name of the one person who can declare a crisis or approve a public response"
+        helpText="Reputation Manager never publishes or approves anything on its own — this is who it always defers to."
+      />
+      <TextAreaField
+        label="Aliases"
+        value={form.operatorAliases}
+        onChange={(v) => set("operatorAliases", v)}
+        placeholder={"Marvo\nMarvo Roofing\nMarvo Co"}
+        rows={2}
+        helpText="One per line. Other names AI engines or reviewers might use for this operator."
+      />
+      <TextAreaField
+        label="Domains"
+        value={form.operatorDomains}
+        onChange={(v) => set("operatorDomains", v)}
+        placeholder={"marvoroofing.com"}
+        rows={2}
+      />
+      <TextAreaField
+        label="Handles"
+        value={form.operatorHandles}
+        onChange={(v) => set("operatorHandles", v)}
+        placeholder={"x: @marvoroofing\nlinkedin: /company/marvo-roofing"}
+        rows={2}
+        helpText={'One per line, as "platform: handle".'}
+      />
+      <TextAreaField
+        label="Email contacts"
+        value={form.operatorEmailContacts}
+        onChange={(v) => set("operatorEmailContacts", v)}
+        placeholder={"hello@marvoroofing.com"}
+        rows={2}
+      />
+    </div>
+  );
 
+  const watchListSection = (
+    <div className="space-y-8">
       <div className="space-y-3">
         <RepeatingGroupHeader
           title="Entities"
@@ -463,62 +495,95 @@ export function IdentityGraphForm({
           </div>
         )}
       </div>
+    </div>
+  );
 
-      <div className="space-y-4">
+  const sourcesSection = (
+    <div className="space-y-4">
+      {layout === "flat" && (
         <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
           Sources & panel
         </h2>
-        <TextAreaField
-          label="Trusted sources"
-          value={form.trustedSources}
-          onChange={(v) => set("trustedSources", v)}
-          placeholder={"g2.com\ncapterra.com"}
-          rows={2}
-        />
-        <TextAreaField
-          label="Seed AI-engine prompts"
-          value={form.seedPanelPrompts}
-          onChange={(v) => set("seedPanelPrompts", v)}
-          placeholder={"Who is Marvo Roofing?\nIs Marvo Roofing legit?"}
-          rows={3}
-          helpText="5-8 starting prompts. Expanded into the full monitoring panel by a future skill — this just seeds it."
-        />
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">Engines checked</label>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            Only engines your workspace has a model configured for actually run — unchecking one here just narrows
-            it further for this client specifically.
-          </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
-            {REP_ENGINE_IDS.map((id) => (
-              <label key={id} className="flex items-center gap-1.5 text-[12px] text-zinc-700 dark:text-zinc-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.activeEngines.includes(id)}
-                  onChange={(e) => {
-                    const next = e.target.checked ? [...form.activeEngines, id] : form.activeEngines.filter((x) => x !== id);
-                    set("activeEngines", next);
-                  }}
-                />
-                {REP_ENGINE_LABELS[id]}
-              </label>
-            ))}
-          </div>
+      )}
+      <TextAreaField
+        label="Trusted sources"
+        value={form.trustedSources}
+        onChange={(v) => set("trustedSources", v)}
+        placeholder={"g2.com\ncapterra.com"}
+        rows={2}
+      />
+      <TextAreaField
+        label="Seed AI-engine prompts"
+        value={form.seedPanelPrompts}
+        onChange={(v) => set("seedPanelPrompts", v)}
+        placeholder={"Who is Marvo Roofing?\nIs Marvo Roofing legit?"}
+        rows={3}
+        helpText="5-8 starting prompts. Expanded into the full monitoring panel by a future skill — this just seeds it."
+      />
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">Engines checked</label>
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          Only engines your workspace has a model configured for actually run — unchecking one here just narrows
+          it further for this client specifically.
+        </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
+          {REP_ENGINE_IDS.map((id) => (
+            <label key={id} className="flex items-center gap-1.5 text-[12px] text-zinc-700 dark:text-zinc-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.activeEngines.includes(id)}
+                onChange={(e) => {
+                  const next = e.target.checked ? [...form.activeEngines, id] : form.activeEngines.filter((x) => x !== id);
+                  set("activeEngines", next);
+                }}
+              />
+              {REP_ENGINE_LABELS[id]}
+            </label>
+          ))}
         </div>
-        <InputField
-          label="Crisis threshold override"
-          value={form.crisisThresholdOverride}
-          onChange={(v) => set("crisisThresholdOverride", v)}
-          placeholder="Leave blank to use the shared default (80)"
-          type="number"
-        />
-        <InputField
-          label="Crisis paging phone (SMS fallback)"
-          value={form.operatorPagePhone}
-          onChange={(v) => set("operatorPagePhone", v)}
-          placeholder="+1 555 555 5555 — leave blank to skip SMS paging"
-        />
       </div>
+      <InputField
+        label="Crisis threshold override"
+        value={form.crisisThresholdOverride}
+        onChange={(v) => set("crisisThresholdOverride", v)}
+        placeholder="Leave blank to use the shared default (80)"
+        type="number"
+      />
+      <InputField
+        label="Crisis paging phone (SMS fallback)"
+        value={form.operatorPagePhone}
+        onChange={(v) => set("operatorPagePhone", v)}
+        placeholder="+1 555 555 5555 — leave blank to skip SMS paging"
+      />
     </div>
+  );
+
+  if (layout === "flat") {
+    return (
+      <div className="space-y-8">
+        {operatorSection}
+        {watchListSection}
+        {sourcesSection}
+      </div>
+    );
+  }
+
+  const steps: ProgressiveFlowStep[] = [
+    { id: "operator", label: "Operator", isComplete: form.operatorName.trim() !== "" && form.soleAuthorityName.trim() !== "", content: operatorSection },
+    { id: "watch-list", label: "Watch list", isComplete: true, content: watchListSection },
+    { id: "sources", label: "Sources & panel", isComplete: true, content: sourcesSection },
+  ];
+
+  // In "steps" mode, ProgressiveFlow's own finish button IS the save
+  // action — the caller passes its real save() handler in via onFinish
+  // instead of rendering a separate button below this component.
+  return (
+    <ProgressiveFlow
+      steps={steps}
+      onFinish={onFinish ?? (() => {})}
+      finishLabel={finishLabel}
+      finishDisabled={finishDisabled}
+      finishing={finishing}
+    />
   );
 }

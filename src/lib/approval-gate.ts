@@ -469,6 +469,15 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   },
 
   whop_bulk_promo_codes_confirm: async (engagementId, payload) => {
+    // The skill may have been turned off between this being queued and an
+    // admin approving it now — same re-check webhook_enrollment above
+    // does, extended here per this session's own Whop Agent audit (which
+    // found none of Whop Agent's write-capable approval executors re-checked
+    // the toggle at approval time, only at the original request).
+    const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
+    if (!(await isSkillEnabledForEngagement(engagementId, "whop-bulk-promo-codes"))) {
+      throw new Error("Bulk Promo Code Generation is turned off for this engagement — approve after re-enabling it, if that's intended.");
+    }
     const { executeBulkPromoCodesConfirm } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
     await executeBulkPromoCodesConfirm(engagementId, payload.specs);
   },
@@ -485,6 +494,10 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   // manifest declares; re-checks the evidence window immediately before
   // submitting, independent of the check that ran when this was queued.
   whop_dispute_evidence_submit: async (engagementId, payload) => {
+    const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
+    if (!(await isSkillEnabledForEngagement(engagementId, "whop-dispute-response"))) {
+      throw new Error("Dispute Response is turned off for this engagement — approve after re-enabling it, if that's intended.");
+    }
     const { executeDisputeEvidenceSubmit } = await import("@/features/whop-agent/server/dispute-response-service");
     await executeDisputeEvidenceSubmit(engagementId, payload.disputeId, payload.draft);
   },
@@ -493,6 +506,10 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   // manifest declares; this is the one call in the whole catalog that
   // starts real Meta ad spend.
   whop_ads_flip_to_active: async (engagementId, payload) => {
+    const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
+    if (!(await isSkillEnabledForEngagement(engagementId, "whop-ads-draft-approve"))) {
+      throw new Error("Whop Ads Draft-and-Approve is turned off for this engagement — approve after re-enabling it, if that's intended.");
+    }
     const { executeAdsFlipToActive } = await import("@/features/whop-agent/server/whop-ads-service");
     await executeAdsFlipToActive(engagementId, payload.adId);
   },
