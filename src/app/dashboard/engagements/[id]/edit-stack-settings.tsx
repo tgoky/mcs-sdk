@@ -269,6 +269,200 @@ function GhlCalendarPicker({
   );
 }
 
+type LivePickerOption = { id: string; name: string };
+
+// Generic live-fetch picker for edit-stack-settings' own /stack-options
+// route — same shape as GhlCalendarPicker above, generalized across every
+// platform whose credential is already saved on this engagement. Each
+// caller says which `resource` to ask for and which already-entered
+// field(s) it depends on (extraParams) — e.g. Twilio's messaging-service
+// picker needs the Account SID typed just above it, Webflow's collection
+// picker needs the site just chosen. Falls back to a manual text input
+// (same field this replaced) when the live fetch can't run yet or fails,
+// so a not-yet-connected credential or an API hiccup never blocks saving.
+function LivePicker({
+  engagementId,
+  resource,
+  label,
+  value,
+  onChange,
+  extraParams,
+  missingParamMessage,
+}: {
+  engagementId: string;
+  resource: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  extraParams?: Record<string, string>;
+  missingParamMessage?: string;
+}) {
+  const [options, setOptions] = useState<LivePickerOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [manual, setManual] = useState(false);
+
+  const paramsKey = JSON.stringify(extraParams ?? {});
+  const blocked = Boolean(missingParamMessage) && Object.values(extraParams ?? {}).some((v) => !v?.trim());
+
+  useEffect(() => {
+    if (blocked) {
+      setOptions([]);
+      setError(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      const qs = new URLSearchParams(extraParams ?? {}).toString();
+      fetch(`/api/engagements/${engagementId}/stack-options/${resource}${qs ? `?${qs}` : ""}`)
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || `Request failed [${res.status}]`);
+          return data;
+        })
+        .then((data) => {
+          if (data.success) setOptions(data.options ?? []);
+          else throw new Error(data.error ?? "Failed to load options");
+        })
+        .catch((e: unknown) => {
+          setError(e instanceof Error ? e.message : "Failed to load options");
+          setOptions([]);
+        })
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engagementId, resource, paramsKey, blocked]);
+
+  if (manual) {
+    return (
+      <label className="space-y-1 block">
+        <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">{label}</span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
+        />
+        <button type="button" onClick={() => setManual(false)} className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
+          Pick from a live list instead
+        </button>
+      </label>
+    );
+  }
+
+  // Keep a previously-saved value selectable even if it fell out of the
+  // freshly-fetched list (stale id, or the fetch simply hasn't run yet) —
+  // never silently blank a real saved value out from under the operator.
+  const knownOptions = value && !options.some((o) => o.id === value) ? [{ id: value, name: `${value} (currently saved)` }, ...options] : options;
+
+  return (
+    <label className="space-y-1 block">
+      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={loading || blocked}
+        className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
+      >
+        <option value="">
+          {blocked ? missingParamMessage : loading ? "Loading…" : knownOptions.length === 0 ? (error ? "-- Couldn't load --" : "-- No options found --") : "-- Choose --"}
+        </option>
+        {knownOptions.map((o) => (
+          <option key={o.id} value={o.id}>{o.name}</option>
+        ))}
+      </select>
+      {error && !blocked && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
+      {!blocked && (
+        <button type="button" onClick={() => setManual(true)} className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
+          Type it in manually instead
+        </button>
+      )}
+    </label>
+  );
+}
+
+// Auto-detects the HubSpot Portal ID from the connected key via the same
+// account-info route Win-Back's own config form uses (the lookup is
+// generic to "this engagement's saved HubSpot credential," not specific
+// to Win-Back — reused here rather than re-implemented) instead of
+// asking the operator to hand-copy it from HubSpot's Account Setup
+// screen. There's only ever one portal per key, so unlike LivePicker
+// this shows a single detected value with an override toggle, not a
+// dropdown of many.
+function HubspotPortalIdField({
+  engagementId,
+  value,
+  onChange,
+}: {
+  engagementId: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [detected, setDetected] = useState(false);
+  const [manual, setManual] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/engagements/${engagementId}/bridges/win-back/hubspot-portal`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Request failed [${res.status}]`);
+        return data;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        onChange(data.portalId ?? "");
+        setDetected(true);
+        setManual(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setDetected(false);
+        setError(e instanceof Error ? e.message : "Could not auto-detect the Portal ID.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engagementId]);
+
+  if (manual || (!detected && !loading)) {
+    return (
+      <label className="space-y-1 block">
+        <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Portal ID (inbound-reply routing, optional)</span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
+        />
+        {loading && <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 animate-pulse">⚡ detecting…</p>}
+        {error && !loading && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
+      </label>
+    );
+  }
+
+  return (
+    <label className="space-y-1 block">
+      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Portal ID (inbound-reply routing, optional)</span>
+      <div className="flex items-center gap-2 w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300">
+        <span>{value}</span>
+        <span className="text-[10px] font-mono uppercase tracking-wide text-emerald-600 dark:text-emerald-400">✓ detected</span>
+        <button type="button" onClick={() => setManual(true)} className="ml-auto text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
+          Override
+        </button>
+      </div>
+    </label>
+  );
+}
+
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider pt-2 first:pt-0">
@@ -688,7 +882,46 @@ export function EditStackSettings({
               ))}
             </select>
           </label>
-          <MetaFieldInputs fields={hostingMetaFields} values={meta} onChange={setMetaField} />
+          {hostingPlatform === "webflow" ? (
+            <>
+              <LivePicker
+                engagementId={engagementId}
+                resource="webflow-sites"
+                label="Webflow site ID"
+                value={meta.webflow_site_id ?? ""}
+                onChange={(v) => setMetaField("webflow_site_id", v)}
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="webflow-collections"
+                label="Collection ID (optional)"
+                value={meta.webflow_collection_id ?? ""}
+                onChange={(v) => setMetaField("webflow_collection_id", v)}
+                extraParams={{ siteId: meta.webflow_site_id ?? "" }}
+                missingParamMessage="-- Choose a Webflow site above first --"
+              />
+              <MetaFieldInputs fields={hostingMetaFields.filter((f) => f.key === "webflow_page_id")} values={meta} onChange={setMetaField} />
+            </>
+          ) : hostingPlatform === "nextjs_vercel" ? (
+            <>
+              <LivePicker
+                engagementId={engagementId}
+                resource="vercel-projects"
+                label="Vercel project name"
+                value={meta.vercel_project_name ?? ""}
+                onChange={(v) => setMetaField("vercel_project_name", v)}
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="vercel-teams"
+                label="Vercel team ID (optional)"
+                value={meta.vercel_team_id ?? ""}
+                onChange={(v) => setMetaField("vercel_team_id", v)}
+              />
+            </>
+          ) : (
+            <MetaFieldInputs fields={hostingMetaFields} values={meta} onChange={setMetaField} />
+          )}
         </div>
 
         {/* Email / CRM automation */}
@@ -712,7 +945,61 @@ export function EditStackSettings({
               ))}
             </select>
           </label>
-          <MetaFieldInputs fields={emailStructureFields} values={meta} onChange={setMetaField} />
+          {emailPlatform === "klaviyo" ? (
+            <>
+              <LivePicker engagementId={engagementId} resource="klaviyo-lists" label="Target list ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
+              <LivePicker engagementId={engagementId} resource="klaviyo-lists" label="Recovery list ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
+            </>
+          ) : emailPlatform === "mailchimp" ? (
+            <>
+              <LivePicker engagementId={engagementId} resource="mailchimp-lists" label="Target list ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
+              <LivePicker engagementId={engagementId} resource="mailchimp-lists" label="Recovery list ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
+            </>
+          ) : emailPlatform === "convertkit" ? (
+            <>
+              <LivePicker engagementId={engagementId} resource="convertkit-forms" label="Target form ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
+              <LivePicker engagementId={engagementId} resource="convertkit-tags" label="Recovery tag ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
+            </>
+          ) : emailPlatform === "activecampaign" ? (
+            <>
+              <MetaFieldInputs fields={emailStructureFields.filter((f) => f.key === "activecampaign_base_url")} values={meta} onChange={setMetaField} />
+              <div />
+              <LivePicker
+                engagementId={engagementId}
+                resource="activecampaign-lists"
+                label="Target list ID (Pile-On)"
+                value={meta.target_list_id ?? ""}
+                onChange={(v) => setMetaField("target_list_id", v)}
+                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
+                missingParamMessage="-- Enter the Account base URL above first --"
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="activecampaign-lists"
+                label="Recovery list ID (Win-Back)"
+                value={meta.recovery_list_id ?? ""}
+                onChange={(v) => setMetaField("recovery_list_id", v)}
+                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
+                missingParamMessage="-- Enter the Account base URL above first --"
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="activecampaign-automations"
+                label="Recovery automation ID (optional)"
+                value={meta.recovery_automation_id ?? ""}
+                onChange={(v) => setMetaField("recovery_automation_id", v)}
+                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
+                missingParamMessage="-- Enter the Account base URL above first --"
+              />
+            </>
+          ) : emailPlatform === "hubspot" ? (
+            <>
+              <LivePicker engagementId={engagementId} resource="hubspot-workflows" label="Recovery workflow ID (Win-Back)" value={meta.recovery_workflow_id ?? ""} onChange={(v) => setMetaField("recovery_workflow_id", v)} />
+              <HubspotPortalIdField engagementId={engagementId} value={meta.hubspot_portal_id ?? ""} onChange={(v) => setMetaField("hubspot_portal_id", v)} />
+            </>
+          ) : (
+            <MetaFieldInputs fields={emailStructureFields} values={meta} onChange={setMetaField} />
+          )}
           {emailPlatform === "ghl" && (
             bookingPlatform === "ghl_calendar" ? (
               <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
@@ -751,7 +1038,32 @@ export function EditStackSettings({
               ))}
             </select>
           </label>
-          <MetaFieldInputs fields={smsMetaFields} values={meta} onChange={setMetaField} />
+          {smsPlatform === "twilio" ? (
+            <>
+              <MetaFieldInputs fields={smsMetaFields.filter((f) => f.key === "twilio_account_sid")} values={meta} onChange={setMetaField} />
+              <div />
+              <LivePicker
+                engagementId={engagementId}
+                resource="twilio-messaging-services"
+                label="Messaging Service SID (optional)"
+                value={meta.twilio_messaging_service_sid ?? ""}
+                onChange={(v) => setMetaField("twilio_messaging_service_sid", v)}
+                extraParams={{ accountSid: meta.twilio_account_sid ?? "" }}
+                missingParamMessage="-- Enter the Twilio Account SID above first --"
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="twilio-phone-numbers"
+                label="From number"
+                value={meta.twilio_from_number ?? ""}
+                onChange={(v) => setMetaField("twilio_from_number", v)}
+                extraParams={{ accountSid: meta.twilio_account_sid ?? "" }}
+                missingParamMessage="-- Enter the Twilio Account SID above first --"
+              />
+            </>
+          ) : (
+            <MetaFieldInputs fields={smsMetaFields} values={meta} onChange={setMetaField} />
+          )}
         </div>
 
         {/* Ad-data cohort sync */}
@@ -775,7 +1087,28 @@ export function EditStackSettings({
               ))}
             </select>
           </label>
-          <MetaFieldInputs fields={adDataMetaFields} values={meta} onChange={setMetaField} />
+          {adDataPlatform === "google_sheets" ? (
+            <>
+              <LivePicker
+                engagementId={engagementId}
+                resource="google-sheets-spreadsheets"
+                label="Spreadsheet ID"
+                value={meta.google_sheets_spreadsheet_id ?? ""}
+                onChange={(v) => setMetaField("google_sheets_spreadsheet_id", v)}
+              />
+              <LivePicker
+                engagementId={engagementId}
+                resource="google-sheets-tabs"
+                label="Cohort sheet name"
+                value={meta.google_sheets_cohort_sheet_name ?? ""}
+                onChange={(v) => setMetaField("google_sheets_cohort_sheet_name", v)}
+                extraParams={{ spreadsheetId: meta.google_sheets_spreadsheet_id ?? "" }}
+                missingParamMessage="-- Choose a spreadsheet above first --"
+              />
+            </>
+          ) : (
+            <MetaFieldInputs fields={adDataMetaFields} values={meta} onChange={setMetaField} />
+          )}
         </div>
 
         {/* Call Intelligence (Recall.ai) */}

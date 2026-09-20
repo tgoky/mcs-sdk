@@ -4,8 +4,8 @@
 // header for why (inline Configure on WorkersPanel/Library vs. this same
 // form as its own standalone, bookmarkable route).
 
-import { useEffect, useState } from "react";
-import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+import { useCallback, useEffect, useState } from "react";
+import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
@@ -50,6 +50,15 @@ export function WinBackConfigForm({
   const [recoveredFromNoShowTaggingEnabled, setRecoveredFromNoShowTaggingEnabled] = useState(true);
   const [inboundReplyMode, setInboundReplyMode] = useState<"native" | "forwarding" | "none">("none");
   const [hubspotPortalId, setHubspotPortalId] = useState("");
+  // Auto-derived from HubSpot's own account-info API (see the
+  // hubspot-portal route) instead of asking the operator to hand-copy it
+  // from HubSpot's Account Setup screen. detected=true means the value in
+  // hubspotPortalId came from that lookup; editingPortalId lets them
+  // override it if the auto-detected value is ever wrong.
+  const [fetchingPortalId, setFetchingPortalId] = useState(false);
+  const [portalIdError, setPortalIdError] = useState<string | null>(null);
+  const [portalIdDetected, setPortalIdDetected] = useState(false);
+  const [editingPortalId, setEditingPortalId] = useState(false);
 
   // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
   const [autoPaused, setAutoPaused] = useState(false);
@@ -92,6 +101,42 @@ export function WinBackConfigForm({
       cancelled = true;
     };
   }, [engagementId]);
+
+  const fetchPortalId = useCallback(() => {
+    let cancelled = false;
+    setFetchingPortalId(true);
+    setPortalIdError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/engagements/${engagementId}/bridges/win-back/hubspot-portal`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.error ?? "Failed to detect the Portal ID");
+        setHubspotPortalId(data.portalId ?? "");
+        setPortalIdDetected(true);
+        setEditingPortalId(false);
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setPortalIdDetected(false);
+          setPortalIdError(e instanceof Error ? e.message : "Failed to detect the Portal ID");
+        }
+      } finally {
+        if (!cancelled) setFetchingPortalId(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [engagementId]);
+
+  // Auto-detect the Portal ID the moment we know this client is on
+  // HubSpot, instead of leaving a blank/hand-typed field for something
+  // HubSpot's own Account Info API already returns for the connected key.
+  useEffect(() => {
+    if (loading || emailPlatform !== "hubspot") return;
+    return fetchPortalId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, emailPlatform]);
 
   async function save() {
     setSaving(true);
@@ -199,13 +244,44 @@ export function WinBackConfigForm({
             }
           />
           {inboundReplyMode === "native" && emailPlatform === "hubspot" && (
-            <InputField
-              label="HubSpot Portal ID"
-              value={hubspotPortalId}
-              onChange={setHubspotPortalId}
-              helpText="Settings → Account Setup → Account Defaults in your client's HubSpot account."
-              required
-            />
+            <div className="space-y-1.5">
+              {fetchingPortalId && (
+                <p className="text-[11px] italic font-mono animate-pulse" style={{ color: "var(--text-muted)" }}>
+                  ⚡ Contacting HubSpot… detecting this account&apos;s Portal ID…
+                </p>
+              )}
+              {portalIdError && !fetchingPortalId && (
+                <div className="rounded-sm p-3 text-[11px] font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
+                  ⚠ Couldn&apos;t auto-detect: {portalIdError}
+                </div>
+              )}
+              {portalIdDetected && !editingPortalId ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
+                    HubSpot Portal ID
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}>
+                    <span className="font-mono">{hubspotPortalId}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wide text-emerald-600 dark:text-emerald-400">✓ detected via HubSpot</span>
+                    <button type="button" onClick={() => setEditingPortalId(true)} className="ml-auto text-[11px] font-semibold hover:underline cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      Override
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <InputField
+                  label="HubSpot Portal ID"
+                  value={hubspotPortalId}
+                  onChange={setHubspotPortalId}
+                  helpText={
+                    portalIdDetected
+                      ? "Overriding the auto-detected value — re-check the box above to go back to it."
+                      : "Auto-detection needs the connected key's account-info.security.read scope. Settings → Account Setup → Account Defaults in your client's HubSpot account has the same number if you'd rather paste it."
+                  }
+                  required
+                />
+              )}
+            </div>
           )}
           {inboundReplyMode === "forwarding" && (
             <div

@@ -32,6 +32,7 @@ export function CredentialRow({
   currentlyLinkedVaultId,
   embedded = false,
   onRequestClose,
+  onSaved,
 }: {
   engagementId: string;
   provider: string;
@@ -39,6 +40,11 @@ export function CredentialRow({
   currentlyLinkedVaultId?: string | null;
   embedded?: boolean;
   onRequestClose?: () => void;
+  /** Fired after a key is successfully pasted+saved, or a vault credential
+   * successfully linked — lets a parent form (e.g. Send Connect) know it's
+   * safe to fetch live options against this credential for the first time,
+   * without polling or re-deriving connected state itself. */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -257,6 +263,7 @@ export function CredentialRow({
       setSaveForReuse(false);
       toast.success(`${label} updated.`);
       router.refresh();
+      onSaved?.();
 
       // FIXED: Trigger auto-close on success
       if (embedded && onRequestClose) {
@@ -287,6 +294,7 @@ export function CredentialRow({
         setLinked(true);
         toast.success(`${label} linked.`);
         router.refresh();
+        onSaved?.();
 
         // FIXED: Trigger auto-close on success
         if (embedded && onRequestClose) {

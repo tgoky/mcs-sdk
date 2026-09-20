@@ -1,0 +1,1706 @@
+From 6544d5395d14708c0b217737ec05554ae213079c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 20 Sep 2026 17:11:31 +0000
+Subject: [PATCH] Replace manual-paste platform IDs with live-fetched pickers
+
+Every place a connected API key still forced a hand-typed id from a
+third-party dashboard now derives it instead, mirroring the pattern
+this app already used for Klaviyo/GHL/Booking:
+
+- Cold Open Send Connect: campaign id and ICP slug are now pickers
+  sourced from each ESP's listCampaigns() and ICP Lock's saved ICPs,
+  instead of a free-text "the real campaign id from your ESP" field.
+- Win-Back: HubSpot Portal ID auto-detects from HubSpot's account-info
+  API (a wrong hand-typed value silently drops inbound-reply webhook
+  routing), shown as a detected badge with a manual override.
+- edit-stack-settings.tsx (the live per-client settings panel, not the
+  unreachable engagements/new wizard): one consolidated route resolves
+  the engagement's already-saved credential server-side and lists live
+  options for Klaviyo, Mailchimp, ConvertKit, ActiveCampaign (lists +
+  automations), HubSpot workflows, Webflow (sites + collections),
+  Vercel (projects + teams), Twilio (messaging services + numbers),
+  and Google Sheets (spreadsheets + tabs).
+
+Fields left as typed input are the credential's own scoping key,
+required before any list call can be made (GHL Location ID, Twilio
+Account SID, ActiveCampaign base URL) or have no listable endpoint
+(Hyros account id).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Lfyfcf3FM4cyhrCh4R9BF5
+---
+ .../bridges/send-connect/campaigns/route.ts   |  62 ++++
+ .../bridges/win-back/hubspot-portal/route.ts  |  67 ++++
+ .../[id]/stack-options/[resource]/route.ts    | 220 +++++++++++
+ .../activecampaign/automations/route.ts       |  62 ++++
+ .../integrations/convertkit/forms/route.ts    |  54 +++
+ .../api/integrations/convertkit/tags/route.ts |  52 +++
+ .../api/integrations/mailchimp/lists/route.ts |  79 ++++
+ .../engagements/[id]/edit-stack-settings.tsx  | 341 +++++++++++++++++-
+ .../[id]/update-credentials-form.tsx          |   8 +
+ .../engagements/new/use-email-integrations.ts | 246 +++++++++++++
+ .../send-connect-config-form.tsx              | 118 +++++-
+ .../win-back-config-form.tsx                  |  94 ++++-
+ 12 files changed, 1383 insertions(+), 20 deletions(-)
+ create mode 100644 src/app/api/engagements/[id]/bridges/send-connect/campaigns/route.ts
+ create mode 100644 src/app/api/engagements/[id]/bridges/win-back/hubspot-portal/route.ts
+ create mode 100644 src/app/api/engagements/[id]/stack-options/[resource]/route.ts
+ create mode 100644 src/app/api/integrations/activecampaign/automations/route.ts
+ create mode 100644 src/app/api/integrations/convertkit/forms/route.ts
+ create mode 100644 src/app/api/integrations/convertkit/tags/route.ts
+ create mode 100644 src/app/api/integrations/mailchimp/lists/route.ts
+
+diff --git a/src/app/api/engagements/[id]/bridges/send-connect/campaigns/route.ts b/src/app/api/engagements/[id]/bridges/send-connect/campaigns/route.ts
+new file mode 100644
+index 0000000..7543f12
+--- /dev/null
++++ b/src/app/api/engagements/[id]/bridges/send-connect/campaigns/route.ts
+@@ -0,0 +1,62 @@
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { hasCredential } from "@/lib/credentials";
++import { createEspAdapter } from "@/features/cold-open/server/esp/factory";
++import { coldOpenCredentialProvider } from "@/features/cold-open/server/source-connect";
++import type { ColdOpenSendPlatformId } from "@/models/schema";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++const PLATFORMS: ColdOpenSendPlatformId[] = ["instantly", "smartlead", "lemlist", "reply_io"];
++
++// Live campaign list for the platform already connected on Send Connect's
++// first step — every ESPAdapter already implements listCampaigns() (used
++// today only after the fact, by runSendConnect's verifyCampaigns check).
++// This exposes the same call before save, so the ICP->campaign map is a
++// picker instead of a field where a mistyped id fails silently until the
++// next scheduled run.
++export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [row] = await db
++      .select({ engagementId: engagements.engagementId })
++      .from(engagements)
++      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++      .limit(1);
++
++    if (!row) {
++      return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
++    }
++
++    const body = await req.json().catch(() => null);
++    const platform = body?.platform;
++    if (!platform || !PLATFORMS.includes(platform)) {
++      return NextResponse.json({ error: `platform must be one of: ${PLATFORMS.join(", ")}` }, { status: 400 });
++    }
++    const baseUrl = typeof body?.baseUrl === "string" ? body.baseUrl : undefined;
++
++    if (!(await hasCredential(id, coldOpenCredentialProvider(platform)))) {
++      return NextResponse.json({ error: `No ${platform} credential saved for this engagement yet — connect it first.` }, { status: 400 });
++    }
++
++    const adapter = createEspAdapter(id, platform, { baseUrl });
++    const campaigns = await adapter.listCampaigns();
++
++    return NextResponse.json({ success: true, campaigns });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : "Unknown error";
++    console.error("[engagements/[id]/bridges/send-connect/campaigns]", message);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/engagements/[id]/bridges/win-back/hubspot-portal/route.ts b/src/app/api/engagements/[id]/bridges/win-back/hubspot-portal/route.ts
+new file mode 100644
+index 0000000..b7fe6e7
+--- /dev/null
++++ b/src/app/api/engagements/[id]/bridges/win-back/hubspot-portal/route.ts
+@@ -0,0 +1,67 @@
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { hasCredential, resolveCredential } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++// Derives the HubSpot Portal ID from the account's own Account Info API
++// instead of asking the operator to go dig it out of HubSpot's Account
++// Setup screen and paste it back. Same token already saved for
++// email_platform "hubspot" (resolveCredential(id, "hubspot")) — this is
++// the one HubSpot call every native-inbound-reply engagement needs
++// anyway, just moved before save instead of only mattering when a
++// mismatched portal id silently drops inbound webhook events (see
++// src/app/api/webhooks/hubspot-conversations/route.ts's portal lookup).
++export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [row] = await db
++      .select({ engagementId: engagements.engagementId })
++      .from(engagements)
++      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++      .limit(1);
++
++    if (!row) {
++      return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
++    }
++
++    if (!(await hasCredential(id, "hubspot"))) {
++      return NextResponse.json({ error: "No HubSpot credential saved for this engagement yet — connect it first." }, { status: 400 });
++    }
++
++    const token = await resolveCredential(id, "hubspot");
++    const res = await fetch("https://api.hubapi.com/account-info/v3/details", {
++      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
++    });
++
++    if (!res.ok) {
++      const body = await res.text().catch(() => "");
++      return NextResponse.json(
++        { error: `HubSpot rejected the account-info lookup [${res.status}]: ${body.slice(0, 300)} — the connected key may be missing the "account-info.security.read" scope. Enter the Portal ID by hand instead.` },
++        { status: res.status }
++      );
++    }
++
++    const data = await res.json();
++    if (data?.portalId == null) {
++      return NextResponse.json({ error: "HubSpot's account-info response had no portalId." }, { status: 502 });
++    }
++
++    return NextResponse.json({ success: true, portalId: String(data.portalId) });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : "Unknown error";
++    console.error("[engagements/[id]/bridges/win-back/hubspot-portal]", message);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/engagements/[id]/stack-options/[resource]/route.ts b/src/app/api/engagements/[id]/stack-options/[resource]/route.ts
+new file mode 100644
+index 0000000..869c619
+--- /dev/null
++++ b/src/app/api/engagements/[id]/stack-options/[resource]/route.ts
+@@ -0,0 +1,220 @@
++import { NextResponse } from "next/server";
++import { db } from "@/lib/db";
++import { engagements } from "@/models/schema";
++import { and, eq } from "drizzle-orm";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { hasCredential, resolveCredential } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++export const revalidate = 0;
++
++// Live option lists for edit-stack-settings.tsx — every one of these was,
++// until this route existed, a bare text input asking the operator to go
++// copy an id out of a third-party dashboard, even though the credential
++// for that exact platform is already saved on this engagement
++// (resolveCredential(engagementId, provider)). One route, switched on
++// `resource`, instead of a dozen near-identical proxy routes — each case
++// resolves the one credential it needs and maps that platform's list
++// response into { id, name } pairs.
++//
++// Unlike src/app/api/integrations/* (the new-engagement wizard's proxies),
++// this never takes a raw key from the client — the wizard has a plaintext
++// key in hand because the credential hasn't been saved yet; this panel
++// only ever runs against a credential this engagement already has.
++
++type Option = { id: string; name: string };
++
++const PROVIDER_BY_RESOURCE: Record<string, string> = {
++  "klaviyo-lists": "klaviyo",
++  "mailchimp-lists": "mailchimp",
++  "convertkit-forms": "convertkit",
++  "convertkit-tags": "convertkit",
++  "activecampaign-lists": "activecampaign",
++  "activecampaign-automations": "activecampaign",
++  "hubspot-workflows": "hubspot",
++  "webflow-sites": "webflow",
++  "webflow-collections": "webflow",
++  "vercel-projects": "nextjs_vercel",
++  "vercel-teams": "nextjs_vercel",
++  "twilio-messaging-services": "twilio",
++  "twilio-phone-numbers": "twilio",
++  "google-sheets-spreadsheets": "google_sheets",
++  "google-sheets-tabs": "google_sheets",
++};
++
++export async function GET(req: Request, { params }: { params: Promise<{ id: string; resource: string }> }) {
++  try {
++    const { id, resource } = await params;
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const [row] = await db
++      .select({ engagementId: engagements.engagementId })
++      .from(engagements)
++      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
++      .limit(1);
++    if (!row) {
++      return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
++    }
++
++    const provider = PROVIDER_BY_RESOURCE[resource];
++    if (!provider) {
++      return NextResponse.json({ error: `Unknown resource "${resource}"` }, { status: 400 });
++    }
++    if (!(await hasCredential(id, provider))) {
++      return NextResponse.json({ error: `No credential saved for this engagement's ${provider} connection yet — connect it under "Update credentials" first.` }, { status: 400 });
++    }
++    const credential = await resolveCredential(id, provider);
++    const url = new URL(req.url);
++
++    const options = await fetchOptions(resource, credential, url.searchParams);
++    return NextResponse.json({ success: true, options });
++  } catch (error: unknown) {
++    const message = error instanceof Error ? error.message : "Unknown error";
++    console.error(`[engagements/[id]/stack-options] ${message}`);
++    return NextResponse.json({ error: message }, { status: 500 });
++  }
++}
++
++async function fetchOptions(resource: string, credential: string, params: URLSearchParams): Promise<Option[]> {
++  switch (resource) {
++    case "klaviyo-lists": {
++      const lists: Option[] = [];
++      let url: string | null = "https://a.klaviyo.com/api/lists/?page[size]=10";
++      for (let page = 0; url && page < 20; page++) {
++        const res: Response = await fetch(url, {
++          headers: { Authorization: `Klaviyo-API-Key ${credential}`, Revision: "2025-04-15", Accept: "application/json" },
++        });
++        if (!res.ok) throw new Error(`Klaviyo rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++        const payload: { data?: Array<{ id: string; attributes?: { name?: string } }>; links?: { next?: string | null } } = await res.json();
++        for (const item of payload.data ?? []) lists.push({ id: item.id, name: item.attributes?.name ?? "Unnamed List" });
++        url = payload.links?.next ?? null;
++      }
++      return lists;
++    }
++
++    case "hubspot-workflows": {
++      const res = await fetch("https://api.hubapi.com/automation/v3/workflows", { headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" } });
++      if (!res.ok) throw new Error(`HubSpot rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { workflows?: Array<{ id: number; name?: string }> } = await res.json();
++      return (data.workflows ?? []).map((w) => ({ id: String(w.id), name: w.name ?? "Unnamed Workflow" }));
++    }
++
++    case "mailchimp-lists": {
++      const dc = credential.trim().split("-").pop();
++      if (!dc || dc === credential.trim()) throw new Error("Saved Mailchimp key has no datacenter suffix (e.g. -us21) — it may not be a valid API key.");
++      const res = await fetch(`https://${dc}.api.mailchimp.com/3.0/lists?count=100&fields=lists.id,lists.name`, {
++        headers: { Authorization: `Basic ${Buffer.from(`anystring:${credential}`).toString("base64")}`, Accept: "application/json" },
++      });
++      if (!res.ok) throw new Error(`Mailchimp rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { lists?: Array<{ id: string; name?: string }> } = await res.json();
++      return (data.lists ?? []).map((l) => ({ id: l.id, name: l.name ?? "Unnamed Audience" }));
++    }
++
++    case "convertkit-forms": {
++      const res = await fetch(`https://api.convertkit.com/v3/forms?api_key=${encodeURIComponent(credential)}`, { headers: { Accept: "application/json" } });
++      if (!res.ok) throw new Error(`ConvertKit rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { forms?: Array<{ id: number; name?: string }> } = await res.json();
++      return (data.forms ?? []).map((f) => ({ id: String(f.id), name: f.name ?? "Unnamed Form" }));
++    }
++
++    case "convertkit-tags": {
++      const res = await fetch(`https://api.convertkit.com/v3/tags?api_key=${encodeURIComponent(credential)}`, { headers: { Accept: "application/json" } });
++      if (!res.ok) throw new Error(`ConvertKit rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { tags?: Array<{ id: number; name?: string }> } = await res.json();
++      return (data.tags ?? []).map((t) => ({ id: String(t.id), name: t.name ?? "Unnamed Tag" }));
++    }
++
++    case "activecampaign-lists":
++    case "activecampaign-automations": {
++      const baseUrl = params.get("baseUrl")?.trim().replace(/\/+$/, "");
++      if (!baseUrl) throw new Error('Enter the ActiveCampaign "Account base URL" field above first — needed to know which account to ask.');
++      const path = resource === "activecampaign-lists" ? "lists" : "automations";
++      const res = await fetch(`${baseUrl}/${path}?limit=100`, { headers: { "Api-Token": credential, "Content-Type": "application/json" } });
++      if (!res.ok) throw new Error(`ActiveCampaign rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data = await res.json();
++      const items = resource === "activecampaign-lists" ? data.lists : data.automations;
++      return (items ?? []).map((item: any) => ({ id: String(item.id), name: item.name ?? "Unnamed" }));
++    }
++
++    case "webflow-sites": {
++      const res = await fetch("https://api.webflow.com/v2/sites", { headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" } });
++      if (!res.ok) throw new Error(`Webflow rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { sites?: Array<{ id: string; displayName?: string }> } = await res.json();
++      return (data.sites ?? []).map((s) => ({ id: s.id, name: s.displayName ?? "Unnamed Site" }));
++    }
++
++    case "webflow-collections": {
++      const siteId = params.get("siteId")?.trim();
++      if (!siteId) throw new Error("Choose a Webflow site above first.");
++      const res = await fetch(`https://api.webflow.com/v2/sites/${encodeURIComponent(siteId)}/collections`, { headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" } });
++      if (!res.ok) throw new Error(`Webflow rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { collections?: Array<{ id: string; displayName?: string }> } = await res.json();
++      return (data.collections ?? []).map((c) => ({ id: c.id, name: c.displayName ?? "Unnamed Collection" }));
++    }
++
++    case "vercel-projects": {
++      const res = await fetch("https://api.vercel.com/v9/projects?limit=100", { headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" } });
++      if (!res.ok) throw new Error(`Vercel rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { projects?: Array<{ id: string; name?: string }> } = await res.json();
++      return (data.projects ?? []).map((p) => ({ id: p.name ?? p.id, name: p.name ?? p.id }));
++    }
++
++    case "vercel-teams": {
++      const res = await fetch("https://api.vercel.com/v2/teams?limit=100", { headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" } });
++      if (!res.ok) throw new Error(`Vercel rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { teams?: Array<{ id: string; name?: string; slug?: string }> } = await res.json();
++      return (data.teams ?? []).map((t) => ({ id: t.id, name: t.name ?? t.slug ?? t.id }));
++    }
++
++    case "twilio-messaging-services": {
++      const accountSid = params.get("accountSid")?.trim();
++      if (!accountSid) throw new Error("Enter the Twilio Account SID field above first.");
++      const res = await fetch("https://messaging.twilio.com/v1/Services?PageSize=100", {
++        headers: { Authorization: `Basic ${Buffer.from(`${accountSid}:${credential}`).toString("base64")}`, Accept: "application/json" },
++      });
++      if (!res.ok) throw new Error(`Twilio rejected the saved Account SID/token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { services?: Array<{ sid: string; friendly_name?: string }> } = await res.json();
++      return (data.services ?? []).map((s) => ({ id: s.sid, name: s.friendly_name ?? s.sid }));
++    }
++
++    case "twilio-phone-numbers": {
++      const accountSid = params.get("accountSid")?.trim();
++      if (!accountSid) throw new Error("Enter the Twilio Account SID field above first.");
++      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/IncomingPhoneNumbers.json?PageSize=100`, {
++        headers: { Authorization: `Basic ${Buffer.from(`${accountSid}:${credential}`).toString("base64")}`, Accept: "application/json" },
++      });
++      if (!res.ok) throw new Error(`Twilio rejected the saved Account SID/token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { incoming_phone_numbers?: Array<{ sid: string; phone_number: string; friendly_name?: string }> } = await res.json();
++      return (data.incoming_phone_numbers ?? []).map((n) => ({ id: n.phone_number, name: n.friendly_name && n.friendly_name !== n.phone_number ? `${n.friendly_name} (${n.phone_number})` : n.phone_number }));
++    }
++
++    case "google-sheets-spreadsheets": {
++      const q = encodeURIComponent("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
++      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=100&fields=files(id,name)`, {
++        headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" },
++      });
++      if (!res.ok) throw new Error(`Google Drive rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { files?: Array<{ id: string; name?: string }> } = await res.json();
++      return (data.files ?? []).map((f) => ({ id: f.id, name: f.name ?? "Unnamed Spreadsheet" }));
++    }
++
++    case "google-sheets-tabs": {
++      const spreadsheetId = params.get("spreadsheetId")?.trim();
++      if (!spreadsheetId) throw new Error("Choose a spreadsheet above first.");
++      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties`, {
++        headers: { Authorization: `Bearer ${credential}`, Accept: "application/json" },
++      });
++      if (!res.ok) throw new Error(`Google Sheets rejected the saved token [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
++      const data: { sheets?: Array<{ properties?: { sheetId?: number; title?: string } }> } = await res.json();
++      return (data.sheets ?? []).map((s) => ({ id: s.properties?.title ?? String(s.properties?.sheetId ?? ""), name: s.properties?.title ?? "Unnamed Tab" }));
++    }
++
++    default:
++      throw new Error(`Unknown resource "${resource}"`);
++  }
++}
+diff --git a/src/app/api/integrations/activecampaign/automations/route.ts b/src/app/api/integrations/activecampaign/automations/route.ts
+new file mode 100644
+index 0000000..fbf2aad
+--- /dev/null
++++ b/src/app/api/integrations/activecampaign/automations/route.ts
+@@ -0,0 +1,62 @@
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++
++// Sibling of lists/route.ts — same key/vaultId/baseUrl handling, listing
++// automations instead of lists so the Recovery Automation ID field can be
++// a picker instead of a hand-typed numeric id.
++export async function POST(request: Request) {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await request.json().catch(() => ({}));
++    const rawKey = typeof body?.key === "string" ? body.key : null;
++    const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
++    const baseUrl = typeof body?.baseUrl === "string" ? body.baseUrl : null;
++
++    let apiKey: string | null = rawKey;
++    if (!apiKey && vaultId) {
++      const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
++      if (!owned) {
++        return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
++      }
++      apiKey = await resolveVaultCredentialValue(vaultId);
++    }
++
++    if (!apiKey || !baseUrl) {
++      return NextResponse.json({ error: "Missing API Key or Base URL" }, { status: 400 });
++    }
++
++    const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
++
++    const res = await fetch(`${normalizedBaseUrl}/automations?limit=100`, {
++      headers: {
++        "Api-Token": apiKey,
++        "Content-Type": "application/json",
++      },
++    });
++
++    if (!res.ok) {
++      const errorBody = await res.text().catch(() => "Unknown");
++      return NextResponse.json({ error: `ActiveCampaign API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
++    }
++
++    const payload = await res.json();
++    const automations = (payload.automations ?? []).map((item: any) => ({
++      id: String(item.id),
++      name: item.name ?? "Unnamed Automation",
++    }));
++
++    return NextResponse.json({ success: true, automations });
++  } catch (err: any) {
++    console.error("[activecampaign automations proxy exception]:", err.message);
++    return NextResponse.json({ error: err.message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/integrations/convertkit/forms/route.ts b/src/app/api/integrations/convertkit/forms/route.ts
+new file mode 100644
+index 0000000..35e24ed
+--- /dev/null
++++ b/src/app/api/integrations/convertkit/forms/route.ts
+@@ -0,0 +1,54 @@
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++
++// POST, not GET — see the comment in the Klaviyo sibling route
++// (src/app/api/integrations/klaviyo/lists/route.ts) for why the key moved
++// out of the URL query string. Also accepts `vaultId` in place of `key` —
++// see that same route for why.
++export async function POST(request: Request) {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await request.json().catch(() => ({}));
++    const rawKey = typeof body?.key === "string" ? body.key : null;
++    const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
++
++    let apiKey: string | null = rawKey;
++    if (!apiKey && vaultId) {
++      const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
++      if (!owned) {
++        return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
++      }
++      apiKey = await resolveVaultCredentialValue(vaultId);
++    }
++
++    if (!apiKey) {
++      return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });
++    }
++
++    const res = await fetch(`https://api.convertkit.com/v3/forms?api_key=${encodeURIComponent(apiKey)}`, {
++      headers: { Accept: "application/json" },
++    });
++
++    if (!res.ok) {
++      const errorBody = await res.text().catch(() => "Unknown");
++      return NextResponse.json({ error: `ConvertKit API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
++    }
++
++    const payload: { forms?: Array<{ id: number; name?: string }> } = await res.json();
++    const forms = (payload.forms ?? []).map((f) => ({ id: String(f.id), name: f.name ?? "Unnamed Form" }));
++
++    return NextResponse.json({ success: true, forms });
++  } catch (err: any) {
++    console.error("[convertkit forms proxy exception]:", err.message);
++    return NextResponse.json({ error: err.message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/integrations/convertkit/tags/route.ts b/src/app/api/integrations/convertkit/tags/route.ts
+new file mode 100644
+index 0000000..b955227
+--- /dev/null
++++ b/src/app/api/integrations/convertkit/tags/route.ts
+@@ -0,0 +1,52 @@
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++
++// See forms/route.ts (its sibling) for the key/vaultId + POST-not-GET
++// conventions this mirrors exactly.
++export async function POST(request: Request) {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await request.json().catch(() => ({}));
++    const rawKey = typeof body?.key === "string" ? body.key : null;
++    const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
++
++    let apiKey: string | null = rawKey;
++    if (!apiKey && vaultId) {
++      const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
++      if (!owned) {
++        return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
++      }
++      apiKey = await resolveVaultCredentialValue(vaultId);
++    }
++
++    if (!apiKey) {
++      return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });
++    }
++
++    const res = await fetch(`https://api.convertkit.com/v3/tags?api_key=${encodeURIComponent(apiKey)}`, {
++      headers: { Accept: "application/json" },
++    });
++
++    if (!res.ok) {
++      const errorBody = await res.text().catch(() => "Unknown");
++      return NextResponse.json({ error: `ConvertKit API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
++    }
++
++    const payload: { tags?: Array<{ id: number; name?: string }> } = await res.json();
++    const tags = (payload.tags ?? []).map((t) => ({ id: String(t.id), name: t.name ?? "Unnamed Tag" }));
++
++    return NextResponse.json({ success: true, tags });
++  } catch (err: any) {
++    console.error("[convertkit tags proxy exception]:", err.message);
++    return NextResponse.json({ error: err.message }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/integrations/mailchimp/lists/route.ts b/src/app/api/integrations/mailchimp/lists/route.ts
+new file mode 100644
+index 0000000..985c32a
+--- /dev/null
++++ b/src/app/api/integrations/mailchimp/lists/route.ts
+@@ -0,0 +1,79 @@
++import { NextResponse } from "next/server";
++import { getSession } from "@/lib/session";
++import { getActiveWorkspace } from "@/lib/workspace";
++import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
++
++export const runtime = "nodejs";
++
++// POST, not GET — see the comment in the Klaviyo sibling route
++// (src/app/api/integrations/klaviyo/lists/route.ts) for why the key moved
++// out of the URL query string. Also accepts `vaultId` in place of `key` —
++// see that same route for why.
++//
++// Mailchimp API keys embed their datacenter as a suffix
++// (xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us21) — every request has to hit that
++// exact subdomain, so the datacenter is parsed off the key itself rather
++// than asked for separately.
++export async function POST(request: Request) {
++  try {
++    const session = await getSession();
++    if (!session?.whopUserId) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++    }
++    const activeWorkspace = await getActiveWorkspace(session.whopUserId);
++
++    const body = await request.json().catch(() => ({}));
++    const rawKey = typeof body?.key === "string" ? body.key : null;
++    const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
++
++    let apiKey: string | null = rawKey;
++    if (!apiKey && vaultId) {
++      const owned = await vaultCredentialBelongsToTenant(vaultId, activeWorkspace.workspaceId);
++      if (!owned) {
++        return NextResponse.json({ error: "Saved credential not found or access denied." }, { status: 404 });
++      }
++      apiKey = await resolveVaultCredentialValue(vaultId);
++    }
++
++    if (!apiKey) {
++      return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });
++    }
++
++    const dc = apiKey.trim().split("-").pop();
++    if (!dc || dc === apiKey.trim()) {
++      return NextResponse.json({ error: "This doesn't look like a Mailchimp API key — it should end with a datacenter suffix like -us21." }, { status: 400 });
++    }
++
++    const lists: { id: string; name: string }[] = [];
++    let offset = 0;
++    const COUNT = 100;
++    const MAX_PAGES = 20; // safety cap: 2000 audiences is far beyond any real account
++
++    for (let page = 0; page < MAX_PAGES; page++) {
++      const res = await fetch(`https://${dc}.api.mailchimp.com/3.0/lists?count=${COUNT}&offset=${offset}&fields=lists.id,lists.name,total_items`, {
++        headers: {
++          Authorization: `Basic ${Buffer.from(`anystring:${apiKey}`).toString("base64")}`,
++          Accept: "application/json",
++        },
++      });
++
++      if (!res.ok) {
++        const errorBody = await res.text().catch(() => "Unknown");
++        return NextResponse.json({ error: `Mailchimp API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
++      }
++
++      const payload: { lists?: Array<{ id: string; name?: string }>; total_items?: number } = await res.json();
++      for (const item of payload.lists ?? []) {
++        lists.push({ id: item.id, name: item.name ?? "Unnamed Audience" });
++      }
++
++      offset += COUNT;
++      if (!payload.lists || payload.lists.length < COUNT || offset >= (payload.total_items ?? 0)) break;
++    }
++
++    return NextResponse.json({ success: true, lists });
++  } catch (err: any) {
++    console.error("[mailchimp proxy routing exception]:", err.message);
++    return NextResponse.json({ error: err.message }, { status: 500 });
++  }
++}
+diff --git a/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx b/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
+index f768b3e..4428c0e 100644
+--- a/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
++++ b/src/app/dashboard/engagements/[id]/edit-stack-settings.tsx
+@@ -269,6 +269,200 @@ function GhlCalendarPicker({
+   );
+ }
+ 
++type LivePickerOption = { id: string; name: string };
++
++// Generic live-fetch picker for edit-stack-settings' own /stack-options
++// route — same shape as GhlCalendarPicker above, generalized across every
++// platform whose credential is already saved on this engagement. Each
++// caller says which `resource` to ask for and which already-entered
++// field(s) it depends on (extraParams) — e.g. Twilio's messaging-service
++// picker needs the Account SID typed just above it, Webflow's collection
++// picker needs the site just chosen. Falls back to a manual text input
++// (same field this replaced) when the live fetch can't run yet or fails,
++// so a not-yet-connected credential or an API hiccup never blocks saving.
++function LivePicker({
++  engagementId,
++  resource,
++  label,
++  value,
++  onChange,
++  extraParams,
++  missingParamMessage,
++}: {
++  engagementId: string;
++  resource: string;
++  label: string;
++  value: string;
++  onChange: (value: string) => void;
++  extraParams?: Record<string, string>;
++  missingParamMessage?: string;
++}) {
++  const [options, setOptions] = useState<LivePickerOption[]>([]);
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [manual, setManual] = useState(false);
++
++  const paramsKey = JSON.stringify(extraParams ?? {});
++  const blocked = Boolean(missingParamMessage) && Object.values(extraParams ?? {}).some((v) => !v?.trim());
++
++  useEffect(() => {
++    if (blocked) {
++      setOptions([]);
++      setError(null);
++      return;
++    }
++    const timer = setTimeout(() => {
++      setLoading(true);
++      setError(null);
++      const qs = new URLSearchParams(extraParams ?? {}).toString();
++      fetch(`/api/engagements/${engagementId}/stack-options/${resource}${qs ? `?${qs}` : ""}`)
++        .then(async (res) => {
++          const data = await res.json().catch(() => ({}));
++          if (!res.ok) throw new Error(data?.error || `Request failed [${res.status}]`);
++          return data;
++        })
++        .then((data) => {
++          if (data.success) setOptions(data.options ?? []);
++          else throw new Error(data.error ?? "Failed to load options");
++        })
++        .catch((e: unknown) => {
++          setError(e instanceof Error ? e.message : "Failed to load options");
++          setOptions([]);
++        })
++        .finally(() => setLoading(false));
++    }, 400);
++    return () => clearTimeout(timer);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [engagementId, resource, paramsKey, blocked]);
++
++  if (manual) {
++    return (
++      <label className="space-y-1 block">
++        <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">{label}</span>
++        <input
++          value={value}
++          onChange={(e) => onChange(e.target.value)}
++          className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
++        />
++        <button type="button" onClick={() => setManual(false)} className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
++          Pick from a live list instead
++        </button>
++      </label>
++    );
++  }
++
++  // Keep a previously-saved value selectable even if it fell out of the
++  // freshly-fetched list (stale id, or the fetch simply hasn't run yet) —
++  // never silently blank a real saved value out from under the operator.
++  const knownOptions = value && !options.some((o) => o.id === value) ? [{ id: value, name: `${value} (currently saved)` }, ...options] : options;
++
++  return (
++    <label className="space-y-1 block">
++      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">{label}</span>
++      <select
++        value={value}
++        onChange={(e) => onChange(e.target.value)}
++        disabled={loading || blocked}
++        className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
++      >
++        <option value="">
++          {blocked ? missingParamMessage : loading ? "Loading…" : knownOptions.length === 0 ? (error ? "-- Couldn't load --" : "-- No options found --") : "-- Choose --"}
++        </option>
++        {knownOptions.map((o) => (
++          <option key={o.id} value={o.id}>{o.name}</option>
++        ))}
++      </select>
++      {error && !blocked && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
++      {!blocked && (
++        <button type="button" onClick={() => setManual(true)} className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
++          Type it in manually instead
++        </button>
++      )}
++    </label>
++  );
++}
++
++// Auto-detects the HubSpot Portal ID from the connected key via the same
++// account-info route Win-Back's own config form uses (the lookup is
++// generic to "this engagement's saved HubSpot credential," not specific
++// to Win-Back — reused here rather than re-implemented) instead of
++// asking the operator to hand-copy it from HubSpot's Account Setup
++// screen. There's only ever one portal per key, so unlike LivePicker
++// this shows a single detected value with an override toggle, not a
++// dropdown of many.
++function HubspotPortalIdField({
++  engagementId,
++  value,
++  onChange,
++}: {
++  engagementId: string;
++  value: string;
++  onChange: (value: string) => void;
++}) {
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [detected, setDetected] = useState(false);
++  const [manual, setManual] = useState(false);
++
++  useEffect(() => {
++    let cancelled = false;
++    setLoading(true);
++    setError(null);
++    fetch(`/api/engagements/${engagementId}/bridges/win-back/hubspot-portal`)
++      .then(async (res) => {
++        const data = await res.json().catch(() => ({}));
++        if (!res.ok) throw new Error(data?.error || `Request failed [${res.status}]`);
++        return data;
++      })
++      .then((data) => {
++        if (cancelled) return;
++        onChange(data.portalId ?? "");
++        setDetected(true);
++        setManual(false);
++      })
++      .catch((e: unknown) => {
++        if (cancelled) return;
++        setDetected(false);
++        setError(e instanceof Error ? e.message : "Could not auto-detect the Portal ID.");
++      })
++      .finally(() => {
++        if (!cancelled) setLoading(false);
++      });
++    return () => {
++      cancelled = true;
++    };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [engagementId]);
++
++  if (manual || (!detected && !loading)) {
++    return (
++      <label className="space-y-1 block">
++        <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Portal ID (inbound-reply routing, optional)</span>
++        <input
++          value={value}
++          onChange={(e) => onChange(e.target.value)}
++          className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
++        />
++        {loading && <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 animate-pulse">⚡ detecting…</p>}
++        {error && !loading && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
++      </label>
++    );
++  }
++
++  return (
++    <label className="space-y-1 block">
++      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-wider">Portal ID (inbound-reply routing, optional)</span>
++      <div className="flex items-center gap-2 w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300">
++        <span>{value}</span>
++        <span className="text-[10px] font-mono uppercase tracking-wide text-emerald-600 dark:text-emerald-400">✓ detected</span>
++        <button type="button" onClick={() => setManual(true)} className="ml-auto text-[10px] font-mono text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 underline cursor-pointer">
++          Override
++        </button>
++      </div>
++    </label>
++  );
++}
++
+ function GroupHeading({ children }: { children: React.ReactNode }) {
+   return (
+     <p className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider pt-2 first:pt-0">
+@@ -688,7 +882,46 @@ export function EditStackSettings({
+               ))}
+             </select>
+           </label>
+-          <MetaFieldInputs fields={hostingMetaFields} values={meta} onChange={setMetaField} />
++          {hostingPlatform === "webflow" ? (
++            <>
++              <LivePicker
++                engagementId={engagementId}
++                resource="webflow-sites"
++                label="Webflow site ID"
++                value={meta.webflow_site_id ?? ""}
++                onChange={(v) => setMetaField("webflow_site_id", v)}
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="webflow-collections"
++                label="Collection ID (optional)"
++                value={meta.webflow_collection_id ?? ""}
++                onChange={(v) => setMetaField("webflow_collection_id", v)}
++                extraParams={{ siteId: meta.webflow_site_id ?? "" }}
++                missingParamMessage="-- Choose a Webflow site above first --"
++              />
++              <MetaFieldInputs fields={hostingMetaFields.filter((f) => f.key === "webflow_page_id")} values={meta} onChange={setMetaField} />
++            </>
++          ) : hostingPlatform === "nextjs_vercel" ? (
++            <>
++              <LivePicker
++                engagementId={engagementId}
++                resource="vercel-projects"
++                label="Vercel project name"
++                value={meta.vercel_project_name ?? ""}
++                onChange={(v) => setMetaField("vercel_project_name", v)}
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="vercel-teams"
++                label="Vercel team ID (optional)"
++                value={meta.vercel_team_id ?? ""}
++                onChange={(v) => setMetaField("vercel_team_id", v)}
++              />
++            </>
++          ) : (
++            <MetaFieldInputs fields={hostingMetaFields} values={meta} onChange={setMetaField} />
++          )}
+         </div>
+ 
+         {/* Email / CRM automation */}
+@@ -712,7 +945,61 @@ export function EditStackSettings({
+               ))}
+             </select>
+           </label>
+-          <MetaFieldInputs fields={emailStructureFields} values={meta} onChange={setMetaField} />
++          {emailPlatform === "klaviyo" ? (
++            <>
++              <LivePicker engagementId={engagementId} resource="klaviyo-lists" label="Target list ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
++              <LivePicker engagementId={engagementId} resource="klaviyo-lists" label="Recovery list ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
++            </>
++          ) : emailPlatform === "mailchimp" ? (
++            <>
++              <LivePicker engagementId={engagementId} resource="mailchimp-lists" label="Target list ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
++              <LivePicker engagementId={engagementId} resource="mailchimp-lists" label="Recovery list ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
++            </>
++          ) : emailPlatform === "convertkit" ? (
++            <>
++              <LivePicker engagementId={engagementId} resource="convertkit-forms" label="Target form ID (Pile-On)" value={meta.target_list_id ?? ""} onChange={(v) => setMetaField("target_list_id", v)} />
++              <LivePicker engagementId={engagementId} resource="convertkit-tags" label="Recovery tag ID (Win-Back)" value={meta.recovery_list_id ?? ""} onChange={(v) => setMetaField("recovery_list_id", v)} />
++            </>
++          ) : emailPlatform === "activecampaign" ? (
++            <>
++              <MetaFieldInputs fields={emailStructureFields.filter((f) => f.key === "activecampaign_base_url")} values={meta} onChange={setMetaField} />
++              <div />
++              <LivePicker
++                engagementId={engagementId}
++                resource="activecampaign-lists"
++                label="Target list ID (Pile-On)"
++                value={meta.target_list_id ?? ""}
++                onChange={(v) => setMetaField("target_list_id", v)}
++                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
++                missingParamMessage="-- Enter the Account base URL above first --"
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="activecampaign-lists"
++                label="Recovery list ID (Win-Back)"
++                value={meta.recovery_list_id ?? ""}
++                onChange={(v) => setMetaField("recovery_list_id", v)}
++                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
++                missingParamMessage="-- Enter the Account base URL above first --"
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="activecampaign-automations"
++                label="Recovery automation ID (optional)"
++                value={meta.recovery_automation_id ?? ""}
++                onChange={(v) => setMetaField("recovery_automation_id", v)}
++                extraParams={{ baseUrl: meta.activecampaign_base_url ?? "" }}
++                missingParamMessage="-- Enter the Account base URL above first --"
++              />
++            </>
++          ) : emailPlatform === "hubspot" ? (
++            <>
++              <LivePicker engagementId={engagementId} resource="hubspot-workflows" label="Recovery workflow ID (Win-Back)" value={meta.recovery_workflow_id ?? ""} onChange={(v) => setMetaField("recovery_workflow_id", v)} />
++              <HubspotPortalIdField engagementId={engagementId} value={meta.hubspot_portal_id ?? ""} onChange={(v) => setMetaField("hubspot_portal_id", v)} />
++            </>
++          ) : (
++            <MetaFieldInputs fields={emailStructureFields} values={meta} onChange={setMetaField} />
++          )}
+           {emailPlatform === "ghl" && (
+             bookingPlatform === "ghl_calendar" ? (
+               <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
+@@ -751,7 +1038,32 @@ export function EditStackSettings({
+               ))}
+             </select>
+           </label>
+-          <MetaFieldInputs fields={smsMetaFields} values={meta} onChange={setMetaField} />
++          {smsPlatform === "twilio" ? (
++            <>
++              <MetaFieldInputs fields={smsMetaFields.filter((f) => f.key === "twilio_account_sid")} values={meta} onChange={setMetaField} />
++              <div />
++              <LivePicker
++                engagementId={engagementId}
++                resource="twilio-messaging-services"
++                label="Messaging Service SID (optional)"
++                value={meta.twilio_messaging_service_sid ?? ""}
++                onChange={(v) => setMetaField("twilio_messaging_service_sid", v)}
++                extraParams={{ accountSid: meta.twilio_account_sid ?? "" }}
++                missingParamMessage="-- Enter the Twilio Account SID above first --"
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="twilio-phone-numbers"
++                label="From number"
++                value={meta.twilio_from_number ?? ""}
++                onChange={(v) => setMetaField("twilio_from_number", v)}
++                extraParams={{ accountSid: meta.twilio_account_sid ?? "" }}
++                missingParamMessage="-- Enter the Twilio Account SID above first --"
++              />
++            </>
++          ) : (
++            <MetaFieldInputs fields={smsMetaFields} values={meta} onChange={setMetaField} />
++          )}
+         </div>
+ 
+         {/* Ad-data cohort sync */}
+@@ -775,7 +1087,28 @@ export function EditStackSettings({
+               ))}
+             </select>
+           </label>
+-          <MetaFieldInputs fields={adDataMetaFields} values={meta} onChange={setMetaField} />
++          {adDataPlatform === "google_sheets" ? (
++            <>
++              <LivePicker
++                engagementId={engagementId}
++                resource="google-sheets-spreadsheets"
++                label="Spreadsheet ID"
++                value={meta.google_sheets_spreadsheet_id ?? ""}
++                onChange={(v) => setMetaField("google_sheets_spreadsheet_id", v)}
++              />
++              <LivePicker
++                engagementId={engagementId}
++                resource="google-sheets-tabs"
++                label="Cohort sheet name"
++                value={meta.google_sheets_cohort_sheet_name ?? ""}
++                onChange={(v) => setMetaField("google_sheets_cohort_sheet_name", v)}
++                extraParams={{ spreadsheetId: meta.google_sheets_spreadsheet_id ?? "" }}
++                missingParamMessage="-- Choose a spreadsheet above first --"
++              />
++            </>
++          ) : (
++            <MetaFieldInputs fields={adDataMetaFields} values={meta} onChange={setMetaField} />
++          )}
+         </div>
+ 
+         {/* Call Intelligence (Recall.ai) */}
+diff --git a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+index eb3f365..5a4fb92 100644
+--- a/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
++++ b/src/app/dashboard/engagements/[id]/update-credentials-form.tsx
+@@ -32,6 +32,7 @@ export function CredentialRow({
+   currentlyLinkedVaultId,
+   embedded = false,
+   onRequestClose,
++  onSaved,
+ }: {
+   engagementId: string;
+   provider: string;
+@@ -39,6 +40,11 @@ export function CredentialRow({
+   currentlyLinkedVaultId?: string | null;
+   embedded?: boolean;
+   onRequestClose?: () => void;
++  /** Fired after a key is successfully pasted+saved, or a vault credential
++   * successfully linked — lets a parent form (e.g. Send Connect) know it's
++   * safe to fetch live options against this credential for the first time,
++   * without polling or re-deriving connected state itself. */
++  onSaved?: () => void;
+ }) {
+   const router = useRouter();
+   const searchParams = useSearchParams();
+@@ -257,6 +263,7 @@ export function CredentialRow({
+       setSaveForReuse(false);
+       toast.success(`${label} updated.`);
+       router.refresh();
++      onSaved?.();
+ 
+       // FIXED: Trigger auto-close on success
+       if (embedded && onRequestClose) {
+@@ -287,6 +294,7 @@ export function CredentialRow({
+         setLinked(true);
+         toast.success(`${label} linked.`);
+         router.refresh();
++        onSaved?.();
+ 
+         // FIXED: Trigger auto-close on success
+         if (embedded && onRequestClose) {
+diff --git a/src/app/dashboard/engagements/new/use-email-integrations.ts b/src/app/dashboard/engagements/new/use-email-integrations.ts
+index 4429aa7..fcc4cda 100644
+--- a/src/app/dashboard/engagements/new/use-email-integrations.ts
++++ b/src/app/dashboard/engagements/new/use-email-integrations.ts
+@@ -30,6 +30,22 @@ export function useEmailIntegrations(
+   const [acLists, setAcLists] = useState<RemoteOption[]>([]);
+   const [fetchingAcLists, setFetchingAcLists] = useState(false);
+   const [acListsError, setAcListsError] = useState<string | null>(null);
++  const [acAutomations, setAcAutomations] = useState<RemoteOption[]>([]);
++  const [fetchingAcAutomations, setFetchingAcAutomations] = useState(false);
++  const [acAutomationsError, setAcAutomationsError] = useState<string | null>(null);
++
++  // Mailchimp state
++  const [mailchimpLists, setMailchimpLists] = useState<RemoteOption[]>([]);
++  const [fetchingMailchimpLists, setFetchingMailchimpLists] = useState(false);
++  const [mailchimpListsError, setMailchimpListsError] = useState<string | null>(null);
++
++  // ConvertKit state
++  const [convertkitForms, setConvertkitForms] = useState<RemoteOption[]>([]);
++  const [fetchingConvertkitForms, setFetchingConvertkitForms] = useState(false);
++  const [convertkitFormsError, setConvertkitFormsError] = useState<string | null>(null);
++  const [convertkitTags, setConvertkitTags] = useState<RemoteOption[]>([]);
++  const [fetchingConvertkitTags, setFetchingConvertkitTags] = useState(false);
++  const [convertkitTagsError, setConvertkitTagsError] = useState<string | null>(null);
+ 
+   // GHL state
+   const [ghlLocations, setGhlLocations] = useState<RemoteOption[]>([]);
+@@ -276,6 +292,208 @@ export function useEmailIntegrations(
+     };
+   }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
+ 
++  // 3b. ActiveCampaign: Fetch automations (500ms Debounce) — same
++  // trigger condition as its lists effect above, just a different
++  // endpoint, so the Recovery Automation ID field can be a picker too.
++  useEffect(() => {
++    let cancelled = false;
++
++    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
++    if (
++      form.emailPlatform === "activecampaign" &&
++      hasKeyOrVault &&
++      form.emailActiveCampaignBaseUrl?.trim()
++    ) {
++      const timer = setTimeout(() => {
++        setFetchingAcAutomations(true);
++        setAcAutomationsError(null);
++
++        fetch(`/api/integrations/activecampaign/automations`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({
++            key: form.emailApiKey?.trim() || undefined,
++            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
++            baseUrl: form.emailActiveCampaignBaseUrl.trim(),
++          }),
++        })
++          .then(async (res) => {
++            const data = await res.json().catch(() => ({}));
++            if (!res.ok) {
++              throw new Error(data?.error || `ActiveCampaign request failed [${res.status}]`);
++            }
++            return data;
++          })
++          .then((data) => {
++            if (cancelled) return;
++            if (data.success) {
++              setAcAutomations(data.automations ?? []);
++            } else {
++              throw new Error(data.error ?? "Unknown error");
++            }
++          })
++          .catch((err: any) => {
++            if (cancelled) return;
++            console.error("[useEmailIntegrations] activecampaign automations fetch error:", err);
++            setAcAutomationsError(err.message || "Could not retrieve ActiveCampaign automations.");
++          })
++          .finally(() => {
++            if (!cancelled) setFetchingAcAutomations(false);
++          });
++      }, 500);
++
++      return () => {
++        cancelled = true;
++        clearTimeout(timer);
++      };
++    } else {
++      setAcAutomations([]);
++      setAcAutomationsError(null);
++    }
++
++    return () => {
++      cancelled = true;
++    };
++  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
++
++  // 3c. Mailchimp: Fetch audiences (500ms Debounce)
++  useEffect(() => {
++    let cancelled = false;
++
++    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
++    if (form.emailPlatform === "mailchimp" && hasKeyOrVault) {
++      const timer = setTimeout(() => {
++        setFetchingMailchimpLists(true);
++        setMailchimpListsError(null);
++
++        fetch(`/api/integrations/mailchimp/lists`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({
++            key: form.emailApiKey?.trim() || undefined,
++            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
++          }),
++        })
++          .then(async (res) => {
++            const data = await res.json().catch(() => ({}));
++            if (!res.ok) {
++              throw new Error(data?.error || `Mailchimp request failed [${res.status}]`);
++            }
++            return data;
++          })
++          .then((data) => {
++            if (cancelled) return;
++            if (data.success) {
++              setMailchimpLists(data.lists ?? []);
++            } else {
++              throw new Error(data.error ?? "Unknown error");
++            }
++          })
++          .catch((err: any) => {
++            if (cancelled) return;
++            console.error("[useEmailIntegrations] mailchimp fetch error:", err);
++            setMailchimpListsError(err.message || "Could not retrieve Mailchimp audiences.");
++          })
++          .finally(() => {
++            if (!cancelled) setFetchingMailchimpLists(false);
++          });
++      }, 500);
++
++      return () => {
++        cancelled = true;
++        clearTimeout(timer);
++      };
++    } else {
++      setMailchimpLists([]);
++      setMailchimpListsError(null);
++    }
++
++    return () => {
++      cancelled = true;
++    };
++  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId]);
++
++  // 3d. ConvertKit: Fetch forms + tags (500ms Debounce)
++  useEffect(() => {
++    let cancelled = false;
++
++    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
++    if (form.emailPlatform === "convertkit" && hasKeyOrVault) {
++      const timer = setTimeout(() => {
++        const creds = {
++          key: form.emailApiKey?.trim() || undefined,
++          vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
++        };
++
++        setFetchingConvertkitForms(true);
++        setConvertkitFormsError(null);
++        fetch(`/api/integrations/convertkit/forms`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify(creds),
++        })
++          .then(async (res) => {
++            const data = await res.json().catch(() => ({}));
++            if (!res.ok) throw new Error(data?.error || `ConvertKit request failed [${res.status}]`);
++            return data;
++          })
++          .then((data) => {
++            if (cancelled) return;
++            if (data.success) setConvertkitForms(data.forms ?? []);
++            else throw new Error(data.error ?? "Unknown error");
++          })
++          .catch((err: any) => {
++            if (cancelled) return;
++            console.error("[useEmailIntegrations] convertkit forms fetch error:", err);
++            setConvertkitFormsError(err.message || "Could not retrieve ConvertKit forms.");
++          })
++          .finally(() => {
++            if (!cancelled) setFetchingConvertkitForms(false);
++          });
++
++        setFetchingConvertkitTags(true);
++        setConvertkitTagsError(null);
++        fetch(`/api/integrations/convertkit/tags`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify(creds),
++        })
++          .then(async (res) => {
++            const data = await res.json().catch(() => ({}));
++            if (!res.ok) throw new Error(data?.error || `ConvertKit request failed [${res.status}]`);
++            return data;
++          })
++          .then((data) => {
++            if (cancelled) return;
++            if (data.success) setConvertkitTags(data.tags ?? []);
++            else throw new Error(data.error ?? "Unknown error");
++          })
++          .catch((err: any) => {
++            if (cancelled) return;
++            console.error("[useEmailIntegrations] convertkit tags fetch error:", err);
++            setConvertkitTagsError(err.message || "Could not retrieve ConvertKit tags.");
++          })
++          .finally(() => {
++            if (!cancelled) setFetchingConvertkitTags(false);
++          });
++      }, 500);
++
++      return () => {
++        cancelled = true;
++        clearTimeout(timer);
++      };
++    } else {
++      setConvertkitForms([]);
++      setConvertkitFormsError(null);
++      setConvertkitTags([]);
++      setConvertkitTagsError(null);
++    }
++
++    return () => {
++      cancelled = true;
++    };
++  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId]);
++
+   // 4. Direct send (email_platform === "smtp"): compose the JSON credential
+   // blob into emailApiKey. Two shapes share this one slot, picked by
+   // directSendProvider and tagged with a "provider" field so
+@@ -476,6 +694,18 @@ export function useEmailIntegrations(
+     setGhlWorkflows([]);
+     setFetchingGhlWorkflows(false);
+     setGhlWorkflowsError(null);
++    setAcAutomations([]);
++    setFetchingAcAutomations(false);
++    setAcAutomationsError(null);
++    setMailchimpLists([]);
++    setFetchingMailchimpLists(false);
++    setMailchimpListsError(null);
++    setConvertkitForms([]);
++    setFetchingConvertkitForms(false);
++    setConvertkitFormsError(null);
++    setConvertkitTags([]);
++    setFetchingConvertkitTags(false);
++    setConvertkitTagsError(null);
+   }
+ 
+   const klaviyoMissingKeyMessage =
+@@ -499,6 +729,22 @@ export function useEmailIntegrations(
+     acLists,
+     fetchingAcLists,
+     acListsError,
++    acAutomations,
++    fetchingAcAutomations,
++    acAutomationsError,
++
++    // Mailchimp
++    mailchimpLists,
++    fetchingMailchimpLists,
++    mailchimpListsError,
++
++    // ConvertKit
++    convertkitForms,
++    fetchingConvertkitForms,
++    convertkitFormsError,
++    convertkitTags,
++    fetchingConvertkitTags,
++    convertkitTagsError,
+ 
+     // GHL
+     ghlLocations,
+diff --git a/src/components/worker-config-forms/send-connect-config-form.tsx b/src/components/worker-config-forms/send-connect-config-form.tsx
+index 6257552..38d84ba 100644
+--- a/src/components/worker-config-forms/send-connect-config-form.tsx
++++ b/src/components/worker-config-forms/send-connect-config-form.tsx
+@@ -1,8 +1,8 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import { useCallback, useEffect, useState } from "react";
+ import { useRouter } from "next/navigation";
+-import { InputField } from "@/app/dashboard/engagements/new/form-fields";
++import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
+ import type { ColdOpenSendPlatformId } from "@/models/schema";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { useToast } from "@/components/toast/toast-provider";
+@@ -20,6 +20,8 @@ const SEND_PLATFORM_LABELS: Record<ColdOpenSendPlatformId, string> = {
+ };
+ 
+ type MapRow = { icp: string; campaignId: string };
++type RemoteIcp = { slug: string; label: string };
++type RemoteCampaign = { id: string; name: string };
+ 
+ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "Close" }: { engagementId: string; onCancel: () => void; cancelLabel?: string }) {
+   const router = useRouter();
+@@ -31,6 +33,15 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+   const [platform, setPlatform] = useState<ColdOpenSendPlatformId>("instantly");
+   const [mapRows, setMapRows] = useState<MapRow[]>([{ icp: "", campaignId: "" }]);
+   const [autoPushIcps, setAutoPushIcps] = useState("");
++  const [icps, setIcps] = useState<RemoteIcp[]>([]);
++
++  // Live campaigns from the connected ESP account — every ESPAdapter
++  // already implements listCampaigns() server-side (esp/base.ts); this
++  // fetches it before save instead of only verifying a hand-typed id
++  // after the fact.
++  const [campaigns, setCampaigns] = useState<RemoteCampaign[]>([]);
++  const [fetchingCampaigns, setFetchingCampaigns] = useState(false);
++  const [campaignsError, setCampaignsError] = useState<string | null>(null);
+ 
+   const [saving, setSaving] = useState(false);
+   const [saveError, setSaveError] = useState<string | null>(null);
+@@ -49,6 +60,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+         const map: Record<string, string> = data.campaignMap ?? {};
+         if (Object.keys(map).length > 0) setMapRows(Object.entries(map).map(([icp, campaignId]) => ({ icp, campaignId: String(campaignId) })));
+         setAutoPushIcps((data.autoPushIcps ?? []).join(", "));
++        setIcps(Array.isArray(data.icps) ? data.icps.map((i: { slug: string; label: string }) => ({ slug: i.slug, label: i.label })) : []);
+       } catch (e) {
+         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
+       } finally {
+@@ -60,6 +72,43 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+     };
+   }, [engagementId]);
+ 
++  const fetchCampaigns = useCallback(() => {
++    let cancelled = false;
++    setFetchingCampaigns(true);
++    setCampaignsError(null);
++    (async () => {
++      try {
++        const res = await fetch(`/api/engagements/${engagementId}/bridges/send-connect/campaigns`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ platform }),
++        });
++        const data = await res.json();
++        if (cancelled) return;
++        if (!res.ok) throw new Error(data.error ?? "Failed to fetch campaigns");
++        setCampaigns(data.campaigns ?? []);
++      } catch (e) {
++        if (!cancelled) {
++          setCampaigns([]);
++          setCampaignsError(e instanceof Error ? e.message : "Failed to fetch campaigns");
++        }
++      } finally {
++        if (!cancelled) setFetchingCampaigns(false);
++      }
++    })();
++    return () => {
++      cancelled = true;
++    };
++  }, [engagementId, platform]);
++
++  // Re-fetch whenever the platform changes, once loading has settled (the
++  // credential may or may not be connected yet — a 400 just surfaces as
++  // campaignsError, same as every other live-fetch dropdown in this app).
++  useEffect(() => {
++    if (loading) return;
++    return fetchCampaigns();
++  }, [loading, fetchCampaigns]);
++
+   function updateRow(i: number, patch: Partial<MapRow>) {
+     setMapRows((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+   }
+@@ -93,6 +142,9 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+   if (loading) return <ConfigFormSkeleton />;
+   if (loadError) return <div className="p-6 text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {loadError}</div>;
+ 
++  const icpOptions = icps.map((i) => ({ value: i.slug, label: `${i.label} (${i.slug})` }));
++  const campaignOptions = campaigns.map((c) => ({ value: c.id, label: c.name ? `${c.name} (${c.id})` : c.id }));
++
+   const steps: ProgressiveFlowStep[] = [
+     {
+       id: "platform",
+@@ -111,7 +163,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+               { value: "reply_io", label: "Reply.io" },
+             ]}
+           />
+-          <CredentialRow engagementId={engagementId} provider={`cold_open_${platform}`} label={`${SEND_PLATFORM_LABELS[platform]} key`} />
++          <CredentialRow engagementId={engagementId} provider={`cold_open_${platform}`} label={`${SEND_PLATFORM_LABELS[platform]} key`} onSaved={fetchCampaigns} />
+         </div>
+       ),
+     },
+@@ -122,13 +174,47 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+       content: (
+         <div className="space-y-5">
+           <div className="space-y-3">
+-            <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICP → campaign map</h2>
++            <div className="flex items-center justify-between">
++              <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ICP → campaign map</h2>
++              <button type="button" onClick={fetchCampaigns} disabled={fetchingCampaigns} className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 disabled:opacity-40 cursor-pointer">
++                {fetchingCampaigns ? "Refreshing…" : "↻ Refresh campaigns"}
++              </button>
++            </div>
++            {icps.length === 0 && (
++              <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400">No ICPs locked yet — run ICP Lock first, then come back to map each one to a campaign.</p>
++            )}
++            {fetchingCampaigns && <p className="text-[11px] italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Contacting {SEND_PLATFORM_LABELS[platform]}… fetching live campaigns…</p>}
++            {campaignsError && !fetchingCampaigns && (
++              <div className="rounded-sm p-3 text-[11px] font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
++                ⚠ Couldn&apos;t load campaigns: {campaignsError} — you can still paste a campaign id by hand below.
++              </div>
++            )}
+             {mapRows.map((row, i) => (
+               <div key={i} className="grid gap-2 grid-cols-1 md:grid-cols-2 items-end">
+-                <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
++                {icpOptions.length > 0 ? (
++                  <SelectField label="ICP" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} options={[{ value: "", label: "-- Choose a locked ICP --" }, ...icpOptions]} />
++                ) : (
++                  <InputField label="ICP slug" value={row.icp} onChange={(v) => updateRow(i, { icp: v })} placeholder="boutique-agency" />
++                )}
+                 <div className="flex items-end gap-2">
+                   <div className="flex-1">
+-                    <InputField label="Campaign id" value={row.campaignId} onChange={(v) => updateRow(i, { campaignId: v })} placeholder="the real campaign id from your ESP" />
++                    {campaignOptions.length > 0 ? (
++                      <SelectField
++                        label="Campaign"
++                        value={row.campaignId}
++                        onChange={(v) => updateRow(i, { campaignId: v })}
++                        disabled={fetchingCampaigns}
++                        options={[{ value: "", label: fetchingCampaigns ? "-- Loading… --" : "-- Choose a live campaign --" }, ...campaignOptions]}
++                      />
++                    ) : (
++                      <InputField
++                        label="Campaign id"
++                        value={row.campaignId}
++                        onChange={(v) => updateRow(i, { campaignId: v })}
++                        placeholder="the real campaign id from your ESP"
++                        helpText={fetchingCampaigns ? undefined : "Connect the key above to pick from a live list instead of typing this by hand."}
++                      />
++                    )}
+                   </div>
+                   {mapRows.length > 1 && (
+                     <button type="button" onClick={() => setMapRows((rows) => rows.filter((_, idx) => idx !== i))} className="mb-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 cursor-pointer">
+@@ -143,7 +229,25 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
+             </button>
+           </div>
+ 
+-          <InputField label="Auto-push ICPs (comma-separated, optional)" value={autoPushIcps} onChange={setAutoPushIcps} placeholder="boutique-agency" helpText="Bypasses the review-required hold for these ICPs, if any are set in ICP Lock." />
++          {icpOptions.length > 0 ? (
++            <SelectField
++              label="Auto-push ICP (optional)"
++              value=""
++              onChange={(v) => {
++                if (!v) return;
++                const current = autoPushIcps.split(",").map((s) => s.trim()).filter(Boolean);
++                if (!current.includes(v)) setAutoPushIcps([...current, v].join(", "));
++              }}
++              options={[{ value: "", label: "-- Add an ICP to auto-push --" }, ...icpOptions.filter((o) => !autoPushIcps.split(",").map((s) => s.trim()).includes(o.value))]}
++              helpText={
++                autoPushIcps
++                  ? `Bypassing review for: ${autoPushIcps}. Bypasses the review-required hold for these ICPs, if any are set in ICP Lock.`
++                  : "Bypasses the review-required hold for the ICPs you add here, if any are set in ICP Lock."
++              }
++            />
++          ) : (
++            <InputField label="Auto-push ICPs (comma-separated, optional)" value={autoPushIcps} onChange={setAutoPushIcps} placeholder="boutique-agency" helpText="Bypasses the review-required hold for these ICPs, if any are set in ICP Lock." />
++          )}
+         </div>
+       ),
+     },
+diff --git a/src/components/worker-config-forms/win-back-config-form.tsx b/src/components/worker-config-forms/win-back-config-form.tsx
+index 007b4cb..4760876 100644
+--- a/src/components/worker-config-forms/win-back-config-form.tsx
++++ b/src/components/worker-config-forms/win-back-config-form.tsx
+@@ -4,8 +4,8 @@
+ // header for why (inline Configure on WorkersPanel/Library vs. this same
+ // form as its own standalone, bookmarkable route).
+ 
+-import { useEffect, useState } from "react";
+-import { InputField, SelectField } from "@/app/dashboard/engagements/new/form-fields";
++import { useCallback, useEffect, useState } from "react";
++import { InputField } from "@/app/dashboard/engagements/new/form-fields";
+ import { ConfigFormSkeleton } from "./config-form-skeleton";
+ import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+ import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+@@ -50,6 +50,15 @@ export function WinBackConfigForm({
+   const [recoveredFromNoShowTaggingEnabled, setRecoveredFromNoShowTaggingEnabled] = useState(true);
+   const [inboundReplyMode, setInboundReplyMode] = useState<"native" | "forwarding" | "none">("none");
+   const [hubspotPortalId, setHubspotPortalId] = useState("");
++  // Auto-derived from HubSpot's own account-info API (see the
++  // hubspot-portal route) instead of asking the operator to hand-copy it
++  // from HubSpot's Account Setup screen. detected=true means the value in
++  // hubspotPortalId came from that lookup; editingPortalId lets them
++  // override it if the auto-detected value is ever wrong.
++  const [fetchingPortalId, setFetchingPortalId] = useState(false);
++  const [portalIdError, setPortalIdError] = useState<string | null>(null);
++  const [portalIdDetected, setPortalIdDetected] = useState(false);
++  const [editingPortalId, setEditingPortalId] = useState(false);
+ 
+   // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
+   const [autoPaused, setAutoPaused] = useState(false);
+@@ -93,6 +102,42 @@ export function WinBackConfigForm({
+     };
+   }, [engagementId]);
+ 
++  const fetchPortalId = useCallback(() => {
++    let cancelled = false;
++    setFetchingPortalId(true);
++    setPortalIdError(null);
++    (async () => {
++      try {
++        const res = await fetch(`/api/engagements/${engagementId}/bridges/win-back/hubspot-portal`);
++        const data = await res.json();
++        if (cancelled) return;
++        if (!res.ok) throw new Error(data.error ?? "Failed to detect the Portal ID");
++        setHubspotPortalId(data.portalId ?? "");
++        setPortalIdDetected(true);
++        setEditingPortalId(false);
++      } catch (e: unknown) {
++        if (!cancelled) {
++          setPortalIdDetected(false);
++          setPortalIdError(e instanceof Error ? e.message : "Failed to detect the Portal ID");
++        }
++      } finally {
++        if (!cancelled) setFetchingPortalId(false);
++      }
++    })();
++    return () => {
++      cancelled = true;
++    };
++  }, [engagementId]);
++
++  // Auto-detect the Portal ID the moment we know this client is on
++  // HubSpot, instead of leaving a blank/hand-typed field for something
++  // HubSpot's own Account Info API already returns for the connected key.
++  useEffect(() => {
++    if (loading || emailPlatform !== "hubspot") return;
++    return fetchPortalId();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [loading, emailPlatform]);
++
+   async function save() {
+     setSaving(true);
+     setSaveError(null);
+@@ -199,13 +244,44 @@ export function WinBackConfigForm({
+             }
+           />
+           {inboundReplyMode === "native" && emailPlatform === "hubspot" && (
+-            <InputField
+-              label="HubSpot Portal ID"
+-              value={hubspotPortalId}
+-              onChange={setHubspotPortalId}
+-              helpText="Settings → Account Setup → Account Defaults in your client's HubSpot account."
+-              required
+-            />
++            <div className="space-y-1.5">
++              {fetchingPortalId && (
++                <p className="text-[11px] italic font-mono animate-pulse" style={{ color: "var(--text-muted)" }}>
++                  ⚡ Contacting HubSpot… detecting this account&apos;s Portal ID…
++                </p>
++              )}
++              {portalIdError && !fetchingPortalId && (
++                <div className="rounded-sm p-3 text-[11px] font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
++                  ⚠ Couldn&apos;t auto-detect: {portalIdError}
++                </div>
++              )}
++              {portalIdDetected && !editingPortalId ? (
++                <div className="space-y-1">
++                  <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
++                    HubSpot Portal ID
++                  </label>
++                  <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}>
++                    <span className="font-mono">{hubspotPortalId}</span>
++                    <span className="text-[10px] font-mono uppercase tracking-wide text-emerald-600 dark:text-emerald-400">✓ detected via HubSpot</span>
++                    <button type="button" onClick={() => setEditingPortalId(true)} className="ml-auto text-[11px] font-semibold hover:underline cursor-pointer" style={{ color: "var(--text-muted)" }}>
++                      Override
++                    </button>
++                  </div>
++                </div>
++              ) : (
++                <InputField
++                  label="HubSpot Portal ID"
++                  value={hubspotPortalId}
++                  onChange={setHubspotPortalId}
++                  helpText={
++                    portalIdDetected
++                      ? "Overriding the auto-detected value — re-check the box above to go back to it."
++                      : "Auto-detection needs the connected key's account-info.security.read scope. Settings → Account Setup → Account Defaults in your client's HubSpot account has the same number if you'd rather paste it."
++                  }
++                  required
++                />
++              )}
++            </div>
+           )}
+           {inboundReplyMode === "forwarding" && (
+             <div
+-- 
+2.43.0
+

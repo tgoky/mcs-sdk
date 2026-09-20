@@ -30,6 +30,22 @@ export function useEmailIntegrations(
   const [acLists, setAcLists] = useState<RemoteOption[]>([]);
   const [fetchingAcLists, setFetchingAcLists] = useState(false);
   const [acListsError, setAcListsError] = useState<string | null>(null);
+  const [acAutomations, setAcAutomations] = useState<RemoteOption[]>([]);
+  const [fetchingAcAutomations, setFetchingAcAutomations] = useState(false);
+  const [acAutomationsError, setAcAutomationsError] = useState<string | null>(null);
+
+  // Mailchimp state
+  const [mailchimpLists, setMailchimpLists] = useState<RemoteOption[]>([]);
+  const [fetchingMailchimpLists, setFetchingMailchimpLists] = useState(false);
+  const [mailchimpListsError, setMailchimpListsError] = useState<string | null>(null);
+
+  // ConvertKit state
+  const [convertkitForms, setConvertkitForms] = useState<RemoteOption[]>([]);
+  const [fetchingConvertkitForms, setFetchingConvertkitForms] = useState(false);
+  const [convertkitFormsError, setConvertkitFormsError] = useState<string | null>(null);
+  const [convertkitTags, setConvertkitTags] = useState<RemoteOption[]>([]);
+  const [fetchingConvertkitTags, setFetchingConvertkitTags] = useState(false);
+  const [convertkitTagsError, setConvertkitTagsError] = useState<string | null>(null);
 
   // GHL state
   const [ghlLocations, setGhlLocations] = useState<RemoteOption[]>([]);
@@ -276,6 +292,208 @@ export function useEmailIntegrations(
     };
   }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
 
+  // 3b. ActiveCampaign: Fetch automations (500ms Debounce) — same
+  // trigger condition as its lists effect above, just a different
+  // endpoint, so the Recovery Automation ID field can be a picker too.
+  useEffect(() => {
+    let cancelled = false;
+
+    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
+    if (
+      form.emailPlatform === "activecampaign" &&
+      hasKeyOrVault &&
+      form.emailActiveCampaignBaseUrl?.trim()
+    ) {
+      const timer = setTimeout(() => {
+        setFetchingAcAutomations(true);
+        setAcAutomationsError(null);
+
+        fetch(`/api/integrations/activecampaign/automations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: form.emailApiKey?.trim() || undefined,
+            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
+            baseUrl: form.emailActiveCampaignBaseUrl.trim(),
+          }),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(data?.error || `ActiveCampaign request failed [${res.status}]`);
+            }
+            return data;
+          })
+          .then((data) => {
+            if (cancelled) return;
+            if (data.success) {
+              setAcAutomations(data.automations ?? []);
+            } else {
+              throw new Error(data.error ?? "Unknown error");
+            }
+          })
+          .catch((err: any) => {
+            if (cancelled) return;
+            console.error("[useEmailIntegrations] activecampaign automations fetch error:", err);
+            setAcAutomationsError(err.message || "Could not retrieve ActiveCampaign automations.");
+          })
+          .finally(() => {
+            if (!cancelled) setFetchingAcAutomations(false);
+          });
+      }, 500);
+
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    } else {
+      setAcAutomations([]);
+      setAcAutomationsError(null);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId, form.emailActiveCampaignBaseUrl]);
+
+  // 3c. Mailchimp: Fetch audiences (500ms Debounce)
+  useEffect(() => {
+    let cancelled = false;
+
+    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
+    if (form.emailPlatform === "mailchimp" && hasKeyOrVault) {
+      const timer = setTimeout(() => {
+        setFetchingMailchimpLists(true);
+        setMailchimpListsError(null);
+
+        fetch(`/api/integrations/mailchimp/lists`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: form.emailApiKey?.trim() || undefined,
+            vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
+          }),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(data?.error || `Mailchimp request failed [${res.status}]`);
+            }
+            return data;
+          })
+          .then((data) => {
+            if (cancelled) return;
+            if (data.success) {
+              setMailchimpLists(data.lists ?? []);
+            } else {
+              throw new Error(data.error ?? "Unknown error");
+            }
+          })
+          .catch((err: any) => {
+            if (cancelled) return;
+            console.error("[useEmailIntegrations] mailchimp fetch error:", err);
+            setMailchimpListsError(err.message || "Could not retrieve Mailchimp audiences.");
+          })
+          .finally(() => {
+            if (!cancelled) setFetchingMailchimpLists(false);
+          });
+      }, 500);
+
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    } else {
+      setMailchimpLists([]);
+      setMailchimpListsError(null);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId]);
+
+  // 3d. ConvertKit: Fetch forms + tags (500ms Debounce)
+  useEffect(() => {
+    let cancelled = false;
+
+    const hasKeyOrVault = Boolean(form.emailApiKey?.trim() || form.emailCredentialVaultId?.trim());
+    if (form.emailPlatform === "convertkit" && hasKeyOrVault) {
+      const timer = setTimeout(() => {
+        const creds = {
+          key: form.emailApiKey?.trim() || undefined,
+          vaultId: !form.emailApiKey?.trim() ? form.emailCredentialVaultId || undefined : undefined,
+        };
+
+        setFetchingConvertkitForms(true);
+        setConvertkitFormsError(null);
+        fetch(`/api/integrations/convertkit/forms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(creds),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || `ConvertKit request failed [${res.status}]`);
+            return data;
+          })
+          .then((data) => {
+            if (cancelled) return;
+            if (data.success) setConvertkitForms(data.forms ?? []);
+            else throw new Error(data.error ?? "Unknown error");
+          })
+          .catch((err: any) => {
+            if (cancelled) return;
+            console.error("[useEmailIntegrations] convertkit forms fetch error:", err);
+            setConvertkitFormsError(err.message || "Could not retrieve ConvertKit forms.");
+          })
+          .finally(() => {
+            if (!cancelled) setFetchingConvertkitForms(false);
+          });
+
+        setFetchingConvertkitTags(true);
+        setConvertkitTagsError(null);
+        fetch(`/api/integrations/convertkit/tags`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(creds),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || `ConvertKit request failed [${res.status}]`);
+            return data;
+          })
+          .then((data) => {
+            if (cancelled) return;
+            if (data.success) setConvertkitTags(data.tags ?? []);
+            else throw new Error(data.error ?? "Unknown error");
+          })
+          .catch((err: any) => {
+            if (cancelled) return;
+            console.error("[useEmailIntegrations] convertkit tags fetch error:", err);
+            setConvertkitTagsError(err.message || "Could not retrieve ConvertKit tags.");
+          })
+          .finally(() => {
+            if (!cancelled) setFetchingConvertkitTags(false);
+          });
+      }, 500);
+
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    } else {
+      setConvertkitForms([]);
+      setConvertkitFormsError(null);
+      setConvertkitTags([]);
+      setConvertkitTagsError(null);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.emailPlatform, form.emailApiKey, form.emailCredentialVaultId]);
+
   // 4. Direct send (email_platform === "smtp"): compose the JSON credential
   // blob into emailApiKey. Two shapes share this one slot, picked by
   // directSendProvider and tagged with a "provider" field so
@@ -476,6 +694,18 @@ export function useEmailIntegrations(
     setGhlWorkflows([]);
     setFetchingGhlWorkflows(false);
     setGhlWorkflowsError(null);
+    setAcAutomations([]);
+    setFetchingAcAutomations(false);
+    setAcAutomationsError(null);
+    setMailchimpLists([]);
+    setFetchingMailchimpLists(false);
+    setMailchimpListsError(null);
+    setConvertkitForms([]);
+    setFetchingConvertkitForms(false);
+    setConvertkitFormsError(null);
+    setConvertkitTags([]);
+    setFetchingConvertkitTags(false);
+    setConvertkitTagsError(null);
   }
 
   const klaviyoMissingKeyMessage =
@@ -499,6 +729,22 @@ export function useEmailIntegrations(
     acLists,
     fetchingAcLists,
     acListsError,
+    acAutomations,
+    fetchingAcAutomations,
+    acAutomationsError,
+
+    // Mailchimp
+    mailchimpLists,
+    fetchingMailchimpLists,
+    mailchimpListsError,
+
+    // ConvertKit
+    convertkitForms,
+    fetchingConvertkitForms,
+    convertkitFormsError,
+    convertkitTags,
+    fetchingConvertkitTags,
+    convertkitTagsError,
 
     // GHL
     ghlLocations,
