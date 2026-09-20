@@ -63,6 +63,7 @@ export function WorkerCard({
   index,
   productOnboarded = true,
   productOnboardingSkipDismissed = false,
+  completeness,
 }: {
   worker: WorkerDefinition;
   enabled: boolean;
@@ -101,6 +102,15 @@ export function WorkerCard({
    * header. When true, a gated skill shows a quiet inline note instead of
    * popping the modal again. */
   productOnboardingSkipDismissed?: boolean;
+  /** Real capability completeness (worker-capability-status.ts's
+   * getWorkerCompletenessSummaries) — found missing by this session's own
+   * follow-up review: this card's "Enabled" badge used to render the same
+   * flat green either way, whether every capability was active or none
+   * were, so an operator had no way to tell "on and working" from "on and
+   * broken" without opening Configure. Undefined for the ~20 workers with
+   * no real capability data (or no active engagement) — the badge falls
+   * back to plain "Enabled" for those, since there's nothing real to say. */
+  completeness?: { activeCount: number; totalCount: number };
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -131,6 +141,7 @@ export function WorkerCard({
   // the row variant), matching the same "don't navigate away just to see
   // a form" pattern WorkersPanel's own Configure button already uses.
   const canConfigureInline = worker.hasHingesPanel && Boolean(engagementId) && Boolean(onToggleConfigure);
+  const isIncomplete = Boolean(completeness && completeness.activeCount < completeness.totalCount);
   // A worker with no dedicated hinges panel has nothing to expand inline
   // — this used to land on the bare engagement page (`/dashboard/
   // engagements/${engagementId}`), which has no obvious way back to this
@@ -308,9 +319,18 @@ export function WorkerCard({
                 )}
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{worker.name}</h3>
                 {enabled && (
-                  <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
-                    Enabled
-                  </span>
+                  isIncomplete ? (
+                    <span
+                      className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500 dark:bg-amber-600 border border-amber-600 dark:border-amber-700 px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase"
+                      title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active — open Configure to see what's missing`}
+                    >
+                      <AlertTriangle size={10} /> Enabled — needs setup
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
+                      Enabled
+                    </span>
+                  )
                 )}
                 {worker.hasHingesPanel && <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">configured per client</span>}
               </div>
@@ -422,9 +442,18 @@ export function WorkerCard({
             <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">{PRODUCT_LABELS[worker.productId]}</p>
           </div>
           {enabled && (
-            <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
-              Enabled
-            </span>
+            isIncomplete ? (
+              <span
+                className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500 dark:bg-amber-600 border border-amber-600 dark:border-amber-700 px-2 py-0.5 text-[10px] font-semibold text-white uppercase"
+                title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active — open Configure to see what's missing`}
+              >
+                <AlertTriangle size={10} /> Needs setup
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
+                Enabled
+              </span>
+            )
           )}
         </div>
         <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{worker.description}</p>

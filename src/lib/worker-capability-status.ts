@@ -297,3 +297,33 @@ export function computeCapabilityStatus(workerId: WorkerId, filledKeys: Set<stri
     return { name: cap.name, active: missingFieldKeys.length === 0, missingFieldKeys };
   });
 }
+
+export interface WorkerCompletenessSummary {
+  activeCount: number;
+  totalCount: number;
+}
+
+/** Server-side batch version of the same read the Live Capability Matrix
+ * uses, for the Library grid — found missing by this session's own
+ * follow-up review: a worker's card showed a flat green "Enabled" badge
+ * whether every capability was active or none were, so an operator had no
+ * way to tell "on and working" from "on and broken" without opening its
+ * Dossier. Returns null for a worker with no WORKER_CAPABILITIES entry at
+ * all (13 of the 34 workers have one today) — the card keeps today's
+ * behavior for those, since there's nothing real to summarize. */
+export async function getWorkerCompletenessSummaries(
+  workerIds: WorkerId[],
+  engagementId: string
+): Promise<Map<WorkerId, WorkerCompletenessSummary>> {
+  const result = new Map<WorkerId, WorkerCompletenessSummary>();
+  await Promise.all(
+    workerIds.map(async (workerId) => {
+      const capabilities = WORKER_CAPABILITIES[workerId];
+      if (!capabilities || capabilities.length === 0) return;
+      const filledKeys = await getFilledFieldKeys(workerId, engagementId);
+      const statuses = computeCapabilityStatus(workerId, filledKeys);
+      result.set(workerId, { activeCount: statuses.filter((s) => s.active).length, totalCount: statuses.length });
+    })
+  );
+  return result;
+}

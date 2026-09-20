@@ -38,6 +38,12 @@ export function PinDownConfigForm({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
+  // Found by this session's own follow-up review: this route's own GET
+  // already computes and returns `enabled` (isSkillEnabledForEngagement),
+  // same as icp-lock's and rep-onboarding's own bridge routes — but this
+  // form never read it, so an operator with Pin-Down disabled saw no
+  // indication of that on reopening this screen, unlike those two.
+  const [wasDisabled, setWasDisabled] = useState(false);
 
   const [voiceSource, setVoiceSource] = useState<"scrape" | "manual">("scrape");
   const [marketingDomain, setMarketingDomain] = useState("");
@@ -69,6 +75,7 @@ export function PinDownConfigForm({
         if (cancelled) return;
 
         setBuyer(data.buyer ?? "");
+        setWasDisabled(data.enabled === false);
         setMarketingDomain(data.marketingDomain ?? "");
         if (data.marketingDomain) setVoiceSource("scrape");
         setRawVoiceCorpus(data.rawVoiceCorpus ?? "");
@@ -367,6 +374,12 @@ export function PinDownConfigForm({
           immediately — you&apos;ll land on a live status page right after.
         </p>
       </div>
+
+      {wasDisabled && (
+        <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2">
+          Pin-Down is currently turned off for this client — saving below turns it back on.
+        </p>
+      )}
 
       <PinDownLivePreview form={{ ...previewData, confirmationPageTemplate }} confirmationPageTemplate={confirmationPageTemplate as TemplateId} />
 

@@ -24,6 +24,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { ProductDetailClient } from "@/components/library/product-detail-client";
 import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
+import { getWorkerCompletenessSummaries } from "@/lib/worker-capability-status";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -36,8 +37,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const whopUserId = session.whopUserId!;
   const workspace = await getActiveWorkspace(whopUserId);
   const engagementId = await getPrimaryEngagementIdForWorkspace(workspace.workspaceId);
+  const skillIds = skillIdsForProduct(product) as WorkerId[];
 
-  const [enabledWorkerIds, overview, installed, engagementRow, productOnboarded] = await Promise.all([
+  const [enabledWorkerIds, overview, installed, engagementRow, productOnboarded, completenessById] = await Promise.all([
     engagementId ? getEnabledWorkerIdsForEngagement(engagementId) : Promise.resolve([]),
     getWorkspaceWorkerOverview(whopUserId, workspace.workspaceId),
     isPackageInstalledInWorkspace(workspace.workspaceId, product),
@@ -50,11 +52,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           .then((r) => r[0] ?? null)
       : Promise.resolve(null),
     engagementId ? isProductOnboarded(product, engagementId) : Promise.resolve(true),
+    // Found missing by this session's own follow-up review: a worker's
+    // card showed a flat green "Enabled" badge whether it was actually
+    // fully configured or not — this feeds the card the same real
+    // completeness data its own Dossier already computes, so the badge
+    // can tell the two states apart.
+    engagementId ? getWorkerCompletenessSummaries(skillIds, engagementId) : Promise.resolve(new Map()),
   ]);
 
   const meta = WORKSPACE_PRODUCTS.find((p) => p.id === product);
-  const skillIds = skillIdsForProduct(product) as WorkerId[];
   const workers = skillIds.map((id) => WORKER_REGISTRY[id]);
+  // Plain object, not the Map itself — a server component's props to a
+  // client component have to survive RSC serialization.
+  const completenessByWorkerId = Object.fromEntries(completenessById);
 
   return (
     <ProductDetailClient
@@ -70,6 +80,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       buyerName={engagementRow?.buyer ?? null}
       productOnboarded={productOnboarded}
       productOnboardingSkipDismissed={isProductOnboardingSkipDismissed(engagementRow?.stack as EngagementStack | null, product)}
+      completenessByWorkerId={completenessByWorkerId}
     />
   );
 }

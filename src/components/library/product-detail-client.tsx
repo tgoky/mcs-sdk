@@ -54,6 +54,7 @@ export function ProductDetailClient({
   buyerName,
   productOnboarded = true,
   productOnboardingSkipDismissed = false,
+  completenessByWorkerId = {},
 }: {
   productId: string;
   name: string;
@@ -73,6 +74,13 @@ export function ProductDetailClient({
    * this page shares one value since they're all the same product. */
   productOnboarded?: boolean;
   productOnboardingSkipDismissed?: boolean;
+  /** Real capability completeness per worker (worker-capability-status.ts's
+   * getWorkerCompletenessSummaries) — lets a card's "Enabled" badge tell
+   * "on and working" from "on and broken" apart, instead of showing the
+   * same green badge either way. Absent entries (only 13 of 34 workers
+   * have real WORKER_CAPABILITIES data today, or there's no active
+   * engagement) mean the card falls back to today's plain badge. */
+  completenessByWorkerId?: Record<string, { activeCount: number; totalCount: number }>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -335,6 +343,7 @@ export function ProductDetailClient({
                     }
                     productOnboarded={productOnboarded}
                     productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+                    completeness={completenessByWorkerId[worker.id]}
                   />
                 )}
               </Fragment>
