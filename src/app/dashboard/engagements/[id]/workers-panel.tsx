@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
+import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X, CheckCircle2 } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
@@ -63,13 +64,21 @@ export interface ModuleRunDTO {
 }
 
 
-function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: boolean): ModuleStatus | "disabled" {
+function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: boolean, missingFieldCount: number): ModuleStatus | "disabled" {
   if (!isEnabled) return "disabled";
   if (isPaused) {
     const s = runs?.[0]?.status.toLowerCase();
     if (s === "failed") return "failed";
     return "paused";
   }
+  // Only for the "hasn't run yet" case — a worker with real run history
+  // already has better evidence than a static field check (its last run
+  // either worked or it didn't), and a config gap discovered after a
+  // worker went live is exactly what "failed" already reports, with the
+  // real error attached. This is purely about the first-run gap: distinct
+  // from "hasn't fired yet, that's fine" is "would fail immediately if it
+  // fired right now" — same gate inngest/skill.ts itself checks.
+  if ((!runs || runs.length === 0) && missingFieldCount > 0) return "needs_setup";
   if (!runs || runs.length === 0) return "not_run";
   const s = runs[0].status.toLowerCase();
   if (s === "success") return "live";
@@ -96,6 +105,7 @@ export function WorkersPanel({
   isPaused = false,
   productOnboarded = {},
   productOnboardingSkipDismissed = {},
+  missingFieldsByWorkerId = {},
 }: {
   engagementId: string;
   workerIds: WorkerId[];
@@ -109,6 +119,9 @@ export function WorkersPanel({
    * same permissive default worker-card.tsx uses. */
   productOnboarded?: Partial<Record<ProductId, boolean>>;
   productOnboardingSkipDismissed?: Partial<Record<ProductId, boolean>>;
+  /** worker-config-completeness.ts's own gate, precomputed server-side for
+   * every worker on this page — see this file's own deriveModuleStatus. */
+  missingFieldsByWorkerId?: Partial<Record<WorkerId, MissingField[]>>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -210,6 +223,19 @@ export function WorkersPanel({
   // risking for a one-line difference.
   const activeCount = workerIds.filter((id) => states[id] ?? true).length;
 
+  // Aggregated "X of Y need setup" rollup — built from
+  // CONFIG_CHECKED_WORKER_IDS, the one place that actually knows which
+  // workers have real required fields, precisely so this can't drift into
+  // the exact mislabeling that'd make it worse than no rollup at all:
+  // counting one of the on/off-only workers as an incomplete setup step
+  // just because it happens to be enabled. Only enabled workers are in
+  // scope — a disabled one has nothing "next" to do here; re-enabling it
+  // is what would put it back in this math.
+  const enabledIds = workerIds.filter((id) => states[id] ?? true);
+  const configurableEnabledIds = enabledIds.filter((id) => CONFIG_CHECKED_WORKER_IDS.includes(id));
+  const incompleteConfigurable = configurableEnabledIds.filter((id) => (missingFieldsByWorkerId[id]?.length ?? 0) > 0);
+  const toggleOnlyEnabledCount = enabledIds.length - configurableEnabledIds.length;
+
   return (
     <div className="w-full space-y-3 font-sans">
       <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-zinc-200/80 dark:border-zinc-800/60">
@@ -232,6 +258,61 @@ export function WorkersPanel({
           </span>
         </div>
       </div>
+
+      {/* Stripe/Zapier-style rollup — one place to see what's left,
+          instead of hunting card by card. The denominator is
+          configurableEnabledIds only, never workerIds/enabledIds — an
+          on/off-only worker (most of them) has nothing to configure and
+          must never silently count as either "done" or "needs setup," so
+          it's named explicitly rather than folded into the ratio. Hidden
+          entirely when no enabled worker has a field to fill in at all —
+          nothing to roll up, same as Stripe not showing a checklist with
+          zero items on it. */}
+      {!expandedWorker && configurableEnabledIds.length > 0 && (
+        <div
+          className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-mono ${
+            incompleteConfigurable.length > 0
+              ? "border-orange-300/70 dark:border-orange-500/30 bg-orange-50/50 dark:bg-orange-500/[0.06]"
+              : "border-emerald-300/60 dark:border-emerald-500/25 bg-emerald-50/40 dark:bg-emerald-500/[0.05]"
+          }`}
+        >
+          {incompleteConfigurable.length > 0 ? (
+            <>
+              <span className="font-bold text-orange-700 dark:text-orange-400">
+                {configurableEnabledIds.length - incompleteConfigurable.length} of {configurableEnabledIds.length} configured skills fully set up
+              </span>
+              <span className="text-zinc-300 dark:text-zinc-700">·</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {incompleteConfigurable.map((id) => {
+                  const w = WORKER_REGISTRY[id];
+                  const count = missingFieldsByWorkerId[id]?.length ?? 0;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => w.hasHingesPanel && setExpandedWorker(id)}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-orange-300/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 hover:bg-orange-100/60 dark:hover:bg-orange-500/10 transition-colors cursor-pointer"
+                    >
+                      <Settings2 className="w-2.5 h-2.5" />
+                      {w.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              All {configurableEnabledIds.length} configured skills are fully set up
+            </span>
+          )}
+          {toggleOnlyEnabledCount > 0 && (
+            <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic ml-auto">
+              +{toggleOnlyEnabledCount} other enabled {toggleOnlyEnabledCount === 1 ? "skill is" : "skills are"} plain on/off — nothing to configure.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
           configuring a worker hides the whole card grid and renders the
@@ -315,9 +396,11 @@ export function WorkersPanel({
           const isEnabled = states[workerId] ?? true;
           const isBusy = updatingWorkers.has(workerId);
           const workerRuns = runsByWorker[workerId] ?? [];
-          const status = deriveModuleStatus(workerRuns, isEnabled, isPaused);
+          const missingFields = missingFieldsByWorkerId[workerId] ?? [];
+          const status = deriveModuleStatus(workerRuns, isEnabled, isPaused, missingFields.length);
           const latestRun = workerRuns[0] ?? null;
           const isPausedActive = isEnabled && isPaused;
+          const isNeedsSetup = status === "needs_setup";
 
           return (
             <div
@@ -371,7 +454,10 @@ export function WorkersPanel({
                 <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-semibold">Status</span>
-                    <StatusSwatch status={status} />
+                    <StatusSwatch
+                      status={status}
+                      title={isNeedsSetup ? `Missing: ${missingFields.map((f) => f.label).join(", ")}` : undefined}
+                    />
                   </div>
 
                   {isEnabled && latestRun ? (
@@ -394,6 +480,10 @@ export function WorkersPanel({
                     </div>
                   ) : isPausedActive ? (
                     <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">On hold — client paused.</p>
+                  ) : isNeedsSetup ? (
+                    <p className="text-[10.5px] text-orange-600 dark:text-orange-400 leading-snug font-mono line-clamp-1">
+                      Missing: {missingFields.map((f) => f.label).join(", ")}
+                    </p>
                   ) : isEnabled ? (
                     <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic font-mono">No executions yet.</p>
                   ) : (

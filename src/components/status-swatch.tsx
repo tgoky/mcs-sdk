@@ -19,6 +19,10 @@ const SWATCH_COLOR: Record<ModuleStatus | "disabled", string> = {
   // bad), but "neutral" doesn't have to mean "colorless" — violet and pink
   // read as clearly their own category without implying success or failure.
   not_run: "bg-violet-400",
+  // Its own color, not reused from "paused" or "failed" — needs_setup is
+  // neither of those. Nothing has actually failed yet (paused would also
+  // be misleading — the client isn't on hold, the field just isn't set).
+  needs_setup: "bg-orange-400",
   paused: "bg-amber-500",
   disabled: "bg-pink-400",
 };
@@ -28,6 +32,10 @@ const SWATCH_LABEL: Record<ModuleStatus | "disabled", string> = {
   disabled: "Turned off",
 };
 
-export function StatusSwatch({ status }: { status: ModuleStatus | "disabled" }) {
-  return <SwatchLabel colorClass={SWATCH_COLOR[status]} label={SWATCH_LABEL[status]} />;
+export function StatusSwatch({ status, title }: { status: ModuleStatus | "disabled"; title?: string }) {
+  return (
+    <span title={title}>
+      <SwatchLabel colorClass={SWATCH_COLOR[status]} label={SWATCH_LABEL[status]} />
+    </span>
+  );
 }

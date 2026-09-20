@@ -109,12 +109,9 @@ import { eq } from "drizzle-orm";
 import { hasCredential } from "@/lib/credentials";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
 import type { WorkerId } from "@/lib/worker-registry";
+import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
 
-export interface MissingField {
-  key: string;
-  label: string;
-  reason: string;
-}
+export type { MissingField };
 
 type Checker = (engagementId: string) => Promise<MissingField[]>;
 
@@ -386,4 +383,26 @@ export async function getMissingRequiredFields(workerId: WorkerId, engagementId:
   const checker = CHECKERS[workerId];
   if (!checker) return [];
   return checker(engagementId);
+}
+
+// worker-config-completeness-shared.ts's CONFIG_CHECKED_WORKER_IDS is a
+// hand-written mirror of this file's own CHECKERS keys — kept as a
+// separate literal, not a re-export, specifically so a client component
+// (workers-panel.tsx's setup rollup) can import it without pulling in
+// this file's server-only db/credentials imports (see that file's own
+// header). A hand-written mirror can drift silently, which would be
+// exactly the mislabeling it exists to prevent — a plain on/off worker
+// miscounted as an incomplete setup step, or a real one dropped from the
+// rollup — so this checks it out loud, once, at module load, in every
+// environment except production (a drift is a code review to catch, not
+// something to blow up a live request over).
+if (process.env.NODE_ENV !== "production") {
+  const declared = new Set(CONFIG_CHECKED_WORKER_IDS);
+  const actual = new Set(Object.keys(CHECKERS));
+  const inSync = declared.size === actual.size && [...declared].every((id) => actual.has(id));
+  if (!inSync) {
+    throw new Error(
+      "worker-config-completeness-shared.ts's CONFIG_CHECKED_WORKER_IDS and worker-config-completeness.ts's own CHECKERS have drifted apart — update both."
+    );
+  }
 }

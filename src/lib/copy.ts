@@ -62,13 +62,20 @@ export function skillName(raw: string | null | undefined): string {
 // Overall module status (per-client module cards)
 // ---------------------------------------------------------------------------
 
-export type ModuleStatus = "live" | "running" | "failed" | "not_run" | "paused";
+export type ModuleStatus = "live" | "running" | "failed" | "not_run" | "needs_setup" | "paused";
 
 export const MODULE_STATUS_LABELS: Record<ModuleStatus, string> = {
   live: "Healthy",
   running: "In progress",
   failed: "Needs attention",
   not_run: "Not started yet",
+  // Distinct from "not_run": this one HAS a real reason it can't run —
+  // worker-config-completeness.ts's own gate (the thing inngest/skill.ts
+  // itself checks before every dispatch) found required fields still
+  // blank, so the next fire would fail immediately, not just "hasn't
+  // happened yet." "not_run" now only ever means "would work fine, just
+  // hasn't fired."
+  needs_setup: "Needs setup",
   // Distinct from "disabled": the skill itself is still turned ON, it's the
   // whole client/engagement that's on hold, so nothing will actually fire.
   paused: "Paused",

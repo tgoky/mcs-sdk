@@ -32,6 +32,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
+import { getMissingRequiredFields, type MissingField } from "@/lib/worker-config-completeness";
 import { WORKER_REGISTRY } from "@/lib/worker-registry";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
@@ -146,6 +147,19 @@ export default async function EngagementDetailPage({
   const productOnboardingSkipDismissed: Partial<Record<ProductId, boolean>> = Object.fromEntries(
     PRODUCT_IDS.map((pid) => [pid, isProductOnboardingSkipDismissed(stackForGate, pid)])
   );
+
+  // Closes WorkersPanel's own "not_run" ambiguity — flagged during this
+  // session's patch-verification pass: a worker that's never fired reads
+  // identically whether that's "fine, just hasn't happened yet" or "would
+  // fail immediately, required fields are blank." getMissingRequiredFields
+  // is the exact same gate inngest/skill.ts itself checks before every
+  // dispatch (worker-config-completeness.ts) — a worker with no CHECKERS
+  // entry resolves to [] with no DB call at all, so this costs nothing
+  // extra for the 20 zero-config workers.
+  const missingFieldsEntries = await Promise.all(
+    workerIds.map(async (wid): Promise<[WorkerId, MissingField[]]> => [wid, await getMissingRequiredFields(wid, id)])
+  );
+  const missingFieldsByWorkerId: Partial<Record<WorkerId, MissingField[]>> = Object.fromEntries(missingFieldsEntries);
 
   // Same dynamic, per-worker block model dashboard/reports uses now —
   // replaces the old separately-gated ClientReportCard/RepClientReportCard
@@ -339,6 +353,7 @@ export default async function EngagementDetailPage({
             isPaused={Boolean(engagement.pausedAt)}
             productOnboarded={productOnboarded}
             productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+            missingFieldsByWorkerId={missingFieldsByWorkerId}
           />
         </div>
 
