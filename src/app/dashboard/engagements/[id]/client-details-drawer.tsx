@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dropdown, type DropdownItem } from "@/components/ui/dropdown";
+import { InferredFieldBadge } from "@/components/inferred-field-badge";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { Loader2, Plus, Trash2, RefreshCw } from "lucide-react";
 
@@ -38,6 +39,15 @@ export interface ClientDetailsDrawerData {
   notificationPackSelections: string[];
   hasAdCreativeBriefs: boolean;
   hasScriptPack: boolean;
+  /** client_facts suggestions with nowhere else to surface — see
+   * InferredFieldBadge's own header. Undefined when nothing's been
+   * suggested (or the suggestion was rejected) for that field. */
+  suggestedOfferName?: string;
+  suggestedOfferVertical?: string;
+  suggestedOfferIcp?: string;
+  suggestedTrafficTemperature?: string;
+  suggestedCastingChoice?: string;
+  suggestedRawVoiceCorpus?: string;
 }
 
 // Matches src/features/leak-map/server/notification-pack.ts's NOTIFICATION_PACK
@@ -253,6 +263,12 @@ export function ClientDetailsDrawer({
           <Section title="Offer">
             <div>
               <Label>Offer name</Label>
+              <InferredFieldBadge
+                detectedValue={data.suggestedOfferName}
+                currentValue={offerName}
+                detectedFromLabel="the client's own website"
+                onUse={setOfferName}
+              />
               <input className={inputClass} value={offerName} onChange={(e) => setOfferName(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -262,15 +278,33 @@ export function ClientDetailsDrawer({
               </div>
               <div>
                 <Label>Vertical (optional)</Label>
+                <InferredFieldBadge
+                  detectedValue={data.suggestedOfferVertical}
+                  currentValue={offerVertical}
+                  detectedFromLabel="the connected Mailchimp account"
+                  onUse={setOfferVertical}
+                />
                 <input className={inputClass} value={offerVertical} onChange={(e) => setOfferVertical(e.target.value)} placeholder="e.g. coaching" />
               </div>
             </div>
             <div>
               <Label>Ideal customer profile</Label>
+              <InferredFieldBadge
+                detectedValue={data.suggestedOfferIcp}
+                currentValue={offerIcp}
+                detectedFromLabel="the client's own website"
+                onUse={setOfferIcp}
+              />
               <textarea className={inputClass} rows={2} value={offerIcp} onChange={(e) => setOfferIcp(e.target.value)} />
             </div>
             <div>
               <Label>Traffic temperature</Label>
+              <InferredFieldBadge
+                detectedValue={data.suggestedTrafficTemperature}
+                currentValue={trafficTemperature}
+                detectedFromLabel="the client's own voice corpus"
+                onUse={(value) => setTrafficTemperature(value as "cold" | "warm" | "hot")}
+              />
               <Dropdown
                 items={TRAFFIC_TEMPERATURE_ITEMS}
                 selectedKey={trafficTemperature}
@@ -297,6 +331,12 @@ export function ClientDetailsDrawer({
           >
             <div>
               <Label>Raw voice corpus</Label>
+              <InferredFieldBadge
+                detectedValue={data.suggestedRawVoiceCorpus}
+                currentValue={rawVoiceCorpus}
+                detectedFromLabel="an earlier crawl of the client's own site"
+                onUse={setRawVoiceCorpus}
+              />
               <textarea className={inputClass} rows={4} value={rawVoiceCorpus} onChange={(e) => setRawVoiceCorpus(e.target.value)} />
             </div>
             <div>
@@ -305,6 +345,12 @@ export function ClientDetailsDrawer({
             </div>
             <div>
               <Label>Casting choice</Label>
+              <InferredFieldBadge
+                detectedValue={data.suggestedCastingChoice}
+                currentValue={castingChoice}
+                detectedFromLabel="the client's own voice corpus"
+                onUse={setCastingChoice}
+              />
               <Dropdown items={CASTING_CHOICE_ITEMS} selectedKey={castingChoice} onSelect={(key) => setCastingChoice(key)} />
             </div>
             <div>

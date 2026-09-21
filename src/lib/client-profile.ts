@@ -103,3 +103,24 @@ export async function setPrimaryDomainForEngagement(engagementId: string, domain
     .set({ primaryDomain: trimmed, updatedAt: new Date() })
     .where(eq(engagements.engagementId, engagementId));
 }
+
+/**
+ * Same seed as setPrimaryDomainForEngagement, but for a caller holding a
+ * full URL (a product URL, a website field) rather than an already-bare
+ * hostname — account-harvest.ts's own maybeSeedDomainFromAccount needed
+ * exactly this normalization first and had it as a private, undiscoverable
+ * helper; pulled out here so every domain-collecting product onboarding
+ * (Pin-Down's marketingDomain, Cold Open's productUrl, Reputation
+ * Manager's operatorDomains) can seed the shared column the same way
+ * instead of only an OAuth-account harvest doing it. Silently skips a
+ * value that isn't a usable URL/hostname rather than seeding garbage.
+ */
+export async function seedPrimaryDomainFromUrl(engagementId: string, candidateUrl: unknown): Promise<void> {
+  if (typeof candidateUrl !== "string" || !candidateUrl.trim()) return;
+  try {
+    const host = new URL(candidateUrl.startsWith("http") ? candidateUrl : `https://${candidateUrl}`).hostname;
+    if (host) await setPrimaryDomainForEngagement(engagementId, host);
+  } catch {
+    // Not a usable URL — skip rather than seed garbage into primaryDomain.
+  }
+}

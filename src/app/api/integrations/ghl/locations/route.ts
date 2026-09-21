@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
+import { harvestGHLLocation } from "@/lib/account-harvest";
+import { db } from "@/lib/db";
+import { engagements } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -32,6 +36,7 @@ export async function POST(request: Request) {
     const rawKey = typeof body?.key === "string" ? body.key : null;
     const vaultId = typeof body?.vaultId === "string" ? body.vaultId : null;
     const locationId = typeof body?.locationId === "string" ? body.locationId.trim() : null;
+    const engagementId = typeof body?.engagementId === "string" ? body.engagementId : null;
 
     // Also accepts `vaultId` in place of `key` — see the same fallback in
     // the Klaviyo sibling route (src/app/api/integrations/klaviyo/lists/route.ts).
@@ -74,6 +79,22 @@ export async function POST(request: Request) {
     // The v2 "Get Location" response nests the record under `location`;
     // fall back to the bare payload in case that ever changes.
     const location = payload.location ?? payload;
+
+    // Phase 1 harvest hook — only once ownership of the supplied
+    // engagementId is actually verified against this session's own
+    // workspace, same discipline every other write path in this app
+    // applies before touching a client's data. Fire-and-forget: this
+    // verification response must not wait on or fail over the harvest.
+    if (engagementId) {
+      db.select({ id: engagements.id })
+        .from(engagements)
+        .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
+        .limit(1)
+        .then(([owned]) => {
+          if (owned) harvestGHLLocation(engagementId, apiKey!, locationId!).catch((err) => console.error(`[ghl locations] harvest failed for ${engagementId}:`, err));
+        })
+        .catch((err) => console.error(`[ghl locations] ownership check failed for ${engagementId}:`, err));
+    }
 
     return NextResponse.json({
       success: true,

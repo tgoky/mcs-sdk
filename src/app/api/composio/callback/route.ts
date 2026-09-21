@@ -7,7 +7,8 @@ import {
   rotateComposioVaultCredential,
   vaultCredentialBelongsToTenant,
 } from "@/lib/credentials";
-import { composioVaultRefKey, finalizeComposioConnection, isAllowedComposioReturnPath, consumeComposioConnectAttempt } from "@/lib/composio";
+import { composioVaultRefKey, finalizeComposioConnection, isAllowedComposioReturnPath, consumeComposioConnectAttempt, getComposioCredentialValue } from "@/lib/composio";
+import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
 import { db } from "@/lib/db";
 import { engagements, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -172,6 +173,19 @@ export async function GET(request: Request) {
         await linkEngagementToVault(engagementId, provider, vaultId);
         returnUrl.searchParams.set("composio_linked_engagement", engagementId);
         returnUrl.searchParams.set("composio_vault_id", vaultId);
+
+        // Phase 1 account-harvest hook — fire-and-forget on purpose: a
+        // harvest failure (missing scope, a changed provider API shape)
+        // must never turn an otherwise-successful credential connect into
+        // a redirect error, and the browser shouldn't wait on it either.
+        // account-harvest.ts's own harvestAccountMetadata already swallows
+        // and logs its own errors; this is only guarding against the
+        // getComposioCredentialValue call itself throwing.
+        if (isHarvestableProvider(provider)) {
+          getComposioCredentialValue(connectedAccountId)
+            .then((value) => harvestAccountMetadata(engagementId, provider, value))
+            .catch((err) => console.error(`[composio/callback] account harvest kickoff failed for ${provider}:`, err));
+        }
       }
       // Not owned (or no longer exists) — the credential is still saved to
       // the vault either way; it just isn't linked to a specific client.

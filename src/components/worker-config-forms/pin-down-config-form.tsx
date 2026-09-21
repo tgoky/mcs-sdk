@@ -22,6 +22,7 @@ import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progress
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { PinDownLivePreview } from "./pin-down-live-preview";
 import type { TemplateId } from "@/features/pin-down/server/templates";
+import { InferredFieldBadge } from "@/components/inferred-field-badge";
 
 export function PinDownConfigForm({
   engagementId,
@@ -47,7 +48,9 @@ export function PinDownConfigForm({
 
   const [voiceSource, setVoiceSource] = useState<"scrape" | "manual">("scrape");
   const [marketingDomain, setMarketingDomain] = useState("");
+  const [primaryDomain, setPrimaryDomain] = useState("");
   const [rawVoiceCorpus, setRawVoiceCorpus] = useState("");
+  const [suggestedRawVoiceCorpus, setSuggestedRawVoiceCorpus] = useState("");
   const [existingConfirmationPageUrl, setExistingConfirmationPageUrl] = useState("");
   const [existingConfirmationPageReuse, setExistingConfirmationPageReuse] = useState(false);
   const [confirmationPageTemplate, setConfirmationPageTemplate] = useState("signal");
@@ -77,8 +80,10 @@ export function PinDownConfigForm({
         setBuyer(data.buyer ?? "");
         setWasDisabled(data.enabled === false);
         setMarketingDomain(data.marketingDomain ?? "");
+        setPrimaryDomain(data.primaryDomain ?? "");
         if (data.marketingDomain) setVoiceSource("scrape");
         setRawVoiceCorpus(data.rawVoiceCorpus ?? "");
+        setSuggestedRawVoiceCorpus(data.suggestedRawVoiceCorpus ?? "");
         setExistingConfirmationPageUrl(data.existingConfirmationPageUrl ?? "");
         setExistingConfirmationPageReuse(data.existingConfirmationPageReuse ?? false);
         setConfirmationPageTemplate(data.confirmationPageTemplate ?? "signal");
@@ -204,20 +209,34 @@ export function PinDownConfigForm({
           </div>
 
           {voiceSource === "scrape" && (
-            <InputField
-              label="Marketing website"
-              value={marketingDomain}
-              onChange={setMarketingDomain}
-              placeholder="yoursite.com"
-              helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
-              required
-            />
+            <div>
+              <InferredFieldBadge
+                detectedValue={primaryDomain}
+                currentValue={marketingDomain}
+                detectedFromLabel="another product's own setup for this client"
+                onUse={setMarketingDomain}
+              />
+              <InputField
+                label="Marketing website"
+                value={marketingDomain}
+                onChange={setMarketingDomain}
+                placeholder="yoursite.com"
+                helpText="We'll crawl this site (and pricing/sales pages if we find them) to build the voice profile."
+                required
+              />
+            </div>
           )}
 
           <div className="space-y-1.5 w-full">
             <label className="text-xs font-semibold block" style={{ color: "var(--text-primary)" }}>
               Sales copy, scripts, or call transcripts (500 words minimum)
             </label>
+            <InferredFieldBadge
+              detectedValue={suggestedRawVoiceCorpus}
+              currentValue={rawVoiceCorpus}
+              detectedFromLabel="an earlier crawl of the client's own site"
+              onUse={setRawVoiceCorpus}
+            />
             <textarea
               value={rawVoiceCorpus}
               onChange={(e) => setRawVoiceCorpus(e.target.value)}

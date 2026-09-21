@@ -193,6 +193,7 @@ export function IdentityGraphForm({
   onChange,
   readOnlyCollisions,
   detectedOperatorName,
+  detectedOperatorDomain,
   layout = "flat",
   onFinish,
   finishLabel = "Save",
@@ -212,6 +213,11 @@ export function IdentityGraphForm({
    * shows the Phase 3 Inferred Card above operatorName instead of a
    * silent pre-fill with no visible provenance. */
   detectedOperatorName?: string;
+  /** The shared client-profile domain (client-profile.ts's
+   * getPrimaryDomainForEngagement), if any product has captured one for
+   * this client yet — same treatment as detectedOperatorName above, for
+   * the Domains field. Omitted entirely by a caller that doesn't pass it. */
+  detectedOperatorDomain?: string;
   /** "flat" (default, unchanged) renders every section in one long
    * scroll — the shape this component always had, and what
    * new/page.tsx's own onboarding wizard still gets since it wasn't
@@ -278,6 +284,14 @@ export function IdentityGraphForm({
         rows={2}
         helpText="One per line. Other names AI engines or reviewers might use for this operator."
       />
+      {detectedOperatorDomain !== undefined && (
+        <InferredFieldBadge
+          detectedValue={detectedOperatorDomain}
+          currentValue={form.operatorDomains}
+          detectedFromLabel="another product's own setup for this client"
+          onUse={(v) => set("operatorDomains", v)}
+        />
+      )}
       <TextAreaField
         label="Domains"
         value={form.operatorDomains}

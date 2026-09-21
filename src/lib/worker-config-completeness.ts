@@ -110,6 +110,7 @@ import { hasCredential } from "@/lib/credentials";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
 import type { WorkerId } from "@/lib/worker-registry";
 import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 
 export type { MissingField };
 
@@ -382,6 +383,14 @@ const CHECKERS: Partial<Record<WorkerId, Checker>> = {
 export async function getMissingRequiredFields(workerId: WorkerId, engagementId: string): Promise<MissingField[]> {
   const checker = CHECKERS[workerId];
   if (!checker) return [];
+  // Phase 2: promote any trusted, applicable client_facts suggestion into
+  // its real column BEFORE checking — see field-writeback.ts's own
+  // header for exactly which fields qualify and why. The checker below
+  // is completely unchanged; it just reads storage that may now be a
+  // moment fresher than it was a line ago. Failure here degrades to "the
+  // checker sees storage exactly as it already was" — never blocks or
+  // throws past this point.
+  await applyResolvableFacts(engagementId).catch((err) => console.error(`[worker-config-completeness] field-writeback failed for ${engagementId}:`, err));
   return checker(engagementId);
 }
 

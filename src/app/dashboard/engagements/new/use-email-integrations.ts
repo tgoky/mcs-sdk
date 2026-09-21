@@ -572,6 +572,7 @@ export function useEmailIntegrations(
             key: form.ghlApiKey?.trim() || undefined,
             vaultId: !form.ghlApiKey?.trim() ? form.ghlCredentialVaultId || undefined : undefined,
             locationId: form.ghlLocationId.trim(),
+            engagementId: form.engagementId || undefined,
           }),
         })
           .then(async (res) => {

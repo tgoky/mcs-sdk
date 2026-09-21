@@ -32,6 +32,7 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
+  const [primaryDomain, setPrimaryDomain] = useState("");
   const [wasDisabled, setWasDisabled] = useState(false);
   const [form, setForm] = useState<IdentityGraphFormState>(EMPTY_IDENTITY_GRAPH_FORM);
   const [foundCollisions, setFoundCollisions] = useState<(RepCollision & { source: "collision_check" })[]>([]);
@@ -50,6 +51,7 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
         if (cancelled) return;
 
         setBuyer(data.buyer ?? "");
+        setPrimaryDomain(data.primaryDomain ?? "");
         setWasDisabled(data.enabled === false);
         if (data.graph) {
           setForm(fromSavedGraph(data.graph));
@@ -140,6 +142,7 @@ export function RepOnboardingConfigForm({ engagementId, onCancel }: { engagement
           onChange={setForm}
           readOnlyCollisions={foundCollisions}
           detectedOperatorName={buyer || undefined}
+          detectedOperatorDomain={primaryDomain || undefined}
           layout="steps"
           onFinish={handleSubmit}
           finishLabel="Save & enable"

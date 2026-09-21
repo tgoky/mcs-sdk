@@ -6,6 +6,9 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
+import { discoverClient } from "@/lib/discover-client";
+import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
+import { getClientFacts } from "@/lib/client-facts";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -49,11 +52,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const enabled = await isSkillEnabledForEngagement(id, "pin-down");
+  // buyerDomain/rawVoiceCorpus were both registry-flagged "derivable" with
+  // a real, running mechanism (client-profile's shared domain resolver,
+  // this same crawl via discoverClient) but no caller ever surfacing
+  // either as a suggestion here — see worker-registry.ts's own audit note
+  // on primaryDomain having zero real UI callers. Never assumed equal to
+  // the current value; InferredFieldBadge itself only shows when it
+  // isn't.
+  const primaryDomain = await getPrimaryDomainForEngagement(id);
+  const facts = await getClientFacts(id);
+  const suggestedRawVoiceCorpusFact = facts.rawVoiceCorpus;
+  const suggestedRawVoiceCorpus =
+    suggestedRawVoiceCorpusFact && suggestedRawVoiceCorpusFact.status !== "rejected" && typeof suggestedRawVoiceCorpusFact.value === "string"
+      ? suggestedRawVoiceCorpusFact.value
+      : undefined;
 
   return NextResponse.json({
     buyer: row.buyer,
     enabled,
     marketingDomain: row.stack?.buyer_domain ?? "",
+    primaryDomain,
+    suggestedRawVoiceCorpus,
     existingConfirmationPageUrl: row.stack?.existing_confirmation_page_url ?? "",
     rawVoiceCorpus: row.rawVoiceCorpus ?? "",
     confirmationPageTemplate: row.confirmationPageTemplate ?? "signal",
@@ -148,6 +167,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const runId = await dispatchSkillRun(id, "pin-down", row.buyer, {
       completedSteps: [{ phase: "credential_storage", detail: "Credentials stored during setup" }],
     });
+
+    // Phase 1 trigger fix: this was the one live place a domain actually
+    // gets set with nothing ever calling discoverClient — see
+    // discover-client.ts's own module comment. Fires only on a genuinely
+    // new/changed domain, not on every unrelated field edit to this same
+    // form. Fire-and-forget: a slow or failed crawl must never hold up
+    // this route's own response, same discipline as account-harvest.ts's
+    // kickoff of the same function.
+    if (marketingDomain && marketingDomain !== row.stack?.buyer_domain) {
+      discoverClient(id).catch((err) => console.error(`[bridges/pin-down] discoverClient kickoff failed for ${id}:`, err));
+    }
+    // Feeds the shared client-profile domain, same as account-harvest.ts's
+    // own accounts do — so ICP Lock/Reputation Manager's own domain
+    // fields see this as already-known instead of asking the client to
+    // retype a domain they already gave Pin-Down. Fire-and-forget for the
+    // same reason as discoverClient above: never worth failing this save
+    // over.
+    if (marketingDomain) {
+      seedPrimaryDomainFromUrl(id, marketingDomain).catch((err) => console.error(`[bridges/pin-down] domain seed failed for ${id}:`, err));
+    }
 
     return NextResponse.json({ ok: true, runId });
   } catch (error: unknown) {

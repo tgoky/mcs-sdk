@@ -8,6 +8,7 @@ import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveIcpLockIntake, type IcpLockInput } from "@/features/cold-open/server/icp-lock";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
+import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -39,9 +40,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const config = await getColdOpenConfig(id);
   const enabled = await isSkillEnabledForEngagement(id, "icp-lock");
+  // Phase 3: productUrl was registry-flagged as "no live crawl or
+  // resolver path exists anywhere for this field" — client-profile.ts's
+  // shared domain resolver (fed by discoverClient's crawl, or another
+  // product's own domain, per its own coalesce order) is that path now.
+  // Never assumed equal to productUrl (an agency could run the product on
+  // a different domain than the client's own site) — surfaced as a
+  // suggestion via InferredFieldBadge, same as productName below.
+  const primaryDomain = await getPrimaryDomainForEngagement(id);
 
   return NextResponse.json({
     buyer: engagementRow.buyer,
+    primaryDomain,
     enabled,
     config: config
       ? {
@@ -102,6 +112,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     await setSkillEnabledForEngagement(id, "icp-lock", true);
+    // Same cross-product domain seed as bridges/pin-down/route.ts —
+    // productUrl is a full URL here (not a bare host, per this route's own
+    // "acme.com" example), so this goes through the URL-normalizing seed
+    // rather than the bare-domain one. Fire-and-forget, never worth
+    // failing this save over.
+    if (input.productUrl) {
+      seedPrimaryDomainFromUrl(id, input.productUrl).catch((err) => console.error(`[bridges/icp-lock] domain seed failed for ${id}:`, err));
+    }
     const runId = await dispatchSkillRun(id, "icp-lock", engagementRow.buyer);
 
     return NextResponse.json({ ok: true, runId });

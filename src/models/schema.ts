@@ -3223,3 +3223,77 @@ export const whopChangeLedger = pgTable(
     whopChangeLedgerEngagementIdx: index("whop_change_ledger_engagement_idx").on(table.engagementId, table.occurredAt),
   })
 );
+
+// ── Client facts (shared fact store, Phase 0 of the cross-product
+// derivation plan) ──────────────────────────────────────────────────────
+//
+// One row per (engagement, fact key) — the substrate every product's
+// onboarding is meant to read from before asking a question a different
+// product (or a connected account, or the client's own website) already
+// answered. Deliberately separate from engagements.stack/repIdentityGraphs/
+// coldOpenConfig rather than writing into them directly: those remain each
+// product's own system of record (what a worker actually reads at run
+// time), and nothing here changes that. This table only ever holds a
+// SUGGESTION with provenance — src/lib/client-profile.ts's existing
+// primaryDomain/buyerName resolvers are the precedent this generalizes,
+// not a replacement for them.
+//
+// `key` intentionally reuses the same string keys worker-registry.ts's
+// WorkerConfigField.key already uses (e.g. "offerName", "bookingPlatform",
+// "operatorHandles") wherever a fact maps onto a real config field, so a
+// future per-field resolver can look a fact up by the same key the
+// registry already names it by — no separate translation table. A fact
+// with no matching registry field (e.g. a raw client-profile-level value)
+// is still valid here; it just has no registry consumer yet.
+//
+// One row per key per engagement (see the unique index below) — this is a
+// current-value store, not an append-only log. A later write with a new
+// source/value replaces the previous suggestion for that key; it does NOT
+// overwrite a `status: "confirmed"` value silently (callers are expected
+// to check status before overwriting — enforcing that in application code,
+// not a DB constraint, matches this file's existing convention of trusting
+// callers that already scope by tenant, e.g. credentials.ts's own header).
+export const clientFacts = pgTable(
+  "client_facts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    key: text("key").notNull(),
+    // jsonb, not text — most facts are a plain string, but a few (e.g. a
+    // design signal, a sizing-bounds draft) are genuinely structured.
+    // Callers reading a string-shaped fact should expect a JSON string
+    // value, not raw text, to keep this column's typing uniform.
+    value: jsonb("value").notNull(),
+    // "website" | "account" | "jev" | "user" | "default" — where the value
+    // came from. Not a DB enum: new sources (a CSV upload, a paste) are
+    // expected to be added over time, same convention resourceType/
+    // eventType above use for the same reason.
+    source: text("source").notNull(),
+    // Free-form provenance detail for the UI's source chip, e.g. the
+    // connected provider ("calendly") or the crawled domain — never
+    // required, since "user" and some "default" writes have nothing to
+    // name here.
+    sourceDetail: text("source_detail"),
+    // "suggested" | "confirmed" | "edited" | "rejected". Written as
+    // "suggested" by every non-user source; only a human action (or a
+    // later Phase 3 UI write) ever sets "confirmed"/"edited"/"rejected".
+    status: text("status").notNull().default("suggested"),
+    // 0-100, set only when a source actually scores its own confidence
+    // (Jev's probability output). Null for a plain website/account fact
+    // with no score attached yet — absence of a score is not the same as
+    // low confidence.
+    confidence: integer("confidence"),
+    // The raw snippet or short justification a suggestion was drawn from,
+    // for a future "why did we suggest this" affordance. Optional — a
+    // straight account-metadata pull (e.g. HubSpot's own portal ID field)
+    // has no snippet to show, the value itself is the evidence.
+    evidence: text("evidence"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    clientFactsEngagementKeyUidx: uniqueIndex("client_facts_engagement_key_uidx").on(table.engagementId, table.key),
+  })
+);

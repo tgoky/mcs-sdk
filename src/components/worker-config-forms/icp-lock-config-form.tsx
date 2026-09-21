@@ -48,6 +48,7 @@ export function IcpLockConfigForm({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [buyer, setBuyer] = useState("");
+  const [primaryDomain, setPrimaryDomain] = useState("");
   const [wasDisabled, setWasDisabled] = useState(false);
 
   const [productName, setProductName] = useState("");
@@ -70,6 +71,7 @@ export function IcpLockConfigForm({
         if (cancelled) return;
 
         setBuyer(data.buyer ?? "");
+        setPrimaryDomain(data.primaryDomain ?? "");
         setWasDisabled(data.enabled === false);
         if (data.config) {
           setProductName(data.config.productName ?? data.buyer ?? "");
@@ -181,7 +183,15 @@ export function IcpLockConfigForm({
             />
             <InputField label="Product / offer name" value={productName} onChange={setProductName} required />
           </div>
-          <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
+          <div>
+            <InferredFieldBadge
+              detectedValue={primaryDomain}
+              currentValue={productUrl}
+              detectedFromLabel="the client's own domain"
+              onUse={setProductUrl}
+            />
+            <InputField label="Product URL" value={productUrl} onChange={setProductUrl} placeholder="acme.com" required />
+          </div>
           <InputField label="Price" value={productPrice} onChange={setProductPrice} placeholder="$99/mo" />
           <InputField label="Value proposition" value={productValueProp} onChange={setProductValueProp} placeholder="one sentence" required />
         </div>

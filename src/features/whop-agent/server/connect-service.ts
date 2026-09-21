@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { storeCredential } from "@/lib/credentials";
 import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { runScopeProbe, detectWhopCredentialType, findValidatedApiVersionDatePin, type ScopeProbeSummary } from "@/lib/whop-agent/probe";
+import { harvestWhopPlans } from "@/lib/paste-key-harvest";
 
 export interface ConnectWhopResult {
   ok: boolean;
@@ -120,6 +121,17 @@ export async function connectWhopAccount(engagementId: string, apiKey: string): 
         decisionsMade: [`Stored Bot API key for this engagement`, `Pinned version date: ${pinnedVersionDate ?? "none"}`],
       },
     });
+
+    // Phase 1 harvest — only when the probe already confirmed /v1/plans is
+    // reachable on this key (see paste-key-harvest.ts's own header for why
+    // this bypasses the generic harvest dispatcher). Fire-and-forget, same
+    // discipline as every other harvest hook: never lets a fact-store
+    // failure turn a successful connect into an error response.
+    if (probe.results.plans?.ok && probe.whopAccountId) {
+      harvestWhopPlans(engagementId, trimmed, probe.whopAccountId).catch((err) =>
+        console.error(`[whop-agent connect] plans harvest failed for ${engagementId}:`, err)
+      );
+    }
 
     return { ok: true, runId, probe, credentialType, pinnedVersionDate };
   } catch (err) {

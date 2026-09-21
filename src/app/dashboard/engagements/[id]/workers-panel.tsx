@@ -180,6 +180,14 @@ export function WorkersPanel({
           const body = await res.json().catch(() => ({}));
           if (res.status === 422 && body.bridgeHref) {
             setGateWorkerId(workerId);
+          } else if (res.status === 422 && body.missingFields) {
+            // Phase 2 items 8-9's own case: this worker's own fields (a
+            // secret, or a genuinely irreducible blocking field the
+            // resolver pass couldn't fill in) are what's missing, not the
+            // whole product's onboarding — a narrow, specific reason
+            // instead of the ProductOnboardingGateModal, which is about a
+            // different problem.
+            toast.error(body.error ?? `${WORKER_REGISTRY[workerId].name} can't be enabled yet — required fields are missing.`);
           }
         } else {
           toast.success(`${WORKER_REGISTRY[workerId].name} ${nextState ? "enabled" : "disabled"}.`);

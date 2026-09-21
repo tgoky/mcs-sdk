@@ -20,6 +20,15 @@ export interface DiscoveryPrefillResult {
   scrapedCorpus?: string;
   existingConfirmationPageUrl?: string;
   detectedBookingPlatform?: string;
+  /** Fingerprinted from well-known, publicly documented markers in the
+   * homepage's own HTML (a generator meta tag, a standard asset path) —
+   * the same confidence class as detectedBookingPlatform's own regex
+   * signatures, not a vendor API contract. Only the 3 hosting_platform
+   * options that have a real publish API to authenticate against
+   * (checkPinDown's own conditional) are worth detecting here — ghl/
+   * lovable/plain_html/discover_from_docs have no reliable positive
+   * signature and are left to the operator to pick. */
+  detectedHostingPlatform?: string;
   /** Raw visual signal from the buyer's own site (design-scraper.ts), for
    * the dynamic confirmation-page templates (templates/dynamic/). Passed
    * straight through to buildConfirmationPageHtml as
@@ -45,6 +54,18 @@ const BOOKING_PLATFORM_SIGNATURES: Array<{ platform: string; pattern: RegExp }> 
   { platform: "cal_com", pattern: /cal\.com\/(?!docs)/i },
   { platform: "ghl_calendar", pattern: /(msgsndr\.com|leadconnectorhq\.com|gohighlevel)/i },
   { platform: "oncehub", pattern: /oncehub\.com/i },
+];
+
+// Checked in order — Webflow and WordPress sites can both incidentally
+// reference "/wp-content/"-style third-party embeds, but neither ever
+// carries the OTHER platform's own generator meta tag or asset host, so
+// the specific signatures (checked first) never false-positive against
+// each other; only the broad wp-content/wp-includes fallback needs the
+// ordering.
+const HOSTING_PLATFORM_SIGNATURES: Array<{ platform: string; pattern: RegExp }> = [
+  { platform: "webflow", pattern: /(<meta[^>]+name=["']generator["'][^>]+content=["']Webflow["']|assets-global\.website-files\.com|data-wf-(?:site|page)=)/i },
+  { platform: "wordpress", pattern: /(<meta[^>]+name=["']generator["'][^>]+content=["']WordPress|\/wp-content\/|\/wp-includes\/)/i },
+  { platform: "nextjs_vercel", pattern: /(__NEXT_DATA__|\/_next\/static\/)/i },
 ];
 
 const BROWSER_USER_AGENT =
@@ -122,6 +143,14 @@ function detectBookingPlatform(homepageHtml: string | null): string | undefined 
   return undefined;
 }
 
+function detectHostingPlatform(homepageHtml: string | null): string | undefined {
+  if (!homepageHtml) return undefined;
+  for (const sig of HOSTING_PLATFORM_SIGNATURES) {
+    if (sig.pattern.test(homepageHtml)) return sig.platform;
+  }
+  return undefined;
+}
+
 /**
  * Runs the smart pre-fill pass.
  *
@@ -146,6 +175,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   ]);
 
   const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
+  const detectedHostingPlatform = detectHostingPlatform(homepageHtml);
 
   // ── Decide what text to send Claude ──
   //
@@ -173,6 +203,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
       scrapedCorpus: corpus || undefined,
       existingConfirmationPageUrl,
       detectedBookingPlatform,
+      detectedHostingPlatform,
       designSignal: designSignal ?? undefined,
       notes,
     };
@@ -258,6 +289,7 @@ aren't reasonably confident, use null rather than guessing.`,
     scrapedCorpus: corpus,
     existingConfirmationPageUrl,
     detectedBookingPlatform,
+    detectedHostingPlatform,
     designSignal: designSignal ?? undefined,
     notes,
   };

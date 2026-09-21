@@ -30,6 +30,7 @@ import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
 import { isWorkerId, WORKER_REGISTRY, PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isProductOnboarded } from "@/lib/product-onboarding";
+import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -87,6 +88,30 @@ export async function POST(
           bridgeHref: `/dashboard/engagements/${id}/bridges/${onboardingWorkerId}`,
           productId: worker.productId,
           onboardingWorkerName: onboardingWorker.name,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Phase 2, items 8-9: this route previously only checked that the
+    // whole PRODUCT had been onboarded, never this worker's own fields —
+    // a worker could be flipped on with real secrets or blocking fields
+    // still missing, and only find out at its next scheduled run (see
+    // skill.ts's own gate). getMissingRequiredFields already runs its
+    // Phase 2 resolver pass first (worker-config-completeness.ts), so
+    // this reports only what's genuinely still missing after every
+    // available credential/crawl/Jev signal had a chance to fill it in —
+    // a narrow, specific reason, not "go fill out the whole form."
+    // Deliberately no bridgeHref on this response: that field is what
+    // triggers the existing ProductOnboardingGateModal on the frontend,
+    // which is about running the PRODUCT's onboarding worker, a different
+    // thing from this worker's own missing fields.
+    const missingFields = await getMissingRequiredFields(workerId, id);
+    if (missingFields.length > 0) {
+      return NextResponse.json(
+        {
+          error: `${worker.name} can't be enabled yet — ${missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ")}`,
+          missingFields,
         },
         { status: 422 }
       );

@@ -9,6 +9,7 @@ import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/reputation-manager/server/onboarding-service";
 import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
 import type { RepEngineId } from "@/models/schema";
+import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -47,10 +48,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const [graph] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, id)).limit(1);
   const enabled = await isSkillEnabledForEngagement(id, "rep-onboarding");
+  // operatorDomains was registry-flagged "derivable" from primaryDomain
+  // with the resolver already existing but zero real callers (see
+  // client-profile.ts's own audit note on resolveClientProfileFact) —
+  // this is that first caller, same InferredFieldBadge treatment as
+  // Pin-Down's buyerDomain and Cold Open's productUrl already have.
+  const primaryDomain = await getPrimaryDomainForEngagement(id);
 
   return NextResponse.json({
     buyer: engagementRow.buyer,
     enabled,
+    primaryDomain,
     graph: graph
       ? {
           operatorName: graph.operatorName,
@@ -140,6 +148,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     await setSkillEnabledForEngagement(id, "rep-onboarding", true);
+    // Same cross-product domain seed as bridges/pin-down and
+    // bridges/icp-lock — only the first domain (the operator's own,
+    // canonical one) feeds the shared column; the rest of the list can be
+    // aliases/regional sites this session has no basis to treat as THE
+    // client domain. Fire-and-forget, never worth failing this save over.
+    if (input.operatorDomains[0]) {
+      seedPrimaryDomainFromUrl(id, input.operatorDomains[0]).catch((err) => console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err));
+    }
     // No completedSteps: unlike Pin-Down, nothing credential-related
     // happens before this dispatch — the identity graph itself IS the
     // setup, not a prerequisite to it.

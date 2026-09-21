@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { storeCredential, syncStackCredentialMarkers } from "@/lib/credentials";
+import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -56,6 +57,15 @@ export async function POST(request: Request) {
     // marker that nothing here ever set. See syncStackCredentialMarkers'
     // own doc comment for the full bug.
     await syncStackCredentialMarkers(engagementId, provider, true);
+
+    // Phase 1's paste-a-key harvest trigger — the equivalent of the
+    // Composio callback's own account-harvest kickoff, for every provider
+    // that isn't OAuth-managed (see paste-key-harvest.ts's own header).
+    // Fire-and-forget, same as the Composio path: a harvest failure must
+    // never turn a successful credential save into an error response.
+    harvestPasteKeyMetadata(engagementId, provider, value).catch((err) =>
+      console.error(`[credentials API] paste-key harvest kickoff failed for ${provider}:`, err)
+    );
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
