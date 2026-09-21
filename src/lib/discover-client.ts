@@ -8,20 +8,15 @@
 // confirmation-page detection in discovery-prefill.ts itself) — nothing
 // about how the crawl works changes here, only where its output lands.
 //
-// This does NOT replace runDiscoveryPrefill's own caller inside Pin-Down's
-// wizard yet (that's a later, separate slice per the rollout order — Pin-
-// Down keeps working exactly as it does today). This is additive: a second
-// caller of the same crawl, for clients whose FIRST product is something
-// other than Pin-Down.
-//
-// Fact keys below deliberately reuse worker-registry.ts's own
-// WorkerConfigField.key strings (see client-facts.ts's header) so a
-// per-field resolver can look these up directly once Phase 1 exists.
+// Additive deep harvesters:
+//   1. Auto-harvested social & review handles (JSON-LD schema & footer links)
+//   2. Public review baselines (Trustpilot star ratings & review counts)
+//   3. Upfront same-name domain collision pre-checks across common TLDs
 
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
-import { upsertClientFact } from "@/lib/client-facts";
+import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { runDiscoveryPrefill } from "@/features/pin-down/server/discovery-prefill";
-import { resolveWebsiteDerivedChoices } from "@/lib/field-resolvers";
+import { resolveWebsiteDerivedChoices, verifyReputationExtractions } from "@/lib/field-resolvers";
 
 export interface DiscoverClientResult {
   ran: boolean;
@@ -31,16 +26,44 @@ export interface DiscoverClientResult {
 }
 
 /**
+ * Upfront Same-Name Collision Harvester
+ * Checks if another business with the exact same name exists on a different TLD / registry.
+ */
+async function checkUpfrontCollisions(operatorName: string, siteDomain: string) {
+  const collisions: Array<{ name: string; domain?: string; source: "collision_check" }> = [];
+  const nameSlug = operatorName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!nameSlug) return collisions;
+
+  const commonTLDs = [".org", ".co", ".net", ".io"];
+  const currentTLD = siteDomain.slice(siteDomain.lastIndexOf("."));
+
+  for (const tld of commonTLDs) {
+    if (tld === currentTLD) continue;
+    const testDomain = `${nameSlug}${tld}`;
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(`https://${testDomain}`, { method: "HEAD", signal: controller.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        collisions.push({
+          name: `${operatorName} (${tld.toUpperCase()} Variant)`,
+          domain: testDomain,
+          source: "collision_check",
+        });
+      }
+    } catch {
+      // Unreachable domain = no collision
+    }
+  }
+  return collisions;
+}
+
+/**
  * Crawls whatever domain is already on file for this client (via
  * client-profile.ts's existing resolver — engagements.primaryDomain,
  * falling back to stack.buyer_domain / a rep identity graph domain) and
  * writes the results into the shared fact store as "suggested" facts.
- *
- * Does nothing, cheaply, if no domain is on file yet — this is meant to be
- * called opportunistically (client creation with an optional URL, or the
- * first web-dependent product's onboarding asking for a domain), not on a
- * schedule, so a no-op return here is a normal, expected outcome, not an
- * error.
  */
 export async function discoverClient(engagementId: string): Promise<DiscoverClientResult> {
   const domain = await getPrimaryDomainForEngagement(engagementId);
@@ -58,11 +81,20 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
     factsWritten.push(key);
   }
 
-  // operatorName is rep-onboarding's own field (derived from engagements.
-  // buyer today via client-profile.ts's buyerName resolver) — a crawled
-  // name is a second, independent signal for the SAME field, not a
-  // conflicting one. Which one a resolver prefers is Phase 1's job, not
-  // this function's; both are legitimate suggestions to have on file.
+  // Human-touched facts are never re-suggested by a re-crawl. A "rejected"
+  // or "edited" row rewritten here would flow back through verification
+  // and could auto-apply again — silently undoing the operator's decision.
+  async function writeSuggestion(key: string, value: unknown, evidence?: string) {
+    if (value === undefined || value === null || value === "") return;
+    if (Array.isArray(value) && value.length === 0) return;
+
+    const existing = await getClientFact(engagementId, key);
+    if (existing && (existing.status === "rejected" || existing.status === "edited")) return;
+
+    await write(key, value, evidence);
+  }
+
+  // Core website crawl facts
   await write("operatorName", prefill.suggestedBuyerName, "Crawled from the homepage's own branding/title.");
   await write("offerName", prefill.suggestedOfferName, "Crawled from the homepage/offer page.");
   await write("offerIcp", prefill.suggestedIcp, "Inferred from the site's own marketing copy.");
@@ -74,17 +106,43 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
     await write("designSignal", prefill.designSignal);
   }
 
-  // Chains straight into the Jev resolvers that exist so far — the
-  // evidence they need (rawVoiceCorpus) was just written above, and every
-  // caller of discoverClient gets this for free instead of needing to
-  // know a second function exists. Never allowed to fail the crawl
-  // itself: no TYPESAFE_API_KEY/OPENROUTER_API_KEY configured is the
-  // expected, common state today (Jev's contract is confirmed against
-  // real docs now, but no environment in this project has a live key
-  // yet), not a bug to surface as an error.
+  // Reputation Manager extractions from the prefill pass
+  if (prefill.suggestedCompetitors?.length) {
+    await writeSuggestion("competitors", prefill.suggestedCompetitors, "Extracted from the crawled copy by the prefill pass.");
+  }
+  if (prefill.suggestedEntities?.length) {
+    await writeSuggestion("entities", prefill.suggestedEntities, "Extracted from the crawled copy by the prefill pass.");
+  }
+  if (prefill.suggestedSeedPrompts?.length) {
+    await writeSuggestion("seedPanelPrompts", prefill.suggestedSeedPrompts, "Generated from the crawled copy by the prefill pass.");
+  }
+
+  // Deep Harvester Extractions: Social handles & review baseline
+  if (prefill.suggestedHandles && Object.keys(prefill.suggestedHandles).length > 0) {
+    await writeSuggestion("operatorHandles", prefill.suggestedHandles, "Extracted from homepage footer and JSON-LD schema.");
+  }
+  if (prefill.suggestedReviewBaseline) {
+    await writeSuggestion("reviewBaseline", prefill.suggestedReviewBaseline, "Harvested from public review platform.");
+  }
+
+  // Upfront Same-Name Domain Collision Harvester
+  if (prefill.suggestedBuyerName) {
+    try {
+      const collisions = await checkUpfrontCollisions(prefill.suggestedBuyerName, siteDomain);
+      if (collisions.length > 0) {
+        await writeSuggestion("collisions", collisions, "Upfront same-name collision harvester.");
+      }
+    } catch (err) {
+      console.warn(`[discover-client] upfront collision check failed for ${engagementId}:`, err);
+    }
+  }
+
+  // Chains straight into the Jev resolvers — rawVoiceCorpus and candidate lists
+  // were just written above.
   if (factsWritten.includes("rawVoiceCorpus")) {
     try {
       await resolveWebsiteDerivedChoices(engagementId);
+      await verifyReputationExtractions(engagementId);
     } catch (err) {
       console.warn(`[discover-client] website-derived Jev resolution skipped for ${engagementId}:`, err instanceof Error ? err.message : err);
     }

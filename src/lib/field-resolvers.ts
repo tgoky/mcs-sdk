@@ -108,3 +108,80 @@ export async function resolveWebsiteDerivedChoices(engagementId: string) {
     },
   });
 }
+
+// ── Reputation-derived facts: verify prefill extractions ───────────────
+//
+// competitors / entities / seedPanelPrompts are LIST fields extracted by
+// discovery-prefill's Claude pass. This function scores those proposed
+// lists against rawVoiceCorpus using Jev's `score` question type so that
+// field-writeback.ts can gate auto-promotion on a real quality x peakedness
+// metric (>= 75).
+//
+// Deliberately uses object-based state per TypeSafe guidelines and skips
+// any field where human action (status !== "suggested") has already been
+// taken.
+export async function verifyReputationExtractions(
+  engagementId: string
+): Promise<{ verified: string[]; skipped: boolean }> {
+  const corpus = await getClientFact(engagementId, "rawVoiceCorpus");
+  if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) {
+    return { verified: [], skipped: true };
+  }
+
+  // Only score candidates in "suggested" status — human-confirmed, edited,
+  // or rejected facts are respected and left untouched.
+  const candidates: { factKey: string; list: string[] }[] = [];
+  for (const factKey of ["competitors", "entities", "seedPanelPrompts"]) {
+    const fact = await getClientFact(engagementId, factKey);
+    if (fact && fact.status === "suggested" && Array.isArray(fact.value) && fact.value.length > 0) {
+      candidates.push({ factKey, list: fact.value as string[] });
+    }
+  }
+  if (candidates.length === 0) return { verified: [], skipped: true };
+
+  const state: Record<string, unknown> = { siteCopy: corpus.value };
+  for (const { factKey, list } of candidates) {
+    state[`proposed${factKey.charAt(0).toUpperCase()}${factKey.slice(1)}`] = list;
+  }
+
+  const VERIFICATION_LEVELS = [
+    "Fabricated — none of the entries are named or implied in the site copy",
+    "Mostly wrong — at most one entry is real; the rest are fabricated, misread, or the wrong kind of thing",
+    "Mixed — roughly half the entries are real and correctly scoped",
+    "Mostly right — nearly all entries are real and correctly scoped, minor gaps or one weak entry",
+    "Fully right — every entry is real, correctly scoped, and nothing obvious is missing",
+  ];
+
+  const questions: FieldQuestionMap = {};
+  for (const { factKey } of candidates) {
+    questions[`${factKey}Verification`] = {
+      type: "score",
+      instructions:
+        factKey === "seedPanelPrompts"
+          ? "Score how well the proposed prompts match what a real prospective customer of THIS business would ask an AI engine (ChatGPT/Claude/Perplexity) about it, judged against the site copy."
+          : `Score how accurately the proposed ${factKey} list reflects what the site copy names or clearly implies. Entries must be real, correctly scoped, and the kind of thing a prospective customer would actually weigh against this business.`,
+      criteria: VERIFICATION_LEVELS,
+    };
+  }
+
+  const result = await askJev({ state, questions });
+
+  const verified: string[] = [];
+  for (const { factKey, list } of candidates) {
+    const answer = result.answers[`${factKey}Verification`];
+    if (!answer || answer.type !== "score") continue;
+
+    // Quality (rubric level 0-1) x peakedness (distribution certainty)
+    const quality = answer.score / (VERIFICATION_LEVELS.length - 1);
+    const combined = quality * answer.confidence;
+
+    await upsertClientFact(engagementId, factKey, list, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: Math.round(combined * 100),
+      evidence: `Prefill-extracted list scored ${answer.score.toFixed(2)}/${VERIFICATION_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`,
+    });
+    verified.push(factKey);
+  }
+  return { verified, skipped: false };
+}

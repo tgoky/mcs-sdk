@@ -7,9 +7,17 @@ import { fetchWithTimeout } from "@/lib/http";
  * Pin-Down recovery gap 1 — smart pre-fill.
  *
  * Crawls the buyer's site, detects their booking platform, checks for an
- * existing confirmation page, and uses Claude to suggest values for the
- * fields that follow.
+ * existing confirmation page, extracts reputation intelligence (competitors,
+ * entities, seed prompts, social handles, review metrics), and uses Claude
+ * to suggest values for the fields that follow.
  */
+
+export interface HarvestedReviewBaseline {
+  platform: "trustpilot" | "google" | "g2";
+  rating?: number;
+  reviewCount?: number;
+  label?: string;
+}
 
 export interface DiscoveryPrefillResult {
   domain: string;
@@ -17,6 +25,16 @@ export interface DiscoveryPrefillResult {
   suggestedBuyerName?: string;
   suggestedOfferName?: string;
   suggestedIcp?: string;
+  /** Direct category rivals or alternative platforms named or implied in site copy. */
+  suggestedCompetitors?: string[];
+  /** Sub-brands, proprietary product/tier names, or featured publications. */
+  suggestedEntities?: string[];
+  /** 5 to 8 starting questions prospective customers would ask an AI engine. */
+  suggestedSeedPrompts?: string[];
+  /** Official social handles and review profile links extracted from HTML/schema. */
+  suggestedHandles?: Record<string, string>;
+  /** Harvested review baseline metrics (Trustpilot, etc.). */
+  suggestedReviewBaseline?: HarvestedReviewBaseline;
   scrapedCorpus?: string;
   existingConfirmationPageUrl?: string;
   detectedBookingPlatform?: string;
@@ -56,12 +74,6 @@ const BOOKING_PLATFORM_SIGNATURES: Array<{ platform: string; pattern: RegExp }> 
   { platform: "oncehub", pattern: /oncehub\.com/i },
 ];
 
-// Checked in order — Webflow and WordPress sites can both incidentally
-// reference "/wp-content/"-style third-party embeds, but neither ever
-// carries the OTHER platform's own generator meta tag or asset host, so
-// the specific signatures (checked first) never false-positive against
-// each other; only the broad wp-content/wp-includes fallback needs the
-// ordering.
 const HOSTING_PLATFORM_SIGNATURES: Array<{ platform: string; pattern: RegExp }> = [
   { platform: "webflow", pattern: /(<meta[^>]+name=["']generator["'][^>]+content=["']Webflow["']|assets-global\.website-files\.com|data-wf-(?:site|page)=)/i },
   { platform: "wordpress", pattern: /(<meta[^>]+name=["']generator["'][^>]+content=["']WordPress|\/wp-content\/|\/wp-includes\/)/i },
@@ -77,11 +89,6 @@ function normalizeDomain(domain: string): string {
   return d;
 }
 
-/**
- * Minimal HTML strip — used ONLY as a last-resort fallback when
- * scrapeVoiceCorpus returns nothing and we're forced to analyze the raw
- * homepage HTML. Not a substitute for voice-scraper's Firecrawl pipeline.
- */
 function stripHtmlForFallback(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -94,17 +101,6 @@ function stripHtmlForFallback(html: string): string {
     .trim();
 }
 
-/**
- * Direct fetch for structural analysis only:
- * - Booking platform detection (needs raw HTML to find script/iframe embeds)
- * - Confirmation page existence check (needs raw HTML to check length)
- *
- * This is NOT the text extraction path — that goes through voice-scraper.ts
- * which uses Firecrawl first. This runs in parallel with voice-scraper.
- *
- * Kept at a short timeout because booking platform detection is non-critical
- * (user can select manually) and CF-protected sites will just 403.
- */
 async function fetchRaw(url: string, timeoutMs = 4000): Promise<string | null> {
   try {
     const controller = new AbortController();
@@ -151,46 +147,140 @@ function detectHostingPlatform(homepageHtml: string | null): string | undefined 
   return undefined;
 }
 
+// ── Deep Harvester Helper 1: JSON-LD & Footer Schema Handle Parser ─────────
+
+function parseAndAssignHandle(urlStr: string, handles: Record<string, string>) {
+  try {
+    const url = new URL(urlStr);
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.replace(/\/+$/, "");
+
+    if ((host.includes("twitter.com") || host.includes("x.com")) && path && !handles.twitter) {
+      const handle = path.split("/")[1];
+      if (handle && !["intent", "share", "home", "search"].includes(handle.toLowerCase())) {
+        handles.twitter = `@${handle}`;
+      }
+    } else if (host.includes("linkedin.com") && path && !handles.linkedin) {
+      handles.linkedin = `https://${host}${path}`;
+    } else if (host.includes("trustpilot.com") && path.includes("/review/") && !handles.trustpilot) {
+      handles.trustpilot = `https://${host}${path}`;
+    } else if (host.includes("g2.com") && path.includes("/products/") && !handles.g2) {
+      handles.g2 = `https://${host}${path}`;
+    } else if (host.includes("capterra.com") && !handles.capterra) {
+      handles.capterra = `https://${host}${path}`;
+    } else if (host.includes("youtube.com") && path && !handles.youtube) {
+      handles.youtube = `https://${host}${path}`;
+    }
+  } catch {
+    // Ignore invalid URLs
+  }
+}
+
+export function extractSocialAndReviewHandles(
+  html: string | null,
+  siteDomain: string
+): Record<string, string> {
+  if (!html) return {};
+  const handles: Record<string, string> = {};
+
+  // 1. JSON-LD sameAs Parsing
+  const jsonLdMatches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  for (const match of jsonLdMatches) {
+    try {
+      const data = JSON.parse(match[1]);
+      const sameAsList: string[] = Array.isArray(data.sameAs)
+        ? data.sameAs
+        : Array.isArray(data?.organization?.sameAs)
+        ? data.organization.sameAs
+        : typeof data.sameAs === "string"
+        ? [data.sameAs]
+        : [];
+
+      for (const url of sameAsList) {
+        parseAndAssignHandle(url, handles);
+      }
+    } catch {
+      // Ignore unparseable JSON-LD blocks
+    }
+  }
+
+  // 2. Fallback: Parse <a> tags in footer / homepage HTML
+  const hrefMatches = html.matchAll(/href=["'](https?:\/\/[^"']+)["']/gi);
+  for (const match of hrefMatches) {
+    parseAndAssignHandle(match[1], handles);
+  }
+
+  return handles;
+}
+
+// ── Deep Harvester Helper 2: Trustpilot Review Baseline Scraper ─────────────
+
+export async function fetchTrustpilotBaseline(domain: string): Promise<HarvestedReviewBaseline | null> {
+  const cleanDomain = domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  const url = `https://www.trustpilot.com/review/${cleanDomain}`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const res = await fetchWithTimeout(url, {
+      headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html" },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    const ratingMatch = html.match(/["']ratingValue["']:\s*["']?([\d.]+)/i) || html.match(/trustscore\s*([\d.]+)/i);
+    const countMatch = html.match(/["']reviewCount["']:\s*["']?(\d+)/i) || html.match(/([\d,]+)\s*reviews/i);
+
+    if (ratingMatch?.[1]) {
+      const rating = parseFloat(ratingMatch[1]);
+      const reviewCount = countMatch?.[1] ? parseInt(countMatch[1].replace(/,/g, ""), 10) : undefined;
+      return {
+        platform: "trustpilot",
+        rating,
+        reviewCount,
+        label: rating >= 4.5 ? "Excellent" : rating >= 4.0 ? "Great" : "Average",
+      };
+    }
+  } catch {
+    // Graceful degradation on timeout/block
+  }
+  return null;
+}
+
 /**
  * Runs the smart pre-fill pass.
- *
- * Execution model:
- *   fetchRaw (structural) ──┐
- *   scrapeVoiceCorpus ──────┼── Promise.all (parallel)
- *   detectConfirmationPage ─┘
- *                              │
- *                      Claude inference
- *                              │
- *                      Return suggestions
  */
 export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPrefillResult> {
   const base = normalizeDomain(domain);
   const notes: string[] = [];
 
-  const [homepageHtml, { corpus, sources }, existingConfirmationPageUrl, designSignal] = await Promise.all([
+  const [
+    homepageHtml,
+    { corpus, sources },
+    existingConfirmationPageUrl,
+    designSignal,
+    reviewBaseline,
+  ] = await Promise.all([
     fetchRaw(base),
     scrapeVoiceCorpus(domain),
     detectExistingConfirmationPage(base),
     scrapeDesignSignal(domain).catch(() => null),
+    fetchTrustpilotBaseline(base).catch(() => null),
   ]);
 
   const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
   const detectedHostingPlatform = detectHostingPlatform(homepageHtml);
+  const suggestedHandles = extractSocialAndReviewHandles(homepageHtml, base);
 
-  // ── Decide what text to send Claude ──
-  //
-  // Priority 1: Voice corpus from Firecrawl pipeline (clean Markdown)
-  // Priority 2: Stripped homepage HTML (noisy, last resort)
-  // Abort: If neither has enough text
   let textToAnalyze = "";
   let usedFallback = false;
 
   if (corpus && corpus.trim().length > 50) {
     textToAnalyze = corpus;
   } else if (homepageHtml) {
-    // BUG FIX: Old code passed raw HTML to Claude here.
-    // Now we strip it first. Still noisy, but at least Claude sees
-    // words instead of <div class="..."> tags.
     textToAnalyze = stripHtmlForFallback(homepageHtml);
     usedFallback = true;
   }
@@ -200,6 +290,8 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
     return {
       domain: base,
       crawledAt: new Date().toISOString(),
+      suggestedHandles: Object.keys(suggestedHandles).length > 0 ? suggestedHandles : undefined,
+      suggestedReviewBaseline: reviewBaseline ?? undefined,
       scrapedCorpus: corpus || undefined,
       existingConfirmationPageUrl,
       detectedBookingPlatform,
@@ -216,19 +308,25 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   let suggestedBuyerName: string | undefined;
   let suggestedOfferName: string | undefined;
   let suggestedIcp: string | undefined;
+  let suggestedCompetitors: string[] | undefined;
+  let suggestedEntities: string[] | undefined;
+  let suggestedSeedPrompts: string[] | undefined;
 
   try {
     const result = await callClaudeWithRetry({
       model: MODEL.FAST,
-      system: `You infer basic business facts from marketing site text. Given the
-text below, return ONLY a JSON object:
-{ "buyer_name": "the company or personal brand name, or null if unclear",
+      system: `You infer basic business facts and reputation intelligence from marketing site text. Given the text below, return ONLY a JSON object:
+{
+  "buyer_name": "the company or personal brand name, or null if unclear",
   "offer_name": "the primary product/service/offer name being sold, or null if unclear",
-  "icp": "one sentence describing who this is for (their ideal customer), or null if unclear" }
-Return nothing but the JSON object. No preamble, no markdown fences. If you
-aren't reasonably confident, use null rather than guessing.`,
+  "icp": "one sentence describing who this is for (their ideal customer), or null if unclear",
+  "competitors": ["2 to 4 direct category competitors or alternative solutions named or implied in the text, or [] if none"],
+  "entities": ["sub-brands, proprietary product/tier names, or featured publications, or [] if none"],
+  "seed_prompts": ["5 to 8 starting questions prospective customers would ask an AI engine (ChatGPT/Claude/Perplexity) about this business, or [] if none"]
+}
+Return nothing but the JSON object. No preamble, no markdown fences. If you aren't reasonably confident, use null or [] rather than guessing.`,
       userMessage: textToAnalyze.slice(0, 6000),
-      maxTokens: 400,
+      maxTokens: 750,
     });
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
@@ -260,6 +358,29 @@ aren't reasonably confident, use null rather than guessing.`,
         parsed.who_is_the_ideal_customer ??
         parsed.target_audience ??
         undefined;
+
+      if (Array.isArray(parsed.competitors)) {
+        const list = parsed.competitors
+          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((item: string) => item.trim());
+        if (list.length > 0) suggestedCompetitors = list;
+      }
+
+      if (Array.isArray(parsed.entities)) {
+        const list = parsed.entities
+          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((item: string) => item.trim());
+        if (list.length > 0) suggestedEntities = list;
+      }
+
+      const rawPrompts = parsed.seed_prompts ?? parsed.seedPrompts;
+      if (Array.isArray(rawPrompts)) {
+        const list = rawPrompts
+          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((item: string) => item.trim())
+          .slice(0, 8);
+        if (list.length > 0) suggestedSeedPrompts = list;
+      }
     }
   } catch (e: any) {
     notes.push(`Couldn't infer buyer/offer details from the crawl: ${e.message}`);
@@ -286,6 +407,11 @@ aren't reasonably confident, use null rather than guessing.`,
     suggestedBuyerName,
     suggestedOfferName,
     suggestedIcp,
+    suggestedCompetitors,
+    suggestedEntities,
+    suggestedSeedPrompts,
+    suggestedHandles: Object.keys(suggestedHandles).length > 0 ? suggestedHandles : undefined,
+    suggestedReviewBaseline: reviewBaseline ?? undefined,
     scrapedCorpus: corpus,
     existingConfirmationPageUrl,
     detectedBookingPlatform,
@@ -337,10 +463,6 @@ export async function auditExistingConfirmationPage(
 
   const text = stripHtmlForAudit(html);
 
-  // Competitor comparison is genuinely optional and best-effort — a
-  // failed/empty competitor fetch degrades to no comparison section
-  // rather than failing the whole audit, same as this function's own
-  // existing "couldn't fetch" fallback above does for the primary URL.
   const competitorHtml = competitorUrl ? await fetchRaw(competitorUrl, 8000) : null;
   const competitorText = competitorHtml ? stripHtmlForAudit(competitorHtml) : null;
 
@@ -358,7 +480,7 @@ Page content (text-extracted):
  ${text}
 ${
   competitorText
-    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted) — compare against it specifically, calling out what it does that this page doesn't and vice versa:\n ${competitorText}\n`
+    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted) — compare against it specifically, calling out what it does that this page doesn't and vice versa:\n${competitorText}\n`
     : ""
 }
 

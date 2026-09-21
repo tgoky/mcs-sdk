@@ -10,6 +10,7 @@ import { saveRepIdentityGraphIntake, type RepIntakeInput } from "@/features/repu
 import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
 import type { RepEngineId } from "@/models/schema";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -18,9 +19,7 @@ export const revalidate = 0;
  * rep-onboarding's own hinges — mirrors bridges/pin-down/route.ts's shape
  * exactly (GET to prefill, POST to save + enable + dispatch), adapted for
  * Reputation Manager's identity-graph fields instead of Pin-Down's brand-
- * voice/confirmation-page ones. Unlike Pin-Down, there's no credential
- * storage happening here — dispatchSkillRun is called with no
- * completedSteps for that reason (see that function's own comment).
+ * voice/confirmation-page ones.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -46,13 +45,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
+  // Promote any trusted, high-confidence client_facts suggestions (competitors,
+  // entities, seedPanelPrompts) into repIdentityGraphs before querying
+  await applyResolvableFacts(id).catch((err) =>
+    console.error(`[bridges/rep-onboarding] GET applyResolvableFacts failed for ${id}:`, err)
+  );
+
   const [graph] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, id)).limit(1);
   const enabled = await isSkillEnabledForEngagement(id, "rep-onboarding");
-  // operatorDomains was registry-flagged "derivable" from primaryDomain
-  // with the resolver already existing but zero real callers (see
-  // client-profile.ts's own audit note on resolveClientProfileFact) —
-  // this is that first caller, same InferredFieldBadge treatment as
-  // Pin-Down's buyerDomain and Cold Open's productUrl already have.
   const primaryDomain = await getPrimaryDomainForEngagement(id);
 
   return NextResponse.json({
@@ -114,6 +114,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
 
+    // Promote trusted suggestions into database columns before processing submitted intake
+    await applyResolvableFacts(id).catch((err) =>
+      console.error(`[bridges/rep-onboarding] POST applyResolvableFacts failed for ${id}:`, err)
+    );
+
     const input: RepIntakeInput = {
       operatorName: typeof body.operatorName === "string" ? body.operatorName : "",
       operatorAliases: Array.isArray(body.operatorAliases) ? body.operatorAliases : [],
@@ -129,36 +134,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       soleAuthorityName: typeof body.soleAuthorityName === "string" ? body.soleAuthorityName : "",
       crisisThresholdOverride:
         typeof body.crisisThresholdOverride === "number" ? body.crisisThresholdOverride : null,
-      // null (anything other than a real array, including "not sent at
-      // all") means no restriction — matches toIntakePayload's own
-      // null-means-all-engines convention on the form side.
       activeEngines: Array.isArray(body.activeEngines)
         ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
         : null,
       operatorPagePhone: typeof body.operatorPagePhone === "string" ? body.operatorPagePhone : null,
     };
 
-    // saveRepIdentityGraphIntake owns every actual validation rule (see
-    // that function) — this route's job is auth/ownership + coercing the
-    // untyped JSON body into RepIntakeInput's shape, not re-implementing
-    // field-level checks that already live in one place.
     const result = await saveRepIdentityGraphIntake(id, input);
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
     await setSkillEnabledForEngagement(id, "rep-onboarding", true);
-    // Same cross-product domain seed as bridges/pin-down and
-    // bridges/icp-lock — only the first domain (the operator's own,
-    // canonical one) feeds the shared column; the rest of the list can be
-    // aliases/regional sites this session has no basis to treat as THE
-    // client domain. Fire-and-forget, never worth failing this save over.
+
     if (input.operatorDomains[0]) {
-      seedPrimaryDomainFromUrl(id, input.operatorDomains[0]).catch((err) => console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err));
+      seedPrimaryDomainFromUrl(id, input.operatorDomains[0]).catch((err) =>
+        console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err)
+      );
     }
-    // No completedSteps: unlike Pin-Down, nothing credential-related
-    // happens before this dispatch — the identity graph itself IS the
-    // setup, not a prerequisite to it.
+
     const runId = await dispatchSkillRun(id, "rep-onboarding", engagementRow.buyer);
 
     return NextResponse.json({ ok: true, runId });
