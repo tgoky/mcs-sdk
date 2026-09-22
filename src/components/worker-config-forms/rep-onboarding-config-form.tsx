@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
+import { AnySkillBadge } from "@/components/any-skill-badge";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 export interface RepOnboardingFormProps {
@@ -547,7 +548,7 @@ export function RepOnboardingConfigForm({
           </div>
         </div>
 
-        {/* Reputation Sub-Skill Automations Grid (uses anySkillDisplayName) */}
+        {/* Reputation Sub-Skill Automations Grid (Uses AnySkillBadge) */}
         <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
@@ -556,17 +557,14 @@ export function RepOnboardingConfigForm({
             <span className="text-[10px] text-zinc-400 font-mono">6/6 Active</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
             {REP_AUTOMATION_SKILLS.map((skill) => (
               <div
                 key={skill.id}
                 className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
               >
-                <div className="flex items-center gap-2 truncate">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
+                <div className="flex items-center gap-2.5 truncate">
+                  <AnySkillBadge skill={skill.id} size={22} />
                   <span className="font-medium text-zinc-200 truncate">
                     {anySkillDisplayName(skill.id)}
                   </span>
@@ -610,7 +608,9 @@ export function RepOnboardingConfigForm({
             <div className="space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                <h3 className="text-xs font-semibold text-zinc-200">1. Crisis Response Approval Authority</h3>
+                <h3 className="text-xs font-semibold text-zinc-200">
+                  1. {anySkillDisplayName("rep-crisis-response")} Approval Authority
+                </h3>
               </div>
               <p className="text-xs text-zinc-400">
                 If an AI engine or review platform flags a critical complaint about your pricing or service, who approves public response drafts before they go live?
@@ -683,7 +683,9 @@ export function RepOnboardingConfigForm({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bot className="h-4 w-4 text-blue-400" />
-                  <h3 className="text-xs font-semibold text-zinc-200">3. AI Engine Watch Panel</h3>
+                  <h3 className="text-xs font-semibold text-zinc-200">
+                    3. {anySkillDisplayName("rep-engine-panel")}
+                  </h3>
                 </div>
                 <span className="text-[10px] text-zinc-400 font-mono">
                   {selectedEngines.length}/{ALL_ENGINES.length} Models Selected
