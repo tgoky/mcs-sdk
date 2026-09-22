@@ -18,7 +18,10 @@ import {
   Star,
   Link,
   Loader2,
+  Clock,
+  Zap,
 } from "lucide-react";
+import { anySkillDisplayName } from "@/lib/any-skill";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
 
 export interface RepOnboardingFormProps {
@@ -52,11 +55,20 @@ interface RepGraphData {
 }
 
 const ALL_ENGINES = [
-  { id: "chatgpt", label: "ChatGPT (OpenAI)", badge: "GPT-4o" },
-  { id: "claude", label: "Claude (Anthropic)", badge: "Claude 3.5 Sonnet" },
-  { id: "perplexity", label: "Perplexity AI", badge: "Sonar Deep" },
-  { id: "gemini", label: "Google Gemini", badge: "Gemini 1.5 Pro" },
-  { id: "grok", label: "Grok (xAI)", badge: "Grok 2" },
+  { id: "chatgpt", label: "ChatGPT", provider: "OpenAI", badge: "GPT-4o" },
+  { id: "claude", label: "Claude", provider: "Anthropic", badge: "Claude 3.5 Sonnet" },
+  { id: "perplexity", label: "Perplexity", provider: "Sonar", badge: "Sonar Deep" },
+  { id: "gemini", label: "Gemini", provider: "Google", badge: "Gemini 1.5 Pro" },
+  { id: "grok", label: "Grok", provider: "xAI", badge: "Grok 2" },
+];
+
+const REP_AUTOMATION_SKILLS = [
+  { id: "rep-engine-panel", cadence: "Daily Scan" },
+  { id: "rep-trustpilot-watch", cadence: "Daily Scan" },
+  { id: "rep-reddit-watch", cadence: "Daily Scan" },
+  { id: "rep-twitter-watch", cadence: "Daily Scan" },
+  { id: "rep-crisis-response", cadence: "Real-Time" },
+  { id: "rep-digest", cadence: "24h Digest" },
 ];
 
 export function RepOnboardingConfigForm({
@@ -187,7 +199,7 @@ export function RepOnboardingConfigForm({
   };
 
   const handleConnectIntegration = () => {
-    window.location.href = `/settings/integrations`;
+    window.location.href = `/dashboard/settings/apps`;
   };
 
   const handleAddCompetitor = () => {
@@ -280,25 +292,25 @@ export function RepOnboardingConfigForm({
   if (hasCompetitors) coverageScore += 20;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 py-4 text-foreground">
-      {/* Dossier Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <div className="w-full space-y-6 text-zinc-100">
+      {/* Uncarded Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/80">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            <h1 className="text-base font-semibold tracking-tight">
+            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+            <h1 className="text-xl font-bold tracking-tight text-zinc-100">
               Reputation Manager Dossier
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Identity profile for <span className="font-medium text-foreground">{operatorName || buyer}</span>.
+          <p className="text-xs text-zinc-400">
+            Identity profile for <span className="font-medium text-zinc-200">{operatorName || buyer}</span>
           </p>
         </div>
 
         <button
           onClick={handleArmAndSave}
           disabled={saving}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 cursor-pointer shrink-0"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
         >
           {saving ? (
             <>
@@ -315,47 +327,47 @@ export function RepOnboardingConfigForm({
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
-      {/* Data Sources & Enrichment Section */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Data Sources & Radar Coverage Card (Settings/Apps styling) */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Data Sources & Intelligence Radar
           </div>
           <div className="flex items-center gap-1.5 text-xs font-medium">
-            <span className="text-muted-foreground">Coverage:</span>
+            <span className="text-zinc-400">Radar Coverage:</span>
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${
                 coverageScore >= 80
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                   : coverageScore >= 50
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                  : "bg-red-500/10 text-red-400 border-red-500/30"
               }`}
             >
-              {coverageScore}% {coverageScore < 70 ? "(Action Recommended)" : "(Ready)"}
+              {coverageScore}% {coverageScore < 70 ? "(Action Recommended)" : "(High Radar)"}
             </span>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Crawl your domain or connect your CRM to populate daily review scans and rival comparison queries.
+        <p className="text-xs text-zinc-400">
+          Crawl your website domain or connect your CRM integration to populate automated review monitoring and AI rival comparisons.
         </p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {/* Option 1: Domain Crawl */}
+          {/* Domain Crawl Input */}
           <div className="flex items-center gap-2">
             <input
               type="url"
               value={inputDomain}
               onChange={(e) => setInputDomain(e.target.value)}
               placeholder="https://company.com"
-              className="flex-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
             <button
               type="button"
@@ -368,15 +380,15 @@ export function RepOnboardingConfigForm({
             </button>
           </div>
 
-          {/* Option 2: CRM Integration Connect */}
-          <div className="flex items-center justify-between rounded-lg border border-input bg-background px-3 py-1.5">
-            <span className="text-xs text-muted-foreground truncate">
+          {/* CRM Connection Link */}
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+            <span className="text-xs text-zinc-400 truncate">
               {graphData?.operatorHandles?.ghl ? "GoHighLevel Connected" : "GoHighLevel / HubSpot / Klaviyo"}
             </span>
             <button
               type="button"
               onClick={handleConnectIntegration}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:underline dark:text-emerald-400 cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:underline cursor-pointer shrink-0"
             >
               <Link className="h-3.5 w-3.5" />
               {graphData?.operatorHandles?.ghl ? "Manage" : "+ Connect"}
@@ -385,31 +397,31 @@ export function RepOnboardingConfigForm({
         </div>
       </div>
 
-      {/* Auto-Discovered Profile & Smart Gap Nudges */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-5 shadow-sm">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-3">
+      {/* Auto-Discovered Profile & Smart Gap Nudges (Settings/Apps styling) */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-5 shadow-sm">
+        <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 border-b border-zinc-800/80 pb-3">
           Auto-Discovered Identity Profile
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {/* Brand & Monitored Domain */}
-          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3.5">
-            <div className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5 text-blue-500" /> Monitored Entity & Domain
+          <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+            <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-blue-400" /> Monitored Entity & Domain
             </div>
             <div>
-              <div className="text-sm font-semibold text-foreground">{operatorName || buyer}</div>
+              <div className="text-sm font-semibold text-zinc-100">{operatorName || buyer}</div>
               {primaryDomain || inputDomain ? (
                 <a
                   href={`https://${(primaryDomain || inputDomain).replace(/^https?:\/\//i, "")}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+                  className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:underline"
                 >
                   {primaryDomain || inputDomain} <ExternalLink className="h-3 w-3" />
                 </a>
               ) : (
-                <span className="text-xs text-amber-600 dark:text-amber-400">
+                <span className="text-xs text-amber-400">
                   ⚠️ No domain crawled yet
                 </span>
               )}
@@ -417,14 +429,14 @@ export function RepOnboardingConfigForm({
           </div>
 
           {/* Official Handles & Reviews */}
-          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3.5">
-            <div className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+          <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+            <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-indigo-500" /> Handles & Reviews
+                <Users className="h-3.5 w-3.5 text-indigo-400" /> Handles & Reviews
               </span>
               {reviewBaseline && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                   {reviewBaseline.rating ?? "4.8"} ({reviewBaseline.reviewCount ? reviewBaseline.reviewCount.toLocaleString() : "1k+"})
                 </span>
               )}
@@ -435,22 +447,22 @@ export function RepOnboardingConfigForm({
                 {handlesList.map(([platform, handle]) => (
                   <span
                     key={platform}
-                    className="inline-flex items-center gap-1 rounded bg-background border border-border px-2 py-0.5 text-xs text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-xs text-zinc-200 font-medium"
                   >
-                    <span className="capitalize text-muted-foreground">{platform}:</span> {handle}
+                    <span className="capitalize text-zinc-400">{platform}:</span> {handle}
                   </span>
                 ))}
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-amber-400">
                   ⚠️ No Trustpilot or social handles detected
                 </p>
                 {!showAddHandle ? (
                   <button
                     type="button"
                     onClick={() => setShowAddHandle(true)}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:underline cursor-pointer"
                   >
                     <Plus className="h-3 w-3" /> Add Review URL / Handle
                   </button>
@@ -459,7 +471,7 @@ export function RepOnboardingConfigForm({
                     <select
                       value={handlePlatform}
                       onChange={(e) => setHandlePlatform(e.target.value)}
-                      className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                      className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                     >
                       <option value="trustpilot">Trustpilot</option>
                       <option value="x">X / Twitter</option>
@@ -470,12 +482,12 @@ export function RepOnboardingConfigForm({
                       value={handleValue}
                       onChange={(e) => setHandleValue(e.target.value)}
                       placeholder="e.g. marvoroofing"
-                      className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                      className="flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                     />
                     <button
                       type="button"
                       onClick={handleAddInlineHandle}
-                      className="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-500 cursor-pointer"
+                      className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500 cursor-pointer"
                     >
                       Save
                     </button>
@@ -486,9 +498,9 @@ export function RepOnboardingConfigForm({
           </div>
 
           {/* Monitored Competitors */}
-          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3.5">
-            <div className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-              <Search className="h-3.5 w-3.5 text-amber-500" /> Monitored Competitors ({competitorList.length})
+          <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+            <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center gap-1.5">
+              <Search className="h-3.5 w-3.5 text-amber-400" /> Monitored Competitors ({competitorList.length})
             </div>
 
             {competitorList.length > 0 ? (
@@ -496,107 +508,115 @@ export function RepOnboardingConfigForm({
                 {competitorList.map((comp) => (
                   <span
                     key={comp}
-                    className="inline-flex items-center gap-1 rounded bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400"
                   >
                     {comp}
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-amber-400">
                 ⚠️ 0 Rivals Extracted — Add rivals below in Scenario Tuning
               </p>
             )}
           </div>
 
           {/* Disambiguation & Entities */}
-          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3.5">
-            <div className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Disambiguation & Prompts
+          <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+            <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Disambiguation & Prompts
             </div>
-            <div className="space-y-1 text-xs text-foreground">
+            <div className="space-y-1 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Same-Name Collisions:</span>
-                <span className={`font-medium ${collisionsCount === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                <span className="text-zinc-400">Same-Name Collisions:</span>
+                <span className={`font-medium ${collisionsCount === 0 ? "text-emerald-400" : "text-amber-400"}`}>
                   {collisionsCount === 0 ? "0 Flagged (Clear)" : `${collisionsCount} Collisions Detected`}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Sub-Brands & Entities:</span>
-                <span className="font-medium text-foreground">
+                <span className="text-zinc-400">Sub-Brands & Entities:</span>
+                <span className="font-medium text-zinc-200">
                   {entitiesCount > 0 ? `${entitiesCount} Discovered` : "None Flagged"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">AI Seed Prompts:</span>
+                <span className="text-zinc-400">AI Seed Prompts:</span>
                 <span className="font-medium">{seedPromptsCount > 0 ? `${seedPromptsCount} Prompts Ready` : "5 Standard Prompts"}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Automations Checklist */}
-        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-            Automations Armed Upon Save
+        {/* Reputation Sub-Skill Automations Grid (uses anySkillDisplayName) */}
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-emerald-400" /> Sub-Skill Automations Armed Upon Save
+            </span>
+            <span className="text-[10px] text-zinc-400 font-mono">6/6 Active</span>
           </div>
-          <div className="grid grid-cols-1 gap-1.5 text-xs text-foreground sm:grid-cols-2">
-            <div className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>AI Engine Watch ({selectedEngines.length} Models Daily)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>Daily Review & Social Scans (Trustpilot, X, Reddit)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>Automated Crisis Paging Floor ({crisisThreshold}/100)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>Executive Sentiment & Brand Summary Digest</span>
-            </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+            {REP_AUTOMATION_SKILLS.map((skill) => (
+              <div
+                key={skill.id}
+                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="font-medium text-zinc-200 truncate">
+                    {anySkillDisplayName(skill.id)}
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 shrink-0">
+                  <Clock className="h-2.5 w-2.5" />
+                  {skill.cadence}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Scenario-Based Tuning Collapsible */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
         <button
           type="button"
           onClick={() => setShowCustomizer(!showCustomizer)}
-          className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/30 transition cursor-pointer"
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/30 transition cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-indigo-500" />
+            <SlidersHorizontal className="h-4 w-4 text-indigo-400" />
             <div>
-              <div className="text-xs font-semibold">Customize Setup / Scenario Tuning</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-xs font-semibold text-zinc-200">Customize Setup / Scenario Tuning</div>
+              <div className="text-[11px] text-zinc-400">
                 Tweak response authorities, rival watchlists, and active AI engine panels.
               </div>
             </div>
           </div>
           {showCustomizer ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-zinc-400" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-zinc-400" />
           )}
         </button>
 
         {showCustomizer && (
-          <div className="border-t border-border p-5 space-y-5 bg-muted/10">
+          <div className="border-t border-zinc-800 p-5 space-y-5 bg-zinc-950/40">
             {/* Scenario Card 1: Response Approval Authority */}
-            <div className="space-y-2.5 rounded-lg border border-border bg-card p-4">
+            <div className="space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                <h3 className="text-xs font-semibold">1. Crisis Response Approval Authority</h3>
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-xs font-semibold text-zinc-200">1. Crisis Response Approval Authority</h3>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-400">
                 If an AI engine or review platform flags a critical complaint about your pricing or service, who approves public response drafts before they go live?
               </p>
               <div className="pt-1">
-                <label className="block text-[11px] font-medium text-foreground mb-1">
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">
                   Sole Response Authority Name
                 </label>
                 <input
@@ -604,18 +624,18 @@ export function RepOnboardingConfigForm({
                   value={soleAuthority}
                   onChange={(e) => setSoleAuthority(e.target.value)}
                   placeholder="e.g. Sarah Jenkins (Co-Founder)"
-                  className="w-full max-w-sm rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
             </div>
 
             {/* Scenario Card 2: Competitor Watchlist */}
-            <div className="space-y-2.5 rounded-lg border border-border bg-card p-4">
+            <div className="space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
               <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-amber-500" />
-                <h3 className="text-xs font-semibold">2. Competitor Radar & Rival Brands</h3>
+                <Search className="h-4 w-4 text-amber-400" />
+                <h3 className="text-xs font-semibold text-zinc-200">2. Competitor Radar & Rival Brands</h3>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-400">
                 Which specific direct rivals do you hate losing deals to? We will track AI queries comparing your brand against them.
               </p>
 
@@ -626,12 +646,12 @@ export function RepOnboardingConfigForm({
                   onChange={(e) => setNewCompetitor(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddCompetitor())}
                   placeholder="Add competitor name (e.g. Apex Contracting)"
-                  className="flex-1 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
                 <button
                   type="button"
                   onClick={handleAddCompetitor}
-                  className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add
                 </button>
@@ -642,13 +662,13 @@ export function RepOnboardingConfigForm({
                   {competitorList.map((comp) => (
                     <span
                       key={comp}
-                      className="inline-flex items-center gap-1 rounded bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400"
                     >
                       {comp}
                       <button
                         type="button"
                         onClick={() => handleRemoveCompetitor(comp)}
-                        className="hover:text-red-500 transition cursor-pointer"
+                        className="hover:text-red-400 transition cursor-pointer"
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -659,16 +679,22 @@ export function RepOnboardingConfigForm({
             </div>
 
             {/* Scenario Card 3: AI Engine Panel Selection */}
-            <div className="space-y-2.5 rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-blue-500" />
-                <h3 className="text-xs font-semibold">3. AI Engine Watch Panel</h3>
+            <div className="space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-blue-400" />
+                  <h3 className="text-xs font-semibold text-zinc-200">3. AI Engine Watch Panel</h3>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-mono">
+                  {selectedEngines.length}/{ALL_ENGINES.length} Models Selected
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-400">
                 Select which AI models should be queried daily with your brand&apos;s seed prompts.
               </p>
 
-              <div className="grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-2">
+              {/* Squishy Pill Badges for Engine Selection */}
+              <div className="flex flex-wrap gap-2 pt-1">
                 {ALL_ENGINES.map((engine) => {
                   const isChecked = selectedEngines.includes(engine.id);
                   return (
@@ -676,25 +702,22 @@ export function RepOnboardingConfigForm({
                       key={engine.id}
                       type="button"
                       onClick={() => toggleEngine(engine.id)}
-                      className={`flex items-center justify-between rounded-lg border p-2.5 text-left transition cursor-pointer ${
+                      className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                         isChecked
-                          ? "border-emerald-500/50 bg-emerald-500/5 text-foreground"
-                          : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900"
                       }`}
                     >
-                      <div>
-                        <div className="text-xs font-semibold text-foreground">{engine.label}</div>
-                        <div className="text-[10px] text-muted-foreground">{engine.badge}</div>
-                      </div>
-                      <div
-                        className={`h-4 w-4 rounded border flex items-center justify-center transition ${
-                          isChecked
-                            ? "border-emerald-500 bg-emerald-500 text-white"
-                            : "border-border bg-background"
+                      <span
+                        className={`h-2 w-2 rounded-full transition-colors ${
+                          isChecked ? "bg-emerald-500" : "bg-zinc-600"
                         }`}
-                      >
-                        {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
-                      </div>
+                      />
+                      <span>{engine.label}</span>
+                      <span className="rounded bg-zinc-800 px-1.5 py-0.2 text-[10px] font-mono text-zinc-400">
+                        {engine.badge}
+                      </span>
+                      {isChecked && <Check className="h-3 w-3 text-emerald-400 stroke-[3]" />}
                     </button>
                   );
                 })}
@@ -709,7 +732,7 @@ export function RepOnboardingConfigForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-border bg-background px-4 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted cursor-pointer"
+          className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-900 cursor-pointer"
         >
           {cancelLabel}
         </button>
@@ -718,7 +741,7 @@ export function RepOnboardingConfigForm({
           type="button"
           onClick={handleArmAndSave}
           disabled={saving}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 cursor-pointer shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
         >
           {saving ? "Arming..." : "ARM REPUTATION MANAGER"}
         </button>
