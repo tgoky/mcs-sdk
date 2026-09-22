@@ -54,7 +54,6 @@ const maybeSeedDomainFromAccount = seedPrimaryDomainFromUrl;
 async function harvestCalendly(engagementId: string, apiKey: string): Promise<string[]> {
   const written: (string | null)[] = [];
 
-  // A. User Identity & Timezone
   const userRes = await fetchWithTimeout("https://api.calendly.com/users/me", {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
@@ -68,7 +67,6 @@ async function harvestCalendly(engagementId: string, apiKey: string): Promise<st
     written.push(await writeFact(engagementId, "bookingPlatform", "calendly", "calendly", "Connected via Calendly."));
     written.push(await writeFact(engagementId, "timezone", resource?.timezone, "calendly", "Calendly account timezone."));
 
-    // B. Booking Form Schema Probe (pre-call-read)
     if (userUri) {
       try {
         const eventsRes = await fetchWithTimeout(
@@ -111,7 +109,6 @@ async function harvestCalendly(engagementId: string, apiKey: string): Promise<st
 async function harvestHubSpot(engagementId: string, accessToken: string): Promise<string[]> {
   const written: (string | null)[] = [];
 
-  // A. Account Details & Portal ID
   const accountRes = await fetchWithTimeout("https://api.hubapi.com/account-info/v3/details", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -130,7 +127,6 @@ async function harvestHubSpot(engagementId: string, accessToken: string): Promis
     written.push(await writeFact(engagementId, "timezone", data.timeZone, "hubspot", "HubSpot account timezone."));
   }
 
-  // B. Pipeline Stage Auto-Dispositions (win-back & leak-map)
   try {
     const pipeRes = await fetchWithTimeout("https://api.hubapi.com/crm/v3/pipelines/deals", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -287,24 +283,106 @@ async function harvestSlack(engagementId: string, botToken: string): Promise<str
   return written.filter((k): k is string => k !== null);
 }
 
-// ── 7. WHOP AGENT HARVESTER ─────────────────────────────────────────────
+// ── 7. WHOP AGENT DEEP HARVESTER ────────────────────────────────────────
 async function harvestWhop(engagementId: string, apiKey: string): Promise<string[]> {
   const written: (string | null)[] = [];
-  const res = await fetchWithTimeout("https://api.whop.com/api/v2/me", {
+
+  // A. Primary Account & Company Identity
+  const meRes = await fetchWithTimeout("https://api.whop.com/api/v2/me", {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
-  if (res.ok) {
-    const data = (await res.json()) as { id?: string; username?: string; email?: string };
+  if (!meRes.ok) throw new Error(`Whop account verification failed [${meRes.status}]`);
+  
+  const meData = (await meRes.json()) as { id?: string; username?: string; email?: string; company_id?: string };
+  const whopAccount = {
+    id: meData.id,
+    username: meData.username,
+    email: meData.email,
+    companyId: meData.company_id,
+  };
+
+  written.push(
+    await writeFact(
+      engagementId,
+      "whopAccount",
+      whopAccount,
+      "whop",
+      "Verified Whop Account Identity & Company ID."
+    )
+  );
+
+  if (meData.username) {
     written.push(
       await writeFact(
         engagementId,
-        "whopAccount",
-        { id: data.id, username: data.username },
+        "operatorName",
+        meData.username,
         "whop",
-        "Whop company account verified."
+        "Whop company username."
       )
     );
   }
+
+  // B. Product Catalog & Pricing Tiers Probe
+  try {
+    const productsRes = await fetchWithTimeout("https://api.whop.com/api/v2/products", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (productsRes.ok) {
+      const productsData = (await productsRes.json()) as {
+        data?: Array<{ id?: string; title?: string; visibility?: string }>;
+      };
+      if (Array.isArray(productsData.data) && productsData.data.length > 0) {
+        const productList = productsData.data.map((p) => ({
+          id: p.id,
+          title: p.title,
+          visibility: p.visibility,
+        }));
+        written.push(
+          await writeFact(
+            engagementId,
+            "whopProducts",
+            productList,
+            "whop",
+            `Harvested ${productList.length} Whop digital products.`
+          )
+        );
+      }
+    }
+  } catch {
+    // Non-critical probe failure
+  }
+
+  // C. Webhook Fleet Audit Probe
+  try {
+    const webhooksRes = await fetchWithTimeout("https://api.whop.com/api/v2/webhooks", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (webhooksRes.ok) {
+      const webhooksData = (await webhooksRes.json()) as {
+        data?: Array<{ id?: string; url?: string; status?: string }>;
+      };
+      if (Array.isArray(webhooksData.data)) {
+        const activeWebhooks = webhooksData.data.map((w) => ({
+          id: w.id,
+          url: w.url,
+          status: w.status,
+        }));
+        written.push(
+          await writeFact(
+            engagementId,
+            "whopWebhooks",
+            activeWebhooks,
+            "whop",
+            `Audited ${activeWebhooks.length} Whop webhook endpoints.`
+          )
+        );
+      }
+    }
+  } catch {
+    // Non-critical probe failure
+  }
+
   return written.filter((k): k is string => k !== null);
 }
 

@@ -5,6 +5,9 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { connectWhopAccount, markWhopDisconnected } from "@/features/whop-agent/server/connect-service";
+import { applyResolvableFacts } from "@/lib/field-writeback";
+import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -18,9 +21,7 @@ async function loadOwnedEngagement(engagementId: string, whopUserId: string, wor
   return row;
 }
 
-/** Connect state for the Whop Agent hinges panel — what's connected, what
- * unlocked, whether a pin is validated. Never returns the key itself
- * (credentials.ts has no "read back the plaintext" path at all). */
+/** Connect state for the Whop Agent hinges panel */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session?.whopUserId) {
@@ -33,6 +34,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!engagement) {
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
+
+  // Promote any trusted client_facts on load
+  await applyResolvableFacts(id).catch((err) =>
+    console.error(`[whop-connect] applyResolvableFacts error for ${id}:`, err)
+  );
 
   const [connection] = await db.select().from(whopAgentConnections).where(eq(whopAgentConnections.engagementId, id)).limit(1);
 
@@ -52,7 +58,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 }
 
-/** Runs the connect flow (Section 2.3-2.6) against a freshly-pasted key. */
+/** Runs the connect flow against a freshly-pasted key and auto-arms all 15 skills */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -75,6 +81,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!result.ok) {
       return NextResponse.json({ error: result.error, runId: result.runId, probe: result.probe }, { status: 422 });
     }
+
+    // Auto-arm all 15 Whop Agent workers simultaneously upon connecting
+    await Promise.all(
+      WHOP_AGENT_SKILL_IDS.map((skillId) => setSkillEnabledForEngagement(id, skillId, true))
+    );
+
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to connect Whop account.";
@@ -82,9 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-/** Section 2.7 disconnect — credential + connection-state teardown. Webhook
- * subscription teardown (agent-created only) runs separately in the
- * webhook subsystem, triggered from the same handler once it exists. */
+/** Section 2.7 disconnect */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();

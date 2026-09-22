@@ -5,6 +5,7 @@
 //   - Showtime (engagements.stack, engagements.offerDetails, engagements.castingChoice)
 //   - Reputation Manager (repIdentityGraphs.*)
 //   - Cold Open (coldOpenConfig.*)
+//   - Whop Agent (engagements.stack.whop_*)
 
 import { db } from "@/lib/db";
 import {
@@ -354,24 +355,6 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId));
     },
   },
-  reviewBaseline: {
-    isTrusted: isDirectlyTrusted,
-    apply: async (engagementId, value) => {
-      if (typeof value !== "object" || value === null) return;
-      const [row] = await db
-        .select({ reviewBaseline: repIdentityGraphs.reviewBaseline })
-        .from(repIdentityGraphs)
-        .where(eq(repIdentityGraphs.engagementId, engagementId))
-        .limit(1);
-
-      if (!row || row.reviewBaseline) return;
-
-      await db
-        .update(repIdentityGraphs)
-        .set({ reviewBaseline: value as Record<string, any>, updatedAt: new Date() })
-        .where(eq(repIdentityGraphs.engagementId, engagementId));
-    },
-  },
 
   // ── COLD OPEN CONFIG WRITEBACKS ───────────────────────────────────────
   sendPlatform: {
@@ -422,6 +405,30 @@ const WRITEBACKS: Record<string, WritebackDef> = {
           sourceDomain: val.sourceDomain ? String(val.sourceDomain) : undefined,
         },
       });
+    },
+  },
+
+  // ── WHOP AGENT WRITEBACKS ─────────────────────────────────────────────
+  whopSaveOffer: {
+    isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),
+    apply: async (engagementId, value) => {
+      if (typeof value !== "object" || value === null) return;
+      const val = value as Record<string, any>;
+      const stack = await loadStack(engagementId);
+      if (stack?.whop_save_offer_discount_percentage) return;
+      await mergeStack(engagementId, {
+        whop_save_offer_discount_percentage: Number(val.discountPercentage ?? val.percentage ?? 20),
+        whop_save_offer_duration_months: Number(val.durationMonths ?? val.duration ?? 3),
+        whop_save_offer_message: String(val.message || "Special discount to stay with us!"),
+      });
+    },
+  },
+  whopBridgeDestinationUrl: {
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      const stack = await loadStack(engagementId);
+      if (stack?.whop_bridge_destination_url) return;
+      await mergeStack(engagementId, { whop_bridge_destination_url: String(value) });
     },
   },
 };
