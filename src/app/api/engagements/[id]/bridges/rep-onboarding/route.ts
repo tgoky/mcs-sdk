@@ -46,6 +46,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
+  // Ensure default repIdentityGraphs record exists ONLY when Reputation Manager onboarding is accessed
+  await db
+    .insert(repIdentityGraphs)
+    .values({
+      engagementId: id,
+      operatorName: "",
+      soleAuthorityName: "",
+    })
+    .onConflictDoNothing();
+
   // Promote any trusted, high-confidence client_facts suggestions (competitors,
   // entities, seedPanelPrompts, operatorHandles, collisions) into repIdentityGraphs before querying
   await applyResolvableFacts(id).catch((err) =>
@@ -118,6 +128,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
+
+    // Ensure default repIdentityGraphs record exists before executing fact writebacks
+    await db
+      .insert(repIdentityGraphs)
+      .values({
+        engagementId: id,
+        operatorName: "",
+        soleAuthorityName: "",
+      })
+      .onConflictDoNothing();
 
     // Promote trusted suggestions into database columns before processing submitted intake
     await applyResolvableFacts(id).catch((err) =>

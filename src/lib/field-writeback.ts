@@ -169,7 +169,8 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (row?.operatorHandles && Object.keys(row.operatorHandles).length > 0) return;
+      if (!row) return;
+      if (row.operatorHandles && Object.keys(row.operatorHandles).length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -198,7 +199,8 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (row?.collisions && row.collisions.length > 0) return;
+      if (!row) return;
+      if (row.collisions && row.collisions.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -219,7 +221,8 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (row?.competitors && row.competitors.length > 0) return;
+      if (!row) return;
+      if (row.competitors && row.competitors.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -240,7 +243,8 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (row?.entities && row.entities.length > 0) return;
+      if (!row) return;
+      if (row.entities && row.entities.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -259,7 +263,8 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (row?.seedPanelPrompts && row.seedPanelPrompts.length > 0) return;
+      if (!row) return;
+      if (row.seedPanelPrompts && row.seedPanelPrompts.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -271,20 +276,9 @@ const WRITEBACKS: Record<string, WritebackDef> = {
 
 /**
  * Promotes every trusted, applicable client_facts suggestion into its
- * real column for this engagement. Auto-creates the base repIdentityGraphs
- * record if it does not exist yet so writebacks don't fail silently.
+ * real column for this engagement. Safe to run generically for any worker.
  */
 export async function applyResolvableFacts(engagementId: string): Promise<string[]> {
-  // Ensure default repIdentityGraphs record exists for reputation writebacks
-  await db
-    .insert(repIdentityGraphs)
-    .values({
-      engagementId,
-      operatorName: "",
-      soleAuthorityName: "",
-    })
-    .onConflictDoNothing();
-
   const facts = await getClientFacts(engagementId);
   const factList = Array.isArray(facts) ? facts : Object.values(facts);
   const applied: string[] = [];

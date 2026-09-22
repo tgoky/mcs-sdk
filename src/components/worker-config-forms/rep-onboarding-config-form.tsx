@@ -182,8 +182,8 @@ export function RepOnboardingConfigForm({
     }
   };
 
-  const handleConnectIntegration = () => {
-    window.location.href = `/engagements/${engagementId}/settings/integrations`;
+const handleConnectIntegration = () => {
+    window.location.href = `/settings/integrations`;
   };
 
   const handleAddCompetitor = () => {
