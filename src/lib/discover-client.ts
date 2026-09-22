@@ -30,7 +30,14 @@ export interface DiscoverClientResult {
  * Checks if another business with the exact same name exists on a different TLD / registry.
  */
 async function checkUpfrontCollisions(operatorName: string, siteDomain: string) {
-  const collisions: Array<{ name: string; domain?: string; source: "collision_check" }> = [];
+  const collisions: Array<{
+    name: string;
+    whoTheyAre: string;
+    disambiguationNote: string;
+    source: "collision_check";
+    domain?: string;
+  }> = [];
+
   const nameSlug = operatorName.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!nameSlug) return collisions;
 
@@ -47,9 +54,11 @@ async function checkUpfrontCollisions(operatorName: string, siteDomain: string) 
       clearTimeout(t);
       if (res.ok) {
         collisions.push({
-          name: `${operatorName} (${tld.toUpperCase()} Variant)`,
-          domain: testDomain,
+          name: `${operatorName} (${tld.toUpperCase().replace(".", "")} Variant)`,
+          whoTheyAre: `Active web host found at ${testDomain}`,
+          disambiguationNote: `Confirm if ${testDomain} belongs to ${operatorName} or an unrelated entity.`,
           source: "collision_check",
+          domain: testDomain,
         });
       }
     } catch {

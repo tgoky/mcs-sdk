@@ -1,47 +1,12 @@
 // src/lib/field-writeback.ts
 //
-// Phase 2, piece 1: the thing Phase 1's fact store couldn't do by itself.
-// A suggestion sitting in client_facts does NOT make a worker functional
-// — every worker's execute() reads engagements.stack/offerDetails/
-// castingChoice, repIdentityGraphs, or coldOpenConfig directly, never
-// client_facts. So "resolved" has to mean promoting a trusted suggestion
-// into the REAL column a worker actually reads, not just having a row in the
-// fact store. This module is that promotion step.
-//
-// Deliberately covers 10 of client_facts' possible keys — the ones this
-// system builds real resolvers for AND can state a clear, conservative
-// trust policy for:
-//   - bookingPlatform, hostingPlatform: trusted from "account" (a
-//     connected credential IS the platform, no inference) or "website"
-//     (this app's own pre-existing crawl-signature detection — regex
-//     matches on a booking iframe/script or a hosting generator meta tag
-//     — already used to pre-fill Pin-Down's own form, so it's held to
-//     that same standing confidence).
-//   - hubspotPortalId, smsA2p10dlcStatus, sendPlatform: trusted only from
-//     "account" — real account-API facts or a definitional "you connected
-//     it" signal, never a guess.
+// Phase 2, piece 1: the promotion step for trusted client_facts suggestions.
+// Promotes verified suggestions into the real database columns workers read:
+//   - bookingPlatform, hostingPlatform: trusted from "account" or "website"
+//   - hubspotPortalId, smsA2p10dlcStatus, sendPlatform: trusted from "account"
+//   - operatorHandles, collisions: trusted from "account", "website", or "user"
 //   - trafficTemperature, castingChoice, competitors, entities,
-//     seedPanelPrompts: trusted only from "jev" AND when combined rubric
-//     quality x peakedness score is >= 75 — these are scored extractions
-//     against crawled text, so they gate on verified confidence before
-//     auto-promoting.
-//
-// Deliberately EXCLUDED: operatorName, offerName, offerIcp. Two reasons,
-// not one. First, they're Claude's own guesses at crawled text
-// (discover-client.ts), not verified facts or scored judgments — lower
-// confidence than anything trusted above. Second, and more simply,
-// operatorName's real destination (engagements.buyer) is set at client
-// creation and is realistically never actually empty by the time any
-// checker would ask about it — there's no genuine "missing -> resolved"
-// transition to make here, only an "overwrite a human-given name with a
-// guess" one, which is a different and much riskier operation this
-// module doesn't attempt.
-//
-// Every apply() below re-reads the current real value immediately before
-// writing and refuses to overwrite anything already set — never
-// overwrites a value a human (or an earlier run of this same function)
-// already put there, mirroring client-profile.ts's own
-// setPrimaryDomainForEngagement convention.
+//     seedPanelPrompts: trusted from "jev" when confidence >= 75%
 
 import { db } from "@/lib/db";
 import {
@@ -194,6 +159,53 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(engagements.engagementId, engagementId));
     },
   },
+  operatorHandles: {
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      if (typeof value !== "object" || value === null) return;
+      const [row] = await db
+        .select({ operatorHandles: repIdentityGraphs.operatorHandles })
+        .from(repIdentityGraphs)
+        .where(eq(repIdentityGraphs.engagementId, engagementId))
+        .limit(1);
+
+      if (row?.operatorHandles && Object.keys(row.operatorHandles).length > 0) return;
+
+      await db
+        .update(repIdentityGraphs)
+        .set({ operatorHandles: value as Record<string, string>, updatedAt: new Date() })
+        .where(eq(repIdentityGraphs.engagementId, engagementId));
+    },
+  },
+  collisions: {
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value) || value.length === 0) return;
+      const shaped = value.map((item: any) => ({
+        name: String(item.name || "Unknown Variant"),
+        whoTheyAre: String(item.whoTheyAre || item.domain || "Same-name domain variant"),
+        disambiguationNote: String(
+          item.disambiguationNote || `Verify if ${item.domain || "this variant"} is an official property.`
+        ),
+        source: (item.source === "buyer" || item.source === "collision_check"
+          ? item.source
+          : "collision_check") as "buyer" | "collision_check",
+      }));
+
+      const [row] = await db
+        .select({ collisions: repIdentityGraphs.collisions })
+        .from(repIdentityGraphs)
+        .where(eq(repIdentityGraphs.engagementId, engagementId))
+        .limit(1);
+
+      if (row?.collisions && row.collisions.length > 0) return;
+
+      await db
+        .update(repIdentityGraphs)
+        .set({ collisions: shaped, updatedAt: new Date() })
+        .where(eq(repIdentityGraphs.engagementId, engagementId));
+    },
+  },
   competitors: {
     isTrusted: isTrustedJev,
     apply: async (engagementId, value) => {
@@ -207,13 +219,7 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (!row) {
-        console.warn(
-          `[field-writeback] no repIdentityGraphs row for ${engagementId} — competitors suggestion stays in client_facts`
-        );
-        return;
-      }
-      if (row.competitors && row.competitors.length > 0) return;
+      if (row?.competitors && row.competitors.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -234,13 +240,7 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (!row) {
-        console.warn(
-          `[field-writeback] no repIdentityGraphs row for ${engagementId} — entities suggestion stays in client_facts`
-        );
-        return;
-      }
-      if (row.entities && row.entities.length > 0) return;
+      if (row?.entities && row.entities.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -259,13 +259,7 @@ const WRITEBACKS: Record<string, WritebackDef> = {
         .where(eq(repIdentityGraphs.engagementId, engagementId))
         .limit(1);
 
-      if (!row) {
-        console.warn(
-          `[field-writeback] no repIdentityGraphs row for ${engagementId} — seedPanelPrompts suggestion stays in client_facts`
-        );
-        return;
-      }
-      if (row.seedPanelPrompts && row.seedPanelPrompts.length > 0) return;
+      if (row?.seedPanelPrompts && row.seedPanelPrompts.length > 0) return;
 
       await db
         .update(repIdentityGraphs)
@@ -277,25 +271,32 @@ const WRITEBACKS: Record<string, WritebackDef> = {
 
 /**
  * Promotes every trusted, applicable client_facts suggestion into its
- * real column for this engagement. Called before a worker's completeness
- * checker runs (worker-config-completeness.ts) so the checker sees
- * already-resolved values instead of empty ones — the checker itself
- * needs no changes, it just reads storage that may now be a moment
- * fresher. Safe to call unconditionally and often: every apply() is a
- * no-op once its real column is set, and a fact with no registered
- * writeback is just skipped.
+ * real column for this engagement. Auto-creates the base repIdentityGraphs
+ * record if it does not exist yet so writebacks don't fail silently.
  */
 export async function applyResolvableFacts(engagementId: string): Promise<string[]> {
+  // Ensure default repIdentityGraphs record exists for reputation writebacks
+  await db
+    .insert(repIdentityGraphs)
+    .values({
+      engagementId,
+      operatorName: "",
+      soleAuthorityName: "",
+    })
+    .onConflictDoNothing();
+
   const facts = await getClientFacts(engagementId);
+  const factList = Array.isArray(facts) ? facts : Object.values(facts);
   const applied: string[] = [];
-  for (const [key, fact] of Object.entries(facts)) {
-    const def = WRITEBACKS[key];
+
+  for (const fact of factList) {
+    const def = WRITEBACKS[fact.key];
     if (!def || !def.isTrusted(fact)) continue;
     try {
       await def.apply(engagementId, fact.value);
-      applied.push(key);
+      applied.push(fact.key);
     } catch (err) {
-      console.error(`[field-writeback] failed to apply ${key} for ${engagementId}:`, err);
+      console.error(`[field-writeback] failed to apply ${fact.key} for ${engagementId}:`, err);
     }
   }
   return applied;

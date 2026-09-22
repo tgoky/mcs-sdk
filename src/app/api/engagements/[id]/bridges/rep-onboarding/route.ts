@@ -11,6 +11,7 @@ import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
 import type { RepEngineId } from "@/models/schema";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { applyResolvableFacts } from "@/lib/field-writeback";
+import { getClientFact } from "@/lib/client-facts";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -46,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Promote any trusted, high-confidence client_facts suggestions (competitors,
-  // entities, seedPanelPrompts) into repIdentityGraphs before querying
+  // entities, seedPanelPrompts, operatorHandles, collisions) into repIdentityGraphs before querying
   await applyResolvableFacts(id).catch((err) =>
     console.error(`[bridges/rep-onboarding] GET applyResolvableFacts failed for ${id}:`, err)
   );
@@ -55,10 +56,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const enabled = await isSkillEnabledForEngagement(id, "rep-onboarding");
   const primaryDomain = await getPrimaryDomainForEngagement(id);
 
+  // Read harvested review baseline (Trustpilot rating & count) directly from client_facts
+  const reviewFact = await getClientFact(id, "reviewBaseline");
+
   return NextResponse.json({
     buyer: engagementRow.buyer,
     enabled,
     primaryDomain,
+    reviewBaseline: reviewFact?.value ?? null,
     graph: graph
       ? {
           operatorName: graph.operatorName,
