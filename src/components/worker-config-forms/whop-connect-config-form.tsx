@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bot,
   CheckCircle2,
@@ -15,20 +16,18 @@ import {
   Link as LinkIcon,
   Percent,
   Clock,
-  ExternalLink,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
+import { ConfigFormSkeleton } from "./config-form-skeleton";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
-import { ConfigFormSkeleton } from "./config-form-skeleton";
-
 export interface WhopConnectFormProps {
   engagementId: string;
-  onCancel: () => void;
+  onCancel?: () => void;
   onSaved?: (result?: { runId?: string }) => void;
   cancelLabel?: string;
 }
@@ -79,6 +78,7 @@ export function WhopConnectConfigForm({
   onSaved,
   cancelLabel = "Back to workspace",
 }: WhopConnectFormProps) {
+  const router = useRouter();
   const toast = useToast();
   const { start: startTour } = useTour();
 
@@ -133,6 +133,14 @@ export function WhopConnectConfigForm({
     };
   }, [engagementId]);
 
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      router.push(`/dashboard/engagements/${engagementId}`);
+    }
+  };
+
   async function submit() {
     if (!apiKey.trim() && !state?.connected) return;
     setSubmitting(true);
@@ -186,7 +194,7 @@ export function WhopConnectConfigForm({
     try {
       await fetch(`/api/engagements/${engagementId}/bridges/whop-connect`, { method: "DELETE" });
       setState({ connected: false });
-toast.success("Whop account disconnected.");
+      toast.success("Whop account disconnected.");
     } finally {
       setSubmitting(false);
     }
@@ -482,7 +490,7 @@ toast.success("Whop account disconnected.");
       <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={handleCancel}
           className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-900 cursor-pointer"
         >
           {cancelLabel}
