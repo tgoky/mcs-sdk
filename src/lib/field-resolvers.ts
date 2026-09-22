@@ -16,6 +16,8 @@
 
 import { askJev, type JevQuestion, type JevAnswer } from "@/lib/jev";
 import { getClientFact, upsertClientFact } from "@/lib/client-facts";
+import { callClaude, MODEL } from "@/lib/llm";
+import type { ColdOpenIcp } from "@/models/schema";
 
 export interface FieldQuestionMap {
   [fieldKey: string]: JevQuestion;
@@ -66,23 +68,6 @@ export async function resolveFieldsFromEvidence(
 }
 
 // ── Concrete resolver: pin-down's website-derived Choice fields ─────────
-//
-// trafficTemperature and castingChoice (EngagementStack.traffic_temperature
-// / castingChoice) are both real, closed enums in schema.ts, and both are
-// judgment calls a website's own marketing copy carries a real signal for
-// — clean Choice candidates. Both are batched into ONE Jev call against
-// the same rawVoiceCorpus state, per TypeSafe's own docs: "ask every
-// question your code might need... adding questions barely changes the
-// response time" — two separate calls against the same evidence would be
-// exactly the anti-pattern those docs call out.
-//
-// offerVertical is deliberately NOT resolved this way: schema.ts's own
-// comment confirms vertical is free text with no fixed taxonomy in this
-// app today ("Coaching" and "coaching" are already treated as different
-// buckets by Leak Map's own benchmark key), and Jev's Choice type requires
-// a closed option set. Inventing a taxonomy to force vertical into one
-// would be a real product decision, not something to slip in inside a
-// resolver.
 export async function resolveWebsiteDerivedChoices(engagementId: string) {
   return resolveFieldsFromEvidence(engagementId, "rawVoiceCorpus", {
     trafficTemperature: {
@@ -110,16 +95,6 @@ export async function resolveWebsiteDerivedChoices(engagementId: string) {
 }
 
 // ── Reputation-derived facts: verify prefill extractions ───────────────
-//
-// competitors / entities / seedPanelPrompts are LIST fields extracted by
-// discovery-prefill's Claude pass. This function scores those proposed
-// lists against rawVoiceCorpus using Jev's `score` question type so that
-// field-writeback.ts can gate auto-promotion on a real quality x peakedness
-// metric (>= 75).
-//
-// Deliberately uses object-based state per TypeSafe guidelines and skips
-// any field where human action (status !== "suggested") has already been
-// taken.
 export async function verifyReputationExtractions(
   engagementId: string
 ): Promise<{ verified: string[]; skipped: boolean }> {
@@ -184,4 +159,132 @@ export async function verifyReputationExtractions(
     verified.push(factKey);
   }
   return { verified, skipped: false };
+}
+
+// ── Cold Open derived facts: extract ICPs, Voice, Product Identity ─────
+export async function resolveColdOpenDerivedFields(
+  engagementId: string
+): Promise<{ resolved: string[]; skipped: boolean }> {
+  const corpus = await getClientFact(engagementId, "rawVoiceCorpus");
+  if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) {
+    return { resolved: [], skipped: true };
+  }
+
+  const existingProduct = await getClientFact(engagementId, "productIdentity");
+  const existingIcps = await getClientFact(engagementId, "icps");
+  const existingVoice = await getClientFact(engagementId, "voiceProfile");
+
+  if (
+    existingProduct && existingProduct.status !== "suggested" &&
+    existingIcps && existingIcps.status !== "suggested" &&
+    existingVoice && existingVoice.status !== "suggested"
+  ) {
+    return { resolved: [], skipped: true };
+  }
+
+  // 1. Resolve Jev choice for outreach tone
+  const toneResult = await askJev({
+    state: corpus.value,
+    questions: {
+      voiceTone: {
+        type: "choice",
+        instructions: "Based on this website's marketing copy, what tone best characterizes their cold outreach and brand messaging?",
+        criteria: {
+          Professional: "Corporate, formal, authoritative, and structured copy.",
+          Direct: "Concise, results-oriented, pitch-focused copy with zero fluff.",
+          Casual: "Conversational, friendly, approachable, and lighthearted copy.",
+          Warm: "Empathetic, consultative, relationship-first copy.",
+        },
+      },
+    },
+  });
+
+  const toneAnswer = toneResult.answers.voiceTone;
+  const detectedTone = toneAnswer && toneAnswer.type === "choice" ? toneAnswer.choice : "Professional";
+  const toneConfidence = toneAnswer && toneAnswer.type === "choice" ? Math.round(toneAnswer.confidence * 100) : 80;
+
+  const resolved: string[] = [];
+
+  // 2. Extract structured Product Identity & ICPs via Claude
+  try {
+    const claudeResult = await callClaude({
+      model: MODEL.FAST,
+      system: `You analyze website marketing text and extract structured sales data for an outbound Cold Open campaign.
+Return ONLY a valid JSON object in the following format:
+{
+  "productName": "extracted product or company name",
+  "productPrice": "pricing details or estimated tier e.g. $499/mo or Custom",
+  "productValueProp": "concise 1-sentence value proposition",
+  "icps": [
+    {
+      "slug": "url-safe-slug-e-g-b2b-saas-founders",
+      "label": "Human readable ICP Label e.g. B2B SaaS Founders",
+      "weight": 0.5
+    }
+  ],
+  "greeting": "Default email greeting e.g. Hi {first_name},",
+  "signOff": "Default email sign-off e.g. Best,"
+}
+Make sure weights across ICPs sum to 1.0. Slug must be lowercase and hyphenated. Do not include markdown code fences or preambles.`,
+      userMessage: corpus.value.slice(0, 6000),
+      maxTokens: 1000,
+    });
+
+    const jsonMatch = claudeResult.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      if (!existingProduct || existingProduct.status === "suggested") {
+        const productIdentity = {
+          name: String(parsed.productName || "Main Product"),
+          url: "",
+          price: String(parsed.productPrice || ""),
+          valueProp: String(parsed.productValueProp || ""),
+        };
+        await upsertClientFact(engagementId, "productIdentity", productIdentity, {
+          source: "jev",
+          sourceDetail: "rawVoiceCorpus",
+          confidence: 85,
+          evidence: `Extracted product identity from site copy via Claude + Jev.`,
+        });
+        resolved.push("productIdentity");
+      }
+
+      if (!existingIcps || existingIcps.status === "suggested") {
+        if (Array.isArray(parsed.icps) && parsed.icps.length > 0) {
+          const shapedIcps: ColdOpenIcp[] = parsed.icps.map((item: any, idx: number) => ({
+            slug: String(item.slug || `icp-${idx + 1}`).toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+            label: String(item.label || `ICP ${idx + 1}`),
+            weight: typeof item.weight === "number" ? item.weight : 1 / parsed.icps.length,
+          }));
+          await upsertClientFact(engagementId, "icps", shapedIcps, {
+            source: "jev",
+            sourceDetail: "rawVoiceCorpus",
+            confidence: 85,
+            evidence: `Extracted ${shapedIcps.length} target ICPs from site copy.`,
+          });
+          resolved.push("icps");
+        }
+      }
+
+      if (!existingVoice || existingVoice.status === "suggested") {
+        const voiceProfile = {
+          greeting: String(parsed.greeting || "Hi {first_name},"),
+          signOff: String(parsed.signOff || "Best,"),
+          tone: detectedTone,
+        };
+        await upsertClientFact(engagementId, "voiceProfile", voiceProfile, {
+          source: "jev",
+          sourceDetail: "rawVoiceCorpus",
+          confidence: toneConfidence,
+          evidence: `Derived brand voice profile with ${detectedTone} tone from site copy.`,
+        });
+        resolved.push("voiceProfile");
+      }
+    }
+  } catch (err) {
+    console.warn(`[field-resolvers] resolveColdOpenDerivedFields extraction failed for ${engagementId}:`, err);
+  }
+
+  return { resolved, skipped: resolved.length === 0 };
 }

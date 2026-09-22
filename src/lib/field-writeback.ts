@@ -7,6 +7,7 @@
 //   - operatorHandles, collisions: trusted from "account", "website", or "user"
 //   - trafficTemperature, castingChoice, competitors, entities,
 //     seedPanelPrompts: trusted from "jev" when confidence >= 75%
+//   - productIdentity, icps, voiceProfile: promoted to coldOpenConfig
 
 import { db } from "@/lib/db";
 import {
@@ -15,6 +16,7 @@ import {
   type EngagementStack,
   type RepCompetitor,
   type RepEntity,
+  type ColdOpenIcp,
 } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { getClientFacts, type ClientFact } from "@/lib/client-facts";
@@ -119,9 +121,49 @@ const WRITEBACKS: Record<string, WritebackDef> = {
     isTrusted: (f) => f.source === "account",
     apply: async (engagementId, value) => {
       const config = await getColdOpenConfig(engagementId);
-      if (config?.sendPlatform) return;
+      if (!config || config.sendPlatform) return;
       await upsertColdOpenConfig(engagementId, {
         sendPlatform: value as { platform: "instantly" | "smartlead" | "lemlist" | "reply_io" },
+      });
+    },
+  },
+  productIdentity: {
+    isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),
+    apply: async (engagementId, value) => {
+      if (typeof value !== "object" || value === null) return;
+      const config = await getColdOpenConfig(engagementId);
+      if (!config || config.productIdentity?.name) return;
+      await upsertColdOpenConfig(engagementId, {
+        productIdentity: value as { name: string; url: string; price: string; valueProp: string },
+      });
+    },
+  },
+  icps: {
+    isTrusted: isTrustedJev,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value) || value.length === 0) return;
+      const config = await getColdOpenConfig(engagementId);
+      if (!config || (config.icps && config.icps.length > 0)) return;
+      await upsertColdOpenConfig(engagementId, {
+        icps: value as ColdOpenIcp[],
+      });
+    },
+  },
+  voiceProfile: {
+    isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),
+    apply: async (engagementId, value) => {
+      if (typeof value !== "object" || value === null) return;
+      const val = value as Record<string, any>;
+      const config = await getColdOpenConfig(engagementId);
+      if (!config || config.voiceProfile?.tone) return;
+
+      await upsertColdOpenConfig(engagementId, {
+        voiceProfile: {
+          greeting: String(val.greeting || val.greetingStyle || "Hi {first_name},"),
+          signOff: String(val.signOff || val.signoffStyle || "Best,"),
+          tone: String(val.tone || "Professional"),
+          sourceDomain: val.sourceDomain ? String(val.sourceDomain) : undefined,
+        },
       });
     },
   },

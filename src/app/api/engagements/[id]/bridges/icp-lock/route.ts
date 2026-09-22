@@ -9,16 +9,16 @@ import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { saveIcpLockIntake, type IcpLockInput } from "@/features/cold-open/server/icp-lock";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
+import { getClientFacts } from "@/lib/client-facts";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 
 /**
- * icp-lock's own hinges — mirrors bridges/rep-onboarding/route.ts's shape
- * exactly (GET to prefill, POST to save + enable + dispatch), adapted for
- * Cold Open's product-identity/ICP/sizing-bounds fields. Like
- * rep-onboarding, there's no credential storage happening here —
- * dispatchSkillRun is called with no completedSteps.
+ * icp-lock's bridge route — Single Dossier prefill and save handler for Cold Open.
+ * Pulls harvested client_facts (productIdentity, icps, voiceProfile) when
+ * coldOpenConfig is incomplete to enable 1-click pipeline arming.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -31,40 +31,66 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const [engagementRow] = await db
     .select({ buyer: engagements.buyer })
     .from(engagements)
-    .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
+    .where(
+      and(
+        eq(engagements.engagementId, id),
+        eq(engagements.whopUserId, session.whopUserId),
+        eq(engagements.workspaceId, activeWorkspace.workspaceId)
+      )
+    )
     .limit(1);
 
   if (!engagementRow) {
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
+  // Attempt auto-writeback of any trusted facts before loading config
+  await applyResolvableFacts(id).catch((err) =>
+    console.error(`[bridges/icp-lock] applyResolvableFacts error for ${id}:`, err)
+  );
+
   const config = await getColdOpenConfig(id);
+  const facts = await getClientFacts(id);
   const enabled = await isSkillEnabledForEngagement(id, "icp-lock");
-  // Phase 3: productUrl was registry-flagged as "no live crawl or
-  // resolver path exists anywhere for this field" — client-profile.ts's
-  // shared domain resolver (fed by discoverClient's crawl, or another
-  // product's own domain, per its own coalesce order) is that path now.
-  // Never assumed equal to productUrl (an agency could run the product on
-  // a different domain than the client's own site) — surfaced as a
-  // suggestion via InferredFieldBadge, same as productName below.
   const primaryDomain = await getPrimaryDomainForEngagement(id);
+
+  // Extract candidate suggestions from fact store
+  const factList = Array.isArray(facts) ? facts : Object.values(facts);
+  const factMap = Object.fromEntries(factList.map((f) => [f.key, f.value]));
+
+  const suggestedProduct = factMap.productIdentity as
+    | { name?: string; url?: string; price?: string; valueProp?: string }
+    | undefined;
+  const suggestedIcps = (Array.isArray(factMap.icps) ? factMap.icps : []) as Array<any>;
+  const suggestedVoice = factMap.voiceProfile as
+    | { greeting?: string; signOff?: string; tone?: string }
+    | undefined;
+
+  const productName = config?.productIdentity?.name || suggestedProduct?.name || engagementRow.buyer || "";
+  const productUrl =
+    config?.productIdentity?.url ||
+    suggestedProduct?.url ||
+    (primaryDomain ? `https://${primaryDomain.replace(/^https?:\/\//i, "")}` : "");
+  const productPrice = config?.productIdentity?.price || suggestedProduct?.price || "";
+  const productValueProp = config?.productIdentity?.valueProp || suggestedProduct?.valueProp || "";
 
   return NextResponse.json({
     buyer: engagementRow.buyer,
     primaryDomain,
     enabled,
-    config: config
-      ? {
-          productName: config.productIdentity?.name ?? "",
-          productUrl: config.productIdentity?.url ?? "",
-          productPrice: config.productIdentity?.price ?? "",
-          productValueProp: config.productIdentity?.valueProp ?? "",
-          productAllocation: config.productAllocation,
-          icps: config.icps,
-          sizingBounds: config.sizingBounds,
-          reviewRequiredIcps: config.reviewRequiredIcps,
-        }
-      : null,
+    config: {
+      productName,
+      productUrl,
+      productPrice,
+      productValueProp,
+      productAllocation: config?.productAllocation || (productName ? { [productName]: 1.0 } : {}),
+      icps: config?.icps?.length ? config.icps : suggestedIcps,
+      sizingBounds: config?.sizingBounds || {},
+      reviewRequiredIcps: config?.reviewRequiredIcps || [],
+      voiceProfile: config?.voiceProfile || suggestedVoice || { greeting: "Hi {first_name},", signOff: "Best,", tone: "Professional" },
+      sendPlatform: config?.sendPlatform || null,
+      dailySendSettings: config?.dailySendSettings || { dailyLimit: 50, sendWindowHours: "09:00-17:00" },
+    },
   });
 }
 
@@ -83,7 +109,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const [engagementRow] = await db
       .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
       .from(engagements)
-      .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
+      .where(
+        and(
+          eq(engagements.engagementId, id),
+          eq(engagements.whopUserId, session.whopUserId),
+          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+        )
+      )
       .limit(1);
 
     if (!engagementRow) {
@@ -112,14 +144,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     await setSkillEnabledForEngagement(id, "icp-lock", true);
-    // Same cross-product domain seed as bridges/pin-down/route.ts —
-    // productUrl is a full URL here (not a bare host, per this route's own
-    // "acme.com" example), so this goes through the URL-normalizing seed
-    // rather than the bare-domain one. Fire-and-forget, never worth
-    // failing this save over.
+
     if (input.productUrl) {
-      seedPrimaryDomainFromUrl(id, input.productUrl).catch((err) => console.error(`[bridges/icp-lock] domain seed failed for ${id}:`, err));
+      seedPrimaryDomainFromUrl(id, input.productUrl).catch((err) =>
+        console.error(`[bridges/icp-lock] domain seed failed for ${id}:`, err)
+      );
     }
+
     const runId = await dispatchSkillRun(id, "icp-lock", engagementRow.buyer);
 
     return NextResponse.json({ ok: true, runId });
