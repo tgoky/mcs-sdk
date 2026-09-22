@@ -7,9 +7,9 @@ import { fetchWithTimeout } from "@/lib/http";
  * Pin-Down recovery gap 1 — smart pre-fill.
  *
  * Crawls the buyer's site, detects their booking platform, checks for an
- * existing confirmation page, extracts reputation intelligence (competitors,
- * entities, seed prompts, social handles, review metrics), and uses Claude
- * to suggest values for the fields that follow.
+ * existing confirmation page, extracts embedded video URLs, reputation intelligence
+ * (competitors, entities, seed prompts, social handles, review metrics), and uses
+ * Claude to suggest offer values (name, price, vertical, ICP).
  */
 
 export interface HarvestedReviewBaseline {
@@ -24,7 +24,10 @@ export interface DiscoveryPrefillResult {
   crawledAt: string;
   suggestedBuyerName?: string;
   suggestedOfferName?: string;
+  suggestedOfferPrice?: string;
+  suggestedOfferVertical?: string;
   suggestedIcp?: string;
+  suggestedHeroVideoUrl?: string;
   /** Direct category rivals or alternative platforms named or implied in site copy. */
   suggestedCompetitors?: string[];
   /** Sub-brands, proprietary product/tier names, or featured publications. */
@@ -38,21 +41,7 @@ export interface DiscoveryPrefillResult {
   scrapedCorpus?: string;
   existingConfirmationPageUrl?: string;
   detectedBookingPlatform?: string;
-  /** Fingerprinted from well-known, publicly documented markers in the
-   * homepage's own HTML (a generator meta tag, a standard asset path) —
-   * the same confidence class as detectedBookingPlatform's own regex
-   * signatures, not a vendor API contract. Only the 3 hosting_platform
-   * options that have a real publish API to authenticate against
-   * (checkPinDown's own conditional) are worth detecting here — ghl/
-   * lovable/plain_html/discover_from_docs have no reliable positive
-   * signature and are left to the operator to pick. */
   detectedHostingPlatform?: string;
-  /** Raw visual signal from the buyer's own site (design-scraper.ts), for
-   * the dynamic confirmation-page templates (templates/dynamic/). Passed
-   * straight through to buildConfirmationPageHtml as
-   * PageBuilderInput.designSignal — undefined here means "render the
-   * static default for whichever archetype gets picked", never a
-   * broken page. */
   designSignal?: DesignSignalResult;
   notes: string[];
 }
@@ -121,6 +110,17 @@ async function fetchRaw(url: string, timeoutMs = 4000): Promise<string | null> {
   }
 }
 
+/**
+ * Extracts video embed URLs (YouTube, Vimeo, Wistia, Loom) from HTML.
+ */
+export function extractEmbeddedVideoUrl(html: string | null): string | undefined {
+  if (!html) return undefined;
+  const match = html.match(
+    /src=["'](https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/|player\.vimeo\.com\/video\/|fast\.wistia\.net\/embed\/|loom\.com\/embed\/)[^"']+)["']/i
+  );
+  return match?.[1];
+}
+
 async function detectExistingConfirmationPage(base: string): Promise<string | undefined> {
   const results = await Promise.all(
     CONFIRMATION_PAGE_PATHS.map(async (path) => {
@@ -183,7 +183,6 @@ export function extractSocialAndReviewHandles(
   if (!html) return {};
   const handles: Record<string, string> = {};
 
-  // 1. JSON-LD sameAs Parsing
   const jsonLdMatches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   for (const match of jsonLdMatches) {
     try {
@@ -204,7 +203,6 @@ export function extractSocialAndReviewHandles(
     }
   }
 
-  // 2. Fallback: Parse <a> tags in footer / homepage HTML
   const hrefMatches = html.matchAll(/href=["'](https?:\/\/[^"']+)["']/gi);
   for (const match of hrefMatches) {
     parseAndAssignHandle(match[1], handles);
@@ -245,7 +243,7 @@ export async function fetchTrustpilotBaseline(domain: string): Promise<Harvested
       };
     }
   } catch {
-    // Graceful degradation on timeout/block
+    // Graceful degradation
   }
   return null;
 }
@@ -274,6 +272,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
   const detectedHostingPlatform = detectHostingPlatform(homepageHtml);
   const suggestedHandles = extractSocialAndReviewHandles(homepageHtml, base);
+  const suggestedHeroVideoUrl = extractEmbeddedVideoUrl(homepageHtml);
 
   let textToAnalyze = "";
   let usedFallback = false;
@@ -290,6 +289,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
     return {
       domain: base,
       crawledAt: new Date().toISOString(),
+      suggestedHeroVideoUrl,
       suggestedHandles: Object.keys(suggestedHandles).length > 0 ? suggestedHandles : undefined,
       suggestedReviewBaseline: reviewBaseline ?? undefined,
       scrapedCorpus: corpus || undefined,
@@ -307,6 +307,8 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
 
   let suggestedBuyerName: string | undefined;
   let suggestedOfferName: string | undefined;
+  let suggestedOfferPrice: string | undefined;
+  let suggestedOfferVertical: string | undefined;
   let suggestedIcp: string | undefined;
   let suggestedCompetitors: string[] | undefined;
   let suggestedEntities: string[] | undefined;
@@ -319,6 +321,8 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
 {
   "buyer_name": "the company or personal brand name, or null if unclear",
   "offer_name": "the primary product/service/offer name being sold, or null if unclear",
+  "offer_price": "pricing details or estimated tier e.g. $997, $5k/mo, or null if unclear",
+  "offer_vertical": "industry or vertical e.g. B2B SaaS, Agency, Coaching, Fitness, or null if unclear",
   "icp": "one sentence describing who this is for (their ideal customer), or null if unclear",
   "competitors": ["2 to 4 direct category competitors or alternative solutions named or implied in the text, or [] if none"],
   "entities": ["sub-brands, proprietary product/tier names, or featured publications, or [] if none"],
@@ -347,6 +351,19 @@ Return nothing but the JSON object. No preamble, no markdown fences. If you aren
         parsed.product_name ??
         parsed.productName ??
         parsed.service_name ??
+        undefined;
+
+      suggestedOfferPrice =
+        parsed.offer_price ??
+        parsed.offerPrice ??
+        parsed.price ??
+        undefined;
+
+      suggestedOfferVertical =
+        parsed.offer_vertical ??
+        parsed.offerVertical ??
+        parsed.vertical ??
+        parsed.industry ??
         undefined;
 
       suggestedIcp =
@@ -406,7 +423,10 @@ Return nothing but the JSON object. No preamble, no markdown fences. If you aren
     crawledAt: new Date().toISOString(),
     suggestedBuyerName,
     suggestedOfferName,
+    suggestedOfferPrice,
+    suggestedOfferVertical,
     suggestedIcp,
+    suggestedHeroVideoUrl,
     suggestedCompetitors,
     suggestedEntities,
     suggestedSeedPrompts,
