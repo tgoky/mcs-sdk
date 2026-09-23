@@ -34,7 +34,8 @@ export async function getRepEnrolledEngagementIds(whopUserId: string, workspaceI
       and(
         eq(engagements.whopUserId, whopUserId),
         eq(engagements.workspaceId, workspaceId),
-        isNull(engagements.deletedAt)
+        isNull(engagements.deletedAt),
+        repIdentityIsComplete
       )
     );
 
