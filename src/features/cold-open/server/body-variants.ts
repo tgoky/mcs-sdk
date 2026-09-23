@@ -59,7 +59,7 @@ export function validateBodyVariants(
     if (pool.length < minVariants) {
       const src = pool.length === 0 ? "no template" : `only ${pool.length} variant${pool.length === 1 ? "" : "s"}`;
       problems.push(
-        `ICP '${slug}': ${src} — Cold Open requires at least ${minVariants} body variants per ICP so the same body ` +
+        `ICP '${slug}': ${src}: Cold Open requires at least ${minVariants} body variants per ICP so the same body ` +
           `never sends to many similar prospects in a week (internal outreach audit 2026-07-20 found one fixed ` +
           `body ran ~93% identical across 9 leads and got fingerprinted). Add another variant, or lower the ` +
           `minimum if you accept the risk.`
@@ -69,7 +69,7 @@ export function validateBodyVariants(
   if (!icpSlugs || icpSlugs.length === 0) {
     const pool = resolvePool(pools, "");
     if (pool.length < minVariants) {
-      problems.push(`upload templates resolve to only ${pool.length} body variant(s) — at least ${minVariants} are required (audit Panel 1 Issue #1).`);
+      problems.push(`upload templates resolve to only ${pool.length} body variant(s): at least ${minVariants} are required (audit Panel 1 Issue #1).`);
     }
   }
   return problems;

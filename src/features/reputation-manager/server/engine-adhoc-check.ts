@@ -48,7 +48,7 @@ export async function runRepEngineAdhocCheck(
     });
 
     if (!graph) {
-      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet — there's no operator name or competitor list to check against.");
+      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet. There's no operator name or competitor list to check against.");
     }
 
     const requestedSubject = ctx?.engineCheckSubject?.trim();
@@ -100,7 +100,7 @@ export async function runRepEngineAdhocCheck(
     }
 
     if (answered.length === 0) {
-      throw new Error("Every engine query failed — nothing to report.");
+      throw new Error("Every engine query failed. Nothing to report.");
     }
 
     await logStep(runId, {

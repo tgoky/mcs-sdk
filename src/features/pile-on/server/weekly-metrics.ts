@@ -184,7 +184,7 @@ export async function processWeeklyMetricsForEngagement(engagementId: string): P
     ...listSizes,
   ];
   if (isAnomaly) {
-    bodyLines.push(`⚠ Booking volume dropped ${Math.abs(pctChange!).toFixed(0)}% week-over-week — may be worth a look.`);
+    bodyLines.push(`⚠ Booking volume dropped ${Math.abs(pctChange!).toFixed(0)}% week-over-week. May be worth a look.`);
   }
 
   try {
@@ -193,7 +193,7 @@ export async function processWeeklyMetricsForEngagement(engagementId: string): P
       engagementId,
       type: "weekly_metrics",
       severity: isAnomaly ? "warning" : "info",
-      title: `Weekly readout — ${tenant.buyer}`,
+      title: `Weekly readout: ${tenant.buyer}`,
       body: bodyLines.join("\n"),
       slackWebhookUrl: stack.slack_webhook_url,
     });

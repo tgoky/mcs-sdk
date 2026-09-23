@@ -3,13 +3,13 @@ import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRAN
 import { buildGoldenTicketDynamicHtml } from "./dynamic/golden-ticket.dynamic";
 
 /**
- * The Golden Ticket — built for a workshop or event registration where
+ * The Golden Ticket --- built for a workshop or event registration where
  * the room filling up is the actual dynamic doing the work. Black and
  * gold, die-cut perforation between a main panel and a tear-off stub.
- * Signature element: the ticket itself — a real stub shape (perforated
+ * Signature element: the ticket itself --- a real stub shape (perforated
  * edge, notch cutouts, a stub half carrying the reference code) rather
  * than a card wearing a gold accent color, since a ticket only works if
- * it actually reads as one at a glance. The stub code now sits upright —
+ * it actually reads as one at a glance. The stub code now sits upright ---
  * a real paper ticket's stub number is small print, not sideways text
  * nobody can read without tilting their head.
  *
@@ -78,7 +78,7 @@ ${buildGoogleFontLinks("family=Abril+Fatface&family=Inter:wght@400;500;600;700")
   .brand-line { text-align: center; font-size: 0.72rem; color: #a3915f; margin: 0 0 22px; }
   h1 { text-align: center; font-family: "Abril Fatface", Georgia, serif; font-size: 2.3rem; font-weight: 400; letter-spacing: -0.01em; margin: 0 0 28px; }
 
-  /* Ticket stub — signature element */
+  /* Ticket stub --- signature element */
   .ticket { display: flex; margin: 0 0 22px; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45)); }
   .ticket-main {
     flex: 1;
@@ -106,7 +106,7 @@ ${buildGoogleFontLinks("family=Abril+Fatface&family=Inter:wght@400;500;600;700")
     text-align: center;
   }
   /* perforation: a column of small punched circles, the way a real
-     die-cut stub separates — no sideways text needed to sell "ticket". */
+     die-cut stub separates: no sideways text needed to sell "ticket". */
   .perf { position: absolute; top: 10px; bottom: 10px; left: -1px; width: 1px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
   .perf span { width: 4px; height: 4px; border-radius: 50%; background: #151014; border: 1px solid #4a3a1c; }
   .notch { position: absolute; left: -8px; width: 16px; height: 16px; border-radius: 50%; background: #151014; border: 1px solid #4a3a1c; }
@@ -125,7 +125,7 @@ ${buildGoogleFontLinks("family=Abril+Fatface&family=Inter:wght@400;500;600;700")
   section { margin-bottom: 40px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #E8B23D; margin: 0 0 16px; text-align: center; }
 
-  /* Doors-open video — placeholder card until the operator's recording
+  /* Doors-open video --- placeholder card until the operator's recording
      pass produces one; never a fabricated embed. */
   .video-card { background: #1a1418; border: 1px dashed #4a3a1c; border-radius: 8px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
   .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #E8B23D; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }

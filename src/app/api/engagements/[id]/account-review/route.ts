@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const review = await generateAccountReview(id);
     if (!review) {
-      return NextResponse.json({ error: "Nothing to review yet — no enabled skill has reported data." }, { status: 422 });
+      return NextResponse.json({ error: "Nothing to review yet. No enabled skill has reported data." }, { status: 422 });
     }
 
     return NextResponse.json({ review });

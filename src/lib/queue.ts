@@ -46,7 +46,7 @@ import { classifyRunError, type StackSection } from "@/lib/error-classification"
 const REPLY_DISPOSITION_LABELS: Record<string, string> = {
   interested: "Interested reply",
   objection: "Objection reply",
-  unclassified: "Unclassified reply — needs review",
+  unclassified: "Unclassified reply (needs review)",
 };
 
 /**

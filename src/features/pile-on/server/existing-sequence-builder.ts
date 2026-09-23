@@ -61,7 +61,7 @@ async function findExistingSequenceEmails(
       const client = new KlaviyoClient(apiKey);
       const flows = await client.findFlowsByNameContains(nameHints);
       if (flows.length === 0) {
-        return { supported: false, reason: "No live Klaviyo flow found matching common pre-call/booking naming — the operator may need to point this at a specific flow manually." };
+        return { supported: false, reason: "No live Klaviyo flow found matching common pre-call/booking naming. The operator may need to point this at a specific flow manually." };
       }
       // Take the first match — if the buyer has multiple, this is a
       // starting point for the operator to confirm, not a guarantee of
@@ -77,7 +77,7 @@ async function findExistingSequenceEmails(
       const client = new HubSpotClient(apiKey);
       const workflows = await client.findWorkflowsByNameContains(nameHints);
       if (workflows.length === 0) {
-        return { supported: false, reason: "No HubSpot workflow found matching common pre-call/booking naming — the operator may need to point this at a specific workflow manually." };
+        return { supported: false, reason: "No HubSpot workflow found matching common pre-call/booking naming. The operator may need to point this at a specific workflow manually." };
       }
       const emails = await client.getWorkflowEmailActions(workflows[0].id);
       if (emails.length === 0) {
@@ -89,7 +89,7 @@ async function findExistingSequenceEmails(
     default:
       return {
         supported: false,
-        reason: `${emailPlatform} doesn't expose a flow/workflow read API this app can use for an automated audit — review the existing sequence manually before activating Pile-On.`,
+        reason: `${emailPlatform} doesn't expose a flow/workflow read API this app can use for an automated audit. Review the existing sequence manually before activating Pile-On.`,
       };
   }
 }
@@ -129,7 +129,7 @@ not the sequence as a whole), and give ONE recommendation:
 - "merge": has some good content worth folding into the new sequence, but isn't strong enough to keep as-is
 - "drop": redundant with another email or off-topic, not worth carrying forward
 - "investigate_before_changing": this email looks deliberately different from a standard pre-call
-  email (unusual structure, unusual timing, something that suggests an intentional choice) — flag
+  email (unusual structure, unusual timing, something that suggests an intentional choice). Flag
   for a human conversation rather than recommending a change outright.
 
 Return ONLY a JSON array, one object per email in the same order, no prose, no markdown fences:
@@ -152,7 +152,7 @@ Return ONLY a JSON array, one object per email in the same order, no prose, no m
     scored = emails.map(() => ({
       pillarScores: Object.fromEntries(CONTENT_PILLARS.map((p) => [p, 0])),
       recommendation: "investigate_before_changing",
-      reasoning: "Automated scoring failed to parse — review this email manually.",
+      reasoning: "Automated scoring failed to parse. Review this email manually.",
     }));
   }
 

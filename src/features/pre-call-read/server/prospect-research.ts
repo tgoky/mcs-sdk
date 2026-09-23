@@ -46,7 +46,7 @@ someone else's information to them. Never fabricate a detail you didn't
 actually find via search.
 
 Keep the summary to 3-5 short bullet points. No preamble, no "Based on my
-search" framing — just the findings, or an honest note that nothing
+search" framing, just the findings, or an honest note that nothing
 reliable was found.`;
 
   const userMessage = `Prospect: ${name} <${email}>${company ? `\nCompany: ${company}` : ""}`;
@@ -61,7 +61,7 @@ reliable was found.`;
     });
 
     return {
-      summary: result.text || "No research findings — search did not return anything usable.",
+      summary: result.text || "No research findings. Search did not return anything usable.",
       citedUrls: result.citedUrls,
       searchesUsed: result.searchesUsed,
     };

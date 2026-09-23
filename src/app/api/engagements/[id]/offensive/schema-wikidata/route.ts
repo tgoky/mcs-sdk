@@ -39,7 +39,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const [graph] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, id)).limit(1);
   if (!graph) {
     return NextResponse.json(
-      { error: "No identity graph found for this client yet — complete Reputation Manager's identity setup first." },
+      { error: "No identity graph found for this client yet. Complete Reputation Manager's identity setup first." },
       { status: 404 }
     );
   }

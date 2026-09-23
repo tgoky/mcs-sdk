@@ -243,7 +243,7 @@ export async function checkSingleCredential(
           type: "credential_invalid",
           severity: "critical",
           title: `${row.provider} connection needs attention`,
-          body: `Your ${row.provider} credential stopped working (${err.message}). Runs that depend on it — bookings, briefs, reschedule links — will fail until it's reconnected in Credentials.`,
+          body: `Your ${row.provider} credential stopped working (${err.message}). Runs that depend on it (bookings, briefs, reschedule links) will fail until it's reconnected in Credentials.`,
           slackWebhookUrl: tenantStack?.slack_webhook_url,
         });
         return { flagged: true, skipped: false };

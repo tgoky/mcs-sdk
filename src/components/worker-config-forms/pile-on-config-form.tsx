@@ -194,12 +194,12 @@ export function PileOnConfigForm({
     !smsPlatform
       ? "SMS follow-ups: not chosen yet."
       : smsPlatform === "none"
-      ? "SMS follow-ups are off — no text messages will be sent."
+      ? "SMS follow-ups are off. No text messages will be sent."
       : `New leads matching your ICPs will get SMS follow-ups via ${SMS_PLATFORM_LABELS[smsPlatform as keyof typeof SMS_PLATFORM_LABELS] ?? smsPlatform}.`,
     !adDataPlatform
       ? "Ad-data cohort sync: not chosen yet."
       : adDataPlatform === "none"
-      ? "Ad-data cohort sync is off — leads won't be pushed to an ad platform."
+      ? "Ad-data cohort sync is off. Leads won't be pushed to an ad platform."
       : `Leads will also be synced to ${AD_DATA_PLATFORM_LABELS[adDataPlatform as keyof typeof AD_DATA_PLATFORM_LABELS] ?? adDataPlatform} for ad-cohort targeting.`,
   ];
 

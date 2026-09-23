@@ -19,8 +19,8 @@ const LEAD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
   dry_run: { label: "Dry run", tone: "info" },
   held: { label: "Held for review", tone: "warning" },
   duplicate: { label: "Duplicate", tone: "neutral" },
-  skipped_dead: { label: "Skipped — dead lead", tone: "neutral" },
-  skipped_filtered: { label: "Skipped — filtered", tone: "neutral" },
+  skipped_dead: { label: "Skipped (dead lead)", tone: "neutral" },
+  skipped_filtered: { label: "Skipped (filtered)", tone: "neutral" },
   error: { label: "Error", tone: "danger" },
   discarded: { label: "Discarded", tone: "neutral" },
 };

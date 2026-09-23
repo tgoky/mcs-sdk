@@ -186,7 +186,7 @@ export function PreCallReadView({
           {callsByDay.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
-              <span className="text-xs">This run&apos;s window came back empty — nothing to brief.</span>
+              <span className="text-xs">This run&apos;s window came back empty. Nothing to brief.</span>
             </div>
           ) : (
             callsByDay.map(([dayKeyStr, dayCalls]) => {
@@ -539,7 +539,7 @@ function CallCard({
 
           {stepDetail && status === "brief_ready" && !call.briefDeliveredAt && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              Brief generated but not sent — {stepDetail}
+              Brief generated but not sent: {stepDetail}
             </p>
           )}
         </div>

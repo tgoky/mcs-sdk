@@ -128,7 +128,7 @@ export function EnablePileOnModal({
         {mode === "form" ? (
           <div className="space-y-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Two quick choices, both optional — skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account
+              Two quick choices, both optional. Skip either and it defaults to off. Finer setup (SMS compliance registration, ad-cohort account
               details) continues from Edit Stack Settings after enabling.
             </p>
 

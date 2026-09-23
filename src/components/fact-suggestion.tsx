@@ -129,7 +129,7 @@ export function FactSuggestionList({
   return (
     <div className="mt-1.5 space-y-1 text-[11px]" title={suggestion.evidence ?? undefined}>
       <div className="text-zinc-400">
-        Suggested from {suggestionSourceLabel(suggestion)}{confidenceNote(suggestion)} — {prompt}:
+        Suggested from {suggestionSourceLabel(suggestion)}{confidenceNote(suggestion)} · {prompt}:
       </div>
       <div className="flex flex-wrap gap-1.5">
         {remaining.map((item) => (

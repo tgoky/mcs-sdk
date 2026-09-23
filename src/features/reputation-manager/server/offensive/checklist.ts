@@ -26,17 +26,17 @@ export const OFFENSIVE_CHECKLIST_ITEMS: Record<OffensiveMove, { key: string; lab
   b: [
     { key: "build_target_list", label: "Build the Tier-1 target list (publication, beat, contact, channel, fit)" },
     { key: "draft_pitches", label: "Draft a pitch per target from one of the three archetypes" },
-    { key: "week1_first_batch", label: "Week 1 — send the first batch" },
-    { key: "week2_follow_up", label: "Week 2 — one follow-up only per unanswered target" },
-    { key: "weeks3_4_next_batch", label: "Weeks 3-4 — send the next batch" },
+    { key: "week1_first_batch", label: "Week 1: send the first batch" },
+    { key: "week2_follow_up", label: "Week 2: one follow-up only per unanswered target" },
+    { key: "weeks3_4_next_batch", label: "Weeks 3-4: send the next batch" },
     { key: "setup_inbound_expert_quote", label: "Set up inbound expert-quote platform profiles" },
   ],
   c: [
     { key: "confirm_handle", label: "Confirm and lock the Reddit handle (never rename mid-stream)" },
     { key: "build_subreddit_map", label: "Build the 3-tier subreddit map" },
-    { key: "weeks1_2_foundation", label: "Weeks 1-2 — comment-only foundation, no links or brand mentions, build karma past 50" },
-    { key: "weeks3_4_first_posts", label: "Weeks 3-4 — first self-posts unlock" },
-    { key: "weeks5_12_full_cadence", label: "Weeks 5-12 — full comment + post cadence" },
+    { key: "weeks1_2_foundation", label: "Weeks 1-2: comment-only foundation, no links or brand mentions, build karma past 50" },
+    { key: "weeks3_4_first_posts", label: "Weeks 3-4: first self-posts unlock" },
+    { key: "weeks5_12_full_cadence", label: "Weeks 5-12: full comment + post cadence" },
     { key: "knock_on_updates", label: "Add the confirmed handle to identity data, schema sameAs, Wikidata P4265, and Trustpilot's social field" },
   ],
 };

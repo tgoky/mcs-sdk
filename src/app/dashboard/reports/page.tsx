@@ -90,7 +90,7 @@ export default async function ReportsPage() {
       <div className="space-y-1">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Reports</h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
-          How this client is doing, across whatever&apos;s enabled — Showtime, Reputation Manager, or both. Comparing
+          How this client is doing, across whatever&apos;s enabled: Showtime, Reputation Manager, or both. Comparing
           across skills? See Analytics.
         </p>
       </div>

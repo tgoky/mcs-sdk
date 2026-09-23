@@ -162,7 +162,7 @@ function buildSweepReasonText(
   reasonDetail?: { crmCheckDescription: string; readinessDescription: string; minutesSinceReady: number }
 ): string {
   if (!reasonDetail) {
-    return `Possible no-show: ${prospectName}. No rep logged an outcome and no Recall bot session confirmed attendance. This is an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or use the outcome buttons if you know what actually happened.`;
+    return `Possible no-show: ${prospectName}. No rep logged an outcome and no Recall bot session confirmed attendance. This is an inference from missing evidence, not a confirmed no-show. Approve to start Win-Back recovery, or use the outcome buttons if you know what actually happened.`;
   }
   const { crmCheckDescription, readinessDescription, minutesSinceReady } = reasonDetail;
   const elapsed =
@@ -173,9 +173,9 @@ function buildSweepReasonText(
         : `${Math.round(minutesSinceReady / (24 * 60))}d ago`;
 
   return (
-    `Possible no-show: ${prospectName}. Here's what I checked — ${readinessDescription} (call became eligible for review ${elapsed}); ` +
+    `Possible no-show: ${prospectName}. Here's what I checked: ${readinessDescription} (call became eligible for review ${elapsed}); ` +
     `no rep logged an outcome on the dashboard or Slack; no Recall bot session confirmed attendance; and I ${crmCheckDescription}. ` +
-    `That's an inference from missing evidence, not a confirmed no-show — approve to start Win-Back recovery, or use the outcome buttons below if you already know what actually happened.`
+    `That's an inference from missing evidence, not a confirmed no-show. Approve to start Win-Back recovery, or use the outcome buttons below if you already know what actually happened.`
   );
 }
 
@@ -260,7 +260,7 @@ async function triggerNoShowWinBack(
       // "webhook_enrollment" (deliberately, for the shared execution
       // path), but a reviewer deciding "did this person actually
       // no-show" should never see a title about webhook enrollment.
-      _title: source === "auto_sweep" ? "Possible no-show — review before Win-Back recovery starts" : undefined,
+      _title: source === "auto_sweep" ? "Possible no-show: review before Win-Back recovery starts" : undefined,
       // Volume fix — at any real call count, one instant Slack ping per
       // ambiguous sweep call (this cron runs every 15 minutes, per
       // engagement) turns into exactly the "alert app" pattern this
@@ -450,7 +450,7 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
         prospectEmail: null,
         winBack: "skipped_no_email",
         cohort: "none",
-        reason: "No prospect email on file for this booking — cannot enroll or sync a cohort.",
+        reason: "No prospect email on file for this booking. Cannot enroll or sync a cohort.",
       };
     }
     const winBack = await triggerNoShowWinBack(
@@ -506,7 +506,7 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
     // needed".
     result.winBack = outcome === "no_show" ? "skipped_no_email" : "none";
     result.cohort = outcome !== "rescheduled" ? "skipped_no_email" : "none";
-    result.reason = "No prospect email on file for this booking — cannot enroll or sync a cohort.";
+    result.reason = "No prospect email on file for this booking. Cannot enroll or sync a cohort.";
     return result;
   }
 

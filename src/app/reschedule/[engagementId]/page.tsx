@@ -111,7 +111,7 @@ export default async function ReschedulePage({
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-zinc-500">
-              We could not pull live availability just now — use the link below to see all open times.
+              We could not pull live availability just now. Use the link below to see all open times.
             </p>
             <a
               href={standardBookingUrl}

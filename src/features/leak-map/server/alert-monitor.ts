@@ -196,7 +196,7 @@ export async function evaluateActiveAlertMonitor(): Promise<number> {
       );
     }
 
-    let alertMessage = `Metric \`${alert.metricName}\` is ${currentValue.toFixed(1)} — breaching your ${alert.comparison} ${alert.threshold} threshold.`;
+    let alertMessage = `Metric \`${alert.metricName}\` is ${currentValue.toFixed(1)}, breaching your ${alert.comparison} ${alert.threshold} threshold.`;
 
     const llmPromise = callClaude({
       model: MODEL.FAST,
@@ -232,7 +232,7 @@ Write a one-paragraph alert for the sales operator.`,
               blocks: [
                 {
                   type: "header",
-                  text: { type: "plain_text", text: `${severityEmoji} Leak Map Alert — ${alert.severity.toUpperCase()}`, emoji: true },
+                  text: { type: "plain_text", text: `${severityEmoji} Leak Map Alert: ${alert.severity.toUpperCase()}`, emoji: true },
                 },
                 { type: "section", text: { type: "mrkdwn", text: alertMessage } },
                 {

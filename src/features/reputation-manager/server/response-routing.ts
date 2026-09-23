@@ -88,7 +88,7 @@ async function queueDraftApproval(params: {
       findingExcerpt: params.finding.excerpt,
       draftText: draft,
       tier: params.tier,
-      _title: `Response draft ready (${label}) — ${platformLabel}`,
+      _title: `Response draft ready (${label}) for ${platformLabel}`,
     },
     `Severity ${params.finding.compositeScore ?? "n/a"}/100 on ${platformLabel}. Drafted response: "${draft}"`
   );
@@ -114,11 +114,11 @@ async function pageForPostureChoice(params: {
     engagementId: params.engagementId,
     type: "reputation_crisis_declared",
     severity: "critical",
-    title: `Response posture needed — ${params.operatorName}`,
+    title: `Response posture needed: ${params.operatorName}`,
     body:
       `A high-severity ${platformLabel} finding needs a response posture before anything gets drafted:\n\n"${params.finding.excerpt}"\n\n` +
       `Choose one from the incident page:\n${postureList}\n\n` +
-      `Sole authority on record: ${params.soleAuthorityName}. No draft exists yet — choosing a posture is what generates one.`,
+      `Sole authority on record: ${params.soleAuthorityName}. No draft exists yet. Choosing a posture is what generates one.`,
     slackWebhookUrl: (params.tenant.stack as EngagementStack | null)?.slack_webhook_url,
   });
 }
@@ -139,7 +139,7 @@ export function buildEvidencePackage(params: {
   declaredAt: Date;
 }): string {
   const lines: string[] = [
-    `Evidence package — ${params.operatorName}`,
+    `Evidence package: ${params.operatorName}`,
     `Incident: ${params.incidentId}`,
     `Declared: ${params.declaredAt.toISOString()}`,
     `Severity: ${params.severityScore}/100${params.signalClass ? ` (force-triggered: ${params.signalClass})` : ""}`,
@@ -211,9 +211,9 @@ async function escalateExternally(params: {
     engagementId: params.engagementId,
     type: "reputation_crisis_declared",
     severity: "critical",
-    title: `External escalation needed — ${params.operatorName}`,
+    title: `External escalation needed: ${params.operatorName}`,
     body:
-      `This incident needs to go outside the system — legal counsel or the platform's own trust & safety team, not a drafted reply.\n\n` +
+      `This incident needs to go outside the system. Legal counsel or the platform's own trust & safety team, not a drafted reply.\n\n` +
       `Signal: ${params.signalClass ?? "n/a"}. Severity ${params.severityScore}/100.\n\n` +
       `An evidence package has been generated on the incident page. Log the outcome there once you have one.`,
     slackWebhookUrl: (params.tenant.stack as EngagementStack | null)?.slack_webhook_url,
@@ -382,7 +382,7 @@ export async function draftForChosenPosture(params: {
       draftText: draft,
       tier: "tier3_pause_and_instruct",
       posture: params.posture,
-      _title: `Response draft ready (review before approving) — ${platformLabel}`,
+      _title: `Response draft ready (review before approving): ${platformLabel}`,
     },
     `Posture chosen: ${RESPONSE_POSTURES.find((p) => p.id === params.posture)?.label ?? params.posture}. Drafted response: "${draft}"`
   );

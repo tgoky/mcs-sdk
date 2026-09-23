@@ -42,7 +42,7 @@ export function CallIntelligenceLog({ sessions }: { sessions: ConversationIntell
           <Radio className="w-3.5 h-3.5" /> Call Intelligence Log
         </h2>
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-5 text-xs text-zinc-500 dark:text-zinc-400">
-          No calls have been picked up yet — a bot dispatches automatically once a call is booked at least 10 minutes out.
+          No calls have been picked up yet. A bot dispatches automatically once a call is booked at least 10 minutes out.
         </div>
       </div>
     );
@@ -59,7 +59,7 @@ export function CallIntelligenceLog({ sessions }: { sessions: ConversationIntell
         {failedCount > 0 && (
           <span className="text-[11px] font-mono text-rose-400 flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5" />
-            {failedCount} failed — check the region and API key under Update credentials
+            {failedCount} failed. Check the region and API key under Update credentials
           </span>
         )}
       </div>

@@ -551,7 +551,7 @@ export default function RunDetailPage() {
         </button>
         {!showRunActivity && (
           <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-600 pl-5">
-            The exact sequence of internal steps behind the summary above — useful if something looks off and you need the play-by-play.
+            The exact sequence of internal steps behind the summary above. It&apos;s useful if something looks off and you need the play-by-play.
           </p>
         )}
 

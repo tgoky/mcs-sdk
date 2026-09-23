@@ -571,7 +571,7 @@ export class HubSpotClient {
     const appId = process.env.HUBSPOT_APP_ID;
     if (!appId) {
       throw new Error(
-        "HUBSPOT_APP_ID is not configured — HubSpot webhook subscriptions are registered at the developer app level, not per-portal, so this env var is required before a native Conversations subscription can be created."
+        "HUBSPOT_APP_ID is not configured. HubSpot webhook subscriptions are registered at the developer app level, not per-portal, so this env var is required before a native Conversations subscription can be created."
       );
     }
 
@@ -1259,7 +1259,7 @@ export class MailchimpClient {
     const dc = apiKey.includes("-") ? apiKey.slice(apiKey.lastIndexOf("-") + 1) : "";
     if (!dc) {
       throw new Error(
-        `Mailchimp API key doesn't carry a datacenter suffix (expected e.g. "...-us21") — this doesn't look like a valid Mailchimp key.`
+        `Mailchimp API key doesn't carry a datacenter suffix (expected e.g. "...-us21"). This doesn't look like a valid Mailchimp key.`
       );
     }
     this.baseUrl = `https://${dc}.api.mailchimp.com/3.0`;
@@ -1511,7 +1511,7 @@ export function parseSmtpCredential(raw: string): SmtpConfig {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error(
-      'SMTP credential is not valid JSON — expected {"host","port","secure","username","password","fromAddress"}.'
+      'SMTP credential is not valid JSON. Expected {"host","port","secure","username","password","fromAddress"}.'
     );
   }
   for (const key of ["host", "port", "username", "password", "fromAddress"] as const) {
@@ -1605,7 +1605,7 @@ export function parseResendCredential(raw: string): ResendConfig {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error(
-      'Resend credential is not valid JSON — expected {"provider":"resend","apiKey","fromAddress"}.'
+      'Resend credential is not valid JSON. Expected {"provider":"resend","apiKey","fromAddress"}.'
     );
   }
   for (const key of ["apiKey", "fromAddress"] as const) {
@@ -1765,7 +1765,7 @@ export async function enrollInPreCallSequence(
       // Pile-On, or keep SMTP reserved for Win-Back's recovery cadence
       // (see win-back's dispatch below, which does have generated content).
       throw new Error(
-        "SMTP has no Pile-On pre-call content to send yet — this direct-send platform is currently only wired for the Win-Back recovery cadence. Use klaviyo, hubspot, activecampaign, ghl, mailchimp, or convertkit for Pile-On."
+        "SMTP has no Pile-On pre-call content to send yet. This direct-send platform is currently only wired for the Win-Back recovery cadence. Use klaviyo, hubspot, activecampaign, ghl, mailchimp, or convertkit for Pile-On."
       );
 
     default:
@@ -1970,7 +1970,7 @@ export async function deliverPersonalizedIntro(
  case "activecampaign":
       // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
       throw new Error(
-        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet, not supported."
       );
 
     case "smtp":
@@ -1978,7 +1978,7 @@ export async function deliverPersonalizedIntro(
       // time (see recovery-service.ts), there's no separate CRM profile
       // to tag after the fact the way the ESP clients above work.
       throw new Error(
-        "SMTP renders fully-authored content directly, so there's no separate personalized-intro delivery step for it — not supported."
+        "SMTP renders fully-authored content directly, so there's no separate personalized-intro delivery step for it, not supported."
       );
 
     default:
@@ -2037,13 +2037,13 @@ export async function deliverRescheduleLink(
     case "activecampaign":
       // 🌟 THE FIX: Throwing flags the upstream hybrid budget wrapper to accurately log a "fallback" outcome
       throw new Error(
-        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet — not supported."
+        "ActiveCampaign requires a pre-registered numeric custom field ID for this, which isn't collected during onboarding yet, not supported."
       );
 
     case "smtp":
       // Not applicable — same reasoning as deliverPersonalizedIntro above.
       throw new Error(
-        "SMTP renders fully-authored content directly, so there's no separate reschedule-link delivery step for it — not supported."
+        "SMTP renders fully-authored content directly, so there's no separate reschedule-link delivery step for it, not supported."
       );
 
     default:

@@ -60,7 +60,7 @@ export function RepEnginePanelConfigForm({
           AI Engine Watch
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          The scheduled watch already runs off the prompts and engines chosen in Identity Setup — nothing to tune
+          The scheduled watch already runs off the prompts and engines chosen in Identity Setup. Nothing to tune
           here. This runs the same check on demand, right now, instead of waiting for the next scheduled pass.
         </p>
       </div>

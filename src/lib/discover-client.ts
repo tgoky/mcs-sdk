@@ -82,7 +82,7 @@ async function checkUpfrontCollisions(operatorName: string, siteDomain: string) 
 export async function discoverClient(engagementId: string): Promise<DiscoverClientResult> {
   const domain = await getPrimaryDomainForEngagement(engagementId);
   if (!domain) {
-    return { ran: false, factsWritten: [], notes: ["No domain on file for this client yet — nothing to crawl."] };
+    return { ran: false, factsWritten: [], notes: ["No domain on file for this client yet. Nothing to crawl."] };
   }
 
   const siteDomain: string = domain;

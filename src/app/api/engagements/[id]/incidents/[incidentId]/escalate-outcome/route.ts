@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const outcomeDetail = body.outcomeDetail?.trim();
   if (!outcomeDetail) {
-    return NextResponse.json({ error: "outcomeDetail is required — describe what happened." }, { status: 400 });
+    return NextResponse.json({ error: "outcomeDetail is required. Describe what happened." }, { status: 400 });
   }
 
   const [incident] = await db

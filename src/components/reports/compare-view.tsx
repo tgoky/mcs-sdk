@@ -130,7 +130,7 @@ export function CompareView({ engagementId }: { engagementId: string }) {
             </div>
           ) : series.length === 0 ? (
             <p className="text-xs py-2" style={{ color: "var(--text-muted)" }}>
-              Not enough weekly history yet to compare — this fills in as more weeks pass.
+              Not enough weekly history yet to compare. This fills in as more weeks pass.
             </p>
           ) : (
             <>

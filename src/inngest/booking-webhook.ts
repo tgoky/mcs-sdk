@@ -68,7 +68,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
       await logStep(runId, {
         phase: "webhook_received",
         status: "skipped",
-        detail: `Engagement is ${statusReason} — booking webhook enrollment skipped.`,
+        detail: `Engagement is ${statusReason}. Booking webhook enrollment skipped.`,
       });
       await finishRun(runId, { status: "skipped" });
       return { processed: false, reason: `engagement is ${statusReason}` };
@@ -105,7 +105,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
       await logStep(runId, {
         phase: "skill_disabled",
         status: "skipped",
-        detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement — this booking event was not enrolled.`,
+        detail: `${SKILL_REGISTRY[skillId].name} is turned off for this engagement. This booking event was not enrolled.`,
       });
       await finishRun(runId, { status: "skipped" });
       return { processed: false, reason: "skill disabled for this engagement" };
@@ -122,7 +122,7 @@ export const processBookingWebhookEvent = inngest.createFunction(
           whatWorked: [],
           whatFailed: [message],
           openItems: [
-            "This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform.",
+            "This booking event was not enrolled in any sequence. Check the payload shape against the configured booking platform.",
           ],
           decisionsMade: [],
         },

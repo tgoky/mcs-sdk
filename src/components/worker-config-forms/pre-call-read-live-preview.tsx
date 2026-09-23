@@ -24,11 +24,11 @@ import { Sparkles } from "lucide-react";
 
 const SECTIONS: { title: string; body: string }[] = [
   { title: "Prospect Overview", body: "Jordan Kim, VP of Sales at Northwind Robotics. Booked via the confirmation page, no prior contact on file." },
-  { title: "Company Context", body: "Northwind Robotics — 40-person industrial automation startup, raised a Series A 6 months ago per public research." },
+  { title: "Company Context", body: "Northwind Robotics, a 40-person industrial automation startup, raised a Series A 6 months ago per public research." },
   { title: "Engagement History", body: "Opened 2 of 3 Pile-On sequence emails. No confirmation-page video watched yet." },
   { title: "Likely Objections", body: "Budget timing (just raised, may want to wait for board sign-off) and implementation bandwidth." },
-  { title: "Recommended Opening", body: "Lead with the Series A — ask what changes for their ops team in the next 2 quarters." },
-  { title: "Red Flags", body: "None on file yet — this section stays empty unless something real turns up." },
+  { title: "Recommended Opening", body: "Lead with the Series A. Ask what changes for their ops team in the next 2 quarters." },
+  { title: "Red Flags", body: "None on file yet. This section stays empty unless something real turns up." },
   { title: "Conversation Notes", body: "Booking notes: “Looking to cut manual QA time before we scale headcount.”" },
 ];
 
@@ -50,7 +50,7 @@ export function PreCallReadLivePreview({
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
         <div className="flex items-center gap-1.5 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Example brief — not live-generated</span>
+          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Example brief (not live-generated)</span>
         </div>
         <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">fictional prospect</span>
       </div>
@@ -71,7 +71,7 @@ export function PreCallReadLivePreview({
         </div>
       </div>
       <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed border-t border-zinc-100 dark:border-zinc-900">
-        The real brief is written per prospect from actual booking/CRM/research data once Pre-Call Read runs — this
+        The real brief is written per prospect from actual booking/CRM/research data once Pre-Call Read runs. This
         is a fixed example of its shape, not a preview of real upcoming content.
       </p>
     </div>

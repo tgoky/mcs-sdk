@@ -64,7 +64,7 @@ export function RepTwitterWatchConfigForm({
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
           The scheduled watch already searches the operator name, high-priority entities, and @handle from Identity
-          Setup daily — nothing to tune there. This reaches further back than that daily window using X's own
+          Setup daily. Nothing to tune there. This reaches further back than that daily window using X's own
           since: search operator, in one deeper pull.
         </p>
       </div>
@@ -75,7 +75,7 @@ export function RepTwitterWatchConfigForm({
         value={sinceDate}
         onChange={setSinceDate}
         required
-        helpText="Pulls every matching tweet posted since this date, scores what's new, and adds it to this client's findings — same pipeline the daily watch uses."
+        helpText="Pulls every matching tweet posted since this date, scores what's new, and adds it to this client's findings, using the same pipeline as the daily watch."
       />
 
       {error && (

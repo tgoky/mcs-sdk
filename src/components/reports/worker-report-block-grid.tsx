@@ -25,7 +25,7 @@ export function WorkerReportBlockGrid({ blocks }: { blocks: ReportBlockWithTrend
   if (blocks.length === 0) {
     return (
       <p className="text-xs text-zinc-500 dark:text-zinc-400 py-4">
-        No metrics yet for this client&apos;s enabled skills — check back once they&apos;ve run.
+        No metrics yet for this client&apos;s enabled skills. Check back once they&apos;ve run.
       </p>
     );
   }

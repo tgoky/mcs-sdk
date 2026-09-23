@@ -75,7 +75,7 @@ export async function runDriftMonitor(tenant: any, runId: string): Promise<void>
     if (monitoredEventTypes.size === 0) {
       await finishRun(runId, {
         status: "skipped",
-        summary: { whatWasAttempted: ["Checked subscribed events against the 6 pin-exempt resources"], whatWorked: [], whatFailed: [], openItems: ["Not applicable — no pin-exempt-resource events subscribed."], decisionsMade: [] },
+        summary: { whatWasAttempted: ["Checked subscribed events against the 6 pin-exempt resources"], whatWorked: [], whatFailed: [], openItems: ["Not applicable. No pin-exempt-resource events subscribed."], decisionsMade: [] },
       });
       return;
     }
@@ -104,7 +104,7 @@ export async function runDriftMonitor(tenant: any, runId: string): Promise<void>
           const deliveries = await client.request<{ data?: Array<{ payload?: unknown }> }>("webhooks.deliveries", `/v1/webhooks/${sub.whopWebhookId}/deliveries`, {});
           sample = deliveries.data?.[0]?.payload ?? null;
           if (!sample) throw new Error("no recent deliveries to compare against");
-          await logStep(runId, { phase: `drift_${eventType}`, status: "success", detail: "send_test_event failed — used a recent live delivery instead (reduced coverage)." });
+          await logStep(runId, { phase: `drift_${eventType}`, status: "success", detail: "send_test_event failed. Used a recent live delivery instead (reduced coverage)." });
         } catch (fallbackErr) {
           unmonitorable.push(eventType);
           await logStep(runId, { phase: `drift_${eventType}`, status: "failed", detail: `Both test event and live-delivery comparison failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}` });
@@ -139,7 +139,7 @@ export async function runDriftMonitor(tenant: any, runId: string): Promise<void>
         engagementId,
         "whop_drift_fingerprint_adopt",
         { whopWebhookId: sub.whopWebhookId, eventType, nextFingerprint },
-        `${eventType}'s payload shape changed (${diffs.join("; ")}). ${eventType === "plan.updated" ? "This backs Product Launch Pre-Flight's pricing confirmation — review before adopting." : ""} Adopt the new shape as the baseline?`
+        `${eventType}'s payload shape changed (${diffs.join("; ")}). ${eventType === "plan.updated" ? "This backs Product Launch Pre-Flight's pricing confirmation. Review before adopting." : ""} Adopt the new shape as the baseline?`
       );
     }
 
@@ -148,7 +148,7 @@ export async function runDriftMonitor(tenant: any, runId: string): Promise<void>
         whatWasAttempted: [`Checked ${monitoredEventTypes.size} pin-exempt event type(s)`],
         whatWorked: [...monitoredEventTypes].filter((e) => !alerts.some((a) => a.startsWith(e)) && !unmonitorable.includes(e)),
         whatFailed: [...alerts, ...unmonitorable.map((e) => `${e}: unmonitorable this pass`)],
-        openItems: alerts.length ? ["Structural changes queued for operator review — never auto-adopted."] : [],
+        openItems: alerts.length ? ["Structural changes queued for operator review. Never auto-adopted."] : [],
         decisionsMade: [],
       },
     });

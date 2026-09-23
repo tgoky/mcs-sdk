@@ -313,7 +313,7 @@ export const notifyStaleRunCron = inngest.createFunction(
       event.data.runId,
       event.data.skillName,
       "run_timed_out",
-      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
+      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging. Check the run's step timeline for where it stalled."
     );
     return { notified: true };
   }
@@ -744,7 +744,7 @@ export const checkSingleCanary = inngest.createFunction(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              text: `:rotating_light: Canary check *${result.status}* — ${check.platform} / ${check.adapterMethod}\n${result.detail ?? "(no detail)"}`,
+              text: `:rotating_light: Canary check *${result.status}*: ${check.platform} / ${check.adapterMethod}\n${result.detail ?? "(no detail)"}`,
             }),
           });
         } catch {
@@ -1129,7 +1129,7 @@ export const pendingActionDigestCron = inngest.createFunction(
             // makes for the immediate-ping case — a bare count tells a
             // reviewer nothing about what they're actually being asked
             // to confirm for each one.
-            return `• ${reason ?? "Possible no-show — no evidence found."}`;
+            return `• ${reason ?? "Possible no-show. No evidence found."}`;
           });
           const overflow = rows.length - listed.length;
 

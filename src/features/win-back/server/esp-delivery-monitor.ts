@@ -209,13 +209,13 @@ async function sweepActiveEnrollments(
 
   if (notifyOnCompletion && whopUserId) {
     const total = activeEnrollments.length;
-    const failureNote = failedCount > 0 ? ` ${failedCount} of ${total} could NOT be confirmed unenrolled (ESP call failed) and remain active — a later event will retry them automatically, or unenroll manually if this persists.` : "";
+    const failureNote = failedCount > 0 ? ` ${failedCount} of ${total} could NOT be confirmed unenrolled (ESP call failed) and remain active. A later event will retry them automatically, or unenroll manually if this persists.` : "";
     await notifyUser({
       whopUserId,
       engagementId,
       type: "win_back_delivery_auto_paused",
       severity: "critical",
-      title: "Win-Back auto-paused — deliverability threshold crossed",
+      title: "Win-Back auto-paused: deliverability threshold crossed",
       body: `${reasonText} ${succeededIds.length} of ${total} active enrollment(s) were unenrolled from ${stack.email_platform}.${failureNote} New enrollments are on hold until you resume from the engagement's Win-Back panel.`,
       slackWebhookUrl: stack.slack_webhook_url,
       workspaceId: workspaceId ?? undefined,

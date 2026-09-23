@@ -73,7 +73,7 @@ export function NotificationList({ notifs, unreadCount, markAllRead, markRead, o
       <div className="flex-1 overflow-y-auto">
         {notifs.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
-            Nothing yet — you&apos;ll see run failures and connection issues here.
+            Nothing yet. You&apos;ll see run failures and connection issues here.
           </div>
         ) : (
           notifs.map((n) => {

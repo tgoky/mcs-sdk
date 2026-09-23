@@ -139,7 +139,7 @@ export function PileOnView({
         subtitle: emailStep
           ? emailStep.detail ?? emailPlatformLabel(run.stack?.email_platform)
           : run.stack?.email_platform
-          ? `${emailPlatformLabel(run.stack.email_platform)} — Not attempted`
+          ? `${emailPlatformLabel(run.stack.email_platform)}: Not attempted`
           : "Not configured",
         badge:
           emailStep?.status === "success"
@@ -172,10 +172,10 @@ export function PileOnView({
                 smsFailedCount > 0 ? `, ${smsFailedCount} failed` : ""
               } of ${smsMessages.length} attempted`
             : smsDispatchStep?.status === "success"
-            ? "Dispatched — waiting on schedule"
+            ? "Dispatched: waiting on schedule"
             : smsDispatchStep?.status === "failed"
             ? smsDispatchStep.detail ?? "Failed to start"
-            : `${smsPlatformLabel(run.stack.sms_platform)} — no dispatch recorded`,
+            : `${smsPlatformLabel(run.stack.sms_platform)}. No dispatch recorded`,
         badge:
           !run.stack?.sms_platform || run.stack.sms_platform === "none"
             ? "Disabled"
@@ -211,7 +211,7 @@ export function PileOnView({
         subtitle: adDataStep
           ? adDataStep.detail ?? adDataPlatformLabel(run.stack?.ad_data_platform)
           : run.stack?.ad_data_platform && run.stack.ad_data_platform !== "none"
-          ? `${adDataPlatformLabel(run.stack.ad_data_platform)} — not updated`
+          ? `${adDataPlatformLabel(run.stack.ad_data_platform)}: not updated`
           : "Not configured",
         badge:
           adDataStep?.status === "success"
@@ -317,7 +317,7 @@ export function PileOnView({
                 Recovered a lost lead
               </p>
               <p className="text-xs text-[#424d77]/80 dark:text-[#c5b7ea]/80 leading-relaxed">
-                {prospectEmail ?? "This prospect"} had no-showed and was actively in the Win-Back sequence — this
+                {prospectEmail ?? "This prospect"} had no-showed and was actively in the Win-Back sequence. This
                 booking pulled them out of it{" "}
                 {recoveredTaggerStep?.status === "success" ? (
                   <>and tagged them as recovered on {run.stack?.email_platform ? emailPlatformLabel(run.stack.email_platform) : "your CRM"}.</>
@@ -401,8 +401,7 @@ export function PileOnView({
           })()
         ) : (
           <p className="pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 text-xs italic text-zinc-400">
-            Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used
-            — no AI-personalized intro generated.
+            Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used. No AI-personalized intro generated.
           </p>
         )}
       </div>
@@ -497,7 +496,7 @@ export function PileOnView({
                         className="flex items-center justify-between text-xs py-1.5"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                          Text #{i + 1} —{" "}
+                          Text #{i + 1} :{" "}
                           <span className="text-zinc-400 font-normal">
                             {formatDiaryTime(m.sentAt)}
                           </span>

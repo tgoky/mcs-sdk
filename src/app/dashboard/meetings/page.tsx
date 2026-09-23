@@ -102,7 +102,7 @@ export default async function MeetingsPage({
     <div className="max-w-3xl">
       <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Meetings</h1>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-        Everything tracked about calls, across every client — bookings as they come in, and briefs once Pre-Call Read has run.
+        Everything tracked about calls, across every client. Bookings as they come in, and briefs once Pre-Call Read has run.
       </p>
 
       <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-900 mb-5">

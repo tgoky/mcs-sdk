@@ -29,7 +29,7 @@ function describeRow(row: IcpRow): string {
   if (row.teamSizeMin || row.teamSizeMax) {
     const min = row.teamSizeMin || "0";
     const max = row.teamSizeMax || "any";
-    parts.push(`${min}–${max} team members`);
+    parts.push(`${min}-${max} team members`);
   }
   if (row.disqualifyIf.trim()) {
     parts.push(`disqualify if ${row.disqualifyIf.trim()}`);
@@ -55,7 +55,7 @@ export function IcpLockLivePreview({
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
         <div className="flex items-center gap-1.5 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Who Cold Open will target — live preview</span>
+          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Who Cold Open will target: live preview</span>
         </div>
         {usingPlaceholder && (
           <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">using a placeholder example</span>
@@ -65,7 +65,7 @@ export function IcpLockLivePreview({
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
           Prospects hear about{" "}
           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{productName || "Growth Accelerator"}</span>
-          {" — "}
+          {": "}
           {productValueProp || "helps B2B teams close more deals faster"}.
         </p>
         <div className="space-y-1.5">
@@ -75,7 +75,7 @@ export function IcpLockLivePreview({
               <span className="text-zinc-700 dark:text-zinc-300">
                 <span className="font-semibold">{row.label || row.slug}</span>
                 {row.weight && <span className="text-zinc-400 dark:text-zinc-600"> ({Math.round(Number(row.weight) * 100) || row.weight}%)</span>}
-                {" — "}
+                {": "}
                 {describeRow(row)}
               </span>
             </div>
@@ -83,7 +83,7 @@ export function IcpLockLivePreview({
         </div>
       </div>
       <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed border-t border-zinc-100 dark:border-zinc-900">
-        Voice Capture, Source Connect, Send Connect, and Daily Send all read this once it's saved — nothing runs
+        Voice Capture, Source Connect, Send Connect, and Daily Send all read this once it's saved. Nothing runs
         against it until then.
       </p>
     </div>

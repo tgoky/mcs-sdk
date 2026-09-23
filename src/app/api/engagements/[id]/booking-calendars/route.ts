@@ -58,7 +58,7 @@ export async function GET(
     }
     if (!stack.booking_platform_credentials_ref) {
       return NextResponse.json(
-        { error: "No booking credential saved yet — save your API key in Update credentials first." },
+        { error: "No booking credential saved yet. Save your API key in Update credentials first." },
         { status: 409 }
       );
     }

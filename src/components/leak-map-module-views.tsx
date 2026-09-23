@@ -56,9 +56,9 @@ function actionSummary(run: SkillRun): string {
   if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
   if (s === "failed" || s === "error") {
     if (run.errorMessage && run.errorMessage.length < 90) return run.errorMessage;
-    return "Funnel audit failed — click to view diagnostic log";
+    return "Funnel audit failed. Click to view diagnostic log";
   }
-  if (s === "timed_out") return "Timed out — exceeded max execution runtime";
+  if (s === "timed_out") return "Timed out (exceeded max execution runtime)";
   if (s === "cancelled") return "Cancelled by operator";
   return "Funnel health audit report generated";
 }

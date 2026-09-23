@@ -64,7 +64,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Duration (months) must be a positive whole number." }, { status: 400 });
   }
   if (!message) {
-    return NextResponse.json({ error: "The offer message is required — Section 8.3 never proposes an offer with a guessed message." }, { status: 400 });
+    return NextResponse.json({ error: "The offer message is required. Section 8.3 never proposes an offer with a guessed message." }, { status: 400 });
   }
 
   let minTenureDays: number | undefined;

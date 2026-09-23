@@ -52,7 +52,7 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
       await logStep(runId, {
         phase: "reply_fetch",
         status: "skipped",
-        detail: `Reply feed for ${config.sendPlatform.platform} is not yet built — Instantly is the only supported feed today.`,
+        detail: `Reply feed for ${config.sendPlatform.platform} is not yet built. Instantly is the only supported feed today.`,
       });
       summary.openItems.push(`Reply feed for ${config.sendPlatform.platform} is real, separately-scoped follow-up work.`);
       await finishRun(runId, { summary });

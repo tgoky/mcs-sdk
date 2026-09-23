@@ -175,7 +175,7 @@ async function scoreMentions(operatorName: string, mentions: RawMention[], runId
         `You score Reddit mentions of a business ("${operatorName}") for reputation risk. For each numbered item, ` +
         "classify overall sentiment (positive, neutral, or negative), and flag it (flagged: true) only if it raises " +
         "a serious issue worth a human looking at (fraud/scam accusations, safety concerns, a pattern of " +
-        "complaint) — most mentions, even lukewarm or joking ones, don't need flagging. Respond with ONLY a JSON " +
+        "complaint): most mentions, even lukewarm or joking ones, don't need flagging. Respond with ONLY a JSON " +
         'array, no preamble, no markdown fences:\n[{"index": 0, "sentiment": "positive"|"neutral"|"negative", "flagged": boolean, "flagReason": "one sentence, or null"}]',
       userMessage: numbered,
     });
@@ -342,7 +342,7 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "reddit_watch", status: "success", detail: "No mentions found." });
-      summary.whatWorked.push("Searched Reddit — no mentions found.");
+      summary.whatWorked.push("Searched Reddit. No mentions found.");
       await finishRun(runId, { summary });
       return;
     }
@@ -361,7 +361,7 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       await logStep(runId, {
         phase: "reddit_watch",
         status: "success",
-        detail: `Checked ${fetched.length} mention(s) — all already on file.`,
+        detail: `Checked ${fetched.length} mention(s). All already on file.`,
       });
       summary.whatWorked.push("No new mentions since last check.");
       await finishRun(runId, { summary });
@@ -410,7 +410,7 @@ export async function runRepRedditDeepScan(
   try {
     const timeframe = ctx?.deepScanTimeframe?.trim().toLowerCase();
     if (!timeframe || !VALID_REDDIT_TIMEFRAMES.includes(timeframe)) {
-      throw new Error(`A timeframe is required — one of: ${VALID_REDDIT_TIMEFRAMES.join(", ")}.`);
+      throw new Error(`A timeframe is required. Use one of: ${VALID_REDDIT_TIMEFRAMES.join(", ")}.`);
     }
 
     const graph = await (step ? step.run("load-identity-graph", () => loadIdentityGraph(engagementId)) : loadIdentityGraph(engagementId));
@@ -442,7 +442,7 @@ export async function runRepRedditDeepScan(
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "reddit_deep_scan", status: "success", detail: "No mentions found in that window." });
-      summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe} — no mentions found.`);
+      summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe}. No mentions found.`);
       await finishRun(runId, { summary });
       return;
     }
@@ -456,7 +456,7 @@ export async function runRepRedditDeepScan(
       status: "success",
       detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found widening to t=${timeframe}.`,
     });
-    summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe} (sort=top) — found ${result.newCount} new mention(s) beyond what the regular recency-sorted watch already had on file.`);
+    summary.whatWorked.push(`Widened the Reddit scan to t=${timeframe} (sort=top): found ${result.newCount} new mention(s) beyond what the regular recency-sorted watch already had on file.`);
     if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
 
     await finishRun(runId, { summary });

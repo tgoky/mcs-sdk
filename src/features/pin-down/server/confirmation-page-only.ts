@@ -46,10 +46,10 @@ export async function runConfirmationPageOnly(
       await logStep(runId, {
         phase: "confirmation_page_deploy",
         status: "skipped",
-        detail: "This client is set to keep their existing confirmation page — nothing to rebuild.",
+        detail: "This client is set to keep their existing confirmation page. Nothing to rebuild.",
       });
       summary.openItems.push(
-        "Client is configured to keep their existing confirmation page — switch that off in Edit Stack Settings before rebuilding one."
+        "Client is configured to keep their existing confirmation page. Switch that off in Edit Stack Settings before rebuilding one."
       );
       await finishRun(runId, { summary });
       return;
@@ -74,7 +74,7 @@ export async function runConfirmationPageOnly(
         await logStep(runId, {
           phase: "design_scrape",
           status: designSignal ? "success" : "skipped",
-          detail: designSignal ? `Matched the confirmation page's visual style to ${stack.buyer_domain}.` : `No usable design signal from ${stack.buyer_domain} — using the template's default look.`,
+          detail: designSignal ? `Matched the confirmation page's visual style to ${stack.buyer_domain}.` : `No usable design signal from ${stack.buyer_domain}. Using the template's default look.`,
         });
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
@@ -113,7 +113,7 @@ export async function runConfirmationPageOnly(
       await logStep(runId, {
         phase: "confirmation_page_deploy",
         status: "pending_review",
-        detail: "Queued for your approval — the rebuilt page hasn't published yet. Approve it from the dashboard queue to go live.",
+        detail: "Queued for your approval. The rebuilt page hasn't published yet. Approve it from the dashboard queue to go live.",
       });
       summary.openItems.push("Rebuilt confirmation page queued for approval before it publishes.");
       await finishRun(runId, { summary });
@@ -162,7 +162,7 @@ export async function runConfirmationPageOnly(
 
       await logStep(runId, { phase: "confirmation_page_deploy", status: "failed", detail: deployResult.reason });
       summary.whatFailed.push(`Could not auto-publish the rebuilt page to ${stack.hosting_platform}: ${deployResult.reason}`);
-      summary.openItems.push(`Paste-ready HTML ready for ${stack.hosting_platform} — manual publish required.`);
+      summary.openItems.push(`Paste-ready HTML ready for ${stack.hosting_platform}. Manual publish required.`);
     }
 
     await finishRun(runId, { summary });

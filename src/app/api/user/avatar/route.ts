@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Upload a JPEG, PNG or WebP image." }, { status: 400 });
       }
       if (body.dataUri.length > MAX_DATA_URI_LENGTH) {
-        return NextResponse.json({ error: "Image is too large — try a smaller photo." }, { status: 400 });
+        return NextResponse.json({ error: "Image is too large. Try a smaller photo." }, { status: 400 });
       }
       await setUploadedAvatar(session.whopUserId, body.dataUri);
       return NextResponse.json({ ok: true });

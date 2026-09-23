@@ -158,7 +158,7 @@ export function computeKarmaGateStatus(karma: number, accountAgeDays: number): K
   const selfPostsUnlocked = karma >= 50 && accountAgeDays >= 14;
   const linksAllowed = accountAgeDays >= 30 && karma >= 100;
 
-  if (!visibleToOthers) notes.push("Below 10 karma — comments may be shadowfiltered on some subreddits.");
+  if (!visibleToOthers) notes.push("Below 10 karma. Comments may be shadowfiltered on some subreddits.");
   if (visibleToOthers && !selfPostsUnlocked) notes.push("Comments are visible, but self-posts need 50+ karma and a 14+ day old account.");
   if (accountAgeDays < 30) notes.push("Accounts under 30 days old should not post links.");
   else if (!linksAllowed) notes.push("Links are allowed at one per post once the account has 100+ karma.");

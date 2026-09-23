@@ -137,7 +137,7 @@ export async function getLeakMapBenchmarkComparison(engagementId: string, worksp
   // column definition itself.
   const topIssues = latestAudit?.topIssues as Array<{ name: string; current: number; insufficientData?: boolean }> | null | undefined;
   if (!topIssues || topIssues.length === 0) {
-    return { error: "No Leak Map audit on file yet for this client — run Leak Map at least once first, then benchmarks can compare against it." };
+    return { error: "No Leak Map audit on file yet for this client. Run Leak Map at least once first, then benchmarks can compare against it." };
   }
 
   const metrics = topIssues.map((issue) => ({ name: issue.name, current: issue.current, insufficientData: issue.insufficientData ?? false }));
@@ -145,7 +145,7 @@ export async function getLeakMapBenchmarkComparison(engagementId: string, worksp
   if (lines.length === 0) {
     return {
       error:
-        "No benchmark data available for this client's bucket yet (needs traffic_temperature + price + vertical all set, and at least 20 other engagements in the same bucket) — nothing to compare against right now.",
+        "No benchmark data available for this client's bucket yet (needs traffic_temperature + price + vertical all set, and at least 20 other engagements in the same bucket). Nothing to compare against right now.",
     };
   }
   return { lines, auditedAt: latestAudit.createdAt };

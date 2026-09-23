@@ -263,7 +263,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     // that's a more recent signal than the approval click, so honor it
     // rather than silently re-enrolling anyway.
     if (!(await isSkillEnabledForEngagement(engagementId, skillName))) {
-      throw new Error(`${skillName} is turned off for this engagement — approve after re-enabling it, if that's intended.`);
+      throw new Error(`${skillName} is turned off for this engagement. Approve after re-enabling it, if that's intended.`);
     }
 
     // Fix: this label was the generic, mechanism-y "approved pending
@@ -271,7 +271,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     // approved — exactly the "sounds like a hardcoded system alarm, not
     // an assistant" complaint. Says what actually happened instead.
     const label = payload?._reason
-      ? `Win-Back recovery started for ${prospectName || prospectEmail || "prospect"} — no-show confirmed on review`
+      ? `Win-Back recovery started for ${prospectName || prospectEmail || "prospect"}. no-show confirmed on review`
       : `${skillName === "win-back" ? "Win-Back" : "Pile-On"} enrollment approved for ${prospectName || prospectEmail || "prospect"}`;
 
     await startRun({
@@ -339,7 +339,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     await logStep(payload.runId, {
       phase: "confirmation_page_deploy",
       status: "running",
-      detail: "Approved — publishing now.",
+      detail: "Approved. Publishing now.",
     });
 
     const deployResult = await publishConfirmationPage(
@@ -479,7 +479,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     // the toggle at approval time, only at the original request).
     const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
     if (!(await isSkillEnabledForEngagement(engagementId, "whop-bulk-promo-codes"))) {
-      throw new Error("Bulk Promo Code Generation is turned off for this engagement — approve after re-enabling it, if that's intended.");
+      throw new Error("Bulk Promo Code Generation is turned off for this engagement. Approve after re-enabling it, if that's intended.");
     }
     const { executeBulkPromoCodesConfirm } = await import("@/features/whop-agent/server/bulk-promo-codes-service");
     await executeBulkPromoCodesConfirm(engagementId, payload.specs);
@@ -499,7 +499,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   whop_dispute_evidence_submit: async (engagementId, payload) => {
     const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
     if (!(await isSkillEnabledForEngagement(engagementId, "whop-dispute-response"))) {
-      throw new Error("Dispute Response is turned off for this engagement — approve after re-enabling it, if that's intended.");
+      throw new Error("Dispute Response is turned off for this engagement. Approve after re-enabling it, if that's intended.");
     }
     const { executeDisputeEvidenceSubmit } = await import("@/features/whop-agent/server/dispute-response-service");
     await executeDisputeEvidenceSubmit(engagementId, payload.disputeId, payload.draft);
@@ -511,7 +511,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   whop_ads_flip_to_active: async (engagementId, payload) => {
     const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
     if (!(await isSkillEnabledForEngagement(engagementId, "whop-ads-draft-approve"))) {
-      throw new Error("Whop Ads Draft-and-Approve is turned off for this engagement — approve after re-enabling it, if that's intended.");
+      throw new Error("Whop Ads Draft-and-Approve is turned off for this engagement. Approve after re-enabling it, if that's intended.");
     }
     const { executeAdsFlipToActive } = await import("@/features/whop-agent/server/whop-ads-service");
     await executeAdsFlipToActive(engagementId, payload.adId);
@@ -604,7 +604,7 @@ async function claimPendingAction(
               action,
               terminal: {
                 ok: false,
-                error: `Anti-hasty-response cooling-off period active — wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
+                error: `Anti-hasty-response cooling-off period active: wait ${minutesLeft} more minute${minutesLeft === 1 ? "" : "s"} before approving a public response to this incident.`,
               },
             };
           }

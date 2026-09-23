@@ -58,7 +58,7 @@ export async function maybeNotifySequenceFailure(opts: {
       type: "sequence_message_failed",
       severity: "warning",
       title: `${label} delivery is failing`,
-      body: `A scheduled ${label} message failed to send: ${opts.error}. Further failures on this sequence won't re-notify for ${DEDUP_WINDOW_MS / 3600000}h so this doesn't spam you — check the credential for this engagement.`,
+      body: `A scheduled ${label} message failed to send: ${opts.error}. Further failures on this sequence won't re-notify for ${DEDUP_WINDOW_MS / 3600000}h so this doesn't spam you. Check the credential for this engagement.`,
       slackWebhookUrl: stack?.slack_webhook_url,
     });
   } catch (e) {

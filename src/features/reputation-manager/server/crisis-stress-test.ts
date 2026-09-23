@@ -52,7 +52,7 @@ export async function runCrisisStressTest(
     });
 
     if (!graph) {
-      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet — there's no threshold to test against.");
+      throw new Error("Reputation Manager's Identity Setup hasn't been completed for this client yet. There's no threshold to test against.");
     }
 
     const hypothetical: ContributingFinding = { source, excerpt: findingText, flagReason: null };
@@ -76,12 +76,12 @@ export async function runCrisisStressTest(
     });
 
     summary.whatWorked.push(
-      `Tested a hypothetical ${source} finding: "${findingText.slice(0, 150)}${findingText.length > 150 ? "…" : ""}" — severity ${assessment.severityScore}/100 (${axisDetail}), this client's threshold is ${floor}.`
+      `Tested a hypothetical ${source} finding: "${findingText.slice(0, 150)}${findingText.length > 150 ? "…" : ""}": severity ${assessment.severityScore}/100 (${axisDetail}), this client's threshold is ${floor}.`
     );
     summary.decisionsMade.push(
       wouldTrigger
-        ? `Would trigger an incident${forceTriggerClass ? ` (force-trigger class: ${forceTriggerClass})` : ` — severity ${assessment.severityScore} meets or exceeds the ${floor} threshold`}. No real incident was declared — this was a test only.`
-        : `Would NOT trigger an incident — severity ${assessment.severityScore} is below the ${floor} threshold and no force-trigger class applied.`
+        ? `Would trigger an incident${forceTriggerClass ? ` (force-trigger class: ${forceTriggerClass})` : `: severity ${assessment.severityScore} meets or exceeds the ${floor} threshold`}. No real incident was declared. This was a test only.`
+        : `Would NOT trigger an incident: severity ${assessment.severityScore} is below the ${floor} threshold and no force-trigger class applied.`
     );
 
     await finishRun(runId, { summary });

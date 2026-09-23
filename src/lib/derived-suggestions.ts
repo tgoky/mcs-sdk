@@ -40,7 +40,7 @@ export async function showtimeConnectionSuggestions(
     if (await hasCredential(engagementId, "hyros")) {
       out.adDataPlatform = fromConnection("hyros", "hyros", "A Hyros key is connected for this client.");
     } else if (crm) {
-      out.adDataPlatform = fromConnection("native_crm", crm, `Booked leads can be tagged in ${crm} — no separate ad-data platform needed.`);
+      out.adDataPlatform = fromConnection("native_crm", crm, `Booked leads can be tagged in ${crm}. No separate ad-data platform needed.`);
     }
   }
 

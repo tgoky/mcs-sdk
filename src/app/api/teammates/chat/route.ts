@@ -951,11 +951,11 @@ export async function POST(request: Request) {
           const status = await getWhopConnectionStatus(engagementId, activeWorkspace.workspaceId);
           ok = true;
           if (!status.connected) {
-            message2 = "No Whop account has been connected for this client yet — Whop Agent's Connect step hasn't been run.";
+            message2 = "No Whop account has been connected for this client yet. Whop Agent's Connect step hasn't been run.";
           } else if (status.disconnected) {
-            message2 = `This client's Whop connection was disconnected (account ${status.whopAccountId ?? "unknown"}) — it needs to be reconnected.`;
+            message2 = `This client's Whop connection was disconnected (account ${status.whopAccountId ?? "unknown"}). It needs to be reconnected.`;
           } else if (status.circuitBreakerState === "open") {
-            message2 = `This client's Whop connection is broken (account ${status.whopAccountId ?? "unknown"}) — the circuit breaker tripped${status.circuitBreakerReason ? `: ${status.circuitBreakerReason}` : ""}. It needs to be reconnected.`;
+            message2 = `This client's Whop connection is broken (account ${status.whopAccountId ?? "unknown"}). The circuit breaker tripped${status.circuitBreakerReason ? `: ${status.circuitBreakerReason}` : ""}. It needs to be reconnected.`;
           } else {
             message2 = `Connected (account ${status.whopAccountId ?? "unknown"}, ${status.credentialType} credential). ${status.unlockedScopeCount}/${status.totalScopeCount} probed scopes unlocked${status.lastScopeProbeAt ? `, last checked ${status.lastScopeProbeAt.toLocaleString()}` : ""}.`;
           }
@@ -1183,7 +1183,7 @@ export async function POST(request: Request) {
           message2 =
             rows.length === 0
               ? "Nothing on the roster for today."
-              : rows.map((r) => `${r.prospectName ?? r.prospectEmail ?? "Unknown"} — ${r.callTime.toLocaleTimeString()} (${r.status})`).join("; ");
+              : rows.map((r) => `${r.prospectName ?? r.prospectEmail ?? "Unknown"} at ${r.callTime.toLocaleTimeString()} (${r.status})`).join("; ");
         } else {
           message2 = "Missing engagementId.";
         }
@@ -1195,7 +1195,7 @@ export async function POST(request: Request) {
           message2 =
             rows.length === 0
               ? "No cancellations in the last week."
-              : rows.map((r) => `${r.prospectName ?? r.prospectEmail ?? "Unknown"} — was booked for ${r.callTime.toLocaleString()}`).join("; ");
+              : rows.map((r) => `${r.prospectName ?? r.prospectEmail ?? "Unknown"} was booked for ${r.callTime.toLocaleString()}`).join("; ");
         } else {
           message2 = "Missing engagementId.";
         }
@@ -1209,7 +1209,7 @@ export async function POST(request: Request) {
             rows.length === 0
               ? "No runs yet for this client."
               : rows
-                  .map((r) => `${r.skillName} — ${r.status}${r.errorMessage ? ` (${r.errorMessage})` : ""}, started ${r.startedAt.toLocaleString()}`)
+                  .map((r) => `${r.skillName}: ${r.status}${r.errorMessage ? ` (${r.errorMessage})` : ""}, started ${r.startedAt.toLocaleString()}`)
                   .join("; ");
         } else {
           message2 = "Missing engagementId.";
@@ -1222,7 +1222,7 @@ export async function POST(request: Request) {
           message2 =
             rows.length === 0
               ? "No one is currently in an active recovery cadence for this client."
-              : rows.map((r) => `${r.prospectName ?? r.prospectEmail} — enrolled ${r.enrolledAt.toLocaleDateString()}, ${r.recoveryWindowDays}-day window`).join("; ");
+              : rows.map((r) => `${r.prospectName ?? r.prospectEmail} enrolled ${r.enrolledAt.toLocaleDateString()}, ${r.recoveryWindowDays}-day window`).join("; ");
         } else {
           message2 = "Missing engagementId.";
         }
@@ -1497,7 +1497,7 @@ export async function POST(request: Request) {
           const needsBookingCredential = skillName === "pre-call-read";
           const hasCredential = needsBookingCredential ? await hasBookingCredential(engagementId, activeWorkspace.workspaceId) : true;
           if (!hasCredential) {
-            message2 = "This client doesn't have a booking platform connected yet — nothing would actually run. Want to connect one first?";
+            message2 = "This client doesn't have a booking platform connected yet. Nothing would actually run. Want to connect one first?";
           } else {
             const result = await triggerSkillRunForEngagement(session.whopUserId, activeWorkspace.workspaceId, engagementId, skillName);
             ok = result.ok;

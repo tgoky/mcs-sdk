@@ -45,11 +45,11 @@ interface Touchpoint {
 
 const ENROLLMENT_META: Record<string, { label: string; tone: Tone }> = {
   active: { label: "Active in cadence", tone: "warning" },
-  rebooked: { label: "Exited — rebooked", tone: "success" },
-  reply_exited: { label: "Exited — replied", tone: "info" },
-  manual_override: { label: "Exited — manual override", tone: "neutral" },
-  lost: { label: "Exited — window elapsed", tone: "neutral" },
-  corrected: { label: "Exited — outcome corrected", tone: "neutral" },
+  rebooked: { label: "Exited (rebooked)", tone: "success" },
+  reply_exited: { label: "Exited (replied)", tone: "info" },
+  manual_override: { label: "Exited (manual override)", tone: "neutral" },
+  lost: { label: "Exited (window elapsed)", tone: "neutral" },
+  corrected: { label: "Exited (outcome corrected)", tone: "neutral" },
 };
 
 function dayLabel(offsetDays: number) {
@@ -155,13 +155,13 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   function statusFor(tp: Touchpoint): { label: string; tone: Tone } {
     if (!enrollment) return { label: "Template step", tone: "neutral" };
     if (exitedOffsetDays != null && tp.offsetDays > exitedOffsetDays) {
-      return { label: "Skipped — cadence exited", tone: "neutral" };
+      return { label: "Skipped (cadence exited)", tone: "neutral" };
     }
     if (tp.offsetDays === 0) {
       const dayZeroLog = sendLog[0];
       if (dayZeroLog?.error) return { label: "Send failed", tone: "danger" };
-      if (dayZeroLog?.sentVia === "hybrid") return { label: "Sent — personalized", tone: "success" };
-      return { label: "Sent — template", tone: "success" };
+      if (dayZeroLog?.sentVia === "hybrid") return { label: "Sent (personalized)", tone: "success" };
+      return { label: "Sent (template)", tone: "success" };
     }
     return { label: tp.date.getTime() <= Date.now() ? "Scheduled" : "Upcoming", tone: "info" };
   }
@@ -208,9 +208,9 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
   }
 
   const editNote = isSmtp
-    ? "Saving updates what actually sends — this app reads this content fresh at send time."
+    ? "Saving updates what actually sends. This app reads this content fresh at send time."
     : platform
-      ? `Saving updates your reference copy only — ${emailPlatformLabel(platform)}'s own workflow sends whatever you built there, not this text.`
+      ? `Saving updates your reference copy only: ${emailPlatformLabel(platform)}'s own workflow sends whatever you built there, not this text.`
       : "Saving updates your reference copy for this cadence.";
 
   return (
@@ -236,13 +236,13 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
             {isSmtp ? <Mail size={13} className="shrink-0" /> : <Radio size={13} className="shrink-0" />}
             <span>
               {isSmtp ? (
-                <>Sending directly via {emailPlatformLabel(platform)} — this app owns the send schedule, no external CRM/ESP is involved.</>
+                <>Sending directly via {emailPlatformLabel(platform)} : this app owns the send schedule, no external CRM/ESP is involved.</>
               ) : missingMeta ? (
                 <>
-                  <strong className="font-semibold">{emailPlatformLabel(platform)} connected, but not ready</strong> — {missingMeta}
+                  <strong className="font-semibold">{emailPlatformLabel(platform)} connected, but not ready</strong> : {missingMeta}
                 </>
               ) : (
-                <>Delivering live via <strong className="font-semibold">{emailPlatformLabel(platform)}</strong> — enrolling actually pushes this prospect into that platform&apos;s own automation.</>
+                <>Delivering live via <strong className="font-semibold">{emailPlatformLabel(platform)}</strong> : enrolling actually pushes this prospect into that platform&apos;s own automation.</>
               )}
             </span>
             <span
@@ -258,7 +258,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                   : "border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400"
               )}
             >
-              {requiresApproval ? "Co-Pilot — approval required" : "Autopilot"}
+              {requiresApproval ? "Co-Pilot (approval required)" : "Autopilot"}
             </span>
             <Link
               href={stackSettingsHref}
@@ -270,7 +270,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         ) : (
           <>
             <AlertCircle size={13} className="shrink-0" />
-            <span>No email or SMS platform connected for this client yet — this cadence has nowhere to actually send beyond what&apos;s previewed below.</span>
+            <span>No email or SMS platform connected for this client yet. This cadence has nowhere to actually send beyond what&apos;s previewed below.</span>
             <Link
               href={stackSettingsHref}
               className="ml-auto inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:no-underline shrink-0"
@@ -318,7 +318,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                   type="button"
                   onClick={handleManualStopCadence}
                   className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
-                  title="Stop the automated sequence — use this if the prospect already rebooked elsewhere or replied directly"
+                  title="Stop the automated sequence. Use this if the prospect already rebooked elsewhere or replied directly"
                 >
                   <SquareX size={12} /> Stop Cadence
                 </button>
@@ -345,16 +345,16 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               once the cadence exits instead of always describing "active." */}
           <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
             {manualExited || enrollment.status === "manual_override" ? (
-              <>You stopped this sequence manually — no further messages will go out to this prospect.</>
+              <>You stopped this sequence manually. No further messages will go out to this prospect.</>
             ) : enrollment.status === "rebooked" ? (
-              <>This sequence stopped automatically because the prospect rebooked — no further messages went out after that.</>
+              <>This sequence stopped automatically because the prospect rebooked. No further messages went out after that.</>
             ) : enrollment.status === "reply_exited" ? (
-              <>This sequence stopped automatically because the prospect replied — no further messages went out after that.</>
+              <>This sequence stopped automatically because the prospect replied. No further messages went out after that.</>
             ) : enrollment.status === "lost" ? (
               <>This sequence ran its full {recoveryWindowDays}-day window without the prospect rebooking or replying, so it closed out.</>
             ) : (
               <>
-                What happens next: over the next {recoveryWindowDays} days, we&apos;ll automatically send this prospect the scheduled emails/texts below trying to get them rebooked. It stops the moment they reply or book again — or you can stop it yourself anytime with <span className="font-semibold text-zinc-700 dark:text-zinc-300">Stop Cadence</span> above.
+                What happens next: over the next {recoveryWindowDays} days, we&apos;ll automatically send this prospect the scheduled emails/texts below trying to get them rebooked. It stops the moment they reply or book again, or you can stop it yourself anytime with <span className="font-semibold text-zinc-700 dark:text-zinc-300">Stop Cadence</span> above.
               </>
             )}
           </p>
@@ -371,7 +371,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-3.5 text-xs text-amber-950 dark:text-amber-200 font-sans">
           <Wand2 size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
-            <strong className="font-semibold text-amber-800 dark:text-amber-300">This is real, generated content — not a mock.</strong>{" "}
+            <strong className="font-semibold text-amber-800 dark:text-amber-300">This is real, generated content, not a mock.</strong>{" "}
             No prospect has been enrolled in this cadence yet, so it&apos;s showing the standard 30-day sequence this run generated, unattached to anyone. It&apos;ll show a specific prospect once Win-Back actually enrolls one.
           </span>
         </div>
@@ -413,10 +413,10 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         exitedOffsetDays={exitedOffsetDays}
         deliveryNote={
           !isConnected
-            ? "No platform connected — later messages have nowhere to send yet."
+            ? "No platform connected. Later messages have nowhere to send yet."
             : isSmtp
-              ? "The first message is confirmed sent directly. Later messages are queued in this app's own scheduler and sent directly (SMTP/Resend) — the dates above are when they're scheduled to send."
-              : `The first message is confirmed sent directly. Later messages are queued in ${emailPlatformLabel(platform)}'s own automation to go out automatically — the dates above are when they're scheduled to send.`
+              ? "The first message is confirmed sent directly. Later messages are queued in this app's own scheduler and sent directly (SMTP/Resend). The dates above are when they're scheduled to send."
+              : `The first message is confirmed sent directly. Later messages are queued in ${emailPlatformLabel(platform)}'s own automation to go out automatically. The dates above are when they're scheduled to send.`
         }
         editNote={editNote}
         onSaveTouchpoint={handleSaveTouchpoint}
@@ -512,7 +512,7 @@ function CadenceTimeline({
           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
         </h3>
         <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
-          <Clock3 size={11} /> {formatDiaryDate(enrolledAt)} – {formatDiaryDate(windowEnd)} ({windowDays}d)
+          <Clock3 size={11} /> {formatDiaryDate(enrolledAt)} to {formatDiaryDate(windowEnd)} ({windowDays}d)
         </span>
       </div>
 
@@ -656,7 +656,7 @@ function CadenceTimeline({
                       {skipped && (
                         <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
                           <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
-                          This touch was skipped — the prospect exited the cadence on Day {exitedOffsetDays! + 1}.
+                          This touch was skipped. The prospect exited the cadence on Day {exitedOffsetDays! + 1}.
                         </div>
                       )}
                     </div>

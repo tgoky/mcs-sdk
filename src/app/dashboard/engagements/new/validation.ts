@@ -38,7 +38,7 @@ export function getValidationErrors(form: FormData): ValidationError[] {
   // step with no way to satisfy it without leaving that step. Same pattern
   // as the ghl_calendar check below — keep them in sync.
   if ((form.bookingPlatform === "calendly" || form.bookingPlatform === "cal_com") && !form.bookingStandingLink.trim()) {
-    errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Standing booking page link is required — choose a calendar from the dropdown once your API key is verified" });
+    errors.push({ step: "credentials", stepLabel: "Account Keys", issue: "Standing booking page link is required. Choose a calendar from the dropdown once your API key is verified" });
   }
   // Hard gate on the live calendar dropdown, not just the API key — this
   // is what actually prevents the GHL 422 bug: without a verified
@@ -52,7 +52,7 @@ export function getValidationErrors(form: FormData): ValidationError[] {
     errors.push({
       step: "credentials",
       stepLabel: "Account Keys",
-      issue: "GoHighLevel Calendar selection is required — choose one from the dropdown once your token and Location ID are verified",
+      issue: "GoHighLevel Calendar selection is required. Choose one from the dropdown once your token and Location ID are verified",
     });
   }
   if (!form.emailPlatform) {

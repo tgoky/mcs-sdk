@@ -170,7 +170,7 @@ export function CredentialRow({
         const data = await res.json();
         const items: VaultCredential[] = data.items ?? [];
         if (items.length === 0) {
-          throw new Error("Connected, but couldn't find the saved credential — try \"Reuse saved\" instead.");
+          throw new Error("Connected, but couldn't find the saved credential. Try \"Reuse saved\" instead.");
         }
         const newest = items.reduce((a, b) => (new Date(b.createdAt) > new Date(a.createdAt) ? b : a));
         const linkRes = await fetch(`/api/engagements/${engagementId}/credentials/link`, {
@@ -446,7 +446,7 @@ export function CredentialRow({
       ) : (
         <div className="space-y-1.5 rounded border border-dashed border-zinc-300 dark:border-zinc-800 px-2 py-1.5">
           <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500 leading-relaxed">
-            Connect {label.replace(/ key$/i, "")} securely — no key to copy or paste, and it&apos;s saved for reuse
+            Connect {label.replace(/ key$/i, "")} securely. No key to copy or paste, and it&apos;s saved for reuse
             on future clients automatically.
           </p>
           <button

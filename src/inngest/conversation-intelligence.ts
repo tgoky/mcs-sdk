@@ -142,7 +142,7 @@ export const processConversationIntelligenceTranscript = inngest.createFunction(
           type: "conversation_intelligence_objection_found",
           severity: "info",
           title: newObjections.length === 1 ? "New objection surfaced from a call" : `${newObjections.length} new objections surfaced from a call`,
-          body: `${newObjections.slice(0, 3).join("; ")}${newObjections.length > 3 ? ", and more" : ""} — the Objections ad brief has been updated to address it.`,
+          body: `${newObjections.slice(0, 3).join("; ")}${newObjections.length > 3 ? ", and more" : ""}. The Objections ad brief has been updated to address it.`,
           slackWebhookUrl: stack?.slack_webhook_url,
         });
       } catch (e) {

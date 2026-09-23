@@ -11,7 +11,7 @@
 export type QuickActionResult = { ok: true } | { ok: false; error: string };
 
 async function parseError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Your session expired — refresh the page and sign in again.";
+  if (res.status === 401) return "Your session expired. Refresh the page and sign in again.";
   if (res.status === 403) return "You don't have permission to do that.";
   try {
     const data = await res.json();
@@ -28,10 +28,10 @@ async function post(url: string, body?: object): Promise<QuickActionResult> {
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) return { ok: false, error: await parseError(res, "That didn't go through — try again.") };
+    if (!res.ok) return { ok: false, error: await parseError(res, "That didn't go through. Try again.") };
     return { ok: true };
   } catch {
-    return { ok: false, error: "Network error — check your connection." };
+    return { ok: false, error: "Network error. Check your connection." };
   }
 }
 
@@ -61,7 +61,7 @@ export async function resumeEngagement(engagementId: string): Promise<QuickActio
     if (!res.ok) return { ok: false, error: await parseError(res, "Failed to resume automations.") };
     return { ok: true };
   } catch {
-    return { ok: false, error: "Network error — check your connection." };
+    return { ok: false, error: "Network error. Check your connection." };
   }
 }
 
@@ -71,6 +71,6 @@ export async function copyToClipboard(text: string): Promise<QuickActionResult> 
     await navigator.clipboard.writeText(text);
     return { ok: true };
   } catch {
-    return { ok: false, error: "Couldn't copy — clipboard access was denied." };
+    return { ok: false, error: "Couldn't copy. Clipboard access was denied." };
   }
 }

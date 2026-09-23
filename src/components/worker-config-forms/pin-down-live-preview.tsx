@@ -71,7 +71,7 @@ export function PinDownLivePreview({
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
         <div className="flex items-center gap-1.5 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{meta.name} — live preview</span>
+          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{meta.name} (live preview)</span>
         </div>
         {!hasRealOffer && (
           <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">using placeholder offer details</span>
@@ -94,7 +94,7 @@ export function PinDownLivePreview({
         <div className="absolute inset-0" />
       </div>
       <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed">
-        This updates as the offer details on file change and as a different design is picked below — nothing here is
+        This updates as the offer details on file change and as a different design is picked below. Nothing here is
         published until Pin-Down actually runs.
       </p>
     </div>

@@ -38,7 +38,7 @@ export function VoiceCaptureLivePreview({
 }) {
   const firstSubject = subjectVariants.split("\n").map((s) => s.trim()).find(Boolean);
   const placeholderSubject = "chatgpt on {company_name}";
-  const placeholderBody = "Noticed {company_name} is scaling outbound — most teams your size are leaving replies on the table because nobody's actually reading them fast enough.";
+  const placeholderBody = "Noticed {company_name} is scaling outbound. Most teams your size are leaving replies on the table because nobody's actually reading them fast enough.";
 
   const subject = firstSubject || placeholderSubject;
   const body = applyGreetingAndSignOff(firstTouchsetBody.trim() || placeholderBody, greeting, signOff);
@@ -49,7 +49,7 @@ export function VoiceCaptureLivePreview({
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30">
         <div className="flex items-center gap-1.5 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Touch 1 — live preview</span>
+          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">Touch 1: live preview</span>
         </div>
         {usingPlaceholders && (
           <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">using placeholder copy</span>
@@ -63,7 +63,7 @@ export function VoiceCaptureLivePreview({
         <p className="text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</p>
       </div>
       <p className="px-3 py-1.5 text-[10px] text-zinc-400 dark:text-zinc-600 leading-relaxed border-t border-zinc-100 dark:border-zinc-900">
-        Assembled the same way copy-engine.ts's upload mode does — this is exactly what a lead would receive, not a
+        Assembled the same way copy-engine.ts's upload mode does. This is exactly what a lead would receive, not a
         mockup. {"{company_name}"} and similar tokens resolve per-lead at send time.
       </p>
     </div>

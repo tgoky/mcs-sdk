@@ -61,15 +61,15 @@ export const COMMON_TIMEZONES: { value: string; label: string }[] = [
  * (allowlisted, not free text) since a locale drives real formatting
  * behavior elsewhere in the app (see lib/workspace-format.ts). */
 export const SUPPORTED_LOCALES: { value: string; label: string }[] = [
-  { value: "en-US", label: "English (United States) — MM/DD/YYYY" },
-  { value: "en-GB", label: "English (United Kingdom) — DD/MM/YYYY" },
-  { value: "en-CA", label: "English (Canada) — YYYY-MM-DD" },
-  { value: "en-AU", label: "English (Australia) — DD/MM/YYYY" },
-  { value: "en-ZA", label: "English (South Africa) — YYYY/MM/DD" },
-  { value: "fr-FR", label: "French (France) — DD/MM/YYYY" },
-  { value: "de-DE", label: "German (Germany) — DD.MM.YYYY" },
-  { value: "es-ES", label: "Spanish (Spain) — DD/MM/YYYY" },
-  { value: "pt-BR", label: "Portuguese (Brazil) — DD/MM/YYYY" },
+  { value: "en-US", label: "English (United States), MM/DD/YYYY" },
+  { value: "en-GB", label: "English (United Kingdom), DD/MM/YYYY" },
+  { value: "en-CA", label: "English (Canada), YYYY-MM-DD" },
+  { value: "en-AU", label: "English (Australia), DD/MM/YYYY" },
+  { value: "en-ZA", label: "English (South Africa), YYYY/MM/DD" },
+  { value: "fr-FR", label: "French (France), DD/MM/YYYY" },
+  { value: "de-DE", label: "German (Germany), DD.MM.YYYY" },
+  { value: "es-ES", label: "Spanish (Spain), DD/MM/YYYY" },
+  { value: "pt-BR", label: "Portuguese (Brazil), DD/MM/YYYY" },
 ];
 
 export function isValidLocale(locale: string): boolean {

@@ -138,7 +138,7 @@ export function DynamicClientReport({
               href={workerPrimaryHref(id, engagementId)}
               className="text-xs text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
             >
-              {WORKER_REGISTRY[id].name} has no trend to show — see its full report
+              {WORKER_REGISTRY[id].name} has no trend to show. See its full report
             </Link>
           ))}
         </div>

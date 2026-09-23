@@ -96,18 +96,18 @@ export async function handleCancellationIntentEvent(
     const flippedTo = previousAttributes?.cancel_at_period_end;
     if (flippedTo !== false) {
       // previous value was true (member un-cancelled) or unknown — never eligible.
-      await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Direction check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: ["Not a new cancel-intent — no proposal generated."] } });
+      await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Direction check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: ["Not a new cancel-intent. No proposal generated."] } });
       return { proposed: false, reason: "not_a_new_cancellation" };
     }
 
-    await logStep(runId, { phase: "eligibility_check", status: "running", detail: degraded ? "previous_attributes absent — used read-back fallback" : undefined });
+    await logStep(runId, { phase: "eligibility_check", status: "running", detail: degraded ? "previous_attributes absent: used read-back fallback" : undefined });
 
     const minTenureDays = config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS;
     if (createdAtRaw) {
       const tenureDays = (Date.now() - new Date(createdAtRaw).getTime()) / (24 * 60 * 60 * 1000);
       if (tenureDays < minTenureDays) {
         await logStep(runId, { phase: "eligibility_check", status: "skipped", detail: `Tenure ${tenureDays.toFixed(0)}d < minimum ${minTenureDays}d.` });
-        await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Eligibility check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: [`Excluded — tenure ${tenureDays.toFixed(0)}d below ${minTenureDays}d minimum.`] } });
+        await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Eligibility check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: [`Excluded: tenure ${tenureDays.toFixed(0)}d below ${minTenureDays}d minimum.`] } });
         return { proposed: false, reason: "tenure_too_short" };
       }
     }
@@ -126,7 +126,7 @@ export async function handleCancellationIntentEvent(
       const alreadyOffered = priorOffers.some((row) => (row.payload as { memberEmail?: string })?.memberEmail === memberEmail);
       if (alreadyOffered) {
         await logStep(runId, { phase: "eligibility_check", status: "skipped", detail: `Already offered within the last ${cooldownDays} days.` });
-        await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Cooldown check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: [`Excluded — offered within the ${cooldownDays}-day cooldown.`] } });
+        await finishRun(runId, { status: "skipped", summary: { whatWasAttempted: ["Cooldown check"], whatWorked: [], whatFailed: [], openItems: [], decisionsMade: [`Excluded: offered within the ${cooldownDays}-day cooldown.`] } });
         return { proposed: false, reason: "cooldown_active" };
       }
     }
@@ -138,7 +138,7 @@ export async function handleCancellationIntentEvent(
       engagementId,
       "whop_cancellation_offer_create",
       { membershipId, memberEmail, productId, discountPercentage: config.discountPercentage, offerDurationMonths: config.offerDurationMonths, offerMessage: message },
-      `Save-offer proposal for ${memberEmail ?? membershipId}: ${config.discountPercentage}% off for ${config.offerDurationMonths} month(s). Approve to create the promo code — you still send the message yourself.`
+      `Save-offer proposal for ${memberEmail ?? membershipId}: ${config.discountPercentage}% off for ${config.offerDurationMonths} month(s). Approve to create the promo code. You still send the message yourself.`
     );
 
     await finishRun(runId, {

@@ -172,7 +172,7 @@ export function WorkersPanel({
             // whole product's onboarding — a narrow, specific reason
             // instead of the ProductOnboardingGateModal, which is about a
             // different problem.
-            toast.error(body.error ?? `${WORKER_REGISTRY[workerId].name} can't be enabled yet — required fields are missing.`);
+            toast.error(body.error ?? `${WORKER_REGISTRY[workerId].name} can't be enabled yet. Required fields are missing.`);
           }
         } else {
           toast.success(`${WORKER_REGISTRY[workerId].name} ${nextState ? "enabled" : "disabled"}.`);
@@ -235,7 +235,7 @@ export function WorkersPanel({
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Skills</h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
-            Status, configuration, and manual executions for every skill installed for this client — Showtime and
+            Status, configuration, and manual executions for every skill installed for this client. Showtime and
             Reputation Manager together, whichever this client actually has running.
           </p>
         </div>
@@ -301,7 +301,7 @@ export function WorkersPanel({
           )}
           {toggleOnlyEnabledCount > 0 && (
             <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic ml-auto">
-              +{toggleOnlyEnabledCount} other enabled {toggleOnlyEnabledCount === 1 ? "skill is" : "skills are"} plain on/off — nothing to configure.
+              +{toggleOnlyEnabledCount} other enabled {toggleOnlyEnabledCount === 1 ? "skill is" : "skills are"} plain on/off. Nothing to configure.
             </span>
           )}
         </div>
@@ -320,7 +320,7 @@ export function WorkersPanel({
             onClick={() => setExpandedWorker(null)}
             className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" /> Close — back to all skills
+            <X className="w-3.5 h-3.5" /> Back to all skills
           </button>
 
           {renderWorkerConfigForm(expandedWorker, {
@@ -379,7 +379,7 @@ export function WorkersPanel({
                     aria-label={`Toggle ${worker.name}`}
                     title={
                       !isEnabled && !worker.runOnSetup && productOnboarded[worker.productId] === false
-                        ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " — click for details"}`
+                        ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " (click for details)"}`
                         : undefined
                     }
                     className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
@@ -422,7 +422,7 @@ export function WorkersPanel({
                       )}
                     </div>
                   ) : isPausedActive ? (
-                    <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">On hold — client paused.</p>
+                    <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">On hold. Client paused.</p>
                   ) : isNeedsSetup ? (
                     <p className="text-[10.5px] text-orange-600 dark:text-orange-400 leading-snug font-mono line-clamp-1">
                       Missing: {missingFields.map((f) => f.label).join(", ")}

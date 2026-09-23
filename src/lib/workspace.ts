@@ -512,7 +512,7 @@ export async function deleteWorkspace(
       )
     );
   if (remaining === 0) {
-    return { error: "You need at least one workspace — create another before deleting this one." };
+    return { error: "You need at least one workspace. Create another before deleting this one." };
   }
 
   await db

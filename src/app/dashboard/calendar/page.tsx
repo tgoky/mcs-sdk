@@ -53,8 +53,8 @@ export default async function CalendarPage({
           <div className="space-y-0.5">
             <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Calendar</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Every call, Win-Back touch, and Leak Map audit across all of {activeWorkspace.name} — everything
-              on the calendar for whichever month you&apos;re looking at, forward or back.
+              Every call, Win-Back touch, and Leak Map audit across all of {activeWorkspace.name}, for
+              whichever month you&apos;re looking at, forward or back.
             </p>
           </div>
         </div>

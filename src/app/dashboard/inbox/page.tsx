@@ -87,7 +87,7 @@ export default async function InboxPage({
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Inbox</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Everything Showtime has surfaced across your clients — run issues, win-back activity, and weekly digests.
+            Everything Showtime has surfaced across your clients. Run issues, win-back activity, and weekly digests.
           </p>
         </div>
         {unreadTotal > 0 && <MarkAllReadButton />}

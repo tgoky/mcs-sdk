@@ -63,7 +63,7 @@ export function AccountAdvisorPanel({
 
       {reviews.length === 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          No reviews yet — generate one to get a real read across everything enabled for this client.
+          No reviews yet. Generate one to get a real read across everything enabled for this client.
         </p>
       ) : (
         <div className="space-y-4 divide-y divide-zinc-200 dark:divide-zinc-800/80">

@@ -3,16 +3,16 @@ import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRAN
 import { buildTentativeHoldDynamicHtml } from "./dynamic/tentative-hold.dynamic";
 
 /**
- * The Tentative Hold — for agency/done-for-you offers, where a booked
+ * The Tentative Hold --- for agency/done-for-you offers, where a booked
  * slot alone doesn't feel like a commitment yet. Cool slate blue,
  * professional and calm. Signature element: the page opens in a
  * "pending" state (a hold, not yet confirmed) and asks for one honest
- * tap — "Yes, I'll be there" — before it visually settles into
+ * tap --- "Yes, I'll be there" --- before it visually settles into
  * "confirmed." This is a self-contained visual acknowledgment (no form
- * submission, no backend write — the page has no server to write to)
+ * submission, no backend write --- the page has no server to write to)
  * built to raise the buyer's own felt commitment the same way saying a
  * thing out loud does, not to fake a persistence step that isn't there.
- * The status indicator is a plain static dot — no pulsing animation —
+ * The status indicator is a plain static dot --- no pulsing animation ---
  * since a hold that's genuinely pending doesn't need to visually nag.
  *
  * Published once per engagement as static HTML, so the greeting and call
@@ -82,13 +82,13 @@ ${buildGoogleFontLinks("family=Manrope:wght@400;500;600;700")}
   .eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #5b7699; margin: 0 0 12px; text-align: center; }
   h1 { text-align: center; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 8px; }
 
-  /* Call-time chip, shown only once the booking redirect resolves it —
+  /* Call-time chip, shown only once the booking redirect resolves it ---
      never a guessed or stale time. */
   .chip-row { display: flex; justify-content: center; margin: 0 0 32px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d7dee6; border-radius: 999px; padding: 7px 14px; font-size: 0.8rem; color: #2c3947; }
   .chip strong { color: #2B4C7E; }
 
-  /* Hold-status card — signature element */
+  /* Hold-status card --- signature element */
   .hold-card {
     border-radius: 14px;
     padding: 26px 24px;
@@ -125,7 +125,7 @@ ${buildGoogleFontLinks("family=Manrope:wght@400;500;600;700")}
   section { margin-bottom: 40px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #5b7699; margin: 0 0 16px; }
 
-  /* Briefing video — placeholder until the operator's recording pass
+  /* Briefing video --- placeholder until the operator's recording pass
      produces one; never a fabricated embed. */
   .video-card { background: #fff; border: 1px solid #d7dee6; border-radius: 12px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
   .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #2B4C7E; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }

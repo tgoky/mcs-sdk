@@ -55,7 +55,7 @@ export async function deliverAuditReport(
   opts: { slackWebhookUrl?: string; reportEmail?: string }
 ): Promise<AuditOutputResult> {
   const resolvedFormat = format ?? "dashboard_only";
-  const title = `Leak Map ${runType === "weekly" ? "Weekly Summary" : "Monthly Deep-Dive"} — ${buyerName}`;
+  const title = `Leak Map ${runType === "weekly" ? "Weekly Summary" : "Monthly Deep-Dive"} for ${buyerName}`;
 
   if (resolvedFormat === "dashboard_only") {
     return { delivered: true, channel: "dashboard_only" };
@@ -74,7 +74,7 @@ export async function deliverAuditReport(
             { type: "header", text: { type: "plain_text", text: title, emoji: true } },
             { type: "section", text: { type: "mrkdwn", text: toSlackMrkdwn(report).slice(0, 2900) } },
             ...(report.length > 2900
-              ? [{ type: "context", elements: [{ type: "mrkdwn", text: "Full report available in the dashboard — truncated here for Slack's length limit." }] }]
+              ? [{ type: "context", elements: [{ type: "mrkdwn", text: "Full report available in the dashboard. Truncated here for Slack's length limit." }] }]
               : []),
           ],
         }),
@@ -90,7 +90,7 @@ export async function deliverAuditReport(
 
   // format === "email"
   if (!process.env.RESEND_API_KEY) {
-    return { delivered: false, channel: "email", error: "RESEND_API_KEY is not configured — email delivery is unavailable." };
+    return { delivered: false, channel: "email", error: "RESEND_API_KEY is not configured. Email delivery is unavailable." };
   }
   if (!opts.reportEmail) {
     return { delivered: false, channel: "email", error: "No leak_map_report_email configured on this engagement." };

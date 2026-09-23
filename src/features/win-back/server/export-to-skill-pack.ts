@@ -57,14 +57,14 @@ export interface SkillPackExportBundle {
 }
 
 const EXIT_CONDITION_NOTE =
-  "Exit this flow immediately if the prospect rebooks a call (recovered) or replies to any message in this sequence (Win-Back recovery gaps 4 and 6) — do not let a later step send after either signal.";
+  "Exit this flow immediately if the prospect rebooks a call (recovered) or replies to any message in this sequence (Win-Back recovery gaps 4 and 6). Do not let a later step send after either signal.";
 
 const PLATFORM_SETUP_INSTRUCTIONS: Record<string, string[]> = {
   klaviyo: [
     "In Klaviyo: Flows > Create Flow > Build your own.",
-    "Set the trigger to whatever event/list this buyer's booking platform previously enrolled prospects into Win-Back on (ask your Mudd Ventures contact for the exact enrollment criteria if you're not sure — this app enrolled on the booking platform's 'no_show' or 'cancelled' disposition tag).",
+    "Set the trigger to whatever event/list this buyer's booking platform previously enrolled prospects into Win-Back on (ask your Mudd Ventures contact for the exact enrollment criteria if you're not sure. This app enrolled on the booking platform's 'no_show' or 'cancelled' disposition tag).",
     "Add each step below in order using its listed delay relative to the previous step (Klaviyo: 'Time Delay' action between each email/SMS action).",
-    "Add a flow filter on the flow itself (or per-step) implementing the exit condition noted on each step — Klaviyo supports this via a 'Conditional Split' checking a rebooked/replied property, or by removing the profile from the flow's trigger list on those events.",
+    "Add a flow filter on the flow itself (or per-step) implementing the exit condition noted on each step. Klaviyo supports this via a 'Conditional Split' checking a rebooked/replied property, or by removing the profile from the flow's trigger list on those events.",
   ],
   hubspot: [
     "In HubSpot: Automation > Workflows > Create workflow > From scratch.",
@@ -87,7 +87,7 @@ const PLATFORM_SETUP_INSTRUCTIONS: Record<string, string[]> = {
 };
 
 const GENERIC_SETUP_INSTRUCTIONS = [
-  "Recreate this sequence as a native automation/flow inside your platform, triggered the same way this app's Win-Back skill was — on a no-show or cancelled disposition.",
+  "Recreate this sequence as a native automation/flow inside your platform, triggered the same way this app's Win-Back skill was. On a no-show or cancelled disposition.",
   "Add each step below in order, respecting each step's send delay relative to the previous step.",
   "Implement the exit condition noted on each step so the sequence halts correctly on a rebook or reply.",
 ];
@@ -100,7 +100,7 @@ export async function exportWinBackToSkillPack(engagementId: string): Promise<Sk
   const assetMap = tenant.winBackSequenceAssetMap;
   if (!assetMap || (assetMap.emails.length === 0 && assetMap.sms.length === 0)) {
     throw new Error(
-      "No generated Win-Back cadence found for this engagement — run generateRecoveryCadence (Win-Back onboarding) before exporting."
+      "No generated Win-Back cadence found for this engagement. Run generateRecoveryCadence (Win-Back onboarding) before exporting."
     );
   }
 
@@ -129,7 +129,7 @@ export async function exportWinBackToSkillPack(engagementId: string): Promise<Sk
   return {
     engagementId,
     platform,
-    flowName: `Win-Back Recovery — ${tenant.buyer}`,
+    flowName: `Win-Back Recovery: ${tenant.buyer}`,
     exportedAt: new Date().toISOString(),
     steps,
     setupInstructions: PLATFORM_SETUP_INSTRUCTIONS[platform] ?? GENERIC_SETUP_INSTRUCTIONS,
@@ -149,7 +149,7 @@ export async function markWinBackExported(engagementId: string, platform: string
   const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!tenant) throw new Error(`Engagement ${engagementId} not found`);
   const stack = tenant.stack as EngagementStack | null;
-  if (!stack) throw new Error(`Engagement ${engagementId} has no stack configured — nothing to export`);
+  if (!stack) throw new Error(`Engagement ${engagementId} has no stack configured. Nothing to export`);
 
   await db
     .update(engagements)

@@ -68,7 +68,7 @@ export function RepOnboardingView({ detail }: { detail: RepOnboardingDetail }) {
           <ul className="space-y-2">
             {identityGraph.collisions.map((c, i) => (
               <li key={i} className="text-xs text-zinc-700 dark:text-zinc-300">
-                <span className="font-semibold">{c.name}</span> — {c.whoTheyAre}
+                <span className="font-semibold">{c.name}</span> : {c.whoTheyAre}
                 <p className="text-zinc-500 dark:text-zinc-400 mt-0.5">{c.disambiguationNote}</p>
                 <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
                   {c.source === "buyer" ? "reported by buyer" : "found by collision check"}

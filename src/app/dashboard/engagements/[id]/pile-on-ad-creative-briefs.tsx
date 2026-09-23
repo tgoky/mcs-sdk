@@ -29,7 +29,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-5 font-sans">
         <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs</h3>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1">
-          No ad creative briefs have been generated yet — this gets built automatically during setup.
+          No ad creative briefs have been generated yet. This gets built automatically during setup.
         </p>
       </div>
     );
@@ -41,7 +41,7 @@ export function PileOnAdCreativeBriefs({ pack }: { pack: AdCreativeBriefPack | n
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs</h3>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
-            Hand these to your editor or copywriter — one brief per content angle.
+            Hand these to your editor or copywriter. One brief per content angle.
           </p>
         </div>
         {pack.objectionsLastRegeneratedAt && (

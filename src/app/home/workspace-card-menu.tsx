@@ -220,7 +220,7 @@ function DeleteWorkspaceSection({
         <TriangleAlert className="w-3.5 h-3.5" /> Delete {workspace.name}?
       </p>
       <p className="text-[11px] text-rose-600/80 dark:text-rose-400/70 font-mono leading-relaxed">
-        This hides the workspace and everything in it — engagements, credentials, run history. Nothing is
+        This hides the workspace and everything in it. Engagements, credentials, run history. Nothing is
         erased, but there&apos;s no restore option for this one yet, so make sure it&apos;s the right
         workspace. Type its name to confirm: <span className="font-bold">{workspace.name}</span>
       </p>

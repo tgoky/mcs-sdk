@@ -14,16 +14,16 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const TIER_LABELS: Record<string, string> = {
-  tier1_one_click: "Tier 1 — drafted, one-click approve",
-  tier2_review: "Tier 2 — drafted, review & approve",
-  tier3_pause_and_instruct: "Tier 3 — choose a posture",
-  tier4_external_escalation: "Tier 4 — external escalation",
+  tier1_one_click: "Tier 1: drafted, one-click approve",
+  tier2_review: "Tier 2: drafted, review & approve",
+  tier3_pause_and_instruct: "Tier 3: choose a posture",
+  tier4_external_escalation: "Tier 4: external escalation",
 };
 
 const RESPONSE_POSTURES = [
   { id: "acknowledge_private_resolution", label: "Acknowledge & invite private resolution" },
   { id: "factual_correction", label: "Non-defensive factual correction" },
-  { id: "monitor_only", label: "No public response — monitor only" },
+  { id: "monitor_only", label: "No public response (monitor only)" },
   { id: "escalate_externally", label: "Escalate externally instead" },
 ];
 
@@ -183,7 +183,7 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
       {status === "open" && incident.responseTier === "tier3_pause_and_instruct" && !selectedPosture && (
         <div className="ml-7 rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-950/20 p-2.5">
           <p className="text-[11px] font-semibold text-sky-700 dark:text-sky-400 mb-1.5">
-            Choose a response posture — nothing is drafted until you do:
+            Choose a response posture. Nothing is drafted until you do:
           </p>
           <div className="flex flex-wrap gap-1.5">
             {RESPONSE_POSTURES.map((p) => (
@@ -204,7 +204,7 @@ export function IncidentRow({ incident }: { incident: IncidentRowData }) {
       )}
       {selectedPosture && (
         <p className="ml-7 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Posture chosen: {RESPONSE_POSTURES.find((p) => p.id === selectedPosture)?.label ?? selectedPosture} — draft queued in the Queue for approval.
+          Posture chosen: {RESPONSE_POSTURES.find((p) => p.id === selectedPosture)?.label ?? selectedPosture} : draft queued in the Queue for approval.
         </p>
       )}
 

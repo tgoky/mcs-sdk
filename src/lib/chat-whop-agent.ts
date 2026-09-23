@@ -82,7 +82,7 @@ async function requireAccess(session: Session, engagementId: string): Promise<st
 // first, same pattern whop-agent.ts's own webhook handlers already use.
 async function requireSkillEnabled(engagementId: string, skillId: string, label: string): Promise<string | null> {
   if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
-    return `${label} is currently turned off for this client — enable it in the dashboard's Skills panel first.`;
+    return `${label} is currently turned off for this client. Enable it in the dashboard's Skills panel first.`;
   }
   return null;
 }
@@ -100,23 +100,23 @@ export async function runProductLaunchPreflightForEngagement(
   try {
     const result = await runProductLaunchBatch(engagementId, [input]);
     if (result.queued) {
-      return { ok: true, message: `Queued for confirmation (${result.pendingActionId}) — review it in the dashboard's Approvals before it launches.` };
+      return { ok: true, message: `Queued for confirmation (${result.pendingActionId}). Review it in the dashboard's Approvals before it launches.` };
     }
     const one = result.results[0];
     if (one.status === "halted_on_validation") {
       return { ok: false, error: `Preflight failed: ${(one.violations ?? []).map((v) => `${v.field}: ${v.message}`).join("; ")}` };
     }
     if (one.status === "halted_on_purchase_cap") {
-      return { ok: false, error: "Halted — one of these plans exceeds the purchase cap. Use assemble_purchase_cap_packet to request an increase first." };
+      return { ok: false, error: "Halted. One of these plans exceeds the purchase cap. Use assemble_purchase_cap_packet to request an increase first." };
     }
     if (one.status === "dry_run") {
       return {
         ok: true,
         message:
-          "Dry run only (this client's first Product Launch Pre-Flight run, per Section 8.2) — no product was actually created, this was a preview of what would be. There's currently no single-launch path (here or in the dashboard) to force it live from here — going live requires either a batch of 4+ products (queued for a human to approve in Approvals) or this client having already gone live once through that path.",
+          "Dry run only (this client's first Product Launch Pre-Flight run, per Section 8.2), no product was actually created, this was a preview of what would be. There's currently no single-launch path (here or in the dashboard) to force it live from here, going live requires either a batch of 4+ products (queued for a human to approve in Approvals) or this client having already gone live once through that path.",
       };
     }
-    return { ok: true, message: `Launched "${input.title}" — product ${one.productId}, plans ${one.createdPlanIds?.join(", ") ?? "none"}${one.promoCodeId ? `, promo code ${one.promoCodeId}` : ""}.` };
+    return { ok: true, message: `Launched "${input.title}": product ${one.productId}, plans ${one.createdPlanIds?.join(", ") ?? "none"}${one.promoCodeId ? `, promo code ${one.promoCodeId}` : ""}.` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -159,7 +159,7 @@ export async function configureCancelDiscountForEngagement(
   }
   try {
     const pendingActionId = await queueNativeCancelDiscountConfig(engagementId, planId, { percentage, intervals });
-    return { ok: true, message: `Queued for confirmation (${pendingActionId}) — this changes what every cancelling member sees, so a human needs to approve it in the dashboard's Approvals before it goes live.` };
+    return { ok: true, message: `Queued for confirmation (${pendingActionId}). This changes what every cancelling member sees, so a human needs to approve it in the dashboard's Approvals before it goes live.` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -188,7 +188,7 @@ export async function assembleDisputeResponseForEngagement(session: Session, eng
   try {
     const result = await assembleDisputeResponse(engagementId, disputeId);
     if (result.status === "window_closed") {
-      return { ok: false, error: "The evidence submission window for this dispute has already closed — nothing can be drafted or submitted now." };
+      return { ok: false, error: "The evidence submission window for this dispute has already closed. Nothing can be drafted or submitted now." };
     }
     return {
       ok: true,
@@ -212,7 +212,7 @@ export async function submitDisputeEvidenceForEngagement(
   if (!disputeId || !draft?.notes) return { ok: false, error: "disputeId and draft.notes are required." };
   try {
     const pendingActionId = await queueDisputeEvidenceSubmit(engagementId, disputeId, draft);
-    return { ok: true, message: `Queued for confirmation (${pendingActionId}) — dispute evidence submission always needs a human's approval in the dashboard before it's actually sent to Whop.` };
+    return { ok: true, message: `Queued for confirmation (${pendingActionId}). Dispute evidence submission always needs a human's approval in the dashboard before it's actually sent to Whop.` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -244,7 +244,7 @@ export async function draftWhopAdForEngagement(
   return {
     ok: true,
     runId,
-    message: "Drafting the ad now (generating media, then creating it in draft status — no spend yet). This can take a minute; check get_run_history for the result. Flipping it active is a separate step once you've reviewed the draft.",
+    message: "Drafting the ad now (generating media, then creating it in draft status. No spend yet). This can take a minute; check get_run_history for the result. Flipping it active is a separate step once you've reviewed the draft.",
   };
 }
 
@@ -256,7 +256,7 @@ export async function flipWhopAdActiveForEngagement(session: Session, engagement
   if (!adId || !Number.isFinite(budgetCents) || budgetCents <= 0) return { ok: false, error: "adId and a positive budgetCents are required." };
   try {
     const pendingActionId = await queueAdsFlipToActive(engagementId, adId, budgetCents);
-    return { ok: true, message: `Queued for confirmation (${pendingActionId}) — flipping an ad active always needs a human's approval in the dashboard, since it starts real spend.` };
+    return { ok: true, message: `Queued for confirmation (${pendingActionId}). Flipping an ad active always needs a human's approval in the dashboard, since it starts real spend.` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -278,13 +278,13 @@ export async function runBulkPromoCodesForEngagement(
   try {
     const result = await runBulkPromoCodes(engagementId, specs, { dryRun });
     if (result.status === "queued_for_confirmation") {
-      return { ok: true, message: `Batch exceeds the confirmation threshold — queued (${result.pendingActionId}) for a human to approve in the dashboard.` };
+      return { ok: true, message: `Batch exceeds the confirmation threshold: queued (${result.pendingActionId}) for a human to approve in the dashboard.` };
     }
     if (result.status === "dry_run") {
-      return { ok: true, message: `Dry run only (first run for this client per Section 8.2, or dryRun was left unset) — would create: ${specs.map((s) => s.code).join(", ")}. No live call was made. Confirm with the user, then call this again with dryRun:false to actually create them.` };
+      return { ok: true, message: `Dry run only (first run for this client per Section 8.2, or dryRun was left unset): would create: ${specs.map((s) => s.code).join(", ")}. No live call was made. Confirm with the user, then call this again with dryRun:false to actually create them.` };
     }
     if (result.status === "queued_live") {
-      return { ok: true, runId: result.runId, message: "Dispatched — creating the codes for real now in the background. Check get_run_history for the result." };
+      return { ok: true, runId: result.runId, message: "Dispatched. Creating the codes for real now in the background. Check get_run_history for the result." };
     }
     return { ok: true, message: `Created: ${result.created.join(", ") || "none"}.${result.failed.length ? ` Failed: ${result.failed.map((f) => `${f.code} (${f.error})`).join("; ")}.` : ""}` };
   } catch (e) {
@@ -322,7 +322,7 @@ export async function runAttributionReportForEngagement(session: Session, engage
     return {
       ok: true,
       runId,
-      message: `Attribution report ready — ${report.totalMemberships} membership(s) total, ${report.byPromoCode.length} promo code group(s), ${report.byAffiliate.length} affiliate group(s), ${report.byCheckoutSession.length} checkout-session group(s).${report.shapeMismatch ? ` Note: ${report.shapeMismatch}` : ""}`,
+      message: `Attribution report ready: ${report.totalMemberships} membership(s) total, ${report.byPromoCode.length} promo code group(s), ${report.byAffiliate.length} affiliate group(s), ${report.byCheckoutSession.length} checkout-session group(s).${report.shapeMismatch ? ` Note: ${report.shapeMismatch}` : ""}`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -367,7 +367,7 @@ export async function configureCancellationSaveOfferForEngagement(
     return { ok: false, error: "durationMonths must be a positive whole number." };
   }
   if (!config.message?.trim()) {
-    return { ok: false, error: "A message is required — never propose an offer with a guessed message." };
+    return { ok: false, error: "A message is required. Never propose an offer with a guessed message." };
   }
   const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!row) return { ok: false, error: "Client not found." };

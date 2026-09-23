@@ -81,9 +81,9 @@ export async function runWhopAdsDraft(engagementId: string, runId: string, input
       const message = err instanceof Error ? err.message : String(err);
       const depositMatch = message.match(/deposit_url["']?\s*[:=]\s*["']?(https?:\/\/\S+)["']?/i);
       if (depositMatch) {
-        await logStep(runId, { phase: "media_generate", status: "failed", detail: `Insufficient balance — deposit at ${depositMatch[1]}` });
+        await logStep(runId, { phase: "media_generate", status: "failed", detail: `Insufficient balance. Deposit at ${depositMatch[1]}` });
         await finishRun(runId, {
-          summary: { whatWasAttempted: ["Media generation"], whatWorked: [], whatFailed: ["Insufficient balance (402)"], openItems: [`Deposit at ${depositMatch[1]}, then retry — no draft was created with missing creative.`], decisionsMade: [] },
+          summary: { whatWasAttempted: ["Media generation"], whatWorked: [], whatFailed: ["Insufficient balance (402)"], openItems: [`Deposit at ${depositMatch[1]}, then retry. No draft was created with missing creative.`], decisionsMade: [] },
         });
         return { status: "insufficient_balance", depositUrl: depositMatch[1] };
       }
@@ -106,7 +106,7 @@ export async function runWhopAdsDraft(engagementId: string, runId: string, input
     if (!mediaReady) {
       await logStep(runId, { phase: "media_poll", status: "failed", detail: `Media ${mediaId} not ready after ${MEDIA_POLL_MAX_ATTEMPTS} polls.` });
       await finishRun(runId, {
-        summary: { whatWasAttempted: ["Media generation", "Media readiness poll"], whatWorked: [`Media ${mediaId} generated`], whatFailed: ["Media did not become ready in time"], openItems: [`Media id ${mediaId} persisted — retry the ad create once it's ready; no list endpoint exists to recover it otherwise.`], decisionsMade: [] },
+        summary: { whatWasAttempted: ["Media generation", "Media readiness poll"], whatWorked: [`Media ${mediaId} generated`], whatFailed: ["Media did not become ready in time"], openItems: [`Media id ${mediaId} persisted. Retry the ad create once it's ready; no list endpoint exists to recover it otherwise.`], decisionsMade: [] },
       });
       return { status: "failed", reason: "media_not_ready", mediaId };
     }
@@ -128,7 +128,7 @@ export async function runWhopAdsDraft(engagementId: string, runId: string, input
         whatWasAttempted: ["Social account pre-flight", "Media generation", "Media readiness poll", "Ad create (draft)"],
         whatWorked: [`Media ${mediaId} generated`, `Ad ${adRes.id} created as draft`],
         whatFailed: [],
-        openItems: ["Flip-to-active is a separate, explicitly confirmed action — this draft does not spend anything yet."],
+        openItems: ["Flip-to-active is a separate, explicitly confirmed action. This draft does not spend anything yet."],
         decisionsMade: [],
       },
     });

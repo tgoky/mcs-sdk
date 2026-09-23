@@ -53,7 +53,7 @@ export function DisputeResponseConsole({ engagementId }: { engagementId: string 
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
-      setQueuedMessage(`Submission queued as ${body.pendingActionId} — approve from the Queue (needs elevated scope).`);
+      setQueuedMessage(`Submission queued as ${body.pendingActionId}. Approve from the Queue (needs elevated scope).`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to queue the submission.");
     } finally {
@@ -99,7 +99,7 @@ export function DisputeResponseConsole({ engagementId }: { engagementId: string 
           </div>
 
           <div>
-            <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Narrative (notes field) — review before submitting</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Narrative (notes field). Review before submitting</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} className="mt-1 w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-mono" />
           </div>
 

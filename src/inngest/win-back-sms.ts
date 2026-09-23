@@ -46,7 +46,7 @@ export const processWinBackSmsSequence = inngest.createFunction(
     // this app's SMS dispatch infra must stop running against it, or the
     // buyer would get double-sent from two systems.
     if (stack?.runtime_ownership_model === "buyer_exported") {
-      return { sent: 0, reason: "engagement was exported to buyer_exported ownership — this app no longer sends for it" };
+      return { sent: 0, reason: "engagement was exported to buyer_exported ownership. This app no longer sends for it" };
     }
 
     const smsAssetMap = tenant.winBackSequenceAssetMap as { sms?: Array<{ id: string; offsetDays: number; body: string }> } | null;
@@ -82,7 +82,7 @@ export const processWinBackSmsSequence = inngest.createFunction(
       });
 
       if (!stillActive) {
-        return { sent, reason: "win-back enrollment no longer active — stopping" };
+        return { sent, reason: "win-back enrollment no longer active (stopping)" };
       }
 
       try {

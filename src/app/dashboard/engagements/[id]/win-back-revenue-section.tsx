@@ -277,7 +277,7 @@ export function WinBackRevenueSection({
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
-            Weekly Recovery Trend — {selectedPeriod.label}
+            Weekly Recovery Trend: {selectedPeriod.label}
           </span>
           {recoveredCount === 0 && (
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No recoveries yet this period</span>
@@ -319,7 +319,7 @@ export function WinBackRevenueSection({
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
           <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
-            Recovered Deals — {selectedPeriod.label}
+            Recovered Deals: {selectedPeriod.label}
           </span>
           <span className="text-[11px] font-mono text-zinc-400">{sortedDeals.length} total</span>
         </div>

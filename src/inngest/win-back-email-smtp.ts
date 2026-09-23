@@ -45,7 +45,7 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
     // Same buyer_exported guard as win-back-sms.ts — once an operator has
     // exported this engagement, the buyer's own infra owns sending.
     if (stack?.runtime_ownership_model === "buyer_exported") {
-      return { sent: 0, reason: "engagement was exported to buyer_exported ownership — this app no longer sends for it" };
+      return { sent: 0, reason: "engagement was exported to buyer_exported ownership. This app no longer sends for it" };
     }
 
     if (stack?.email_platform !== "smtp") {
@@ -83,7 +83,7 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
       });
 
       if (!stillActive) {
-        return { sent, reason: "win-back enrollment no longer active — stopping" };
+        return { sent, reason: "win-back enrollment no longer active (stopping)" };
       }
 
       try {

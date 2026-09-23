@@ -56,9 +56,9 @@ function actionSummary(run: SkillRun): string {
   if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
   if (s === "failed" || s === "error") {
     if (run.errorMessage && run.errorMessage.length < 90) return run.errorMessage;
-    return "Brief failed — click to view diagnostic log";
+    return "Brief failed. Click to view diagnostic log";
   }
-  if (s === "timed_out") return "Timed out — exceeded max execution runtime";
+  if (s === "timed_out") return "Timed out (exceeded max execution runtime)";
   if (s === "cancelled") return "Cancelled by operator";
   return "Call brief synthesized & delivered";
 }

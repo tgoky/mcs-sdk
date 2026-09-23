@@ -128,9 +128,9 @@ export default function PitchPackagePage({ params }: { params: Promise<{ id: str
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move B — Press Outreach</h1>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move B: Press Outreach</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Tier-1 targets, drafted pitches, and outreach tracking. Every send happens from your own email — this only drafts and tracks.
+          Tier-1 targets, drafted pitches, and outreach tracking. Every send happens from your own email. This only drafts and tracks.
         </p>
       </div>
 
@@ -251,7 +251,7 @@ export default function PitchPackagePage({ params }: { params: Promise<{ id: str
                 <div className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 space-y-0.5 pt-1">
                   {t.history.map((h, i) => (
                     <div key={i}>
-                      {new Date(h.occurredAt).toLocaleDateString()} — {h.type.replace("_", " ")}
+                      {new Date(h.occurredAt).toLocaleDateString()} : {h.type.replace("_", " ")}
                       {h.note ? `: ${h.note}` : ""}
                     </div>
                   ))}

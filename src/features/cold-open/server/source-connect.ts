@@ -66,7 +66,7 @@ export async function runSourceConnect(tenant: any, runId: string, step: StepToo
   try {
     const config = await (step ? step.run("load-cold-open-config", () => getColdOpenConfig(engagementId)) : getColdOpenConfig(engagementId));
     if (!config || config.leadSources.length === 0) {
-      throw new Error("No lead sources configured — save the Source Connect form before this skill can run.");
+      throw new Error("No lead sources configured. Save the Source Connect form before this skill can run.");
     }
 
     summary.whatWasAttempted.push(`Test-pulling ${config.leadSources.length} configured lead source(s).`);
@@ -94,13 +94,13 @@ export async function runSourceConnect(tenant: any, runId: string, step: StepToo
           label: source.icp,
           status: hasToken ? "success" : "failed",
           detail: hasToken
-            ? `apify: token connected for ICP '${source.icp}' — actor '${source.apifyActorId}'. Live verification pull not yet built; connection only.`
+            ? `apify: token connected for ICP '${source.icp}': actor '${source.apifyActorId}'. Live verification pull not yet built; connection only.`
             : `apify: no API token saved for ICP '${source.icp}'.`,
         });
-        summary.openItems.push(`Apify source for '${source.icp}' is connected but not yet test-pulled live — that verification pass is separately-scoped follow-up work.`);
+        summary.openItems.push(`Apify source for '${source.icp}' is connected but not yet test-pulled live. That verification pass is separately-scoped follow-up work.`);
       } else {
-        await logStep(runId, { phase: "source_test_pull", label: source.icp, status: "skipped", detail: `sales_nav: hand-exported source for '${source.icp}' — nothing to verify automatically.` });
-        summary.openItems.push(`Sales Navigator source for '${source.icp}' has no automated verification — confirm the export manually.`);
+        await logStep(runId, { phase: "source_test_pull", label: source.icp, status: "skipped", detail: `sales_nav: hand-exported source for '${source.icp}'. Nothing to verify automatically.` });
+        summary.openItems.push(`Sales Navigator source for '${source.icp}' has no automated verification. Confirm the export manually.`);
       }
     }
 

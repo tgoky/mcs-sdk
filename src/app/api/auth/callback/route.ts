@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     const destination = membership.hasAccess ? redirectTo || "/home" : "/checkout";
 
     // 6. Create the NextResponse object with the redirect HTML payload
-    const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated — redirecting..."), {
+    const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated. Redirecting..."), {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });

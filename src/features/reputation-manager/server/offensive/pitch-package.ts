@@ -143,11 +143,11 @@ export async function draftPitch(input: {
     "a specific ask, a soft close. Voice rules: no em dashes, no exclamation points, no hype language, short " +
     "sentences, written as if the sender will personalize and send it themselves from their own email. " +
     `${ARCHETYPE_GUIDANCE[input.archetype]} ` +
-    'Respond with ONLY a JSON object: {"subject": "string", "body": "string"} — no markdown fences, no preamble.';
+    'Respond with ONLY a JSON object: {"subject": "string", "body": "string"}. No markdown fences, no preamble.';
 
   const userMessage = [
     `Sender: ${input.operatorName}${input.entityName ? ` (${input.entityName})` : ""}`,
-    `Target: ${input.target}${input.beat ? ` — beat: ${input.beat}` : ""}`,
+    `Target: ${input.target}${input.beat ? `, beat: ${input.beat}` : ""}`,
     input.fitNotes ? `Why this target fits: ${input.fitNotes}` : null,
   ]
     .filter(Boolean)

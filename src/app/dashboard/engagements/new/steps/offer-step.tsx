@@ -45,7 +45,7 @@ export function OfferStep({
           </label>
         </div>
         <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          Have the clients domain? We will crawl it and suggest values below — review and edit anything before submitting.
+          Have the clients domain? We will crawl it and suggest values below. Review and edit anything before submitting.
         </p>
         <div className="flex gap-2">
           <input
@@ -101,16 +101,16 @@ export function OfferStep({
         value={form.offerVertical}
         onChange={(v) => set("offerVertical", v)}
         placeholder="e.g. coaching, agency, SaaS, consulting"
-        helpText="Powers Leak Map's cross-client benchmarks — how this offer's metrics compare to similar offers, once enough clients report the same bucket."
+        helpText="Powers Leak Map's cross-client benchmarks. How this offer's metrics compare to similar offers, once enough clients report the same bucket."
       />
       <SelectField
         label="Where are leads coming from?"
         value={form.trafficTemperature}
         onChange={(v) => set("trafficTemperature", v)}
         options={[
-          { value: "cold", label: "Cold — outbound outreach or paid ads" },
-          { value: "warm", label: "Warm — inbound content or referrals" },
-          { value: "hot", label: "Hot — people who already know you" },
+          { value: "cold", label: "Cold: outbound outreach or paid ads" },
+          { value: "warm", label: "Warm: inbound content or referrals" },
+          { value: "hot", label: "Hot: people who already know you" },
         ]}
       />
       <div className="md:col-span-2">

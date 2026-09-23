@@ -5,16 +5,16 @@ import { buildContractDynamicHtml } from "./dynamic/contract.dynamic";
 const CLAUSE_NUMERALS = ["I", "II", "III", "IV"];
 
 /**
- * The Contract — ceremonial and precise, built for a buyer whose own
+ * The Contract --- ceremonial and precise, built for a buyer whose own
  * credibility runs on gravitas. Deep ink ground, warm gold-foil rule, a
  * parchment panel for the briefing. Signature element: the page is laid
- * out as the front matter of an actual agreement — "Prepared for", a
+ * out as the front matter of an actual agreement --- "Prepared for", a
  * filed reference number, and the briefing/questions/proof sections each
- * numbered as a clause (I, II, III, IV) with a closing signature line — so
+ * numbered as a clause (I, II, III, IV) with a closing signature line --- so
  * the call reads as a commitment already made, not an invitation still
  * being pitched.
  *
- * This page is built once per engagement and published as static HTML —
+ * This page is built once per engagement and published as static HTML ---
  * every prospect who books lands on the same file. "Prepared for" and the
  * particulars strip below therefore resolve client-side from the booking
  * platform's own redirect params (see content-model.ts's buildMergeScriptTag)
@@ -98,7 +98,7 @@ ${buildGoogleFontLinks("family=Fraunces:opsz,wght@9..144,400;9..144,500&family=I
   .prepared { text-align: center; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: #a89a78; margin: 0 0 6px; }
   .sub { text-align: center; color: #b9b2a4; font-size: 0.92rem; margin: 0 auto 32px; max-width: 42ch; line-height: 1.55; }
 
-  /* Particulars strip — replaces the old plain sub-only opener with the
+  /* Particulars strip --- replaces the old plain sub-only opener with the
      agreement's actual terms: when, with whom, filed under what number.
      Bordered rectangular tags rather than rounded chips, to keep the
      document register instead of a startup-SaaS one. */
@@ -116,7 +116,7 @@ ${buildGoogleFontLinks("family=Fraunces:opsz,wght@9..144,400;9..144,500&family=I
   .brief-panel p { margin: 0; font-size: 0.9rem; line-height: 1.65; color: #2b2634; }
   .brief-panel .runtime { display: block; margin-top: 16px; font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 0.78rem; color: #6b6152; }
 
-  /* Briefing video — placeholder until the operator's script pass
+  /* Briefing video --- placeholder until the operator's script pass
      produces a real recording; never a fabricated embed. */
   .video-card { margin-top: 18px; background: #1c1824; border: 1px solid #3a3444; border-radius: 3px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
   .video-card .play { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #C6A15B; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
@@ -130,7 +130,7 @@ ${buildGoogleFontLinks("family=Fraunces:opsz,wght@9..144,400;9..144,500&family=I
   .clause-mark { font-family: "Fraunces", Georgia, serif; font-size: 0.85rem; color: #C6A15B; flex-shrink: 0; min-width: 16px; padding-top: 1px; }
   ul.clauses li p { margin: 0; font-size: 0.9rem; color: #ded6c5; line-height: 1.55; }
 
-  /* Attestations — a bordered card with a quotation glyph up top, no
+  /* Attestations --- a bordered card with a quotation glyph up top, no
      vertical rule down the side. */
   .attestations { display: grid; gap: 16px; }
   figure { margin: 0; background: #1c1824; border: 1px solid #3a3444; border-radius: 4px; padding: 22px 24px; position: relative; }

@@ -48,7 +48,7 @@ export function computeCorrelationFlags(blocks: WorkerReportBlock[]): Correlatio
       flags.push({
         outcomeLabel: outcome.label,
         riskLabel: risk.label,
-        message: `${outcome.label} (${outcome.displayValue}) is down the same week ${risk.label.toLowerCase()} shows elevated risk (${risk.displayValue}) — worth checking whether they're connected.`,
+        message: `${outcome.label} (${outcome.displayValue}) is down the same week ${risk.label.toLowerCase()} shows elevated risk (${risk.displayValue}). Worth checking whether they're connected.`,
       });
     }
   }

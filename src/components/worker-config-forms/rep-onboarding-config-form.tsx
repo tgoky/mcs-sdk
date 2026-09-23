@@ -553,7 +553,7 @@ export function RepOnboardingConfigForm({
               </div>
             ) : (
               <p className="text-xs text-amber-400">
-                ⚠️ 0 Rivals Extracted — Add rivals below in Scenario Tuning
+                ⚠️ 0 Rivals Extracted. Add rivals below in Scenario Tuning
               </p>
             )}
             <FactSuggestionList

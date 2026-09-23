@@ -128,7 +128,7 @@ export async function getComposioConnectLink(opts: {
   origin: string;
 }): Promise<{ ok: true; redirectUrl: string } | { ok: false; error: string }> {
   if (!isComposioManagedProvider(opts.provider)) {
-    return { ok: false, error: `${opts.provider} isn't a Composio-managed connection — it needs a pasted key instead.` };
+    return { ok: false, error: `${opts.provider} isn't a Composio-managed connection. It needs a pasted key instead.` };
   }
   const callbackUrl = new URL("/api/composio/callback", opts.origin);
   callbackUrl.searchParams.set("provider", opts.provider);

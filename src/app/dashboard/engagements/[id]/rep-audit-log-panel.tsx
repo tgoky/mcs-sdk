@@ -24,21 +24,21 @@ function eventSummary(row: RepAuditEventRow): string {
   const p = row.payload;
   switch (row.eventType) {
     case "detection":
-      return `${String(p.source)} — ${String(p.sentimentLabel ?? "unscored")}${p.threatCategory ? ` · ${p.threatCategory}` : ""}`;
+      return `${String(p.source)}: ${String(p.sentimentLabel ?? "unscored")}${p.threatCategory ? ` · ${p.threatCategory}` : ""}`;
     case "draft":
-      return `Draft (${String(p.draftClass)}) — tier ${p.tier ?? "?"}`;
+      return `Draft (${String(p.draftClass)}): tier ${p.tier ?? "?"}`;
     case "approval":
-      return `${String(p.approver)} — ${String(p.decision)}`;
+      return `${String(p.approver)}: ${String(p.decision)}`;
     case "external_action":
-      return `Published to ${String(p.channel)} — ${String(p.status)}`;
+      return `Published to ${String(p.channel)}: ${String(p.status)}`;
     case "outcome":
       return String(p.outcomeType);
     case "compliance_block":
-      return `Blocked — ${String(p.blockReason)}`;
+      return `Blocked: ${String(p.blockReason)}`;
     case "ai_engine_notice":
       return `Notice sent to ${String(p.vendor)}`;
     case "reflection":
-      return `${String(p.period)} reflection — ${p.eventsReviewed ?? 0} event(s) reviewed`;
+      return `${String(p.period)} reflection: ${p.eventsReviewed ?? 0} event(s) reviewed`;
     default:
       return row.eventType;
   }
@@ -65,7 +65,7 @@ export function RepAuditLogPanel({ events }: { events: RepAuditEventRow[] }) {
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Audit Log</h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
-            Every detection, draft, approval, and action recorded for this client — most recent first.
+            Every detection, draft, approval, and action recorded for this client. Most recent first.
           </p>
         </div>
       </div>

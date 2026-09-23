@@ -53,7 +53,7 @@ export async function triggerChatSkillForEngagement(
     .limit(1);
 
   if (!tenant) return { ok: false, error: "Client not found." };
-  if (isEngagementPaused(tenant)) return { ok: false, error: "This client is paused — resume it before running anything for them." };
+  if (isEngagementPaused(tenant)) return { ok: false, error: "This client is paused. Resume it before running anything for them." };
 
   const runId = crypto.randomUUID();
   await startRun({ id: runId, engagementId, skillName: skillId, phase: initialPhase, label: initialLabel });
@@ -86,7 +86,7 @@ export async function triggerVoiceExtractionForEngagement(
     engagementId,
     "pin-down-voice",
     { voiceExtractionDomain: cleanDomain },
-    `Extracting brand voice from ${cleanDomain}. This can take a minute — check back or ask for the status.`,
+    `Extracting brand voice from ${cleanDomain}. This can take a minute. Check back or ask for the status.`,
     "voice_scrape",
     cleanDomain
   );
@@ -105,8 +105,8 @@ export async function triggerScriptPackForEngagement(
     "pin-down-scripts",
     { scriptApproachOverride: approachOverride },
     approachOverride
-      ? `Regenerating the hero and breakout video scripts with a ${approachOverride} approach. This can take a minute — check back or ask for the status.`
-      : "Generating the hero and breakout video scripts. This can take a minute — check back or ask for the status.",
+      ? `Regenerating the hero and breakout video scripts with a ${approachOverride} approach. This can take a minute. Check back or ask for the status.`
+      : "Generating the hero and breakout video scripts. This can take a minute. Check back or ask for the status.",
     "script_pack"
   );
 }
@@ -118,7 +118,7 @@ export async function triggerAdCreativeBriefsForEngagement(whopUserId: string, w
     engagementId,
     "pin-down-ad-briefs",
     {},
-    "Generating ad creative briefs. This can take a minute — check back or ask for the status.",
+    "Generating ad creative briefs. This can take a minute. Check back or ask for the status.",
     "ad_creative_briefs"
   );
 }
@@ -137,7 +137,7 @@ export async function triggerEngineAdhocCheckForEngagement(
     engagementId,
     "rep-engine-adhoc-check",
     { engineCheckSubject: cleanSubject, engineCheckQuestion: question?.trim() },
-    `Asking the AI engines about ${cleanSubject || "this client"} now. This can take a moment — check back or ask for the status.`,
+    `Asking the AI engines about ${cleanSubject || "this client"} now. This can take a moment. Check back or ask for the status.`,
     "engine_adhoc_check",
     cleanSubject
   );
@@ -158,7 +158,7 @@ export async function triggerCrisisStressTestForEngagement(
     engagementId,
     "rep-crisis-stress-test",
     { hypotheticalFindingText: cleanText, hypotheticalFindingSource },
-    "Testing that finding against this client's crisis threshold. This can take a moment — check back or ask for the status.",
+    "Testing that finding against this client's crisis threshold. This can take a moment. Check back or ask for the status.",
     "crisis_stress_test"
   );
 }
@@ -178,7 +178,7 @@ export async function triggerDraftResponseForEngagement(
     engagementId,
     "rep-draft-response",
     { findingText: cleanText, findingPlatform },
-    "Drafting a suggested response. This can take a moment — check back or ask for the status.",
+    "Drafting a suggested response. This can take a moment. Check back or ask for the status.",
     "draft_response"
   );
 }
@@ -199,7 +199,7 @@ export async function triggerTwitterDeepScanForEngagement(
     engagementId,
     "rep-twitter-deep-scan",
     { deepScanSinceDate: cleanDate },
-    `Scanning X back to ${cleanDate}. This can take a moment — check back or ask for the status.`,
+    `Scanning X back to ${cleanDate}. This can take a moment. Check back or ask for the status.`,
     "twitter_deep_scan",
     cleanDate
   );
@@ -221,7 +221,7 @@ export async function triggerTrustpilotDeepScanForEngagement(
     engagementId,
     "rep-trustpilot-deep-scan",
     { deepScanSinceDate: cleanDate },
-    `Scanning Trustpilot back to ${cleanDate}. This can take a moment — check back or ask for the status.`,
+    `Scanning Trustpilot back to ${cleanDate}. This can take a moment. Check back or ask for the status.`,
     "trustpilot_deep_scan",
     cleanDate
   );
@@ -245,7 +245,7 @@ export async function triggerRedditDeepScanForEngagement(
     engagementId,
     "rep-reddit-deep-scan",
     { deepScanTimeframe: cleanTimeframe },
-    `Widening the Reddit scan to t=${cleanTimeframe}. This can take a moment — check back or ask for the status.`,
+    `Widening the Reddit scan to t=${cleanTimeframe}. This can take a moment. Check back or ask for the status.`,
     "reddit_deep_scan",
     cleanTimeframe
   );
@@ -268,8 +268,8 @@ export async function triggerPageAuditForEngagement(
     "pin-down-page-audit",
     { pageAuditUrl: cleanUrl, competitorPageUrl: cleanCompetitorUrl },
     cleanCompetitorUrl
-      ? `Auditing the confirmation page at ${cleanUrl} against ${cleanCompetitorUrl}. This can take a minute — check back or ask for the status.`
-      : `Auditing the confirmation page at ${cleanUrl}. This can take a minute — check back or ask for the status.`,
+      ? `Auditing the confirmation page at ${cleanUrl} against ${cleanCompetitorUrl}. This can take a minute. Check back or ask for the status.`
+      : `Auditing the confirmation page at ${cleanUrl}. This can take a minute. Check back or ask for the status.`,
     "existing_page_audit",
     cleanUrl
   );
@@ -288,7 +288,7 @@ export async function triggerConfirmationPageRebuildForEngagement(
     engagementId,
     "pin-down-confirmation-page",
     { heroVideoUrl: cleanVideoUrl },
-    "Rebuilding and republishing the confirmation page. This can take a minute — check back or ask for the status.",
+    "Rebuilding and republishing the confirmation page. This can take a minute. Check back or ask for the status.",
     "confirmation_page_deploy"
   );
 }

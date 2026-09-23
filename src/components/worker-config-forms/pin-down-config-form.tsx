@@ -449,9 +449,9 @@ export function PinDownConfigForm({
                   className={FIELD_CLASS}
                 >
                   <option value="">Not set</option>
-                  <option value="cold">Cold (Unfamiliar leads — heavy problem education)</option>
-                  <option value="warm">Warm (List/Retargeted leads — familiar with brand)</option>
-                  <option value="hot">Hot (High-intent leads — direct comparison/pricing)</option>
+                  <option value="cold">Cold (Unfamiliar leads, heavy problem education)</option>
+                  <option value="warm">Warm (List/Retargeted leads, familiar with brand)</option>
+                  <option value="hot">Hot (High-intent leads, direct comparison/pricing)</option>
                 </select>
                 <FactSuggestionChip
                   engagementId={engagementId}

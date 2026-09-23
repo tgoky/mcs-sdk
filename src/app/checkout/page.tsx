@@ -28,7 +28,7 @@ export default async function CheckoutPage() {
         <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
           {session.whopUserId
             ? "Your account needs an active subscription to continue."
-            : "Complete checkout below — this creates your account too."}
+            : "Complete checkout below. This creates your account too."}
         </p>
 
         {sessionId ? (

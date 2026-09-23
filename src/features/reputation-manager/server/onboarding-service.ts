@@ -131,7 +131,7 @@ export async function saveRepIdentityGraphIntake(
   if (!isNonEmptyTrimmed(input.soleAuthorityName)) {
     return {
       error:
-        "Sole authority name is required — Reputation Manager never publishes or approves anything on its own, so someone has to be named as the one person who can.",
+        "Sole authority name is required. Reputation Manager never publishes or approves anything on its own, so someone has to be named as the one person who can.",
     };
   }
   if (!isStringArray(input.operatorAliases)) return { error: "Operator aliases must be a list of short strings." };
@@ -154,7 +154,7 @@ export async function saveRepIdentityGraphIntake(
   }
   if (!validateCollisions(input.collisions)) {
     return {
-      error: "Each collision needs a name, who they are, and a disambiguation note — an empty note defeats the point of listing it.",
+      error: "Each collision needs a name, who they are, and a disambiguation note. An empty note defeats the point of listing it.",
     };
   }
   if (!validateActiveEngines(input.activeEngines)) {
@@ -325,7 +325,7 @@ async function runCollisionCheck(
       "You check for same-name collisions that could cause an AI engine to confuse two different people or " +
       "companies. Given a list of names, search the open web and identify any OTHER real, distinct person or " +
       "company that shares one of these names closely enough to cause identity confusion. Do not include the " +
-      "subject themselves. Do not invent a collision that doesn't exist — an empty list is a valid, common " +
+      "subject themselves. Do not invent a collision that doesn't exist. An empty list is a valid, common " +
       "result. Respond with ONLY a JSON object matching this exact shape, no preamble, no markdown fences:\n" +
       '{"collisions": [{"name": "string", "whoTheyAre": "one sentence on who they actually are", ' +
       '"disambiguationNote": "one sentence distinguishing them from the subject"}]}',
@@ -377,7 +377,7 @@ export async function runRepOnboarding(tenant: any, runId: string, step: StepToo
 
     if (!graph) {
       throw new Error(
-        "No identity graph found for this engagement — save the Reputation Manager intake form before this skill can run."
+        "No identity graph found for this engagement. Save the Reputation Manager intake form before this skill can run."
       );
     }
 
@@ -387,7 +387,7 @@ export async function runRepOnboarding(tenant: any, runId: string, step: StepToo
       await logStep(runId, {
         phase: "collision_check",
         status: "success",
-        detail: "Already ran for this engagement — skipped to avoid re-searching on every dispatch.",
+        detail: "Already ran for this engagement. Skipped to avoid re-searching on every dispatch.",
       });
       summary.whatWorked.push("Identity graph already had a completed collision check; nothing further to do.");
       await finishRun(runId, { summary });
@@ -416,7 +416,7 @@ export async function runRepOnboarding(tenant: any, runId: string, step: StepToo
     if (result.error) {
       await logStep(runId, { phase: "collision_check", status: "failed", detail: result.error });
       summary.whatFailed.push(result.error);
-      summary.openItems.push("Re-run the collision check manually if you want another attempt — it won't fire again on its own.");
+      summary.openItems.push("Re-run the collision check manually if you want another attempt. It won't fire again on its own.");
     } else if (result.found > 0) {
       await logStep(runId, {
         phase: "collision_check",
@@ -427,7 +427,7 @@ export async function runRepOnboarding(tenant: any, runId: string, step: StepToo
       summary.decisionsMade.push("Added them to the identity graph tagged as system-found, distinct from the buyer's own entries.");
     } else {
       await logStep(runId, { phase: "collision_check", status: "success", detail: "No additional collisions found." });
-      summary.whatWorked.push("Searched for same-name collisions — none found beyond what the buyer already listed.");
+      summary.whatWorked.push("Searched for same-name collisions. None found beyond what the buyer already listed.");
     }
 
     await finishRun(runId, { summary });

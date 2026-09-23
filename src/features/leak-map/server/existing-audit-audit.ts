@@ -42,8 +42,7 @@ export async function auditExistingReport(operatorDescription: string): Promise<
   const now = new Date().toISOString();
 
   const system = `You are comparing a buyer's existing analytics/reporting setup against what
-Leak Map (an automated funnel audit tool) covers, to produce a delta doc —
-never a recommendation to abandon their existing report, just an honest
+Leak Map (an automated funnel audit tool) covers, to produce a delta doc: never a recommendation to abandon their existing report, just an honest
 comparison so the operator can decide what to keep.
 
 Leak Map's actual coverage:
@@ -93,7 +92,7 @@ Return ONLY a JSON object, no prose, no markdown fences:
       overlapping: [],
       gapsLeakMapCloses: [],
       gapsExistingCovers: [],
-      recommendation: "Audit generation returned an unparseable response — review the existing report manually against Leak Map's coverage list.",
+      recommendation: "Audit generation returned an unparseable response. Review the existing report manually against Leak Map's coverage list.",
     };
   }
 }

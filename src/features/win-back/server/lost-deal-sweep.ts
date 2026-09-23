@@ -265,7 +265,7 @@ export async function processLostDealsForEngagement(
         body: `${rows.length} prospect${rows.length > 1 ? "s" : ""} went past the recovery window without rebooking and ${rows.length > 1 ? "have" : "has"} been marked lost. ${
           stack.email_platform === "klaviyo" && stack.long_term_nurture_list_id
             ? "Auto-enrolled into the configured long-term nurture list."
-            : "Long-term nurture content is ready in the engagement dashboard — no auto-enrollment list configured yet, so this needs to be loaded manually."
+            : "Long-term nurture content is ready in the engagement dashboard. No auto-enrollment list configured yet, so this needs to be loaded manually."
         }`,
         slackWebhookUrl: stack.slack_webhook_url,
       })

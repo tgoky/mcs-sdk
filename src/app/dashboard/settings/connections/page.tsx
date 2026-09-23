@@ -101,8 +101,8 @@ const PLATFORM_GROUPS: PlatformGroup[] = [
     ],
   },
   {
-    group: "Cold Open — outbound",
-    description: "Connect the sending platform and lead source Cold Open pushes to for this account. Pick one sending platform below (whichever you chose in that client's Send Connect setup) — you only need the one you're using.",
+    group: "Cold Open (outbound)",
+    description: "Connect the sending platform and lead source Cold Open pushes to for this account. Pick one sending platform below (whichever you chose in that client's Send Connect setup). You only need the one you're using.",
     platforms: [
       {
         provider: "cold_open_instantly",
@@ -180,7 +180,7 @@ function PlatformSection({ group }: { group: PlatformGroup }) {
       if (!res.ok) {
         setTestResult((r) => ({ ...r, [provider]: { ok: false, message: data.error ?? "Test failed." } }));
       } else if (data.status === "ok") {
-        setTestResult((r) => ({ ...r, [provider]: { ok: true, message: "Connected — key is valid." } }));
+        setTestResult((r) => ({ ...r, [provider]: { ok: true, message: "Connected. Key is valid." } }));
       } else {
         setTestResult((r) => ({ ...r, [provider]: { ok: false, message: data.error ?? "Key was rejected." } }));
       }
@@ -487,7 +487,7 @@ function SmtpCredentialCard() {
       if (!res.ok) {
         setTestResult({ ok: false, message: data.error ?? "Test failed." });
       } else if (data.status === "ok") {
-        setTestResult({ ok: true, message: "Connected — SMTP credentials work." });
+        setTestResult({ ok: true, message: "Connected. SMTP credentials work." });
       } else {
         setTestResult({ ok: false, message: data.error ?? "Credentials were rejected." });
       }
@@ -649,7 +649,7 @@ function SmtpCredentialCard() {
           )}
 
           <p className="text-xs mt-2 font-mono opacity-80" style={{ color: "var(--text-muted)" }}>
-            Only runs the Win-Back recovery email cadence today — SMTP has no Pile-On pre-call content yet.
+            Only runs the Win-Back recovery email cadence today. SMTP has no Pile-On pre-call content yet.
           </p>
         </div>
       )}
@@ -669,7 +669,7 @@ export default function ConnectionsSettingsPage() {
         </h2>
         <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
           Paste your API keys here to connect your platforms. Keys are encrypted
-          before storage — nobody can read them, including Mudd staff.
+          before storage. Nobody can read them, including Mudd staff.
         </p>
       </div>
 

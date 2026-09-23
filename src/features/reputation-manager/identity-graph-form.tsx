@@ -274,7 +274,7 @@ export function IdentityGraphForm({
         value={form.soleAuthorityName}
         onChange={(v) => set("soleAuthorityName", v)}
         placeholder="Full name of the one person who can declare a crisis or approve a public response"
-        helpText="Reputation Manager never publishes or approves anything on its own — this is who it always defers to."
+        helpText="Reputation Manager never publishes or approves anything on its own. This is who it always defers to."
       />
       <TextAreaField
         label="Aliases"
@@ -389,7 +389,7 @@ export function IdentityGraphForm({
           onAdd={() => set("competitors", [...form.competitors, { name: "", monitorFor: [], highPriority: false }])}
         />
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 -mt-2">
-          The 3 to 7 competitors prospects actually compare this operator against — not every company in the category.
+          The 3 to 7 competitors prospects actually compare this operator against, not every company in the category.
         </p>
         <div className="space-y-2">
           {form.competitors.map((c, i) => (
@@ -497,13 +497,13 @@ export function IdentityGraphForm({
 
         {readOnlyCollisions && readOnlyCollisions.length > 0 && (
           <div className="space-y-2 pt-1">
-            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Found automatically — not editable here:</p>
+            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Found automatically (not editable here):</p>
             {readOnlyCollisions.map((c, i) => (
               <div
                 key={i}
                 className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-3 text-[11px] text-zinc-500 dark:text-zinc-400"
               >
-                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{c.name}</span> — {c.whoTheyAre}. {c.disambiguationNote}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{c.name}</span> : {c.whoTheyAre}. {c.disambiguationNote}
               </div>
             ))}
           </div>
@@ -532,12 +532,12 @@ export function IdentityGraphForm({
         onChange={(v) => set("seedPanelPrompts", v)}
         placeholder={"Who is Marvo Roofing?\nIs Marvo Roofing legit?"}
         rows={3}
-        helpText="5-8 starting prompts. Expanded into the full monitoring panel by a future skill — this just seeds it."
+        helpText="5-8 starting prompts. Expanded into the full monitoring panel by a future skill. This just seeds it."
       />
       <div className="space-y-1.5">
         <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">Engines checked</label>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-          Only engines your workspace has a model configured for actually run — unchecking one here just narrows
+          Only engines your workspace has a model configured for actually run. Unchecking one here just narrows
           it further for this client specifically.
         </p>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
@@ -567,7 +567,7 @@ export function IdentityGraphForm({
         label="Crisis paging phone (SMS fallback)"
         value={form.operatorPagePhone}
         onChange={(v) => set("operatorPagePhone", v)}
-        placeholder="+1 555 555 5555 — leave blank to skip SMS paging"
+        placeholder="+1 555 555 5555 (leave blank to skip SMS paging)"
       />
     </div>
   );

@@ -96,7 +96,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
         await alertOperator(
           engagementId,
           "A Whop webhook's pin changed outside the agent",
-          `Subscription ${row.whopWebhookId} is now pinned to ${row.apiVersionDate}, not the account's validated pin (${connection.pinnedVersionDate}). Reported, not corrected — review before it drifts further.`,
+          `Subscription ${row.whopWebhookId} is now pinned to ${row.apiVersionDate}, not the account's validated pin (${connection.pinnedVersionDate}). Reported, not corrected. Review before it drifts further.`,
           "warning"
         );
       }
@@ -118,7 +118,7 @@ export async function sweepReceiverHealth(engagementId: string): Promise<void> {
       const hoursRemaining = Math.max(0, Math.round(72 - hoursFailing));
       const body =
         tier === "urgent_48h"
-          ? `${row.url} has been failing for ${Math.round(hoursFailing)}h. Whop auto-disables this subscription at 72h — ${hoursRemaining}h remaining.`
+          ? `${row.url} has been failing for ${Math.round(hoursFailing)}h. Whop auto-disables this subscription at 72h, ${hoursRemaining}h remaining.`
           : tier === "degraded_24h"
             ? `${row.url} has been failing for ${Math.round(hoursFailing)}h. Whop has also sent its own warning email at the 24h mark.`
             : `${row.url} has been failing for ${Math.round(hoursFailing)}h with ${row.consecutiveFailures} consecutive failures.`;
@@ -175,7 +175,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
       await alertOperator(
         engagementId,
         "Disabled webhook can't be re-enable-probed",
-        `${row.url} (${row.whopWebhookId}) is disabled, but this agent has no signing secret on file for it — cannot produce a probe the receiver would accept.`,
+        `${row.url} (${row.whopWebhookId}) is disabled, but this agent has no signing secret on file for it. Cannot produce a probe the receiver would accept.`,
         "critical"
       );
       return;
@@ -211,7 +211,7 @@ async function attemptReenable(engagementId: string, row: typeof whopWebhookRegi
     await alertOperator(
       engagementId,
       "Disabled webhook still unreachable",
-      `${row.url} (${row.whopWebhookId}) is disabled and failed a fresh health probe — not offering re-enable until it responds.`,
+      `${row.url} (${row.whopWebhookId}) is disabled and failed a fresh health probe, not offering re-enable until it responds.`,
       "critical"
     );
     return;
@@ -255,7 +255,7 @@ export async function executeWebhookReenable(engagementId: string, whopWebhookId
     .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.whopWebhookId, whopWebhookId)));
 
   if (verify && verify.disabled_at) {
-    throw new Error(`Read-back after re-enabling ${whopWebhookId} still shows it disabled — flagging for review.`);
+    throw new Error(`Read-back after re-enabling ${whopWebhookId} still shows it disabled. Flagging for review.`);
   }
 
   // Step 5: gap replay bounded to the outage window (or 30 days,

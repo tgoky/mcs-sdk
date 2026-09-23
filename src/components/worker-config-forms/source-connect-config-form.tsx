@@ -203,7 +203,7 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
                 </>
               )}
               {row.fetcherType === "apify" && (
-                <InputField label="Apify actor id" value={row.apifyActorId} onChange={(v) => updateRow(i, { apifyActorId: v })} placeholder="code_crafter/leads-finder" helpText="Connect only today — a live verification pull isn't built yet." />
+                <InputField label="Apify actor id" value={row.apifyActorId} onChange={(v) => updateRow(i, { apifyActorId: v })} placeholder="code_crafter/leads-finder" helpText="Connect only today. A live verification pull isn't built yet." />
               )}
               {row.fetcherType === "sales_nav" && (
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">No automated verification for a hand-exported Sales Navigator source.</p>
@@ -228,14 +228,14 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
   const namedRows = rows.filter((r) => r.icp.trim());
   const summaryLines: string[] =
     namedRows.length === 0
-      ? ["No ICP has a lead source yet — nothing will be fetched until at least one is set."]
+      ? ["No ICP has a lead source yet. Nothing will be fetched until at least one is set."]
       : namedRows.map((r) => `Leads for "${r.icp.trim()}" will be sourced from ${SOURCE_TYPE_LABEL[r.fetcherType]}${r.dailyLimit ? `, capped at ${r.dailyLimit}/day` : ""}.`);
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Source Connect{buyer ? ` — ${buyer}` : ""}</h1>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Source Connect{buyer ? `: ${buyer}` : ""}</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Where leads come from, one source per ICP.</p>
         </div>
         <button type="button" onClick={onCancel} className="shrink-0 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">

@@ -81,7 +81,7 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
           // this run's own step log IS that audit trail, per this app's
           // existing convention (skillRuns.steps is what Run History
           // renders), not a second, separate audit table.
-          detail: value === null ? "No data points returned this week." : `${formatValue(value, metric.format)} — debug.sql: ${response.debug?.sql ?? "not returned by Whop"}`,
+          detail: value === null ? "No data points returned this week." : `${formatValue(value, metric.format)}: debug.sql: ${response.debug?.sql ?? "not returned by Whop"}`,
         });
 
         if (value !== null) {
@@ -116,8 +116,8 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
       summary: {
         whatWasAttempted: [`Queried ${REPORT_METRICS.length} stats-engine metrics for the week of ${weekStart.toISOString().slice(0, 10)}`],
         whatWorked: blocks.map((b) => `${b.label}: ${b.displayValue}`),
-        whatFailed: failedMetrics.length ? failedMetrics.map((m) => `${m} — query failed, see step detail`) : [],
-        openItems: prior ? [] : ["No prior-week snapshot yet — deltas will start appearing next week."],
+        whatFailed: failedMetrics.length ? failedMetrics.map((m) => `${m} (query failed, see step detail)`) : [],
+        openItems: prior ? [] : ["No prior-week snapshot yet. Deltas will start appearing next week."],
         decisionsMade: deltas,
       },
     });

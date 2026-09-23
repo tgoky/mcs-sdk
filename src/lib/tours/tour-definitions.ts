@@ -33,7 +33,7 @@ const DASHBOARD_BASICS: TourStep[] = [
     route: "/dashboard",
     target: '[data-tour="top-nav-create"]',
     title: "Start anything from here",
-    body: "New client, trigger a skill run, add a manual Queue task, or export a report — one button for every way to start something.",
+    body: "New client, trigger a skill run, add a manual Queue task, or export a report. One button for every way to start something.",
     placement: "bottom-start",
   },
   {
@@ -41,7 +41,7 @@ const DASHBOARD_BASICS: TourStep[] = [
     route: "/dashboard",
     target: '[data-tour="dashboard-overview-stats"]',
     title: "Your week at a glance",
-    body: "Completed runs, open issues, and the weekly trend — the numbers that actually change day to day, not a vanity total.",
+    body: "Completed runs, open issues, and the weekly trend. The numbers that actually change day to day, not a vanity total.",
     placement: "bottom",
   },
   {
@@ -49,7 +49,7 @@ const DASHBOARD_BASICS: TourStep[] = [
     route: "/dashboard",
     target: '[data-tour="dashboard-activity"]',
     title: "Queue and Live Activity, in one place",
-    body: "Every pending approval, blocker, alert, and skill run — past and present, across every client and product — lands in this one filterable list. Needs-action items float to the top; click any row to see the full detail on the right without losing your place in the list.",
+    body: "Every pending approval, blocker, alert, and skill run, past and present, across every client and product, lands in this one filterable list. Needs-action items float to the top; click any row to see the full detail on the right without losing your place in the list.",
     placement: "top",
   },
   {
@@ -57,7 +57,7 @@ const DASHBOARD_BASICS: TourStep[] = [
     route: "/dashboard",
     target: '[data-tour="sidebar-nav-primary"]',
     title: "Home, client profile, reports",
-    body: "This workspace's one client's own page is always one click away here — no roster to dig through.",
+    body: "This workspace's one client's own page is always one click away here. No roster to dig through.",
     placement: "right",
   },
   {
@@ -65,7 +65,7 @@ const DASHBOARD_BASICS: TourStep[] = [
     route: "/dashboard",
     target: '[data-tour="sidebar-installed-skills"]',
     title: "What's already running",
-    body: "Every skill currently enabled for this client, with a quick on/off switch. To turn on something new, that's the Library — next tour.",
+    body: "Every skill currently enabled for this client, with a quick on/off switch. To turn on something new, that's the Library. Next tour.",
     placement: "right",
   },
   {
@@ -92,7 +92,7 @@ const LIBRARY_BASICS: TourStep[] = [
     route: "/dashboard/library",
     target: '[data-tour="product-card-install"]',
     title: "Install for this client",
-    body: "Installing a worker doesn't turn anything on by itself — it just makes its skills available to enable, one at a time, on its own page.",
+    body: "Installing a worker doesn't turn anything on by itself. It just makes its skills available to enable, one at a time, on its own page.",
     placement: "top",
   },
   {
@@ -108,7 +108,7 @@ const LIBRARY_BASICS: TourStep[] = [
     route: "/dashboard/library/showtime",
     target: '[data-tour="product-skill-list"]',
     title: "Enable, Configure, Analytics",
-    body: "Every skill lives in this list. Click a row to open its own page, or use Configure/Analytics directly — same pattern on every worker's page.",
+    body: "Every skill lives in this list. Click a row to open its own page, or use Configure/Analytics directly. Same pattern on every worker's page.",
     placement: "top",
   },
 ];
@@ -119,7 +119,7 @@ const ENGAGEMENT_DETAIL: TourStep[] = [
     route: "/dashboard/engagements/{engagementId}",
     target: '[data-tour="engagement-pause-control"]',
     title: "Pause this client",
-    body: "Pausing stops every automated run for this client without disabling anything — flip it back on and every skill resumes exactly as configured.",
+    body: "Pausing stops every automated run for this client without disabling anything. Flip it back on and every skill resumes exactly as configured.",
     placement: "bottom-end",
   },
   {
@@ -127,7 +127,7 @@ const ENGAGEMENT_DETAIL: TourStep[] = [
     route: "/dashboard/engagements/{engagementId}",
     target: '[data-tour="engagement-report"]',
     title: "One report, every enabled skill",
-    body: "This merges output from whichever skills are actually on for this client — Showtime and Reputation Manager together when both apply, not two separate cards.",
+    body: "This merges output from whichever skills are actually on for this client. Showtime and Reputation Manager together when both apply, not two separate cards.",
     placement: "top",
   },
   {
@@ -135,7 +135,7 @@ const ENGAGEMENT_DETAIL: TourStep[] = [
     route: "/dashboard/engagements/{engagementId}",
     target: '[data-tour="engagement-workers-panel"]',
     title: "Every skill, live status",
-    body: "The same on/off switches, Configure, and Analytics as the Library — but scoped to this one client, with its actual latest run right on the card.",
+    body: "The same on/off switches, Configure, and Analytics as the Library, but scoped to this one client, with its actual latest run right on the card.",
     placement: "top",
   },
 ];
@@ -153,7 +153,7 @@ const PRODUCT_TOUR_SPECS: ProductTourSpec[] = [
   {
     id: "showtime",
     label: "Showtime",
-    description: "Booking-to-close automation — confirmation pages, pre-call sequences, call briefs, win-back.",
+    description: "Booking-to-close automation: confirmation pages, pre-call sequences, call briefs, win-back.",
     productPath: "/dashboard/library/showtime",
     onboardingWorkerId: "pin-down",
     onboardingWorkerName: "Show Rate Setup",
@@ -177,7 +177,7 @@ const PRODUCT_TOUR_SPECS: ProductTourSpec[] = [
   {
     id: "whop-agent",
     label: "Whop Agent",
-    description: "Whop store operations — payouts, disputes, promos, ads.",
+    description: "Whop store operations: payouts, disputes, promos, ads.",
     productPath: "/dashboard/library/whop-agent",
     onboardingWorkerId: "whop-connect",
     onboardingWorkerName: "Connect Whop Account",
@@ -199,7 +199,7 @@ function buildProductTour(spec: ProductTourSpec): TourDefinition {
         route: spec.productPath,
         target: '[data-tour="product-status-tabs"]',
         title: `${spec.label}'s skills`,
-        body: `Filter this worker's own skill list by what's already enabled — everything here belongs to ${spec.label} specifically.`,
+        body: `Filter this worker's own skill list by what's already enabled: everything here belongs to ${spec.label} specifically.`,
         placement: "bottom",
       },
       {
@@ -207,7 +207,7 @@ function buildProductTour(spec: ProductTourSpec): TourDefinition {
         route: spec.productPath,
         target: `[data-tour="worker-row-${spec.onboardingWorkerId}"]`,
         title: spec.onboardingWorkerName,
-        body: `This is where ${spec.label} starts. Every other skill in it stays locked until this one actually runs for this client — not just switched on, actually completed.`,
+        body: `This is where ${spec.label} starts. Every other skill in it stays locked until this one actually runs for this client, not just switched on, actually completed.`,
         placement: "top",
       },
       {
@@ -223,7 +223,7 @@ function buildProductTour(spec: ProductTourSpec): TourDefinition {
 }
 
 export const TOURS: TourDefinition[] = [
-  { id: "dashboard-basics", label: "Dashboard Basics", description: "Orient yourself — Queue, Live Executions, sidebar, and the Create button.", steps: DASHBOARD_BASICS },
+  { id: "dashboard-basics", label: "Dashboard Basics", description: "Orient yourself: Queue, Live Executions, sidebar, and the Create button.", steps: DASHBOARD_BASICS },
   { id: "library", label: "The Library", description: "Install a worker, then enable and configure the skills inside it.", steps: LIBRARY_BASICS },
   { id: "engagement-detail", label: "Your Client's Page", description: "Pause, reports, and every skill running for this one client.", steps: ENGAGEMENT_DETAIL },
   // One entry for every worker, not one per worker: the menu stays the
@@ -244,7 +244,7 @@ export const TOURS: TourDefinition[] = [
   {
     id: "full-walkthrough",
     label: "Full Walkthrough",
-    description: "Everything above, back to back — the whole app in one pass.",
+    description: "Everything above, back to back. The whole app in one pass.",
     steps: [
       { source: "dashboard-basics", steps: DASHBOARD_BASICS },
       { source: "library", steps: LIBRARY_BASICS },

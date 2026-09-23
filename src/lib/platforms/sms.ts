@@ -114,7 +114,7 @@ export class GHLSmsClient {
   async sendSms(email: string, body: string): Promise<void> {
     const contactId = await this.findContactId(email);
     if (!contactId) {
-      throw new Error(`No GHL contact found for ${email} — can't send SMS to a contact that doesn't exist yet.`);
+      throw new Error(`No GHL contact found for ${email}. Can't send SMS to a contact that doesn't exist yet.`);
     }
 
     const res = await fetchWithTimeout(`${this.baseUrl}/conversations/messages`, {
@@ -221,11 +221,11 @@ export async function sendSmsForTenant(
     case "twilio": {
       if (a2p10dlcStatus !== "campaign_approved") {
         throw new Error(
-          `Twilio A2P 10DLC status is "${a2p10dlcStatus ?? "not_started"}", not "campaign_approved" — refusing to send. ` +
+          `Twilio A2P 10DLC status is "${a2p10dlcStatus ?? "not_started"}", not "campaign_approved". Refusing to send. ` +
           "Unregistered marketing SMS to US numbers gets carrier-filtered or blocked outright; complete brand + campaign registration first."
         );
       }
-      if (!to.phone) throw new Error("Twilio send requires a phone number — none was captured for this prospect.");
+      if (!to.phone) throw new Error("Twilio send requires a phone number. None was captured for this prospect.");
       if (!meta?.twilio_account_sid) throw new Error("Missing twilio_account_sid in sms_platform_meta");
       await new TwilioClient(meta.twilio_account_sid, apiKey, meta.twilio_messaging_service_sid, meta.twilio_from_number).sendSms(
         to.phone,
@@ -267,7 +267,7 @@ export async function sendOperatorPageSms(toPhone: string, body: string): Promis
   const authToken = process.env.REP_PAGING_TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.REP_PAGING_TWILIO_FROM_NUMBER;
   if (!accountSid || !authToken || !fromNumber) {
-    throw new Error("Operator SMS paging isn't configured — set REP_PAGING_TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER.");
+    throw new Error("Operator SMS paging isn't configured. Set REP_PAGING_TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER.");
   }
   await new TwilioClient(accountSid, authToken, undefined, fromNumber).sendSms(toPhone, body);
 }

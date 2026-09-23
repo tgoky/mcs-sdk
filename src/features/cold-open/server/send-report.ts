@@ -64,7 +64,7 @@ export async function runSendReport(tenant: any, runId: string, step: StepTools 
     summary.whatWasAttempted.push(`Rolled up the last ${REPORT_WINDOW_DAYS} days of send and reply activity.`);
     summary.whatWorked.push(`${totalPushed} lead(s) pushed for ${config?.productIdentity?.name ?? "this client"}; ${totalReplies} repl${totalReplies === 1 ? "y" : "ies"} received.`);
     if (totalPushed === 0) {
-      summary.openItems.push("No leads pushed in this window — check that Daily Send is enabled and lead sources have fresh leads.");
+      summary.openItems.push("No leads pushed in this window. Check that Daily Send is enabled and lead sources have fresh leads.");
     }
 
     await finishRun(runId, { summary });

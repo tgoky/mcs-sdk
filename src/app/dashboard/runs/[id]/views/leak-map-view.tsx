@@ -28,7 +28,7 @@ function humanizeGap(gap: string): string {
   const [, metricName, current, , floor] = match;
   const have = Number(current);
   const need = Number(floor);
-  return `${metricName} — not enough data yet to call a trend (${have} this period, need at least ${need}).`;
+  return `${metricName}: not enough data yet to call a trend (${have} this period, need at least ${need}).`;
 }
 
 import { auditRunTypeLabel } from "@/lib/copy";
@@ -187,7 +187,7 @@ export function LeakMapView({
         <EmptyState
           icon={AlertTriangle}
           title="No audit recorded for this run"
-          description="This run either failed before the audit could be computed, or it ran before per-run correlation was added — check the Steps panel for detailed execution logs."
+          description="This run either failed before the audit could be computed, or it ran before per-run correlation was added. Check the Steps panel for detailed execution logs."
         />
       ) : (
         (() => {
@@ -271,7 +271,7 @@ export function LeakMapView({
                   <details className="group">
                     <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
                       <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
-                      {otherIssues.length} other metric{otherIssues.length === 1 ? "" : "s"} — healthy or not enough data
+                      {otherIssues.length} other metric{otherIssues.length === 1 ? "" : "s"} (healthy or not enough data)
                     </summary>
                     <div className="mt-1.5 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60 opacity-70">
                       {otherIssues.map((issue) => (
@@ -323,7 +323,7 @@ export function LeakMapView({
               {filteredIssues.length === 0 ? (
                 <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0
-                    ? "No funnel issues detected in this audit — the current metrics are within normal range."
+                    ? "No funnel issues detected in this audit. The current metrics are within normal range."
                     : "No funnel metrics match your search filter."}
                 </div>
               ) : (
@@ -374,11 +374,11 @@ export function LeakMapView({
                           </td>
                           <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400 max-w-[220px]">
                             {issue.insufficientData
-                              ? "Not enough data yet — sample below the reliability floor."
+                              ? "Not enough data yet. Sample below the reliability floor."
                               : issue.severity === "high"
-                              ? "Significant drop-off — requires immediate attention."
+                              ? "Significant drop-off. Requires immediate attention."
                               : issue.severity === "medium"
-                              ? "Moderate variance — monitor over upcoming cycles."
+                              ? "Moderate variance. Monitor over upcoming cycles."
                               : "Within expected parameters."}
                           </td>
                         </tr>
@@ -501,9 +501,9 @@ function IssueRow({ issue }: { issue: IssueType }) {
       {/* Assessment */}
       <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
         {issue.insufficientData
-          ? "Not enough data yet to call a trend for this metric — the sample is below the reliability floor, so this isn't confirmation of healthy performance, just an unknown."
+          ? "Not enough data yet to call a trend for this metric. The sample is below the reliability floor, so this isn't confirmation of healthy performance, just an unknown."
           : issue.severity === "high"
-          ? "Significant drop-off compared to the prior period. Potential leak in conversion or scheduling workflow — prioritize investigation."
+          ? "Significant drop-off compared to the prior period. Potential leak in conversion or scheduling workflow. Prioritize investigation."
           : issue.severity === "medium"
           ? "Moderate variance from baseline. Track over upcoming audit cycles to catch further funnel friction early."
           : "Operating within expected parameters with stable performance."}

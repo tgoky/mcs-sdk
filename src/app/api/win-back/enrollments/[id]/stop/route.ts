@@ -49,7 +49,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     if (row.status !== "active") {
       return NextResponse.json(
-        { error: `Enrollment is already "${row.status}" — nothing to stop.` },
+        { error: `Enrollment is already "${row.status}". Nothing to stop.` },
         { status: 409 }
       );
     }

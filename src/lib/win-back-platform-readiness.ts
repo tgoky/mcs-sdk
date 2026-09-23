@@ -26,10 +26,10 @@ import type { EngagementStack } from "@/models/schema";
 
 export function missingWinBackMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
   if ((platform === "klaviyo" || platform === "mailchimp") && !stack.recovery_list_id) {
-    return `recovery_list_id (${platform === "mailchimp" ? "Mailchimp audience ID" : "Klaviyo list ID"}) isn't configured yet — set that up on the client's page first.`;
+    return `recovery_list_id (${platform === "mailchimp" ? "Mailchimp audience ID" : "Klaviyo list ID"}) isn't configured yet. Set that up on the client's page first.`;
   }
   if (platform === "convertkit" && !stack.recovery_list_id) {
-    return "recovery_list_id (ConvertKit tag ID) isn't configured yet — set that up on the client's page first.";
+    return "recovery_list_id (ConvertKit tag ID) isn't configured yet. Set that up on the client's page first.";
   }
   if (platform === "activecampaign" && (!stack.recovery_list_id || !stack.activecampaign_base_url)) {
     return "ActiveCampaign win-back needs recovery_list_id and activecampaign_base_url configured on the client's page first.";

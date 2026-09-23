@@ -49,13 +49,13 @@ const VALIDATORS: Record<string, (secret: string, ctx: { locationId?: string; tw
   smtp: (raw) => new SMTPClient(parseSmtpCredential(raw)).checkCredentialHealth(),
   ghl_calendar: (token, ctx) => {
     if (!ctx.locationId?.trim()) {
-      throw new Error("No GHL Location ID on file for this engagement yet — set it under Edit stack settings first.");
+      throw new Error("No GHL Location ID on file for this engagement yet. Set it under Edit stack settings first.");
     }
     return new GHLCalendarClient(token, ctx.locationId).checkCredentialHealth();
   },
   twilio: (authToken, ctx) => {
     if (!ctx.twilioAccountSid?.trim()) {
-      throw new Error("No Twilio Account SID on file for this engagement yet — set it under Edit stack settings first.");
+      throw new Error("No Twilio Account SID on file for this engagement yet. Set it under Edit stack settings first.");
     }
     return new TwilioClient(ctx.twilioAccountSid, authToken).checkCredentialHealth();
   },

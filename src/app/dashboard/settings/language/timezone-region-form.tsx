@@ -161,7 +161,7 @@ export function TimezoneRegionForm({
       </div>
 
       <p className="text-[11px] text-zinc-500 dark:text-zinc-400 max-w-xl pt-2 border-t border-zinc-200 dark:border-zinc-800/60">
-        This is the default applied to new clients when they&apos;re added — each client&apos;s own schedule can
+        This is the default applied to new clients when they&apos;re added. Each client&apos;s own schedule can
         still be set independently under their Edit stack settings → Scheduling, which is what actually drives when
         their recovery sweeps and digests run.
       </p>

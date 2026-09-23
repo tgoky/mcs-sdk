@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (!(await hasCredential(id, coldOpenCredentialProvider(platform)))) {
-      return NextResponse.json({ error: `No ${platform} credential saved for this engagement yet — connect it first.` }, { status: 400 });
+      return NextResponse.json({ error: `No ${platform} credential saved for this engagement yet. Connect it first.` }, { status: 400 });
     }
 
     const adapter = createEspAdapter(id, platform, { baseUrl });

@@ -58,7 +58,7 @@ export async function releaseHeldLead(engagementId: string, leadId: string, acti
     .returning();
 
   if (!claimed) {
-    return { error: "This lead is no longer in the held queue — it may have already been reviewed." };
+    return { error: "This lead is no longer in the held queue. It may have already been reviewed." };
   }
   // statusDetail on `claimed` is the pre-claim value — the claim UPDATE
   // above only touched `status`.
@@ -75,12 +75,12 @@ export async function releaseHeldLead(engagementId: string, leadId: string, acti
   const config = await getColdOpenConfig(engagementId);
   if (!config?.sendPlatform) {
     await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
-    return { error: "No sending platform configured for this engagement anymore — reconnect Send Connect first." };
+    return { error: "No sending platform configured for this engagement anymore. Reconnect Send Connect first." };
   }
   const copy = (lead.statusDetail as { copy?: AssembledCopy } | null)?.copy;
   if (!copy) {
     await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
-    return { error: "This held lead has no saved copy to send — it was likely created before a code update. Discard it and let it re-fetch on the next run." };
+    return { error: "This held lead has no saved copy to send. It was likely created before a code update. Discard it and let it re-fetch on the next run." };
   }
 
   const adapter = createEspAdapter(engagementId, config.sendPlatform.platform, { baseUrl: config.sendPlatform.baseUrl });

@@ -48,7 +48,7 @@ export function InferredFieldBadge({
   if (currentValue.trim() === detectedValue.trim()) {
     return (
       <p className="text-[10.5px] text-zinc-400 dark:text-zinc-600 -mt-1 mb-1.5">
-        Pre-filled from {detectedFromLabel} — edit above if it's wrong.
+        Pre-filled from {detectedFromLabel} : edit above if it's wrong.
       </p>
     );
   }

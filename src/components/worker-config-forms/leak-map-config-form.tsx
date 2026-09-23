@@ -139,7 +139,7 @@ export function LeakMapConfigForm({
       content: (
         <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
           <SelectField
-            label="Weekly summary — day"
+            label="Weekly summary: day"
             value={String(weeklyScheduleDayOfWeek)}
             onChange={(v) => setWeeklyScheduleDayOfWeek(Number(v))}
             options={DAY_OPTIONS}
@@ -152,7 +152,7 @@ export function LeakMapConfigForm({
             helpText="Used for both the weekly summary and monthly deep-dive."
           />
           <SelectField
-            label="Monthly deep-dive — day of month"
+            label="Monthly deep-dive: day of month"
             value={String(monthlyScheduleDayOfMonth)}
             onChange={(v) => setMonthlyScheduleDayOfMonth(Number(v))}
             options={DAY_OF_MONTH_OPTIONS}
@@ -207,7 +207,7 @@ export function LeakMapConfigForm({
               className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
               style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
             >
-              Slack delivery uses the Slack webhook URL from Pre-Call Read&apos;s brief settings — add one there if you
+              Slack delivery uses the Slack webhook URL from Pre-Call Read&apos;s brief settings. Add one there if you
               haven&apos;t yet.
             </div>
           )}
@@ -223,7 +223,7 @@ export function LeakMapConfigForm({
           Configure Leak Map{buyer ? ` for ${buyer}` : ""}
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          These already have sane defaults — Leak Map runs fine without ever opening this screen. Come back anytime
+          These already have sane defaults. Leak Map runs fine without ever opening this screen. Come back anytime
           to change the audit schedule or where reports land.
         </p>
       </div>

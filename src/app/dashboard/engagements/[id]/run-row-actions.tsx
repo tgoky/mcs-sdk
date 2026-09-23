@@ -162,7 +162,7 @@ export function RunRowActions({
           {!isActive && (
             <ActionMenuItem
               icon={busy === "retry" ? Loader2 : RotateCcw}
-              label={busy === "retry" ? "Starting…" : "Retry — run again now"}
+              label={busy === "retry" ? "Starting…" : "Retry (run again now)"}
               disabled={busy === "retry"}
               onClick={() => retryRun(close)}
             />

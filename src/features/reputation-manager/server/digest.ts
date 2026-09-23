@@ -83,7 +83,7 @@ async function buildRepDigest(engagementId: string, since: Date | null): Promise
 
 function formatDigestBody(digest: RepDigestSummary, operatorName: string): string {
   if (digest.totalEvents === 0 && digest.incidentsDeclared === 0) {
-    return `Quiet ${digest.since ? "day" : "period"} — nothing new to report for ${operatorName}.`;
+    return `Quiet ${digest.since ? "day" : "period"}: nothing new to report for ${operatorName}.`;
   }
   const bySourceLines = Object.entries(digest.detectionsBySource)
     .map(([source, count]) => `${count} on ${source}`)
@@ -128,7 +128,7 @@ export async function runRepDigest(tenant: any, runId: string, step: StepTools |
         runId,
         type: "reputation_daily_digest",
         severity: "info",
-        title: `Daily digest — ${graph.operatorName}`,
+        title: `Daily digest for ${graph.operatorName}`,
         body,
         slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
       });

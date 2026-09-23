@@ -214,7 +214,7 @@ export async function addToAdDataCohort(
       }
       return new GoogleSheetsCohortClient(apiKey, meta.google_sheets_spreadsheet_id, meta.google_sheets_cohort_sheet_name).addToCohort(email, cohortId);
     default:
-      throw new Error(`addToAdDataCohort does not support platform "${adDataPlatform}" — use the native_crm path via email.ts for that case instead.`);
+      throw new Error(`addToAdDataCohort does not support platform "${adDataPlatform}". Use the native_crm path via email.ts for that case instead.`);
   }
 }
 
@@ -234,7 +234,7 @@ export async function removeFromAdDataCohort(
       }
       return new GoogleSheetsCohortClient(apiKey, meta.google_sheets_spreadsheet_id, meta.google_sheets_cohort_sheet_name).removeFromCohort(email, cohortId);
     default:
-      throw new Error(`removeFromAdDataCohort does not support platform "${adDataPlatform}" — use the native_crm path via email.ts for that case instead.`);
+      throw new Error(`removeFromAdDataCohort does not support platform "${adDataPlatform}". Use the native_crm path via email.ts for that case instead.`);
   }
 }
 

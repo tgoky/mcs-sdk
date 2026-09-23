@@ -83,7 +83,7 @@ export function EngagementPauseControl({
           <span>Paused</span>
           {initialPausedReason && (
             <span className="text-xs font-normal text-amber-700/80 dark:text-amber-400/80 truncate max-w-[180px]" title={initialPausedReason}>
-              — {initialPausedReason}
+              · {initialPausedReason}
             </span>
           )}
         </div>

@@ -55,7 +55,7 @@ export function LaunchStep({
       const res = await fetch(`/api/engagements/${engagementId}/launch`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setLaunchError(data.error ?? "Launch failed. You can try again — nothing else was affected.");
+        setLaunchError(data.error ?? "Launch failed. You can try again. Nothing else was affected.");
         setLaunching(false);
         return;
       }
@@ -89,7 +89,7 @@ export function LaunchStep({
         const data = await res.json();
         if (controller.signal.aborted) return;
         if (!res.ok) {
-          setLaunchError(data.error ?? "Launch failed. You can try again — nothing else was affected.");
+          setLaunchError(data.error ?? "Launch failed. You can try again. Nothing else was affected.");
           setLaunching(false);
           return;
         }
@@ -222,7 +222,7 @@ export function LaunchStep({
           {buyerName} is launched
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          Pick which skills and agents to turn on. None are required, and none are pre-selected — enable whatever fits{" "}
+          Pick which skills and agents to turn on. None are required, and none are pre-selected. Enable whatever fits{" "}
           {buyerName}&apos;s stack today. Anything left off can be turned on later from the engagement page.
         </p>
       </div>
@@ -288,7 +288,7 @@ export function LaunchStep({
 
       <div className="flex justify-between items-center pt-4 font-mono" style={{ borderTop: "1px solid var(--border)" }}>
         <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          {selectedCount === 0 ? "Nothing selected yet — that's fine." : `${selectedCount} of ${SKILL_IDS.length} selected`}
+          {selectedCount === 0 ? "Nothing selected yet, and that's fine." : `${selectedCount} of ${SKILL_IDS.length} selected`}
         </span>
         <button
           onClick={finish}

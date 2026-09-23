@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const dc = apiKey.trim().split("-").pop();
     if (!dc || dc === apiKey.trim()) {
-      return NextResponse.json({ error: "This doesn't look like a Mailchimp API key — it should end with a datacenter suffix like -us21." }, { status: 400 });
+      return NextResponse.json({ error: "This doesn't look like a Mailchimp API key. It should end with a datacenter suffix like -us21." }, { status: 400 });
     }
 
     const lists: { id: string; name: string }[] = [];

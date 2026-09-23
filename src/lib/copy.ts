@@ -236,7 +236,7 @@ export const PHASE_LABELS: Record<string, string> = {
   // Shared / webhooks
   webhook_received: "New booking received",
   booking_roster: "Syncing your booking calendar",
-  skill_disabled: "Skipped — module turned off",
+  skill_disabled: "Skipped: module turned off",
 };
 
 /** Friendly phase description for a raw phase string, with a safe fallback. */
@@ -264,7 +264,7 @@ export const EMAIL_PLATFORM_LABELS: Record<string, string> = {
   ghl: "GoHighLevel",
   mailchimp: "Mailchimp",
   convertkit: "ConvertKit",
-  smtp: "Direct Send — no CRM (Resend or SMTP)",
+  smtp: "Direct Send (no CRM, Resend or SMTP)",
 };
 
 export const HOSTING_PLATFORM_LABELS: Record<string, string> = {
@@ -349,8 +349,8 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   webhook_enrollment: "Enroll prospect from booking webhook",
   cohort_membership_add: "Add prospect to cohort",
   cohort_membership_remove: "Remove prospect from cohort",
-  confirmation_page_deploy: "Confirmation page ready — approve to publish",
-  rep_response_approval: "Reputation response draft — review before posting",
+  confirmation_page_deploy: "Confirmation page ready: approve to publish",
+  rep_response_approval: "Reputation response draft: review before posting",
   whop_webhook_pin: "Pin a Whop webhook subscription",
   whop_webhook_dedupe_delete: "Delete a duplicate Whop webhook subscription",
   whop_webhook_reenable: "Re-enable a disabled Whop webhook subscription",
@@ -375,7 +375,7 @@ export const BLOCKER_TYPE_LABELS: Record<string, string> = {
 
 export const QUEUE_COPY = {
   sectionTitle: "Queue",
-  sectionSubtitle: "Ranked by priority — the top item needs you first.",
+  sectionSubtitle: "Ranked by priority. The top item needs you first.",
   emptyState: "Nothing waiting on you right now.",
   sidebarLabel: "Queue",
   categoryLabels: {
@@ -393,7 +393,7 @@ export const QUEUE_COPY = {
   },
   errors: {
     adminOnly: "Admin access required.",
-    generic: "Something went wrong — try again.",
+    generic: "Something went wrong. Try again.",
   },
 };
 
@@ -553,8 +553,8 @@ export function outcomeSourceLabel(source: string | null | undefined, outcome: s
       return "Confirmed automatically from the call recording";
     case "auto_sweep":
       return outcome === "showed"
-        ? "Confirmed automatically — activity found in your CRM"
-        : "Assumed no-show — no activity found after the scheduled time";
+        ? "Confirmed automatically: activity found in your CRM"
+        : "Assumed no-show: no activity found after the scheduled time";
     default:
       return "Confirmed automatically";
   }
@@ -573,7 +573,7 @@ export const DASHBOARD_COPY = {
   overviewSectionTitle: "Overview",
   activityLogSectionTitle: "Recent Activity",
   noActivityYet:
-    "Nothing has run yet — once you add a client, activity will show up here.",
+    "Nothing has run yet. Once you add a client, activity will show up here.",
   stat: {
     activeAccounts: "Active Accounts",
     activeAccountsAllGood: "All good",
@@ -626,7 +626,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     id: "showtime",
     name: "Showtime",
     description:
-      "Sales execution for your booked calls — client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.",
+      "Sales execution for your booked calls. Client setup, follow-up sequences, call briefs, win-back, and funnel health, all in one place.",
     href: "/dashboard",
     status: "available",
     image: "/images/showtime.png",
@@ -653,7 +653,7 @@ export const WORKSPACE_PRODUCTS: WorkspaceProduct[] = [
     id: "whop-agent",
     name: "Whop Agent",
     description:
-      "Connect a Whop seller account and run curated ops playbooks against it: launch pre-flight, cancellation save-offers, dispute response, webhook fleet health, and portfolio reporting — every write verified and gated.",
+      "Connect a Whop seller account and run curated ops playbooks against it: launch pre-flight, cancellation save-offers, dispute response, webhook fleet health, and portfolio reporting. Every write verified and gated.",
     href: "/dashboard/library/whop-agent",
     // All 15 playbooks in whop-agent-skill-manifest.ts are now
     // implemented:true, each with a real execute function or its own

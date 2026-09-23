@@ -145,7 +145,7 @@ export async function runPinDownOnboarding(
     // ── Email/CRM config completeness check ─────────────────────────────
     if (finalStack.email_platform === "klaviyo" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
       summary.openItems.push(
-        "Klaviyo is missing a target and/or recovery list ID — Pile-On and Win-Back enrollment will fail until these are set."
+        "Klaviyo is missing a target and/or recovery list ID. Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
     if (
@@ -153,7 +153,7 @@ export async function runPinDownOnboarding(
       (!finalStack.target_list_id || !finalStack.recovery_list_id || !finalStack.activecampaign_base_url)
     ) {
       summary.openItems.push(
-        "ActiveCampaign is missing a target list ID, recovery list ID, and/or base URL — Pile-On and Win-Back enrollment will fail until these are set."
+        "ActiveCampaign is missing a target list ID, recovery list ID, and/or base URL. Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
     if (
@@ -163,22 +163,22 @@ export async function runPinDownOnboarding(
         !finalStack.recovery_workflow_id)
     ) {
       summary.openItems.push(
-        "GoHighLevel is missing a location ID and/or workflow IDs — Pile-On and Win-Back enrollment will fail until these are set."
+        "GoHighLevel is missing a location ID and/or workflow IDs. Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
     if (finalStack.email_platform === "mailchimp" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
       summary.openItems.push(
-        "Mailchimp is missing a target and/or recovery audience ID — Pile-On and Win-Back enrollment will fail until these are set."
+        "Mailchimp is missing a target and/or recovery audience ID. Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
     if (finalStack.email_platform === "convertkit" && (!finalStack.target_list_id || !finalStack.recovery_list_id)) {
       summary.openItems.push(
-        "ConvertKit is missing a target form ID and/or recovery tag ID — Pile-On and Win-Back enrollment will fail until these are set."
+        "ConvertKit is missing a target form ID and/or recovery tag ID. Pile-On and Win-Back enrollment will fail until these are set."
       );
     }
     if (finalStack.email_platform === "smtp") {
       summary.openItems.push(
-        "SMTP is a direct-send channel with no app-generated Pile-On pre-call content yet — it will only run the Win-Back recovery email cadence, not Pile-On."
+        "SMTP is a direct-send channel with no app-generated Pile-On pre-call content yet. It will only run the Win-Back recovery email cadence, not Pile-On."
       );
     }
 
@@ -267,7 +267,7 @@ export async function runPinDownOnboarding(
           createPlatformAdapterDraft(engagementId, kind, platformName, discoveredUrl)
         );
         summary.openItems.push(
-          `${kind === "hosting" ? "Hosting" : "Booking"} platform "${platformName}" isn't in the built-in set — researched its docs and drafted an adapter proposal (id: ${draftId}) pending admin review.`
+          `${kind === "hosting" ? "Hosting" : "Booking"} platform "${platformName}" isn't in the built-in set. Researched its docs and drafted an adapter proposal (id: ${draftId}) pending admin review.`
         );
         await logStep(runId, { phase: `doc_research_${kind}`, status: "success", detail: `Draft ${draftId} created, pending_review` });
       } catch (e: any) {
@@ -348,18 +348,18 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       combinedVoiceCorpus = scrapeResult.combinedCorpus;
 
       if (scrapeResult.error) {
-        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} failed: ${scrapeResult.error} — continuing with the operator-pasted corpus.`);
+        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} failed: ${scrapeResult.error}. Continuing with the operator-pasted corpus.`);
       } else if (scrapeResult.sourcesCount > 0) {
         summary.whatWorked.push(
           `Crawled ${scrapeResult.sourcesCount} source(s) (${scrapeResult.sourceKinds.join(", ")}) from ${finalStack.buyer_domain} for voice extraction.`
         );
       } else {
-        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable — voice extraction will rely on the operator-pasted corpus alone.`);
+        summary.openItems.push(`Voice crawl of ${finalStack.buyer_domain} found nothing usable. Voice extraction will rely on the operator-pasted corpus alone.`);
       }
    } else {
       await logStep(runId, { phase: "voice_scrape", status: "skipped", detail: "No buyer_domain on file" });
       summary.openItems.push(
-        "No website domain on file — voice extraction had no scraped content to work with. Add a domain and re-run setup to get a real brand voice profile instead of the neutral default."
+        "No website domain on file. Voice extraction had no scraped content to work with. Add a domain and re-run setup to get a real brand voice profile instead of the neutral default."
       );
     }
 
@@ -395,7 +395,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         summary.whatWorked.push(`Matched the confirmation page's visual style to ${finalStack.buyer_domain}.`);
       } else {
         summary.openItems.push(
-          `Couldn't pull visual design signal from ${finalStack.buyer_domain} — the confirmation page will use the template's default look instead of one matched to the site.`
+          `Couldn't pull visual design signal from ${finalStack.buyer_domain}. The confirmation page will use the template's default look instead of one matched to the site.`
         );
       }
     } else {
@@ -449,10 +449,10 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       summary.whatWorked.push("Brand voice profile extracted from buyer-supplied corpus via Claude.");
     } else if (voiceProfile?.fallback_reason === "extraction_call_failed") {
       summary.whatWorked.push("Brand voice profile set to neutral default (extraction call failed).");
-      summary.openItems.push("Voice extraction call failed — using the operator-grade default tone. Re-run setup to try a real extraction again.");
+      summary.openItems.push("Voice extraction call failed. Using the operator-grade default tone. Re-run setup to try a real extraction again.");
     } else {
       summary.whatWorked.push("Brand voice profile set to neutral default (corpus under 500 words).");
-      summary.openItems.push("Corpus was too short for a real voice extraction — using the operator-grade default tone.");
+      summary.openItems.push("Corpus was too short for a real voice extraction. Using the operator-grade default tone.");
     }
 
     // ── Ad creative briefs ──────────────────────────────────────────────────
@@ -567,7 +567,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         await logStep(runId, { phase: "pile_on_sequence_audit", status: "running" });
         const emailApiKey = await resolveCredential(engagementId, finalStack.email_platform).catch(() => null);
         if (!emailApiKey) {
-          summary.openItems.push("Existing Pile-On sequence audit skipped — no email platform credential resolved yet.");
+          summary.openItems.push("Existing Pile-On sequence audit skipped. No email platform credential resolved yet.");
           await logStep(runId, { phase: "pile_on_sequence_audit", status: "skipped", detail: "No credential" });
         } else {
           const audit = await run("pile-on-sequence-audit", () =>
@@ -579,7 +579,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
             .where(eq(engagements.engagementId, engagementId));
           if (audit.supported) {
             summary.whatWorked.push(
-              `Audited existing Pile-On sequence on ${finalStack.email_platform} — ${audit.emails.length} email(s) scored.`
+              `Audited existing Pile-On sequence on ${finalStack.email_platform}: ${audit.emails.length} email(s) scored.`
             );
             await logStep(runId, { phase: "pile_on_sequence_audit", status: "success", detail: `${audit.emails.length} emails scored` });
           } else {
@@ -606,7 +606,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
           .set({ existingAuditAuditResult: audit })
           .where(eq(engagements.engagementId, engagementId));
         summary.whatWorked.push(
-          `Compared existing report against Leak Map — ${audit.overlapping.length} overlapping area(s), ${audit.gapsLeakMapCloses.length} gap(s) closed.`
+          `Compared existing report against Leak Map: ${audit.overlapping.length} overlapping area(s), ${audit.gapsLeakMapCloses.length} gap(s) closed.`
         );
         await logStep(runId, { phase: "leak_map_existing_audit", status: "success" });
       } catch (e: any) {
@@ -649,7 +649,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
           .set({ pinDownPageAudit: audit })
           .where(eq(engagements.engagementId, engagementId));
         summary.whatWorked.push(
-          `Audited existing confirmation page at ${finalStack.existing_confirmation_page_url} — ${audit.existingPageWeaknesses.length} gap(s) identified.`
+          `Audited existing confirmation page at ${finalStack.existing_confirmation_page_url}: ${audit.existingPageWeaknesses.length} gap(s) identified.`
         );
         await logStep(runId, {
           phase: "existing_page_audit",
@@ -678,7 +678,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
           await logStep(runId, {
             phase: "confirmation_page_deploy",
             status: "skipped",
-            detail: "Buyer opted to keep their existing confirmation page — nothing built or published.",
+            detail: "Buyer opted to keep their existing confirmation page. Nothing built or published.",
           });
           return {
             confirmationPageUrl: finalStack.existing_confirmation_page_url,
@@ -729,7 +729,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
           await logStep(runId, {
             phase: "confirmation_page_deploy",
             status: "pending_review",
-            detail: "Queued for your approval — nothing has been published yet. Approve it from the dashboard queue to go live.",
+            detail: "Queued for your approval. Nothing has been published yet. Approve it from the dashboard queue to go live.",
           });
           return {
             confirmationPageUrl: internalFallbackUrl,
@@ -789,10 +789,10 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
     } else if (confirmationPageDeployment.mode === "pending_review") {
       summary.openItems.push(`Confirmation page drafted and waiting on your approval before it publishes to ${finalStack.hosting_platform}.`);
     } else if (confirmationPageDeployment.mode === "not_deployed" && finalStack.existing_confirmation_page_reuse) {
-      summary.whatWorked.push(`Kept the buyer's existing confirmation page at ${confirmationPageUrl} — no new page built or published.`);
+      summary.whatWorked.push(`Kept the buyer's existing confirmation page at ${confirmationPageUrl}. No new page built or published.`);
     } else {
       summary.whatFailed.push(`Could not auto-publish to ${finalStack.hosting_platform}: ${confirmationPageDeployment.reason}`);
-      summary.openItems.push(`Paste-ready HTML ready for ${finalStack.hosting_platform} — manual publish required.`);
+      summary.openItems.push(`Paste-ready HTML ready for ${finalStack.hosting_platform}. Manual publish required.`);
     }
 
     if (finalStack.hosting_platform === "wordpress" && confirmationPageDeployment.mode === "live" && remoteResourceId) {
@@ -905,7 +905,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
-            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned — fell back to polling mode (manual webhook secret pre-generated for later)" });
+            await logStep(runId, { phase: "webhook_registration", status: "skipped", detail: "No subscription ID returned. Fell back to polling mode (manual webhook secret pre-generated for later)" });
             return { mode: "polling" as const, reason: "no_sub_id", receiverUrl, isError: false };
           }
         } catch (e: any) {
@@ -925,7 +925,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));
-          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message} — fell back to polling mode (manual webhook secret pre-generated for later)` });
+          await logStep(runId, { phase: "webhook_registration", status: "failed", detail: `${e.message}. Fell back to polling mode (manual webhook secret pre-generated for later)` });
           return { mode: "polling" as const, reason: e.message, receiverUrl, isError: true };
         }
       });
@@ -937,12 +937,12 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         summary.whatWasAttempted.push(`Attempted ${finalStack.booking_platform} webhook registration → ${webhookResult.receiverUrl}.`);
         summary.whatFailed.push(`${finalStack.booking_platform} webhook registration failed: ${webhookResult.reason}`);
         summary.openItems.push(
-          `Booking webhook registration failed — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 25} minute(s) as a fallback so bookings still process.`
+          `Booking webhook registration failed: switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 25} minute(s) as a fallback so bookings still process.`
         );
       } else {
-        summary.whatWasAttempted.push(`Evaluated ${finalStack.booking_platform} webhook capability — polling mode selected.`);
+        summary.whatWasAttempted.push(`Evaluated ${finalStack.booking_platform} webhook capability. Polling mode selected.`);
         summary.openItems.push(
-          `${finalStack.booking_platform} doesn't support live webhook registration — switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 25} minute(s) instead. Bookings will process on a short delay rather than instantly.`
+          `${finalStack.booking_platform} doesn't support live webhook registration: switched to polling every ${finalStack.webhook_poll_interval_minutes ?? 25} minute(s) instead. Bookings will process on a short delay rather than instantly.`
         );
       }
     } else {
@@ -977,7 +977,7 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
         summary.whatWorked.push("Calendly post-booking redirect configured.");
       } else {
         summary.whatFailed.push(`Calendly redirect configuration failed: ${redirectResult.error}`);
-        summary.openItems.push("Calendly isn't redirecting to the confirmation page yet — set this manually or re-run setup.");
+        summary.openItems.push("Calendly isn't redirecting to the confirmation page yet. Set this manually or re-run setup.");
       }
     } else {
       // Post-booking redirect config is a Calendly-only feature (it calls

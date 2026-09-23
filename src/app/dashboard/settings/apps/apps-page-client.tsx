@@ -107,7 +107,7 @@ const PLATFORMS: PlatformDef[] = [
     label: "SMTP",
     group: "Email & CRM",
     composioManaged: false,
-    description: "Sends emails directly through your own mail server — no CRM required.",
+    description: "Sends emails directly through your own mail server. No CRM required.",
     placeholder: "smtp://user:pass@host:587",
     howTo: "Your email provider's SMTP credentials, as one connection string.",
   },
@@ -116,7 +116,7 @@ const PLATFORMS: PlatformDef[] = [
     label: "GoHighLevel (CRM & Email)",
     group: "Email & CRM",
     composioManaged: true,
-    description: "Sends follow-ups and reads CRM activity through GoHighLevel — a separate connection from GoHighLevel Calendar above, since this app stores them as two distinct credentials even on the same GHL account.",
+    description: "Sends follow-ups and reads CRM activity through GoHighLevel. A separate connection from GoHighLevel Calendar above, since this app stores them as two distinct credentials even on the same GHL account.",
   },
   // Cold Open's own sending/reply platforms — audited against every
   // resolveCredential() call site in the codebase (send-connect-config-
@@ -423,7 +423,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
           Apps
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Connect the platforms your clients use once here — every engagement can reuse what&apos;s saved, instead of
+          Connect the platforms your clients use once here. Every engagement can reuse what&apos;s saved, instead of
           pasting the same key per client.
         </p>
       </div>
@@ -578,7 +578,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
         </h2>
         {items.length === 0 ? (
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Nothing saved yet — connect or add a key above.
+            Nothing saved yet. Connect or add a key above.
           </p>
         ) : (
           <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)" }}>

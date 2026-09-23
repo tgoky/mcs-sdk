@@ -36,7 +36,7 @@ export function StackStep({
       {form.bookingPlatform === "discover_from_docs" && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-            We will research this platforms public developer docs and draft an integration proposal for review — it won't touch your client's account until an admin approves it. Bookings on this platform won't auto-enroll until then.
+            We will research this platforms public developer docs and draft an integration proposal for review. It won't touch your client's account until an admin approves it. Bookings on this platform won't auto-enroll until then.
           </div>
           <InputField
             label="Platform name"
@@ -91,7 +91,7 @@ export function StackStep({
         value={form.hostingPlatform}
         onChange={(v) => set("hostingPlatform", v)}
         options={Object.entries(HOSTING_PLATFORM_LABELS).map(([value, label]) => ({ value, label }))}
-        helpText="The confirmation page publishes directly onto the client's own site — it never lives on our domain."
+        helpText="The confirmation page publishes directly onto the client's own site. It never lives on our domain."
       />
 
       <InputField
@@ -165,7 +165,7 @@ export function StackStep({
       {form.hostingPlatform === "discover_from_docs" && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-            We'll research this platform's publishing API and draft an integration proposal for review. Until it's approved, the confirmation page ships as ready-to-paste HTML — nothing is blocked in the meantime.
+            We'll research this platform's publishing API and draft an integration proposal for review. Until it's approved, the confirmation page ships as ready-to-paste HTML. Nothing is blocked in the meantime.
           </div>
           <InputField
             label="Platform name"
@@ -202,7 +202,7 @@ export function StackStep({
       />
       {form.smsPlatform === "ghl_sms" && (
         <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-          No key needed here — the next step (Account Keys) has one shared GoHighLevel token that covers SMS along with any GHL calendar or email workflow use.
+          No key needed here. The next step (Account Keys) has one shared GoHighLevel token that covers SMS along with any GHL calendar or email workflow use.
         </div>
       )}
       {form.smsPlatform !== "none" && form.smsPlatform !== "ghl_sms" && (
@@ -232,7 +232,7 @@ export function StackStep({
             value={form.smsTwilioMessagingServiceSid}
             onChange={(v) => set("smsTwilioMessagingServiceSid", v)}
             placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            helpText="Preferred over a single From number — Twilio handles number pooling/failover."
+            helpText="Preferred over a single From number. Twilio handles number pooling/failover."
           />
           <InputField
             label="Twilio From Number (if no Messaging Service)"
@@ -249,7 +249,7 @@ export function StackStep({
               { value: "brand_registered", label: "Brand registered" },
               { value: "campaign_approved", label: "Campaign approved" },
             ]}
-            helpText="Must be 'Campaign approved' or we'll refuse to send — unregistered marketing SMS gets carrier-filtered."
+            helpText="Must be 'Campaign approved' or we'll refuse to send. Unregistered marketing SMS gets carrier-filtered."
           />
         </>
       )}

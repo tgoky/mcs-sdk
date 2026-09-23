@@ -89,7 +89,7 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
           whatWasAttempted: ["Looked for other connected Whop Agent workspaces on this account"],
           whatWorked: [],
           whatFailed: [],
-          openItems: ["No connected Whop Agent workspaces found — Portfolio Rollup needs at least one."],
+          openItems: ["No connected Whop Agent workspaces found. Portfolio Rollup needs at least one."],
           decisionsMade: [],
         },
       });
@@ -157,8 +157,8 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
         ],
         whatFailed: missingByName.length ? [`Missing data for: ${missingByName.join(", ")}`] : [],
         openItems: [
-          ...(prior ? [] : ["No prior-week portfolio snapshot yet — deltas start next week."]),
-          "Per-product breakdown across accounts not yet built — needs the stats engine's breakdowns param on a receipts metric.",
+          ...(prior ? [] : ["No prior-week portfolio snapshot yet. Deltas start next week."]),
+          "Per-product breakdown across accounts not yet built. Needs the stats engine's breakdowns param on a receipts metric.",
         ],
         decisionsMade: [],
       },

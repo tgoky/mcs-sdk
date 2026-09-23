@@ -140,7 +140,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       .set({
         stack: {
           ...stack,
-          webhook_last_error: `Poll failed at ${now.toISOString()} — ${message}`,
+          webhook_last_error: `Poll failed at ${now.toISOString()}: ${message}`,
         },
         updatedAt: now,
       })

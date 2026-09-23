@@ -50,14 +50,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (await llmActionLimitReached(id, "compare")) {
       return NextResponse.json(
-        { error: `That's ${LLM_ACTIONS_PER_HOUR} in the last hour for this client — try again later.` },
+        { error: `That's ${LLM_ACTIONS_PER_HOUR} in the last hour for this client. Try again later.` },
         { status: 429, headers: { "Retry-After": "600" } }
       );
     }
 
     const comparison = await generateSkillComparison(id, workerIds);
     if (!comparison) {
-      return NextResponse.json({ error: "Couldn't generate a comparison — try again." }, { status: 422 });
+      return NextResponse.json({ error: "Couldn't generate a comparison. Try again." }, { status: 422 });
     }
 
     return NextResponse.json({ comparison });

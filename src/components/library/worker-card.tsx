@@ -322,9 +322,9 @@ export function WorkerCard({
                   isIncomplete ? (
                     <span
                       className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500 dark:bg-amber-600 border border-amber-600 dark:border-amber-700 px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase"
-                      title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active — open Configure to see what's missing`}
+                      title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active. Open Configure to see what's missing`}
                     >
-                      <AlertTriangle size={10} /> Enabled — needs setup
+                      <AlertTriangle size={10} /> Enabled, needs setup
                     </span>
                   ) : (
                     <span className="shrink-0 rounded-md bg-[#4d7c4d] dark:bg-[#5c8f5c] border border-[#3f663f] dark:border-[#4d7c4d] px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
@@ -445,7 +445,7 @@ export function WorkerCard({
             isIncomplete ? (
               <span
                 className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500 dark:bg-amber-600 border border-amber-600 dark:border-amber-700 px-2 py-0.5 text-[10px] font-semibold text-white uppercase"
-                title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active — open Configure to see what's missing`}
+                title={`${completeness!.activeCount} of ${completeness!.totalCount} capabilities active. Open Configure to see what's missing`}
               >
                 <AlertTriangle size={10} /> Needs setup
               </span>

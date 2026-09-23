@@ -92,7 +92,7 @@ function HeldLeadsPanel({ engagementId }: { engagementId: string }) {
           <div key={lead.id} className="flex items-center justify-between gap-3 rounded-lg bg-background border border-zinc-200 dark:border-zinc-800 px-3 py-2">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                {[lead.firstName, lead.lastName].filter(Boolean).join(" ") || lead.email} — {lead.companyName}
+                {[lead.firstName, lead.lastName].filter(Boolean).join(" ") || lead.email} , {lead.companyName}
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                 {lead.email} {lead.icp ? `· ${lead.icp}` : ""} {lead.statusDetail?.copy?.subject ? `· "${lead.statusDetail.copy.subject}"` : ""}
@@ -228,14 +228,14 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
             value={copyMode}
             onChange={(v) => setCopyMode(v as "generate" | "upload")}
             options={[
-              { value: "upload", label: "Upload — rotate your own variants" },
-              { value: "generate", label: "Generate — a fresh LLM draft per lead" },
+              { value: "upload", label: "Upload: rotate your own variants" },
+              { value: "generate", label: "Generate: a fresh LLM draft per lead" },
             ]}
           />
           <label className="flex items-start gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 cursor-pointer">
             <input type="checkbox" checked={liveSendEnabled} onChange={(e) => setLiveSendEnabled(e.target.checked)} className="mt-0.5" />
             <span className="text-xs text-zinc-700 dark:text-zinc-300">
-              <span className="font-bold">Send live.</span> Off by default — every run stays a dry run (leads fetched, copy assembled, nothing pushed to your ESP) until this is
+              <span className="font-bold">Send live.</span> Off by default. Every run stays a dry run (leads fetched, copy assembled, nothing pushed to your ESP) until this is
               checked. Turn it on once you&apos;ve confirmed a dry run looks right.
             </span>
           </label>
@@ -249,7 +249,7 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Daily Send{buyer ? ` — ${buyer}` : ""}</h1>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Daily Send{buyer ? ` for ${buyer}` : ""}</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
             The recurring pipeline: fetch, filter, personalize, push, report. {lastRunAt ? `Last ran ${new Date(lastRunAt).toLocaleString()}.` : "Hasn't run yet."}
           </p>
@@ -265,7 +265,7 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
         lines={[
           `Up to ${volume || "0"} leads/day, sent at ${String(localHour).padStart(2, "0")}:00 ${timezone || "UTC"}.`,
           copyMode === "generate" ? "Copy is freshly generated per lead by an LLM call." : "Copy rotates through your uploaded subject/body variants.",
-          liveSendEnabled ? "Live sending is ON — real emails will go out." : "Live sending is OFF — every run stays a dry run until this is turned on.",
+          liveSendEnabled ? "Live sending is ON. Real emails will go out." : "Live sending is OFF. Every run stays a dry run until this is turned on.",
         ]}
       />
 

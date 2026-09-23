@@ -13,7 +13,7 @@ export function RepTwitterWatchView({ detail }: { detail: RepTwitterWatchDetail 
       <EmptyState
         icon={AtSign}
         title="No new mentions in this run"
-        description="This run found no new X (Twitter) mentions since the last check — a normal, healthy outcome, not a failure."
+        description="This run found no new X (Twitter) mentions since the last check. That's a normal, healthy outcome, not a failure."
       />
     );
   }

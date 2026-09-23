@@ -125,7 +125,7 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
       await alertOperator(
         engagementId,
         "Dispute-alert velocity above threshold",
-        `${disputeAlertCount} dispute alerts in the last week (threshold ${disputeAlertThreshold}) — each can carry a fee_charged cost directly.`,
+        `${disputeAlertCount} dispute alerts in the last week (threshold ${disputeAlertThreshold}). Each can carry a fee_charged cost directly.`,
         "critical"
       );
     }

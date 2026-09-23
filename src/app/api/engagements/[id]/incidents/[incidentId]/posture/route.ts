@@ -176,7 +176,7 @@ async function draftAndRespond(engagementId: string, incidentId: string, posture
       .set({ selectedPosture: null })
       .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.selectedPosture, posture)))
       .catch(() => {});
-    return NextResponse.json({ error: `Drafting failed, nothing was saved — try again. (${message})` }, { status: 500 });
+    return NextResponse.json({ error: `Drafting failed, nothing was saved. Try again. (${message})` }, { status: 500 });
   }
   return NextResponse.json({ ok: true, drafted: true });
 }

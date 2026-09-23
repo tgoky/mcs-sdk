@@ -91,7 +91,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-purchase-cap-copilot": {
     id: "whop-purchase-cap-copilot",
     name: "Purchase Cap Application Co-Pilot",
-    description: "Assembles a purchase-cap application packet from your sales history and account-health data, with a submission walkthrough — Whop has no API to submit it for you.",
+    description: "Assembles a purchase-cap application packet from your sales history and account-health data, with a submission walkthrough. Whop has no API to submit it for you.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],
@@ -100,7 +100,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-drift-monitor": {
     id: "whop-drift-monitor",
     name: "Pin-Exempt Resource Drift Monitor",
-    description: "Weekly structural-fingerprint check on the 6 resources exempt from version pinning (cards, plans, transfers, swaps, deposits, exports) — plans especially, since it backs pricing-change confirmation.",
+    description: "Weekly structural-fingerprint check on the 6 resources exempt from version pinning (cards, plans, transfers, swaps, deposits, exports). Plans especially, since it backs pricing-change confirmation.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],
@@ -109,7 +109,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-weekly-ops-report": {
     id: "whop-weekly-ops-report",
     name: "Weekly Ops Report",
-    description: "Net revenue, MRR/ARR, churn, new subscribers, refund/dispute rate and more, read entirely from Whop's stats engine with debug.sql provenance stored per metric — no client-side aggregation.",
+    description: "Net revenue, MRR/ARR, churn, new subscribers, refund/dispute rate and more, read entirely from Whop's stats engine with debug.sql provenance stored per metric. No client-side aggregation.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],
@@ -118,7 +118,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-portfolio-rollup": {
     id: "whop-portfolio-rollup",
     name: "Portfolio Rollup Report",
-    description: "The same Weekly Ops metric set joined across every other workspace on this account that also has Whop Agent connected — the cross-business view no native Whop dashboard provides.",
+    description: "The same Weekly Ops metric set joined across every other workspace on this account that also has Whop Agent connected. The cross-business view no native Whop dashboard provides.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],
@@ -127,7 +127,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-cancellation-save-offer": {
     id: "whop-cancellation-save-offer",
     name: "Cancellation Save-Offer Engine",
-    description: "Configures Whop's native cancel-discount first, then proposes a save offer on every genuine cancel-intent (never an un-cancel) using previous_attributes for direction — operator approves every offer.",
+    description: "Configures Whop's native cancel-discount first, then proposes a save offer on every genuine cancel-intent (never an un-cancel) using previous_attributes for direction. Operator approves every offer.",
     runOnSetup: false,
     hasHingesPanel: true,
     requiredCredentials: ["bot"],
@@ -172,7 +172,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-ads-draft-approve": {
     id: "whop-ads-draft-approve",
     name: "Whop Ads Draft-and-Approve",
-    description: "Pre-flight-checks the connected Meta page, generates creative, and drafts a campaign in Whop's own draft posture — flip-to-active is a separate, explicitly confirmed step needing elevated scope.",
+    description: "Pre-flight-checks the connected Meta page, generates creative, and drafts a campaign in Whop's own draft posture. Flip-to-active is a separate, explicitly confirmed step needing elevated scope.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot", "elevated"],
@@ -190,7 +190,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-daily-change-digest": {
     id: "whop-daily-change-digest",
     name: "Daily Change Digest",
-    description: "A rolling, resource-grouped summary of every previous_attributes delta received — what changed on your Whop yesterday, sourced entirely from webhooks, zero polling.",
+    description: "A rolling, resource-grouped summary of every previous_attributes delta received. What changed on your Whop yesterday, sourced entirely from webhooks, zero polling.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],
@@ -199,7 +199,7 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
   "whop-attribution-report": {
     id: "whop-attribution-report",
     name: "Attribution & Affiliate Report",
-    description: "Members grouped by promo code, affiliate, and checkout session off the v2 membership API — the only source with attribution fields — cross-checked against the stats engine.",
+    description: "Members grouped by promo code, affiliate, and checkout session off the v2 membership API, the only source with attribution fields, cross-checked against the stats engine.",
     runOnSetup: false,
     hasHingesPanel: false,
     requiredCredentials: ["bot"],

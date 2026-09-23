@@ -65,7 +65,7 @@ export async function runWinBackHybridPersonalization(
     system: `You are the email rewriting engine for Win-Back.
 Voice parameters: ${JSON.stringify(brandVoiceProfile ?? {})}
 Offer context: ${JSON.stringify(offerDetails ?? {})}
-Write a personalized opening paragraph for the FIRST recovery email to a prospect who missed/cancelled their call. Under 70 words. Warm, low-stakes "we missed you" tone — never guilt-trip, never pressure. No generic greetings.`,
+Write a personalized opening paragraph for the FIRST recovery email to a prospect who missed/cancelled their call. Under 70 words. Warm, low-stakes "we missed you" tone. Never guilt-trip, never pressure. No generic greetings.`,
     userMessage: `Prospect: ${prospectName} (${prospectEmail})`,
     maxTokens: 200,
     runId,

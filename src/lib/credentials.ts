@@ -425,7 +425,7 @@ export async function resolveCredential(
   if (!row.encryptedValue || !row.iv) {
     throw new Error(
       `Credential row for engagement [${engagementId}] provider [${provider}] has neither a local value nor a vault link. ` +
-      "This shouldn't be reachable — storeCredential and linkEngagementToVault both always set one or the other."
+      "This shouldn't be reachable, since storeCredential and linkEngagementToVault both always set one or the other."
     );
   }
 

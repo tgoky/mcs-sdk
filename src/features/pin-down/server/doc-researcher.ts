@@ -66,7 +66,7 @@ official docs genuinely don't exist) and determine whether it supports
 ${capability}.
 
 Be honest about uncertainty. If you can't find official docs, or the
-platform doesn't appear to have a public API at all, say so plainly — do
+platform doesn't appear to have a public API at all, say so plainly. Do
 not invent endpoints or guess at auth schemes. Never fabricate a specific
 endpoint path, parameter name, or auth header you didn't actually find in
 the docs.

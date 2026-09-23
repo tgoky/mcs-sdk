@@ -105,7 +105,7 @@ export default async function RunsPage({ searchParams }: { searchParams: Promise
             {product ? `${product === "showtime" ? "Showtime" : "Reputation Manager"} executions` : copy.allExecutionsTitle}
           </h1>
           <p className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
-            Every skill run across your engagements — filter by module, status, or client below.
+            Every skill run across your engagements. Filter by module, status, or client below.
           </p>
 
           {skillCounts.size > 0 && (

@@ -47,11 +47,11 @@ export function ProductOnboardingGateModal({
     setSkipError(null);
     try {
       const res = await fetch(`/api/engagements/${engagementId}/products/${productId}/skip-onboarding`, { method: "POST" });
-      if (!res.ok) throw new Error("Couldn't save that — try again.");
+      if (!res.ok) throw new Error("Couldn't save that. Try again.");
       onSkipped();
       onClose();
     } catch (cause) {
-      setSkipError(cause instanceof Error ? cause.message : "Couldn't save that — try again.");
+      setSkipError(cause instanceof Error ? cause.message : "Couldn't save that. Try again.");
       setSkipping(false);
     }
   }
@@ -62,7 +62,7 @@ export function ProductOnboardingGateModal({
         <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
           <strong className="font-bold text-zinc-900 dark:text-white">{onboardingWorkerName}</strong> needs to run for
           this client before <strong className="font-bold text-zinc-900 dark:text-white">{workerName}</strong> means
-          anything — every other skill in this product reads what it sets up.
+          anything. Every other skill in this product reads what it sets up.
         </p>
         {skipError && <p className="text-xs text-rose-600 dark:text-rose-400">{skipError}</p>}
         <div className="flex items-center gap-2 pt-1">

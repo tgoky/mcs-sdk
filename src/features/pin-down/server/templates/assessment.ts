@@ -3,14 +3,14 @@ import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRAN
 import { buildAssessmentDynamicHtml } from "./dynamic/assessment.dynamic";
 
 /**
- * The Pre-Call Assessment — for a niche or vertical offer where
+ * The Pre-Call Assessment --- for a niche or vertical offer where
  * qualification changes what the call actually covers. Clinical calm:
  * off-white, deep teal, generous whitespace. Signature element: a short
- * self-check built straight from the buyer's own top call questions —
+ * self-check built straight from the buyer's own top call questions ---
  * the prospect ticks whichever already apply to them, and the page
  * quietly confirms those are exactly what the call will address. Not a
  * lead score or a graded quiz (nothing here is sent anywhere or judges
- * the prospect) — just a priming device that makes the call feel
+ * the prospect) --- just a priming device that makes the call feel
  * diagnostic before it starts, which is the actual job of this design.
  *
  * Published once per engagement as static HTML, so the greeting and call
@@ -88,7 +88,7 @@ ${buildGoogleFontLinks("family=IBM+Plex+Sans:wght@400;500;600")}
   section { margin-bottom: 44px; }
   .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #6b756f; margin: 0 0 16px; }
 
-  /* Overview video — placeholder until the operator's recording pass
+  /* Overview video --- placeholder until the operator's recording pass
      produces one; never a fabricated embed. */
   .video-card { background: #ffffff; border: 1px solid #dbe4de; border-radius: 12px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
   .video-card .play { width: 32px; height: 32px; border-radius: 50%; background: #1F6F5C; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
@@ -96,7 +96,7 @@ ${buildGoogleFontLinks("family=IBM+Plex+Sans:wght@400;500;600")}
   .video-card .vtitle { margin: 0 0 2px; font-size: 0.85rem; font-weight: 700; color: #1C2321; }
   .video-card .vsub { margin: 0; font-size: 0.76rem; color: #6b756f; }
 
-  /* Self-check — signature element */
+  /* Self-check --- signature element */
   .assess-panel { background: #ffffff; border: 1px solid #dbe4de; border-radius: 12px; padding: 24px 22px 22px; }
   .assess-panel .prompt { margin: 0 0 18px; font-size: 0.86rem; color: #2c352f; line-height: 1.55; }
   .assess-panel .prompt strong { color: #1F6F5C; }

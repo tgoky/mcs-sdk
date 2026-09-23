@@ -51,7 +51,7 @@ let client: Composio | null = null;
 
 function getComposioClient(): Composio {
   if (!process.env.COMPOSIO_API_KEY) {
-    throw new Error("COMPOSIO_API_KEY is not set — Composio-managed connections are unavailable until it's configured.");
+    throw new Error("COMPOSIO_API_KEY is not set. Composio-managed connections are unavailable until it's configured.");
   }
   if (!client) {
     client = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
@@ -147,7 +147,7 @@ export async function getComposioCredentialValue(connectedAccountId: string): Pr
   const account = await composio.connectedAccounts.get(connectedAccountId);
   if (account.status !== "ACTIVE") {
     throw new Error(
-      `Composio connection ${connectedAccountId} is ${account.status}${account.statusReason ? ` (${account.statusReason})` : ""} — reconnect it under Settings > Apps.`
+      `Composio connection ${connectedAccountId} is ${account.status}${account.statusReason ? ` (${account.statusReason})` : ""}. Reconnect it under Settings > Apps.`
     );
   }
   const value = extractCredentialValue(account.state);

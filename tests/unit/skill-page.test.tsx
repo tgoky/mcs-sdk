@@ -76,7 +76,7 @@ describe("skill page", () => {
 
   it("renders the shared header, breadcrumb, Configure menu and body", async () => {
     render(await SkillPage(props("leak-map")));
-    expect(screen.getByRole("heading", { name: "Funnel Audit — Acme" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Funnel Audit for Acme" })).toBeInTheDocument();
     expect(screen.getByText(/Automated weekly and monthly audits/)).toBeInTheDocument();
     expect(screen.getByTestId("configure")).toHaveTextContent("leak-map");
     expect(screen.getByTestId("body")).toHaveTextContent("leak-map e1");
@@ -102,7 +102,7 @@ describe("skill page", () => {
 
   it("uses the breadcrumb override and shows no Configure menu where the body is the form", async () => {
     render(await SkillPage(props("whop-bridge-manager")));
-    expect(screen.getByRole("heading", { name: "Bridge Manager — Acme" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bridge Manager for Acme" })).toBeInTheDocument();
     expect(screen.queryByTestId("configure")).not.toBeInTheDocument();
     expect(SKILL_PAGES["whop-webhook-audit"].breadcrumb).toBe("Webhook Fleet");
   });

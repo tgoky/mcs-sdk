@@ -79,14 +79,14 @@ function severityTone(severity: string): ActivityTone {
 function exitEvent(status: string): { type: ActivityEventType; title: string; tone: ActivityTone } {
   switch (status) {
     case "rebooked":
-      return { type: "win_back_rebooked", title: "Rebooked — recovered", tone: "success" };
+      return { type: "win_back_rebooked", title: "Rebooked (recovered)", tone: "success" };
     case "reply_exited":
-      return { type: "win_back_reply_exited", title: "Prospect replied — exited sequence", tone: "info" };
+      return { type: "win_back_reply_exited", title: "Prospect replied (exited sequence)", tone: "info" };
     case "corrected":
-      return { type: "win_back_corrected", title: "Corrected — call actually showed", tone: "info" };
+      return { type: "win_back_corrected", title: "Corrected (call actually showed)", tone: "info" };
     case "lost":
     default:
-      return { type: "win_back_lost", title: "Recovery window elapsed — lost", tone: "neutral" };
+      return { type: "win_back_lost", title: "Recovery window elapsed (lost)", tone: "neutral" };
   }
 }
 

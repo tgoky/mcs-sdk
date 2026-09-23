@@ -11,21 +11,21 @@ const MOVES = [
   {
     move: "a" as const,
     slug: "schema-wikidata",
-    name: "Move A — Schema & Wikidata",
+    name: "Move A: Schema & Wikidata",
     description: "Generate a Schema.org JSON-LD identity graph and a Wikidata statements guide for manual submission.",
     icon: FileJson,
   },
   {
     move: "b" as const,
     slug: "pitch-package",
-    name: "Move B — Press Outreach",
+    name: "Move B: Press Outreach",
     description: "Build a Tier-1 target list, draft pitches, and track outreach through to placement.",
     icon: Mail,
   },
   {
     move: "c" as const,
     slug: "reddit-ramp",
-    name: "Move C — Reddit Ramp",
+    name: "Move C: Reddit Ramp",
     description: "A 90-day plan to build real thread density: subreddit tiering, cadence, and karma gates.",
     icon: MessageSquare,
   },
@@ -80,7 +80,7 @@ export default function OffensivePlaybookIndexPage({ params }: { params: Promise
       <div>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Offensive Playbook</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Reputation-building moves that run alongside monitoring — generation and drafting tools you execute yourself.
+          Reputation-building moves that run alongside monitoring. Generation and drafting tools you execute yourself.
         </p>
       </div>
 

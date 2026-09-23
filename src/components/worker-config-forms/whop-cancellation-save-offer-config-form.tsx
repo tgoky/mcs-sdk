@@ -125,7 +125,7 @@ export function WhopCancellationSaveOfferConfigForm({
             onChange={setDiscountPercentage}
             type="number"
             placeholder="20"
-            helpText="How much off the save offer proposes when a member starts cancelling — a whole number, 1-100."
+            helpText="How much off the save offer proposes when a member starts cancelling. A whole number, 1-100."
             required
           />
           <InputField
@@ -142,8 +142,8 @@ export function WhopCancellationSaveOfferConfigForm({
             value={message}
             onChange={setMessage}
             rows={3}
-            placeholder="Before you go — stay for {months} more month(s) at {discount}% off?"
-            helpText="Supports {discount} and {months} template tokens. Every offer needs operator approval before it's ever shown — this is the copy that approval will see."
+            placeholder="Before you go, stay for {months} more month(s) at {discount}% off?"
+            helpText="Supports {discount} and {months} template tokens. Every offer needs operator approval before it's ever shown. This is the copy that approval will see."
             required
           />
         </div>
@@ -161,7 +161,7 @@ export function WhopCancellationSaveOfferConfigForm({
             onChange={setMinTenureDays}
             type="number"
             placeholder="Defaults to 30"
-            helpText="A member cancelling before they've been subscribed this long never gets a save offer — leave blank to use the default (30 days)."
+            helpText="A member cancelling before they've been subscribed this long never gets a save offer. Leave blank to use the default (30 days)."
           />
           <InputField
             label="Cooldown (days)"
@@ -169,7 +169,7 @@ export function WhopCancellationSaveOfferConfigForm({
             onChange={setCooldownDays}
             type="number"
             placeholder="Defaults to 90"
-            helpText="How long after one save offer before the same member can be offered another — leave blank to use the default (90 days)."
+            helpText="How long after one save offer before the same member can be offered another. Leave blank to use the default (90 days)."
           />
         </div>
       ),
@@ -183,7 +183,7 @@ export function WhopCancellationSaveOfferConfigForm({
           Configure Cancellation Save-Offer
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          This skill is a no-op until every field below (except the two overrides) is set — every genuine cancel-intent
+          This skill is a no-op until every field below (except the two overrides) is set. Every genuine cancel-intent
           event just gets logged and dropped otherwise. Whop&apos;s native cancel-discount itself is configured separately,
           from the plan settings step.
         </p>

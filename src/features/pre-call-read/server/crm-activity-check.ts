@@ -108,7 +108,7 @@ export function describeCrmCheck(result: CrmActivityCheckResult): string {
     // hasActivity is always false here — this helper is only ever called
     // on the no-show path, where a true would have short-circuited the
     // sweep to "showed" before this message gets built.
-    return `checked ${result.checkedPlatform === "hubspot" ? "HubSpot" : "GoHighLevel"} for any note, call, email, or task logged on this contact since the call — found nothing`;
+    return `checked ${result.checkedPlatform === "hubspot" ? "HubSpot" : "GoHighLevel"} for any note, call, email, or task logged on this contact since the call and found nothing`;
   }
   switch (result.skippedReason) {
     case "no_email_platform":

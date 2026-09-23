@@ -28,7 +28,7 @@ export function LeakMapAuditList({ audits }: { audits: UpcomingLeakMapAudit[] })
   if (audits.length === 0) {
     return (
       <div className="text-center py-8 text-xs font-mono font-medium text-zinc-400 dark:text-zinc-600">
-        No clients yet — add one from Engagements to see it here.
+        No clients yet. Add one from Engagements to see it here.
       </div>
     );
   }

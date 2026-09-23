@@ -94,7 +94,7 @@ export function WinBackManualEnrollModal({
           <>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               For a prospect who cancelled or no-showed outside a connected booking webhook, or whose recovery webhook failed. Adds them to the
-              client&apos;s actual configured recovery list/workflow — a real action, not a simulation.
+              client&apos;s actual configured recovery list/workflow. A real action, not a simulation.
             </p>
 
             <div className="space-y-2">
@@ -138,7 +138,7 @@ export function WinBackManualEnrollModal({
 
             {(step === "previewed" || step === "submitting") && previewActions.length > 0 && (
               <div className="space-y-2 surface-glass-1 rounded-xl p-3">
-                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen — nothing has been sent yet</p>
+                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen. Nothing has been sent yet</p>
                 <ul className="space-y-1.5">
                   {previewActions.map((a, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300">

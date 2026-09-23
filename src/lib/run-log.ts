@@ -293,9 +293,9 @@ function closeDanglingSteps(
   const nowIso = new Date().toISOString();
   const interruptedDetail =
     outcome === "failed"
-      ? "Interrupted — the run failed before this step finished."
+      ? "Interrupted. The run failed before this step finished."
       : outcome === "cancelled"
-      ? "Interrupted — the run was cancelled before this step finished."
+      ? "Interrupted. The run was cancelled before this step finished."
       : undefined;
   return steps.map((s) =>
     s.status === "running"
@@ -479,7 +479,7 @@ export async function timeoutRun(runId: string): Promise<boolean> {
     runId,
     closed.skillName,
     "run_timed_out",
-    "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging — check the run's step timeline for where it stalled."
+    "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging. Check the run's step timeline for where it stalled."
   );
 
   return true;

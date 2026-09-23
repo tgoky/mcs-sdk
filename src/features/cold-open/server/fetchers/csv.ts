@@ -95,7 +95,7 @@ export class CsvFetcher extends LeadFetcher {
     const problems: string[] = [];
     const content = this.cfg.csvContent;
     if (!content || !content.trim()) {
-      problems.push("csv source needs csvContent (paste or upload a CSV) — no file is stored yet.");
+      problems.push("csv source needs csvContent (paste or upload a CSV). No file is stored yet.");
       return problems;
     }
     const mapping = this.cfg.csvMapping ?? {};

@@ -961,7 +961,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     ) : selectedEntry.outcomeStatus === "awaiting_outcome" ? (
                       <div className="space-y-1.5 rounded-lg border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-2.5 font-sans">
                         <span className="flex items-center gap-1 text-[10.5px] font-mono text-amber-800 dark:text-amber-300 uppercase">
-                          <CalendarClock size={11} /> Call time has passed — no outcome logged yet
+                          <CalendarClock size={11} /> Call time has passed. No outcome logged yet
                         </span>
                         <div className="grid grid-cols-3 gap-1.5">
                           <button
@@ -1127,7 +1127,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           )}
                         </>
                       ) : (
-                        <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
+                        <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled, not enrolled in Win-Back recovery.</p>
                       )}
                     </div>
                   )}
@@ -1135,7 +1135,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
               ) : selectedDayActivity.length > 0 ? (
                 <div className="py-6 space-y-2 font-sans">
                   <p className="text-[11px] text-zinc-500 text-center font-sans">
-                    No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened — see the Skill Activity strip above.
+                    No call today, but {selectedDayActivity.length} other skill event{selectedDayActivity.length === 1 ? "" : "s"} happened. See the Skill Activity strip above.
                   </p>
                 </div>
               ) : (
@@ -1567,7 +1567,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   ) : selectedEntry.outcomeStatus === "awaiting_outcome" ? (
                     <div className="space-y-1.5 rounded-lg border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-2.5 font-sans">
                       <span className="flex items-center gap-1 text-[10.5px] font-mono text-amber-800 dark:text-amber-300 uppercase">
-                        <CalendarClock size={11} /> Call time has passed — no outcome logged yet
+                        <CalendarClock size={11} /> Call time has passed. No outcome logged yet
                       </span>
                       <div className="grid grid-cols-3 gap-1.5">
                         <button
@@ -1734,7 +1734,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                         )}
                       </>
                     ) : (
-                      <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled — not enrolled in Win-Back recovery.</p>
+                      <p className="text-zinc-500 italic text-[11px] py-4 text-center font-sans">Prospect is active/scheduled, not enrolled in Win-Back recovery.</p>
                     )}
                   </div>
                 )}

@@ -44,7 +44,7 @@ let _client: WhopSDK | null = null;
 function client(): WhopSDK {
   if (!_client) {
     if (!WHOP_API_KEY) {
-      throw new Error("WHOP_API_KEY is not set — cannot verify memberships");
+      throw new Error("WHOP_API_KEY is not set. Cannot verify memberships");
     }
     _client = new WhopSDK({ apiKey: WHOP_API_KEY });
   }
@@ -89,7 +89,7 @@ export async function checkActiveMembership(
   whopUserId: string
 ): Promise<MembershipCheckResult> {
   if (!WHOP_COMPANY_ID) {
-    throw new Error("WHOP_COMPANY_ID is not set — cannot verify memberships");
+    throw new Error("WHOP_COMPANY_ID is not set. Cannot verify memberships");
   }
 
   const page = await client().memberships.list({

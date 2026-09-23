@@ -3,14 +3,14 @@ import { buildMergeScriptTag, mergeField, mergeSlot, buildHeroVideoBlock, ENTRAN
 import { buildMinimalistDynamicHtml } from "./dynamic/minimalist.dynamic";
 
 /**
- * The Minimalist Trust — for a brand that's already done the convincing
+ * The Minimalist Trust --- for a brand that's already done the convincing
  * before this page ever loads. Nothing here should compete with that.
  * Pure white, one ink color, no cards, no borders, no boxed panels
  * anywhere on the page. Signature element: the total absence of
- * chrome — testimonials sit as bare pull-quotes and questions as a bare
+ * chrome --- testimonials sit as bare pull-quotes and questions as a bare
  * numbered list, deliberately the quietest page in the set, built to get
  * out of the way rather than to make an impression. Stays the leanest of
- * the 5 designs on purpose — a compact video line instead of a boxed
+ * the 5 designs on purpose --- a compact video line instead of a boxed
  * player, one merge-driven greeting instead of a chip row.
  *
  * Published once per engagement as static HTML, so the greeting resolves
@@ -79,7 +79,7 @@ ${buildGoogleFontLinks("family=Inter:wght@400;500;600")}
   .brief-text { font-size: 0.92rem; color: #3d3d3d; line-height: 1.75; margin: 0; }
   .brief-text .tag { display: block; margin-top: 10px; font-size: 0.78rem; color: #9a9a9a; }
 
-  /* One quiet line instead of a boxed video player — the minimalism
+  /* One quiet line instead of a boxed video player --- the minimalism
      budget covers this section too. */
   .video-line { display: flex; align-items: center; gap: 10px; margin-top: 18px; font-size: 0.82rem; color: #6B6B6B; }
   .video-line .dot { width: 6px; height: 6px; border-radius: 50%; background: #171717; flex-shrink: 0; }

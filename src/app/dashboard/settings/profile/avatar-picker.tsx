@@ -119,14 +119,14 @@ export function AvatarPicker({
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setError("That image is too large — try one under 8MB.");
+      setError("That image is too large. Try one under 8MB.");
       return;
     }
     setError(null);
     try {
       setPendingUpload(await resizeImageFile(file));
     } catch {
-      setError("Couldn't read that image — try a different file.");
+      setError("Couldn't read that image. Try a different file.");
     }
   }
 
@@ -144,7 +144,7 @@ export function AvatarPicker({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.error ?? "Couldn't save your avatar — try again.");
+        setError(data?.error ?? "Couldn't save your avatar. Try again.");
         return;
       }
       setAvatar(previewAvatar);
@@ -153,7 +153,7 @@ export function AvatarPicker({
       toast.success("Avatar updated.");
       router.refresh();
     } catch {
-      setError("Network error — check your connection.");
+      setError("Network error. Check your connection.");
     } finally {
       setSaving(false);
     }
@@ -165,7 +165,7 @@ export function AvatarPicker({
     try {
       const res = await fetch("/api/user/avatar", { method: "DELETE" });
       if (!res.ok) {
-        setError("Couldn't remove your avatar — try again.");
+        setError("Couldn't remove your avatar. Try again.");
         return;
       }
       setAvatar({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
@@ -264,7 +264,7 @@ export function AvatarPicker({
                 </label>
               </div>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                PNG, JPEG, WebP or GIF, under 8MB — cropped to a square automatically.
+                PNG, JPEG, WebP or GIF, under 8MB. Cropped to a square automatically.
               </p>
             </div>
           )}

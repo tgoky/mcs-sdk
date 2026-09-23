@@ -66,35 +66,35 @@ function explanationFor(status: number, section: StackSection, platformLabel: st
   if (status === 401 || status === 403) {
     return {
       title: `${platformLabel} rejected the credential`,
-      explanation: `${platformLabel} returned ${status} — the stored API key/token is invalid, expired, or missing a required scope. Re-enter it under "Update credentials."`,
+      explanation: `${platformLabel} returned ${status}. The stored API key/token is invalid, expired, or missing a required scope. Re-enter it under "Update credentials."`,
       isCredentialIssue: true,
     };
   }
   if (status === 404) {
     return {
       title: `${platformLabel} couldn't find the configured ID`,
-      explanation: `${platformLabel} returned 404 — one of the IDs saved for this connection (location, calendar, list, or workflow ID) no longer exists or was never set correctly.`,
+      explanation: `${platformLabel} returned 404. One of the IDs saved for this connection (location, calendar, list, or workflow ID) no longer exists or was never set correctly.`,
       isCredentialIssue: false,
     };
   }
   if (status === 422) {
     return {
       title: `${platformLabel} rejected a saved value`,
-      explanation: `${platformLabel} returned 422 — a required field for this connection is missing or doesn't match what ${platformLabel} expects. Double-check the values under Edit stack settings.`,
+      explanation: `${platformLabel} returned 422: a required field for this connection is missing or doesn't match what ${platformLabel} expects. Double-check the values under Edit stack settings.`,
       isCredentialIssue: false,
     };
   }
   if (status === 429) {
     return {
       title: `${platformLabel} is rate-limiting requests`,
-      explanation: `${platformLabel} returned 429. This isn't a configuration problem — no fix needed here, it should clear on its own on the next scheduled run.`,
+      explanation: `${platformLabel} returned 429. This isn't a configuration problem. No fix needed here, it should clear on its own on the next scheduled run.`,
       isCredentialIssue: false,
     };
   }
   if (status >= 500) {
     return {
       title: `${platformLabel} had an outage`,
-      explanation: `${platformLabel} returned ${status} — that's on their end, not this configuration. No fix needed here; it should clear on its own.`,
+      explanation: `${platformLabel} returned ${status}. That's on their end, not this configuration. No fix needed here; it should clear on its own.`,
       isCredentialIssue: false,
     };
   }

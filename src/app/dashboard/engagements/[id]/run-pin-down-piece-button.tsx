@@ -51,7 +51,7 @@ export function RunPinDownPieceButton({
       const data = await res.json();
       if (res.ok) {
         setState("done");
-        setMessage(data.message ?? "Running — check back shortly.");
+        setMessage(data.message ?? "Running. Check back shortly.");
         if (data.runId) setRunId(data.runId);
         toast.success(`${piece === "voice" ? "Voice extraction" : "Page audit"} started.`);
         router.refresh();

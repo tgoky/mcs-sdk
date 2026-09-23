@@ -124,7 +124,7 @@ export async function fetchAndSelectNewLeads(
         fetchErrors.push(`fetch[${source.icp}]: ${detail}`);
       }
     } else {
-      await logStep(runId, { phase: "fetch", label: source.icp, status: "skipped", detail: `${source.fetcherType} live fetch not yet built — connect-only today.` });
+      await logStep(runId, { phase: "fetch", label: source.icp, status: "skipped", detail: `${source.fetcherType} live fetch not yet built. connect-only today.` });
     }
   }
 
@@ -300,7 +300,7 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
     await logStep(runId, {
       phase: "dedupe_liveness",
       status: "success",
-      detail: `${selection.mapped} mapped, ${runSummary.duplicate} already handled, ${runSummary.skippedDead} dead domain(s) — ${live.length} selected for today.`,
+      detail: `${selection.mapped} mapped, ${runSummary.duplicate} already handled, ${runSummary.skippedDead} dead domain(s): ${live.length} selected for today.`,
     });
 
     // ── ASSEMBLE + PUSH ────────────────────────────────────────────────
@@ -351,7 +351,7 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
 
     summary.whatWorked.push(`${runSummary.pushed} lead(s) ${dryRun ? "dry-run " : ""}pushed, ${runSummary.held} held for review.`);
     if (runSummary.errors.length > 0) summary.whatFailed.push(...runSummary.errors);
-    if (dryRun) summary.openItems.push("Live sending is off — turn on liveSendEnabled in Daily Send settings once you're ready for real pushes.");
+    if (dryRun) summary.openItems.push("Live sending is off. Turn on liveSendEnabled in Daily Send settings once you're ready for real pushes.");
 
     await finishRun(runId, { summary });
   } catch (err) {

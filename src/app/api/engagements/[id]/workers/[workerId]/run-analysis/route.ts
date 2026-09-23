@@ -48,14 +48,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (await llmActionLimitReached(id, "analysis")) {
       return NextResponse.json(
-        { error: `That's ${LLM_ACTIONS_PER_HOUR} in the last hour for this client — try again later.` },
+        { error: `That's ${LLM_ACTIONS_PER_HOUR} in the last hour for this client. Try again later.` },
         { status: 429, headers: { "Retry-After": "600" } }
       );
     }
 
     const analysis = await generateSkillRunAnalysis(id, workerId);
     if (!analysis) {
-      return NextResponse.json({ error: "Nothing to analyze yet — this skill has no runs and no tracked outcome." }, { status: 422 });
+      return NextResponse.json({ error: "Nothing to analyze yet. This skill has no runs and no tracked outcome." }, { status: 422 });
     }
 
     return NextResponse.json({ analysis });

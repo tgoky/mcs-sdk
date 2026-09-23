@@ -72,7 +72,7 @@ export async function POST(
     if (worker.runOnSetup) {
       return NextResponse.json(
         {
-          error: `${worker.name} needs its own setup before it can run — use its configure panel instead of a plain enable.`,
+          error: `${worker.name} needs its own setup before it can run. Use its configure panel instead of a plain enable.`,
           bridgeHref: `/dashboard/engagements/${id}/bridges/${workerId}`,
         },
         { status: 422 }
@@ -110,7 +110,7 @@ export async function POST(
     if (missingFields.length > 0) {
       return NextResponse.json(
         {
-          error: `${worker.name} can't be enabled yet — ${missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ")}`,
+          error: `${worker.name} can't be enabled yet: ${missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ")}`,
           missingFields,
         },
         { status: 422 }

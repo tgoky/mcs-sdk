@@ -308,12 +308,12 @@ export function DeliverablesPanel({
     brandVoiceProfile?.fallback_reason === "extraction_parse_failed"
       ? "The AI extraction ran but didn't return usable output"
       : corpusWordCount > 0
-      ? `Only found ${corpusWordCount.toLocaleString()} word${corpusWordCount === 1 ? "" : "s"} of usable content — that's not enough for a real read (need 500+)`
+      ? `Only found ${corpusWordCount.toLocaleString()} word${corpusWordCount === 1 ? "" : "s"} of usable content. That's not enough for a real read (need 500+)`
       : "Couldn't pull any usable content from this client's site";
 
   const fallbackDetail =
     brandVoiceProfile?.fallback_reason === "extraction_parse_failed"
-      ? "This corpus was long enough — the model's response just didn't come back as valid JSON that run. Worth trying again."
+      ? "This corpus was long enough. The model's response just didn't come back as valid JSON that run. Worth trying again."
       : scrapedSourceCount > 0
       ? `Checked ${scrapedSourceCount} page${scrapedSourceCount === 1 ? "" : "s"} on ${discoveryPrefill?.domain ?? "the domain on file"} and came up short.`
       : `No domain-based crawl produced anything, and there's no operator-pasted sample either.`;
@@ -331,8 +331,8 @@ export function DeliverablesPanel({
               </span>
               <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">
                 {conversationIntelligence.lastProcessedAt
-                  ? `Last call synced ${new Date(conversationIntelligence.lastProcessedAt).toLocaleDateString()} — auto-updating objection briefs`
-                  : "Listening for upcoming calls — auto-mining new objections"}
+                  ? `Last call synced ${new Date(conversationIntelligence.lastProcessedAt).toLocaleDateString()}. Auto-updating objection briefs.`
+                  : "Listening for upcoming calls and auto-mining new objections."}
               </span>
             </div>
           </div>
@@ -540,7 +540,7 @@ export function DeliverablesPanel({
                     <div key={i} className="flex items-center justify-between px-3 py-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
-                        {s.url ? ` — ${s.url}` : ""}
+                        {s.url ? `: ${s.url}` : ""}
                       </span>
                       <span className="text-zinc-500 font-mono text-[11px]">{s.wordCount}w</span>
                     </div>
@@ -557,7 +557,7 @@ export function DeliverablesPanel({
         {briefs.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Generated once during onboarding — regenerate to refresh from the current brand voice and offer details.
+              Generated once during onboarding. Regenerate to refresh from the current brand voice and offer details.
             </p>
             <button
               type="button"
@@ -849,7 +849,7 @@ export function DeliverablesPanel({
             <div className="space-y-3 pt-1 text-xs">
               <p className="text-zinc-600 dark:text-zinc-400">
                 Reviews an existing confirmation page against what a well-built one should include (hero video, what-to-expect, breakout content,
-                social proof, reschedule path) and notes concrete gaps. Doesn&apos;t build or deploy a new page — only audits one that already exists.
+                social proof, reschedule path) and notes concrete gaps. Doesn&apos;t build or deploy a new page, only audits one that already exists.
               </p>
               <RunPinDownPieceButton
                 engagementId={engagementId}

@@ -27,11 +27,11 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
         <CircleCheck className="w-5 h-5 shrink-0" style={{ color: "var(--success)" }} />
         <div>
           <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-            Portfolio — all clear
+            Portfolio: all clear
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             Checked every one of {accounts.length} client{accounts.length !== 1 ? "s" : ""} for stalled steps, missed
-            follow-ups, and blockers waiting on you — none found this week.
+            follow-ups, and blockers waiting on you. None found this week.
           </p>
         </div>
       </div>
@@ -44,7 +44,7 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
         <TriangleAlert className="w-5 h-5 shrink-0" style={{ color: "var(--error)" }} />
         <div>
           <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-            Portfolio — accounts to check first
+            Portfolio: accounts to check first
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             {flagged.length} of {accounts.length} clients have something real to look at this week.

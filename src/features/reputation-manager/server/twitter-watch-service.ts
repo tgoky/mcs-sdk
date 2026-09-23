@@ -139,7 +139,7 @@ async function scoreMentions(operatorName: string, mentions: RawMention[], runId
         `You score X/Twitter mentions of a business ("${operatorName}") for reputation risk. For each numbered item, ` +
         "classify overall sentiment (positive, neutral, or negative), and flag it (flagged: true) only if it raises " +
         "a serious issue worth a human looking at (fraud/scam accusations, safety concerns, a viral pile-on, a " +
-        "pattern of complaint) — most mentions, even lukewarm or joking ones, don't need flagging. Respond with " +
+        "pattern of complaint). Most mentions, even lukewarm or joking ones, don't need flagging. Respond with " +
         'ONLY a JSON array, no preamble, no markdown fences:\n[{"index": 0, "sentiment": "positive"|"neutral"|"negative", "flagged": boolean, "flagReason": "one sentence, or null"}]',
       userMessage: numbered,
     });
@@ -312,7 +312,7 @@ export async function runRepTwitterWatch(tenant: any, runId: string, step: StepT
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "twitter_watch", status: "success", detail: "No mentions found." });
-      summary.whatWorked.push("Searched X — no mentions found.");
+      summary.whatWorked.push("Searched X. No mentions found.");
       await finishRun(runId, { summary });
       return;
     }
@@ -325,7 +325,7 @@ export async function runRepTwitterWatch(tenant: any, runId: string, step: StepT
       await logStep(runId, {
         phase: "twitter_watch",
         status: "success",
-        detail: `Checked ${fetched.length} mention(s) — all already on file.`,
+        detail: `Checked ${fetched.length} mention(s). All already on file.`,
       });
       summary.whatWorked.push("No new mentions since last check.");
       await finishRun(runId, { summary });
@@ -401,7 +401,7 @@ export async function runRepTwitterDeepScan(
       .map((t) => t?.trim())
       .filter((t): t is string => Boolean(t));
     if (baseTerms.length === 0) {
-      throw new Error("Reputation Manager's Identity Setup has no operator name yet — nothing to search for.");
+      throw new Error("Reputation Manager's Identity Setup has no operator name yet. Nothing to search for.");
     }
     const searchTerms = baseTerms.map((term) => `${term} since:${sinceDate}`);
 
@@ -411,7 +411,7 @@ export async function runRepTwitterDeepScan(
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "twitter_deep_scan", status: "success", detail: "No mentions found in that window." });
-      summary.whatWorked.push(`Scanned X back to ${sinceDate} — no mentions found.`);
+      summary.whatWorked.push(`Scanned X back to ${sinceDate}. No mentions found.`);
       await finishRun(runId, { summary });
       return;
     }
@@ -425,7 +425,7 @@ export async function runRepTwitterDeepScan(
       status: "success",
       detail: `${result.newCount} new mention(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found scanning back to ${sinceDate}.`,
     });
-    summary.whatWorked.push(`Scanned X back to ${sinceDate} — found ${result.newCount} new mention(s) beyond what the regular watch already had on file.`);
+    summary.whatWorked.push(`Scanned X back to ${sinceDate}: found ${result.newCount} new mention(s) beyond what the regular watch already had on file.`);
     if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} mention(s) flagged for review.`);
 
     await finishRun(runId, { summary });

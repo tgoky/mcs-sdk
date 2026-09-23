@@ -33,7 +33,7 @@ export function BookingSyncChip({ status }: { status: BookingSyncStatus }) {
       : "text-sky-600 dark:text-sky-400 fill-sky-600/20 dark:fill-sky-400/20";
 
   return (
-    <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium" title={`${status.headline} — ${status.detail}`}>
+    <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium" title={`${status.headline}: ${status.detail}`}>
       <Clock className={`w-3.5 h-3.5 shrink-0 ${toneClass}`} />
       {timeLabel && <span className={status.health === "healthy" ? "text-emerald-700 dark:text-emerald-300" : status.health === "error" ? "text-rose-700 dark:text-rose-300" : "text-sky-700 dark:text-sky-300"}>{timeLabel}</span>}
     </div>

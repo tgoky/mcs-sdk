@@ -32,7 +32,7 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
       <EmptyState
         icon={ShieldCheck}
         title="No incident declared"
-        description="This run assessed the client's flagged findings and stayed below the crisis threshold — nothing needed escalation."
+        description="This run assessed the client's flagged findings and stayed below the crisis threshold. Nothing needed escalation."
       />
     );
   }
@@ -56,7 +56,7 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
           </p>
         )}
         <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-2">
-          Status: {incident.status} · Nothing has been published — this is a notification only.
+          Status: {incident.status} · Nothing has been published. This is a notification only.
         </p>
       </div>
 

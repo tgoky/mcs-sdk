@@ -166,10 +166,10 @@ export async function scoreFindings(operatorName: string, findings: Contributing
       `- reach: ${SEVERITY_AXIS_RUBRIC.reach}\n` +
       `- sentiment: ${SEVERITY_AXIS_RUBRIC.sentiment}\n` +
       `- permanence: ${SEVERITY_AXIS_RUBRIC.permanence}\n\n` +
-      "Also classify each finding's signalClass — one of " +
+      "Also classify each finding's signalClass as one of " +
       `${SIGNAL_CLASSES_FORCE_TRIGGER.join(", ")}, or null if none apply. Classify coordinated_review_bomb only ` +
       "when you see 3 or more negative findings on the same surface (e.g. Trustpilot) clustered in a short window " +
-      "across the finding set you're given now — not from a single item in isolation.\n\n" +
+      "across the finding set you're given now, not from a single item in isolation.\n\n" +
       "Finally, write ONE 2-3 sentence summary of what's actually happening across every finding together. " +
       'Respond with ONLY JSON, no preamble, no markdown fences:\n' +
       '{"findings": [{"index": 0, "reach": 1-10, "sentiment": 1-10, "permanence": 1-10, "signalClass": "..."|null}], "summary": "..."}',
@@ -259,10 +259,10 @@ async function declareIncident(params: {
     runId,
     type: "reputation_crisis_declared",
     severity: "critical",
-    title: `Reputation crisis declared — ${operatorName}`,
+    title: `Reputation crisis declared: ${operatorName}`,
     body:
       `${summaryText}\n\n${triggerReason} Severity: ${severityScore}/100. ` +
-      `Sole authority on record: ${soleAuthorityName}. Nothing has been published — this is a notification only.`,
+      `Sole authority on record: ${soleAuthorityName}. Nothing has been published. This is a notification only.`,
     slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
     smsToPhone: operatorPagePhone ?? undefined,
   });
@@ -306,7 +306,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
 
     if (findings.length === 0 && anomalies.length === 0) {
       await logStep(runId, { phase: "crisis_response", status: "success", detail: "Nothing flagged and no anomalies detected since last check." });
-      summary.whatWorked.push("Checked for new flagged findings and anomalies — none since last check.");
+      summary.whatWorked.push("Checked for new flagged findings and anomalies. None since last check.");
       await finishRun(runId, { summary });
       return;
     }
@@ -361,9 +361,9 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
           runId,
           type: "reputation_elevated_activity",
           severity: "warning",
-          title: `Elevated activity — ${graph.operatorName}`,
+          title: `Elevated activity: ${graph.operatorName}`,
           body:
-            `${contentSummary ?? "Flagged findings"} scored ${severityScore}/100 — below the ${floor} incident threshold, ` +
+            `${contentSummary ?? "Flagged findings"} scored ${severityScore}/100, below the ${floor} incident threshold, ` +
             "but above the real-time-alert floor, so this isn't waiting for the next digest.",
           slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
         });
@@ -374,7 +374,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
         status: "success",
         detail: `Severity ${severityScore}/100, below this engagement's threshold of ${floor}. No incident declared.`,
       });
-      summary.whatWorked.push(`Assessed ${findings.length} flagged finding(s) — severity ${severityScore}/100, below threshold.`);
+      summary.whatWorked.push(`Assessed ${findings.length} flagged finding(s): severity ${severityScore}/100, below threshold.`);
       await finishRun(runId, { summary });
       return;
     }
@@ -476,7 +476,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       status: "success",
       detail: `Incident declared (severity ${severityScore}/100${forceTriggered ? `, force-triggered: ${declaredSignalClass}` : ""}) and operator notified.`,
     });
-    summary.whatWorked.push(`Declared an incident — severity ${severityScore}/100 — and notified the operator.`);
+    summary.whatWorked.push(`Declared an incident (severity ${severityScore}/100) and notified the operator.`);
     summary.decisionsMade.push(
       `Incident ${incidentId} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
     );

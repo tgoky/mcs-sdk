@@ -839,7 +839,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 <span className="text-xs">
                   {listScope === "all"
                     ? "No bookings on file for this client yet."
-                    : `No bookings in this ${listScope === "week" ? "week" : "month"} — try "All" to see full history.`}
+                    : `No bookings in this ${listScope === "week" ? "week" : "month"}. Try "All" to see full history.`}
                 </span>
               </div>
             ) : (

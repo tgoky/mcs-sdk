@@ -39,7 +39,7 @@ export const NOTIFICATION_PACK: PackAlertDefinition[] = [
     comparison: "below",
     defaultSeverity: "high",
     reasoning:
-      "A sustained drop usually means booking-form data quality slipped (a required field got made optional, a form embed broke) — every brief below threshold is a rep walking in blind.",
+      "A sustained drop usually means booking-form data quality slipped (a required field got made optional, a form embed broke). Every brief below threshold is a rep walking in blind.",
   },
   {
     id: "show_rate_drop",
@@ -50,7 +50,7 @@ export const NOTIFICATION_PACK: PackAlertDefinition[] = [
     comparison: "below",
     defaultSeverity: "high",
     reasoning:
-      "Show-rate is usually the single highest-leverage number in the whole funnel — a drop here compounds into every downstream metric.",
+      "Show-rate is usually the single highest-leverage number in the whole funnel. A drop here compounds into every downstream metric.",
   },
   {
     id: "email_open_rate_drop",
@@ -61,7 +61,7 @@ export const NOTIFICATION_PACK: PackAlertDefinition[] = [
     comparison: "below",
     defaultSeverity: "medium",
     reasoning:
-      "A falling open-rate often means a deliverability problem (domain reputation, spam-folder placement) rather than a content problem — worth catching before it silently erodes the whole sequence's effectiveness.",
+      "A falling open-rate often means a deliverability problem (domain reputation, spam-folder placement) rather than a content problem. Worth catching before it silently erodes the whole sequence's effectiveness.",
   },
   {
     id: "pipeline_win_rate_drop",
@@ -82,7 +82,7 @@ export const NOTIFICATION_PACK: PackAlertDefinition[] = [
     comparison: "below",
     defaultSeverity: "low",
     reasoning:
-      "A sharp drop usually means the nightly cron or a webhook subscription silently broke, not that booking volume actually fell — this is often the first sign something upstream needs attention.",
+      "A sharp drop usually means the nightly cron or a webhook subscription silently broke, not that booking volume actually fell. This is often the first sign something upstream needs attention.",
   },
 ];
 

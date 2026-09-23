@@ -146,13 +146,13 @@ function ReputationManagerBody({ engagement, searchParams }: SkillPageContext) {
 export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
   "pin-down": {
     title: "Show Rate Setup",
-    subtitle: "Brand voice, ad creative briefs, video scripts, and confirmation page — the one-time onboarding output, not an ongoing run.",
+    subtitle: "Brand voice, ad creative briefs, video scripts, and confirmation page: the one-time onboarding output, not an ongoing run.",
     headerAction: configure("pin-down"),
     body: (ctx) => <PinDownBody {...ctx} />,
   },
   "win-back": {
     title: "Booking Recovery",
-    subtitle: "Every enrolled prospect across the whole recovery cadence — not one run page at a time.",
+    subtitle: "Every enrolled prospect across the whole recovery cadence, not one run page at a time.",
     headerAction: configure("win-back"),
     body: (ctx) => <WinBackBody {...ctx} />,
   },
@@ -191,7 +191,7 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
     title: "Reputation Manager",
     subtitle: (
       <>
-        Every finding, review, and mention on file for this client — AI engines, Trustpilot, Reddit, and X.{" "}
+        Every finding, review, and mention on file for this client: AI engines, Trustpilot, Reddit, and X.{" "}
         <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
           Manage declared incidents →
         </Link>

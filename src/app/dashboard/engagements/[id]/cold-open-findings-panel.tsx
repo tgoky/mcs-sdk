@@ -105,8 +105,8 @@ const LEAD_STATUS_META: Record<ColdOpenLeadStatus, { label: string; tone: Tone }
   dry_run: { label: "Dry run", tone: "info" },
   held: { label: "Held for review", tone: "warning" },
   duplicate: { label: "Duplicate", tone: "neutral" },
-  skipped_dead: { label: "Skipped — dead lead", tone: "neutral" },
-  skipped_filtered: { label: "Skipped — filtered", tone: "neutral" },
+  skipped_dead: { label: "Skipped (dead lead)", tone: "neutral" },
+  skipped_filtered: { label: "Skipped (filtered)", tone: "neutral" },
   error: { label: "Error", tone: "danger" },
   discarded: { label: "Discarded", tone: "neutral" },
   // Transient — a lead sits here only for the duration of one approve
@@ -122,7 +122,7 @@ const REPLY_DISPOSITION_META: Record<ColdOpenReplyDisposition, { label: string; 
   not_a_fit: { label: "Not a fit", tone: "neutral" },
   auto_reply: { label: "Auto-reply", tone: "neutral" },
   unsubscribe: { label: "Unsubscribe", tone: "neutral" },
-  unclassified: { label: "Unclassified — needs review", tone: "danger" },
+  unclassified: { label: "Unclassified (needs review)", tone: "danger" },
 };
 
 function formatEntryTime(isoString: string) {
@@ -300,7 +300,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
           onClick={close}
           className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
         >
-          <X className="w-3.5 h-3.5" /> Close — back to Cold Open
+          <X className="w-3.5 h-3.5" /> Back to Cold Open
         </button>
         {renderWorkerConfigForm(configuringSkill, { engagementId, onClose: close, onSaved: close, cancelLabel: "Close" })}
       </div>
@@ -474,7 +474,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               </div>
 
               {filteredLeads.length === 0 ? (
-                <EmptyState icon={Send} title="No leads on file" description="Leads will appear here once Daily Send runs — from Source Connect's fetch, filtered to ICP, and pushed (or held/skipped) to the mapped campaign." />
+                <EmptyState icon={Send} title="No leads on file" description="Leads will appear here once Daily Send runs. From Source Connect's fetch, filtered to ICP, and pushed (or held/skipped) to the mapped campaign." />
               ) : (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40 max-h-[420px] overflow-y-auto">
                   {filteredLeads.map((l) => {
@@ -582,7 +582,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               </div>
 
               {filteredReplies.length === 0 ? (
-                <EmptyState icon={MessageSquare} title="No replies on file" description="Inbound replies will appear here once Reply Sort classifies them — interested and objection replies route to the Queue." />
+                <EmptyState icon={MessageSquare} title="No replies on file" description="Inbound replies will appear here once Reply Sort classifies them. Interested and objection replies route to the Queue." />
               ) : (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800/40 max-h-[420px] overflow-y-auto">
                   {filteredReplies.map((r) => {

@@ -77,7 +77,7 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move A — Schema & Wikidata</h1>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move A: Schema & Wikidata</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Generated from this client&apos;s identity graph. Paste the JSON-LD into every owned domain, then work through the Wikidata submission by hand.
         </p>

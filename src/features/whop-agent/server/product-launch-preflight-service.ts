@@ -64,7 +64,7 @@ export function runPreflightValidation(input: ProductLaunchInput): PreflightResu
   if (input.headline.length > HEADLINE_MAX) {
     violations.push({
       field: "headline",
-      message: `Headline is ${input.headline.length} chars — hard cap is ${HEADLINE_MAX}. Whop accepts the write and truncates silently mid-word, which is worse than a rejection.`,
+      message: `Headline is ${input.headline.length} chars: hard cap is ${HEADLINE_MAX}. Whop accepts the write and truncates silently mid-word, which is worse than a rejection.`,
     });
   }
 
@@ -136,7 +136,7 @@ export async function runProductLaunchPreflight(
           whatWasAttempted: ["Pre-flight validation"],
           whatWorked: [],
           whatFailed: preflight.violations.map((v) => `${v.field}: ${v.message}`),
-          openItems: ["Fix every listed violation and re-run — no write was attempted."],
+          openItems: ["Fix every listed violation and re-run. No write was attempted."],
           decisionsMade: [],
         },
       });
@@ -147,7 +147,7 @@ export async function runProductLaunchPreflight(
       await logStep(runId, {
         phase: "preflight_validation",
         status: "failed",
-        detail: `Plan(s) at index ${preflight.purchaseCapExceededPlanIndices.join(", ")} exceed the $2,500 purchase cap — Whop requires application-based approval first.`,
+        detail: `Plan(s) at index ${preflight.purchaseCapExceededPlanIndices.join(", ")} exceed the $2,500 purchase cap. Whop requires application-based approval first.`,
       });
       await finishRun(runId, {
         status: "skipped",
@@ -165,11 +165,11 @@ export async function runProductLaunchPreflight(
 
     const dryRun = opts.dryRun ?? (await isDryRunRequired(engagementId, "whop-product-launch-preflight"));
     const client = await WhopAgentClient.forEngagement(engagementId);
-    if (!client.accountId) throw new Error("This connection has no Whop account id on file — reconnect before launching a product.");
+    if (!client.accountId) throw new Error("This connection has no Whop account id on file. Reconnect before launching a product.");
 
     if (dryRun) {
       const plannedCalls = [
-        `Create product "${input.title}" (hidden) — headline "${input.headline}"`,
+        `Create product "${input.title}" (hidden): headline "${input.headline}"`,
         ...input.plans.map((p, i) => `Create plan ${i}: $${(p.priceCents / 100).toFixed(2)} ${p.billingType}${p.billingPeriod ? `/${p.billingPeriod}` : ""}`),
         ...(input.promoCode ? [`Create promo code ${input.promoCode.code} (${input.promoCode.discountPercentage}% off)`] : []),
         ...(input.webhookEvents?.length ? [`Ensure webhook subscription for: ${input.webhookEvents.join(", ")}`] : []),
@@ -179,11 +179,11 @@ export async function runProductLaunchPreflight(
       }
       await finishRun(runId, {
         summary: {
-          whatWasAttempted: ["Dry run — no writes issued"],
+          whatWasAttempted: ["Dry run: no writes issued"],
           whatWorked: plannedCalls,
           whatFailed: [],
           openItems: ["Review the planned calls above, then re-run with dryRun:false to execute for real."],
-          decisionsMade: ["This is this engagement's first run of Product Launch Pre-Flight — defaulted to dry-run per Section 8.2."],
+          decisionsMade: ["This is this engagement's first run of Product Launch Pre-Flight. Defaulted to dry-run per Section 8.2."],
         },
       });
       return { status: "dry_run" };
@@ -211,14 +211,14 @@ export async function runProductLaunchPreflight(
     );
     const confirmed = readBack.data?.some((p) => p.id === productId);
     if (!confirmed) {
-      await logStep(runId, { phase: "product_create", status: "failed", detail: "Read-back did not confirm the created product — flagging as partial-success." });
+      await logStep(runId, { phase: "product_create", status: "failed", detail: "Read-back did not confirm the created product. Flagging as partial-success." });
       await finishRun(runId, {
         status: "success",
         summary: {
           whatWasAttempted: ["Create product", "Read-back verification"],
           whatWorked: [`Product create call returned id ${productId}`],
           whatFailed: ["Read-back did not confirm the product exists as expected"],
-          openItems: ["Do not proceed to plan creation — verify manually in the Whop dashboard before retrying."],
+          openItems: ["Do not proceed to plan creation. Verify manually in the Whop dashboard before retrying."],
           decisionsMade: [],
         },
       });
@@ -238,7 +238,7 @@ export async function runProductLaunchPreflight(
           })
         );
         createdPlanIds.push(planRes.id);
-        await logStep(runId, { phase: `plan_create_${i}`, status: "success", detail: `Plan ${planRes.id} — $${(plan.priceCents / 100).toFixed(2)}` });
+        await logStep(runId, { phase: `plan_create_${i}`, status: "success", detail: `Plan ${planRes.id}: $${(plan.priceCents / 100).toFixed(2)}` });
       } catch (err) {
         // Fail-open table: "Product create succeeds, plan create fails —
         // Product stays hidden; failed step marked retryable with
@@ -252,7 +252,7 @@ export async function runProductLaunchPreflight(
             whatWasAttempted: [`Create product`, `Create ${input.plans.length} plan(s)`],
             whatWorked: [`Product ${productId} created (hidden)`, ...createdPlanIds.map((id) => `Plan ${id} created`)],
             whatFailed: [`Plan ${i} failed: ${message}`],
-            openItems: [`Product stays hidden. Retry plan ${i} — idempotency key whop-plan-create:${runId}:${i} preserved.`],
+            openItems: [`Product stays hidden. Retry plan ${i}: idempotency key whop-plan-create:${runId}:${i} preserved.`],
             decisionsMade: [],
           },
         });
@@ -297,7 +297,7 @@ export async function runProductLaunchPreflight(
         whatWasAttempted: ["Pre-flight validation", "Product create", `${input.plans.length} plan create(s)`, input.promoCode ? "Promo code create" : "", input.webhookEvents?.length ? "Webhook subscription" : ""].filter(Boolean),
         whatWorked: [`Product ${productId} created (hidden), confirmed by read-back`, ...createdPlanIds.map((id) => `Plan ${id} created`), ...(promoCodeId ? [`Promo code ${promoCodeId} created`] : [])],
         whatFailed: [],
-        openItems: ["Product is hidden — flip to live is a separate, deliberate operator action."],
+        openItems: ["Product is hidden. Flip to live is a separate, deliberate operator action."],
         decisionsMade: [],
       },
     });

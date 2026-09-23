@@ -107,10 +107,10 @@ export class WhopAgentClient {
       .where(eq(whopAgentConnections.engagementId, engagementId))
       .limit(1);
     if (!connection) {
-      throw new Error(`No Whop connection on file for engagement ${engagementId} — run the connect flow first.`);
+      throw new Error(`No Whop connection on file for engagement ${engagementId}. Run the connect flow first.`);
     }
     if (connection.circuitBreakerState === "open") {
-      throw new WhopCredentialError(0, { reason: connection.circuitBreakerReason ?? "circuit breaker open — reconnect required" });
+      throw new WhopCredentialError(0, { reason: connection.circuitBreakerReason ?? "circuit breaker open (reconnect required)" });
     }
     const apiKey = await resolveCredential(engagementId, "whop_bot_api_key");
     return new WhopAgentClient(engagementId, apiKey, connection);
@@ -265,7 +265,7 @@ export class WhopAgentClient {
    */
   async statsMetric(resource: string, opts: { granularity?: "daily" | "weekly" | "monthly"; from?: string; to?: string; breakdowns?: string } = {}): Promise<WhopStatsMetricResponse> {
     if (!this.connection.whopAccountId) {
-      throw new Error("This connection has no Whop account id on file — reconnect before querying stats.");
+      throw new Error("This connection has no Whop account id on file. Reconnect before querying stats.");
     }
     return this.request<WhopStatsMetricResponse>("stats.metric", "/api/v1/stats/metric", {
       query: {

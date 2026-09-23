@@ -151,7 +151,7 @@ export function EngagementActionsMenu({
               <ActionMenuItem
                 icon={Trash2}
                 label="Delete client"
-                description={initialDeletedAt ? "Deleted — restore from here" : "Hides the client, pauses everything"}
+                description={initialDeletedAt ? "Deleted. Restore from here" : "Hides the client, pauses everything"}
                 tone="danger"
                 onClick={() => {
                   setActiveModal("delete");

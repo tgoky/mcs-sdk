@@ -58,7 +58,7 @@ export interface WebhookAuditReport {
 export async function auditWebhookFleet(engagementId: string): Promise<WebhookAuditReport> {
   const client = await WhopAgentClient.forEngagement(engagementId);
   if (!client.accountId) {
-    throw new Error("This connection has no Whop account id on file — reconnect before auditing webhooks.");
+    throw new Error("This connection has no Whop account id on file. Reconnect before auditing webhooks.");
   }
 
   const response = await client.request<{ data: WhopWebhookRecord[] }>("webhooks.list", "/v1/webhooks", {
@@ -140,7 +140,7 @@ export async function auditWebhookFleet(engagementId: string): Promise<WebhookAu
 export async function queueWebhookPin(engagementId: string, whopWebhookId: string): Promise<string> {
   const [connection] = await db.select().from(whopAgentConnections).where(eq(whopAgentConnections.engagementId, engagementId)).limit(1);
   if (!connection?.pinnedVersionDate) {
-    throw new Error("No validated Api-Version-Date pin on file for this connection — resolve pin selection first.");
+    throw new Error("No validated Api-Version-Date pin on file for this connection. Resolve pin selection first.");
   }
   return queuePendingAction(
     engagementId,
@@ -161,7 +161,7 @@ export async function queueWebhookDedupe(engagementId: string, groupKey: string)
     .from(whopWebhookRegistry)
     .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.duplicateGroupKey, groupKey)));
   if (rows.length < 2) {
-    throw new Error("This group no longer has duplicate members — re-run the audit.");
+    throw new Error("This group no longer has duplicate members. Re-run the audit.");
   }
   const sorted = [...rows].sort((a, b) => {
     if (a.consecutiveFailures !== b.consecutiveFailures) return a.consecutiveFailures - b.consecutiveFailures;
@@ -198,7 +198,7 @@ export async function executeWebhookPin(engagementId: string, whopWebhookId: str
     .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.whopWebhookId, whopWebhookId)));
 
   if (verify && verify.api_version_date !== pinnedVersionDate) {
-    throw new Error(`Read-back after pinning ${whopWebhookId} did not confirm the new date — flagging for review.`);
+    throw new Error(`Read-back after pinning ${whopWebhookId} did not confirm the new date. Flagging for review.`);
   }
 }
 

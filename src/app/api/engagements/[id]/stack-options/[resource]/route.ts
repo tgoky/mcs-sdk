@@ -66,7 +66,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: `Unknown resource "${resource}"` }, { status: 400 });
     }
     if (!(await hasCredential(id, provider))) {
-      return NextResponse.json({ error: `No credential saved for this engagement's ${provider} connection yet — connect it under "Update credentials" first.` }, { status: 400 });
+      return NextResponse.json({ error: `No credential saved for this engagement's ${provider} connection yet. Connect it under "Update credentials" first.` }, { status: 400 });
     }
     const credential = await resolveCredential(id, provider);
     const url = new URL(req.url);
@@ -106,7 +106,7 @@ async function fetchOptions(resource: string, credential: string, params: URLSea
 
     case "mailchimp-lists": {
       const dc = credential.trim().split("-").pop();
-      if (!dc || dc === credential.trim()) throw new Error("Saved Mailchimp key has no datacenter suffix (e.g. -us21) — it may not be a valid API key.");
+      if (!dc || dc === credential.trim()) throw new Error("Saved Mailchimp key has no datacenter suffix (e.g. -us21). It may not be a valid API key.");
       const res = await fetch(`https://${dc}.api.mailchimp.com/3.0/lists?count=100&fields=lists.id,lists.name`, {
         headers: { Authorization: `Basic ${Buffer.from(`anystring:${credential}`).toString("base64")}`, Accept: "application/json" },
       });
@@ -132,7 +132,7 @@ async function fetchOptions(resource: string, credential: string, params: URLSea
     case "activecampaign-lists":
     case "activecampaign-automations": {
       const baseUrl = params.get("baseUrl")?.trim().replace(/\/+$/, "");
-      if (!baseUrl) throw new Error('Enter the ActiveCampaign "Account base URL" field above first — needed to know which account to ask.');
+      if (!baseUrl) throw new Error('Enter the ActiveCampaign "Account base URL" field above first. It tells us which account to ask.');
       const path = resource === "activecampaign-lists" ? "lists" : "automations";
       const res = await fetch(`${baseUrl}/${path}?limit=100`, { headers: { "Api-Token": credential, "Content-Type": "application/json" } });
       if (!res.ok) throw new Error(`ActiveCampaign rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);

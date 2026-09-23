@@ -62,7 +62,7 @@ export default async function ReputationManagerIncidentsPage() {
         <div className="h-40 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-2 transition-colors mt-4">
           <ShieldCheck className="w-6 h-6 text-emerald-400 dark:text-emerald-600" />
           <p className="text-xs font-normal text-zinc-400 dark:text-zinc-500 font-mono">
-            No incidents declared — every monitored client is clean right now.
+            No incidents declared. Every monitored client is clean right now.
           </p>
         </div>
       ) : (

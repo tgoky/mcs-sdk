@@ -220,7 +220,7 @@ export const EXTERNAL_ESCALATION_SIGNAL_CLASSES: readonly SignalClass[] = ["regu
 export const RESPONSE_POSTURES = [
   { id: "acknowledge_private_resolution", label: "Acknowledge and invite a private resolution" },
   { id: "factual_correction", label: "Non-defensive factual correction" },
-  { id: "monitor_only", label: "No public response — monitor only" },
+  { id: "monitor_only", label: "No public response (monitor only)" },
   { id: "escalate_externally", label: "Escalate externally instead of drafting" },
 ] as const;
 

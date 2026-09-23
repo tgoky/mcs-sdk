@@ -103,7 +103,7 @@ export class WhopValidationError extends WhopApiError {
  */
 export class ScopeRequiredError extends Error {
   constructor(endpoint: string, param: string) {
-    super(`${endpoint} requires "${param}" to be passed explicitly — refusing to call Whop without it.`);
+    super(`${endpoint} requires "${param}" to be passed explicitly. Refusing to call Whop without it.`);
     this.name = "ScopeRequiredError";
   }
 }
@@ -121,7 +121,7 @@ export class ScopeViolationError extends Error {
   constructor(endpoint: string, foundAccountId: string, expectedAccountId: string) {
     super(
       `${endpoint} returned a record scoped to account "${foundAccountId}", but this connection is scoped to ` +
-        `"${expectedAccountId}". Whop's own scope parameter was ignored or omitted — hard-failing rather than ` +
+        `"${expectedAccountId}". Whop's own scope parameter was ignored or omitted. Hard-failing rather than ` +
         `reporting a result that may belong to a different business.`
     );
     this.name = "ScopeViolationError";

@@ -60,7 +60,7 @@ export function UpcomingPanelContent() {
     return (
       <div className="flex items-center justify-center h-full px-4 text-center">
         <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Couldn&apos;t load Upcoming — try Expand for the full page.
+          Couldn&apos;t load Upcoming. Try Expand for the full page.
         </p>
       </div>
     );

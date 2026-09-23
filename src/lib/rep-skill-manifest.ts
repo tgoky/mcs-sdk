@@ -68,7 +68,7 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     id: "rep-onboarding",
     name: "Identity Setup",
     description:
-      "Captures the client's identity graph — brand, entities, competitors, same-name collisions, and sole response authority — that every other Reputation Manager skill reads.",
+      "Captures the client's identity graph (brand, entities, competitors, same-name collisions, and sole response authority) that every other Reputation Manager skill reads.",
     runOnSetup: true,
     hasHingesPanel: true,
   },
@@ -136,7 +136,7 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     id: "rep-digest",
     name: "Daily Digest",
     description:
-      "Once a day, rolls up everything monitored since the last digest that never crossed the real-time-alert floor into one summary notification — so quiet activity is still reviewed, just not pushed the moment it happens.",
+      "Once a day, rolls up everything monitored since the last digest that never crossed the real-time-alert floor into one summary notification, so quiet activity is still reviewed, just not pushed the moment it happens.",
     runOnSetup: false,
     hasHingesPanel: false,
   },

@@ -38,7 +38,7 @@ function postureInstruction(posture: ResponsePostureId | undefined): string {
     case "factual_correction":
       return " The sole authority has chosen this posture: correct the specific factual inaccuracy plainly and non-defensively, without arguing tone or intent.";
     case "monitor_only":
-      return " The sole authority has chosen to not respond publicly at all — draft only an internal note summarizing why, not a public-facing reply.";
+      return " The sole authority has chosen to not respond publicly at all. Draft only an internal note summarizing why, not a public-facing reply.";
     case "escalate_externally":
       return "";
     default:
@@ -72,7 +72,7 @@ export async function draftResponseText(params: {
     system:
       `You draft a professional, de-escalating public response on behalf of a business ("${params.operatorName}") to a ${params.platformLabel} finding about them. ` +
       "The response should: acknowledge the concern genuinely without being defensive, avoid admitting fault for anything not confirmed, invite the person to continue the conversation privately if it's a genuine complaint, and stay concise (2-4 sentences) and human, not corporate-sounding. " +
-      "Never fabricate specific facts, promises, or offers on the operator's behalf — keep it general enough that a human can add specifics before posting." +
+      "Never fabricate specific facts, promises, or offers on the operator's behalf. Keep it general enough that a human can add specifics before posting." +
       postureInstruction(params.posture) +
       `Respond with ONLY the drafted response text, no preamble, no quotation marks around it.${voiceContext}`,
     userMessage: `The ${params.platformLabel} finding to respond to:\n\n${params.findingText}`,
@@ -116,7 +116,7 @@ export async function runDraftResponse(
 
     await logStep(runId, { phase: "draft_response", status: "success", detail: "Draft ready." });
     summary.whatWorked.push(`Drafted a suggested response to the ${platformLabel} finding: "${draft}"`);
-    summary.openItems.push("This draft was not posted anywhere — review and edit it, then post it manually wherever the original finding was.");
+    summary.openItems.push("This draft was not posted anywhere. Review and edit it, then post it manually wherever the original finding was.");
 
     await finishRun(runId, { summary });
   } catch (err) {

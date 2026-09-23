@@ -160,7 +160,7 @@ export function LibraryMarketplaceClient({
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">Library</h1>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-medium">
-                  Read what each worker does, see its real workload, install it — then enable and configure the
+                  Read what each worker does, see its real workload, install it. Then enable and configure the
                   skills inside.
                 </p>
               </div>
@@ -178,7 +178,7 @@ export function LibraryMarketplaceClient({
 
         {!engagementId && (
           <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-            No client yet in this workspace — create one first, then come back here to install a worker for them.
+            No client yet in this workspace. Create one first, then come back here to install a worker for them.
           </div>
         )}
 

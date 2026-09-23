@@ -18,7 +18,7 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: typeof PhoneCall
         {title}
       </h2>
       <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-        — {subtitle}
+        · {subtitle}
       </span>
     </div>
   );
@@ -58,7 +58,7 @@ export default async function UpcomingPage() {
 
       <div className="flex-1 overflow-y-auto py-4 space-y-6">
         <section>
-          <SectionHeader icon={PhoneCall} title="Next appointments" subtitle="next 14 days, every client — brief status shown per call" />
+          <SectionHeader icon={PhoneCall} title="Next appointments" subtitle="next 14 days, every client, with brief status per call" />
           <CallAgendaList calls={appointments} />
         </section>
 

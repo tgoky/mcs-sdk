@@ -176,14 +176,14 @@ export function WhopBridgeManagerConfigForm({
         lines={[
           destinationUrl.trim()
             ? `Every verified Whop event this connection sees routes to ${destinationUrl.trim()}.`
-            : "No destination set — nothing routes anywhere yet.",
+            : "No destination set. Nothing routes anywhere yet.",
           (() => {
             try {
               const parsed = fieldMappingJson.trim() ? JSON.parse(fieldMappingJson) : {};
               const n = Object.keys(parsed).length;
               return n === 0 ? "Fields pass through unchanged (identity mapping)." : `${n} field${n === 1 ? "" : "s"} renamed before delivery, everything else passes through unchanged.`;
             } catch {
-              return "Field mapping isn't valid JSON yet — fix it before saving, or leave it as {} to pass fields through unchanged.";
+              return "Field mapping isn't valid JSON yet. Fix it before saving, or leave it as {} to pass fields through unchanged.";
             }
           })(),
           "Retries: 6 attempts over ~17 hours, dead-lettered after that.",
@@ -199,7 +199,7 @@ export function WhopBridgeManagerConfigForm({
       )}
       {saved && !saveError && (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Saved — live events will start routing there.
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Saved. Live events will start routing there.
         </div>
       )}
 

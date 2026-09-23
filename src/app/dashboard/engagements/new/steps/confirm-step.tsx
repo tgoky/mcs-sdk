@@ -81,16 +81,16 @@ export function ConfirmStep({
             <span>▶</span> What happens when you click Save Setup
           </div>
           <p style={{ color: "var(--text-muted)" }}>
-            Clicking the button below encrypts and stores what you entered — it does{" "}
+            Clicking the button below encrypts and stores what you entered. It does{" "}
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>not</span> touch{" "}
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{form.buyerName || "this client"}&apos;s</span>{" "}
-            real accounts yet, and neither does Launch itself — Launch just activates the account. After that you&apos;ll
+            real accounts yet, and neither does Launch itself, Launch just activates the account. After that you&apos;ll
             choose which skills and agents to turn on. Most just start waiting on their own trigger (a booking webhook, a
-            nightly cron) with zero further setup. Pin-Down is the one exception — enabling it opens its own short config
+            nightly cron) with zero further setup. Pin-Down is the one exception, enabling it opens its own short config
             screen (brand voice, confirmation page design) before it runs, since it needs those inputs to do anything.
           </p>
           <p style={{ color: "var(--text-muted)" }}>
-            Booking, email, hosting, and SMS credentials you enter in this wizard are shared — whichever skills and
+            Booking, email, hosting, and SMS credentials you enter in this wizard are shared. Whichever skills and
             agents you enable later all draw on the same connections rather than asking for them again.
           </p>
         </div>

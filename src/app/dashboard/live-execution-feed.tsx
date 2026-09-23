@@ -189,10 +189,10 @@ function actionSummary(run: SkillRun): string {
     const diagnosis = classifyRunError(run.errorMessage);
     if (diagnosis) return diagnosis.title;
     if (run.errorMessage && run.errorMessage.length < 80) return run.errorMessage;
-    return "Failed — click to view run telemetry";
+    return "Failed: click to view run telemetry";
   }
 
-  if (s === "timed_out") return "Timed out — exceeded max runtime, click to view";
+  if (s === "timed_out") return "Timed out: exceeded max runtime, click to view";
   if (s === "cancelled") return "Cancelled by user request";
 
   if (s === "skipped") {
@@ -200,7 +200,7 @@ function actionSummary(run: SkillRun): string {
     // engagement, or the skill toggled off for this client) — the run's
     // own step log already recorded the specific reason, surfaced via
     // subjectLabel (see latestStepLabel in lib/run-display.ts).
-    return run.subjectLabel ?? "Skipped — client paused or deleted, or this skill is off";
+    return run.subjectLabel ?? "Skipped: client paused or deleted, or this skill is off";
   }
 
   const summary = run.summary;

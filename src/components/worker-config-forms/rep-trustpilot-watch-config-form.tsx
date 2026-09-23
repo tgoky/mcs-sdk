@@ -62,7 +62,7 @@ export function RepTrustpilotWatchConfigForm({
           Trustpilot Watch
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          The scheduled watch already checks the domain from Identity Setup daily, newest reviews first — nothing to
+          The scheduled watch already checks the domain from Identity Setup daily, newest reviews first. Nothing to
           tune there. This reaches further back than that daily window, in one deeper pull.
         </p>
       </div>
@@ -73,7 +73,7 @@ export function RepTrustpilotWatchConfigForm({
         value={sinceDate}
         onChange={setSinceDate}
         required
-        helpText="Pulls every Trustpilot review published since this date, scores what's new, and adds it to this client's findings — same pipeline the daily watch uses."
+        helpText="Pulls every Trustpilot review published since this date, scores what's new, and adds it to this client's findings, using the same pipeline as the daily watch."
       />
 
       {error && (

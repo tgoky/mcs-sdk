@@ -26,7 +26,7 @@ export function ShowRateByTemplateSection({ stats }: { stats: TemplateShowRateSt
   if (withData.length === 0) {
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-500 px-4 py-7 text-center leading-relaxed">
-        No confirmed call outcomes yet — this fills in once briefs start getting marked showed / no-show.
+        No confirmed call outcomes yet. This fills in once briefs start getting marked showed / no-show.
       </p>
     );
   }
@@ -41,7 +41,7 @@ export function ShowRateByTemplateSection({ stats }: { stats: TemplateShowRateSt
               {s.showRatePct !== null ? `${s.showRatePct}%` : "—"}
               <span className="text-zinc-400 dark:text-zinc-600 text-xs">({s.sampleSize})</span>
               {s.sampleSize < LOW_SAMPLE_THRESHOLD && (
-                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400" title={`Only ${s.sampleSize} resolved call${s.sampleSize !== 1 ? "s" : ""} — too few to read much into yet.`}>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400" title={`Only ${s.sampleSize} resolved call${s.sampleSize !== 1 ? "s" : ""}. Too few to read much into yet.`}>
                   thin sample
                 </span>
               )}

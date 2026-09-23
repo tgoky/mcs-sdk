@@ -57,7 +57,7 @@ async function reconcileDigestCoverage(engagementId: string, periodStart: Date, 
       deliveredCount += (response?.data ?? []).filter((d) => d.payload?.type?.endsWith(".updated") || d.payload?.type === "membership.cancel_at_period_end_changed").length;
     }
     if (deliveredCount > ledgerCount) {
-      return `Reconciliation found ${deliveredCount} .updated deliveries but only ${ledgerCount} ledger entries this period — some deltas may be missing.`;
+      return `Reconciliation found ${deliveredCount} .updated deliveries but only ${ledgerCount} ledger entries this period. Some deltas may be missing.`;
     }
     return null;
   } catch (err) {
@@ -110,7 +110,7 @@ function formatDigestBody(digest: DailyDigest): string {
       const fieldSummary = entry.deltaAvailable && entry.changedFields
         ? Object.entries(entry.changedFields).map(([field, delta]) => `${field}: ${JSON.stringify(delta.previous)} → ${JSON.stringify(delta.current)}`).join(", ")
         : "changed, delta unavailable";
-      lines.push(`  ${entry.resourceId} — ${fieldSummary}`);
+      lines.push(`  ${entry.resourceId}: ${fieldSummary}`);
     }
   }
   if (digest.incompleteReason) lines.push(`\n⚠ ${digest.incompleteReason}`);
@@ -138,7 +138,7 @@ export async function sendDailyDigest(engagementId: string): Promise<void> {
     engagementId,
     type: "whop_webhook_health",
     severity: digest.incompleteReason ? "warning" : "info",
-    title: `Whop change digest — ${digest.materialCount} change${digest.materialCount === 1 ? "" : "s"} yesterday`,
+    title: `Whop change digest: ${digest.materialCount} change${digest.materialCount === 1 ? "" : "s"} yesterday`,
     body: formatDigestBody(digest),
     slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
     workspaceId: tenant.workspaceId ?? undefined,

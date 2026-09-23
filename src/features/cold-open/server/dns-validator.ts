@@ -64,7 +64,7 @@ export function checkSpf(txtRecords: string[], expectedIncludes: string[] = []):
     gaps.push({
       severity: "warn",
       code: "SPF_MISSING",
-      message: "no SPF record found on the sending domain — receivers cannot verify your mail is authorized.",
+      message: "no SPF record found on the sending domain. Receivers cannot verify your mail is authorized.",
       fix: "Add a TXT record: v=spf1 include:<your-mailbox-provider> ~all",
     });
     return gaps;
@@ -87,7 +87,7 @@ export function checkSpf(txtRecords: string[], expectedIncludes: string[] = []):
       gaps.push({
         severity: "warn",
         code: "SPF_INCLUDE_MISSING",
-        message: `SPF record does not include '${inc}' — mail relayed through that provider may fail SPF.`,
+        message: `SPF record does not include '${inc}'. Mail relayed through that provider may fail SPF.`,
         fix: `Add include:${inc} to the existing v=spf1 record (do not add a second SPF record).`,
       });
     }
@@ -96,7 +96,7 @@ export function checkSpf(txtRecords: string[], expectedIncludes: string[] = []):
     gaps.push({
       severity: "warn",
       code: "SPF_PLUS_ALL",
-      message: "SPF ends with +all — this authorizes the whole internet to send as you. Use ~all (soft fail) or -all (hard fail).",
+      message: "SPF ends with +all. This authorizes the whole internet to send as you. Use ~all (soft fail) or -all (hard fail).",
       fix: "Change +all to ~all or -all.",
     });
   }
@@ -110,7 +110,7 @@ export function checkDkim(dkimTxt: string): Gap[] {
       {
         severity: "warn",
         code: "DKIM_MISSING",
-        message: "no DKIM key found at the probed selector(s) — receivers cannot cryptographically verify your mail.",
+        message: "no DKIM key found at the probed selector(s). Receivers cannot cryptographically verify your mail.",
         fix: "Enable DKIM in your mailbox provider and publish the selector._domainkey TXT record it gives you.",
       },
     ];
@@ -137,7 +137,7 @@ export function checkDmarc(dmarcTxt: string): Gap[] {
       {
         severity: "warn",
         code: "DMARC_MISSING",
-        message: "no DMARC record found — you are not building DMARC-passing reputation and cannot see aggregate auth reports.",
+        message: "no DMARC record found. You are not building DMARC-passing reputation and cannot see aggregate auth reports.",
         fix: `Add a TXT record at _dmarc.<your-domain>: ${fixStarter}`,
       },
     ];
@@ -155,7 +155,7 @@ export function checkDmarc(dmarcTxt: string): Gap[] {
       {
         severity: "info",
         code: "DMARC_P_NONE",
-        message: "DMARC policy is p=none (monitoring only) — fine to start. Walk it up to p=quarantine then p=reject over weeks while watching your rua aggregate reports.",
+        message: "DMARC policy is p=none (monitoring only). Fine to start. Walk it up to p=quarantine then p=reject over weeks while watching your rua aggregate reports.",
       },
     ];
   }
@@ -211,7 +211,7 @@ export async function validateDomainLive(domain: string, provider = "", selector
       {
         severity: "warn",
         code: "DNS_RESOLUTION_FAILED",
-        message: `could not resolve DNS for ${d}: ${err instanceof Error ? err.message : String(err)} — re-check manually once this resolves.`,
+        message: `could not resolve DNS for ${d}: ${err instanceof Error ? err.message : String(err)}. re-check manually once this resolves.`,
       },
     ];
   }

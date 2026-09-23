@@ -436,7 +436,7 @@ export default async function AnalyticsPage() {
             actually compare, instead of every worker across every
             installed product rendering at once (real value once there
             are more than a handful, mostly just a long scroll before). */}
-        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days — pick two skills to compare side by side`}>
+        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days. Pick two skills to compare side by side`}>
           <SkillComparisonSection skills={skillStats} />
         </Section>
 

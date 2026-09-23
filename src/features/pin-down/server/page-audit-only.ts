@@ -46,8 +46,8 @@ export async function runPageAuditOnly(
       detail: `${audit.existingPageStrengths.length} strengths, ${audit.existingPageWeaknesses.length} weaknesses noted`,
     });
     summary.whatWasAttempted.push(
-      `Audited ${tenant.buyer}'s confirmation page at ${url} — ${audit.existingPageWeaknesses.length} gap(s) identified.${
-        audit.competitorComparison ? ` Compared against ${audit.competitorComparison.url}.` : competitorUrl ? " Competitor URL couldn't be fetched — audit ran without the comparison." : ""
+      `Audited ${tenant.buyer}'s confirmation page at ${url}: ${audit.existingPageWeaknesses.length} gap(s) identified.${
+        audit.competitorComparison ? ` Compared against ${audit.competitorComparison.url}.` : competitorUrl ? " Competitor URL couldn't be fetched. Audit ran without the comparison." : ""
       }`
     );
     await finishRun(runId, { summary });

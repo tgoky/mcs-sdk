@@ -126,7 +126,7 @@ export function computeBookingSyncStatus(
       if (lastPollAt && pollAgeMin !== null && pollAgeMin > pollIntervalMinutes * 3) {
         health = "error";
         headline = "Auto-polling · stalled";
-        detail = `Last checked ${Math.round(pollAgeMin)} min ago — expected every ${pollIntervalMinutes} min. The poll cycle may have stopped; if this doesn't clear on its own, check credentials in Settings → Booking Sync.`;
+        detail = `Last checked ${Math.round(pollAgeMin)} min ago, expected every ${pollIntervalMinutes} min. The poll cycle may have stopped; if this doesn't clear on its own, check credentials in Settings → Booking Sync.`;
       } else {
         health = "warning";
         headline = supportsAutoWebhook ? "Auto-polling (fallback)" : "Auto-polling · instant sync available";

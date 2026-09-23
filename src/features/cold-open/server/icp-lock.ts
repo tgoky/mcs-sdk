@@ -41,8 +41,8 @@ export function validateIcpSeed(input: IcpLockInput): string[] {
   const problems: string[] = [];
 
   const icps = input.icps ?? [];
-  if (icps.length === 0) problems.push("no ICPs captured — at least one is required");
-  if (icps.length > MAX_LIST_LENGTH) problems.push(`too many ICPs (${icps.length}) — keep it to a manageable set`);
+  if (icps.length === 0) problems.push("no ICPs captured. At least one is required");
+  if (icps.length > MAX_LIST_LENGTH) problems.push(`too many ICPs (${icps.length}). Keep it to a manageable set`);
 
   const slugs = icps.map((i) => i.slug);
   if (new Set(slugs).size !== slugs.length) problems.push(`duplicate ICP slugs: ${slugs.join(", ")}`);
@@ -67,7 +67,7 @@ export function validateIcpSeed(input: IcpLockInput): string[] {
 
   const allocation = input.productAllocation ?? {};
   if (Object.keys(allocation).length === 0) {
-    problems.push("product allocation empty — single-offer clients get { [offerName]: 1.0 }");
+    problems.push("product allocation empty. single-offer clients get { [offerName]: 1.0 }");
   } else {
     const allocSum = Object.values(allocation).reduce((sum, v) => sum + (Number(v) || 0), 0);
     if (allocSum < 0.99 || allocSum > 1.01) problems.push(`product allocation sums to ${allocSum.toFixed(3)}, need ~1.0`);
@@ -124,7 +124,7 @@ export async function runIcpLock(tenant: any, runId: string, step: StepTools | u
     const config = await (step ? step.run("load-cold-open-config", () => getColdOpenConfig(engagementId)) : getColdOpenConfig(engagementId));
 
     if (!config || config.icps.length === 0) {
-      throw new Error("No ICP Lock config found for this engagement — save the ICP Lock form before this skill can run.");
+      throw new Error("No ICP Lock config found for this engagement. Save the ICP Lock form before this skill can run.");
     }
 
     summary.whatWasAttempted.push("Loaded the saved ICP Lock config.");

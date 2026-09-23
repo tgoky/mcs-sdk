@@ -231,7 +231,7 @@ function DraftResponseButton({ engagementId, findingText, findingPlatform }: { e
           className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[10.5px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
         >
           {state === "running" ? <Loader2 size={11} className="animate-spin" /> : <PenLine size={11} />}
-          Confirm — draft a response to this
+          Confirm and draft a response to this
         </button>
       )}
       <RunResultBanner result={result} />
@@ -255,7 +255,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
       {source === "engine" && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Subject (optional — competitor)</label>
+            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Subject (optional: a competitor)</label>
             <input value={engineSubject} onChange={(e) => setEngineSubject(e.target.value)} placeholder="Client themselves if blank" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs w-56" />
           </div>
           <div className="space-y-1 flex-1 min-w-[180px]">
@@ -321,7 +321,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
             <input
               value={crisisText}
               onChange={(e) => setCrisisText(e.target.value)}
-              placeholder="Made-up finding — e.g. a hypothetical bad review"
+              placeholder="Made-up finding, e.g. a hypothetical bad review"
               className="flex-1 min-w-[200px] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs"
             />
             <select value={crisisSource} onChange={(e) => setCrisisSource(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs">
@@ -339,7 +339,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
               Test threshold
             </button>
           </div>
-          <p className="text-[10.5px] text-zinc-500">Hypothetical only — never declares a real incident or notifies anyone.</p>
+          <p className="text-[10.5px] text-zinc-500">Hypothetical only. Never declares a real incident or notifies anyone.</p>
         </div>
       )}
 

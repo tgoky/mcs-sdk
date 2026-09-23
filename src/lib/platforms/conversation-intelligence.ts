@@ -162,7 +162,7 @@ export interface ObjectionExtractionResult {
 export async function extractObjectionsFromTranscript(transcriptText: string, runId?: string): Promise<ObjectionExtractionResult> {
   const system = `You are analyzing a sales call transcript to extract recurring prospect objections.
 
-Read the transcript below (speaker-attributed, auto-transcribed — expect some noise/misattribution) and identify objections or hesitations the PROSPECT raised, not things the rep said.
+Read the transcript below (speaker-attributed, auto-transcribed. Expect some noise/misattribution) and identify objections or hesitations the PROSPECT raised, not things the rep said.
 
 Return ONLY a JSON object, no prose, no markdown fences:
 {
@@ -191,7 +191,7 @@ Rules:
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
     };
   } catch {
-    return { objections: [], summary: "Extraction returned non-JSON output — see conversationIntelligenceSessions.extractionSummary for the raw model response." };
+    return { objections: [], summary: "Extraction returned non-JSON output. See conversationIntelligenceSessions.extractionSummary for the raw model response." };
   }
 }
 

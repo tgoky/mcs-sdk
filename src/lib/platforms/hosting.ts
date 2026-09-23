@@ -415,7 +415,7 @@ export async function publishConfirmationPage(
         // paste-ready per the OG SKILL.md unsupported-platform handler.
         return pasteReady(
           "ghl",
-          "GHL funnel page creation has no stable public API — paste this into a new Funnel/Website page.",
+          "GHL funnel page creation has no stable public API. Paste this into a new Funnel/Website page.",
           content
         );
 
@@ -429,7 +429,7 @@ export async function publishConfirmationPage(
       case "plain_html":
         return pasteReady(
           "plain_html",
-          "Plain HTML hosting has no platform to call — the buyer deploys this file to their own host.",
+          "Plain HTML hosting has no platform to call. The buyer deploys this file to their own host.",
           content
         );
 

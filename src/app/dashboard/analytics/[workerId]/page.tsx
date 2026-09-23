@@ -188,7 +188,7 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
       {/* The real trend chart — day-by-day, not a static number. */}
       <div className="mt-6">
         <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-          Run volume &amp; success rate — last 30 days, every client
+          Run volume &amp; success rate over the last 30 days, every client
         </p>
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-4">
           <RunTrendChart data={trend} />

@@ -23,7 +23,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
       <EmptyState
         icon={Star}
         title="No new reviews in this run"
-        description="This run found no new Trustpilot reviews since the last check — a normal, healthy outcome, not a failure."
+        description="This run found no new Trustpilot reviews since the last check. That's a normal, healthy outcome, not a failure."
       />
     );
   }

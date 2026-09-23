@@ -272,8 +272,8 @@ export async function handleInboundBookingEvent(
         status: "success",
         detail:
           rebookedRows.length > 0
-            ? `Removed ${prospectEmail} from the win-back sequence — they rebooked.`
-            : `${prospectEmail} rebooked directly — they weren't in an active win-back sequence, nothing to remove.`,
+            ? `Removed ${prospectEmail} from the win-back sequence because they rebooked.`
+            : `${prospectEmail} rebooked directly. They weren't in an active win-back sequence, nothing to remove.`,
       });
 
       if (rebookedRows.length > 0) {
@@ -322,7 +322,7 @@ export async function handleInboundBookingEvent(
           await logStep(runId, { phase: "sms_enrollment", status: "success", detail: "HubSpot SMS tag set" });
         } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
           if (!prospectPhone) {
-            summary.openItems.push(`SMS sequence configured (${stack.sms_platform}) but no phone number was captured for ${prospectEmail} — SMS skipped for this booking.`);
+            summary.openItems.push(`SMS sequence configured (${stack.sms_platform}) but no phone number was captured for ${prospectEmail}. SMS skipped for this booking.`);
             await logStep(runId, { phase: "sms_enrollment", status: "skipped", detail: "No phone number on payload" });
           } else {
             // FIXED: Dynamically extract and normalize absolute platform milestones to prevent background engine overlap bugs
@@ -373,7 +373,7 @@ export async function handleInboundBookingEvent(
           await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Added to cohort on ${stack.ad_data_platform}` });
         } else {
           summary.openItems.push(`Ad-data cohort add for ${prospectEmail} queued for approval (pending action ${gated.pendingActionId}).`);
-          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred — awaiting approval" });
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred (awaiting approval)" });
         }
       } catch (e: any) {
         summary.openItems.push(`Ad-data cohort add failed: ${e.message}`);
@@ -486,12 +486,12 @@ export async function handleInboundBookingEvent(
         .where(and(eq(winBackEnrollments.engagementId, tenant.engagementId), eq(winBackEnrollments.sourceBookingId, bookingId)))
         .limit(1);
       summary.openItems.push(
-        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking${existing ? ` (enrollment ${existing.id})` : ""} — skipped a duplicate enrollment.`
+        `${prospectName} (${prospectEmail}) was already enrolled in win-back for this booking${existing ? ` (enrollment ${existing.id})` : ""}. Skipped a duplicate enrollment.`
       );
       await logStep(runId, {
         phase: "recovery_enrollment",
         status: "success",
-        detail: "Skipped — already enrolled for this exact booking.",
+        detail: "Skipped. Already enrolled for this exact booking.",
       });
       await finishRun(runId, { summary });
       return;
@@ -550,7 +550,7 @@ export async function handleInboundBookingEvent(
         await logStep(runId, {
           phase: "reschedule_link",
           status: "success",
-          detail: freshRescheduleLink ? "Fresh per-prospect link delivered" : "No fresh link available — delivered the time_slots fallback URL as the merge value",
+          detail: freshRescheduleLink ? "Fresh per-prospect link delivered" : "No fresh link available. Delivered the time_slots fallback URL as the merge value",
         });
       } catch (e: any) {
         summary.openItems.push(`Reschedule link delivery failed: ${e.message}`);
@@ -669,7 +669,7 @@ export async function handleInboundBookingEvent(
           await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: `Removed from cohort on ${stack.ad_data_platform}` });
         } else {
           summary.openItems.push(`Ad-data cohort remove for ${prospectEmail} queued for approval (pending action ${gated.pendingActionId}).`);
-          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred — awaiting approval" });
+          await logStep(runId, { phase: "ad_data_cohort", status: "success", detail: "Deferred (awaiting approval)" });
         }
       } catch (e: any) {
         summary.openItems.push(`Ad-data cohort removal failed: ${e.message}`);
@@ -677,7 +677,7 @@ export async function handleInboundBookingEvent(
       }
     }
   } else {
-    summary.openItems.push(`Unrecognized webhook event — no sequence enrollment performed.`);
+    summary.openItems.push(`Unrecognized webhook event. No sequence enrollment performed.`);
   }
 
   await finishRun(runId, { summary });

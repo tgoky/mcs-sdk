@@ -40,7 +40,7 @@ const SYSTEM_PROMPT = `You classify ONE inbound reply to a cold email into exact
 
 Rules:
 - Choose exactly one category key from the provided list. Never invent a key.
-- "interested" requires actual buying interest or a genuine question about the offer — a polite brush-off is not interest.
+- "interested" requires actual buying interest or a genuine question about the offer. A polite brush-off is not interest.
 - Pushback with engagement ("we already use X", "too expensive") is "objection". A flat no is "not_a_fit".
 - When genuinely torn between two categories, pick the one that gets a human to look at it sooner.
 - confidence: high | medium | low. summary: one short sentence, plain words.
@@ -70,12 +70,12 @@ export async function classifyReply(
     return { disposition: "auto_reply", confidence: "high", summary: "Autoresponder / OOO / bounce pattern.", method: "heuristic" };
   }
   if (!text) {
-    return { disposition: UNCLASSIFIED, confidence: "low", summary: "Reply body missing from the feed — needs eyes.", method: "empty_body" };
+    return { disposition: UNCLASSIFIED, confidence: "low", summary: "Reply body missing from the feed. Needs eyes.", method: "empty_body" };
   }
 
   const categories = Object.entries(taxonomy).map(([k, v]) => `- ${k}: ${v}`).join("\n");
   const userMessage =
-    `SELLER PRODUCT: ${productIdentity?.name ?? "(unknown)"} — ${productIdentity?.valueProp ?? "(unknown)"}\n\n` +
+    `SELLER PRODUCT: ${productIdentity?.name ?? "(unknown)"}, ${productIdentity?.valueProp ?? "(unknown)"}\n\n` +
     `CATEGORIES:\n${categories}\n\n` +
     `REPLY SUBJECT: ${subject || "(none)"}\n` +
     `REPLY BODY:\n${text.slice(0, 4000)}\n\nClassify. JSON only.`;

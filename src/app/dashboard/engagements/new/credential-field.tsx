@@ -254,7 +254,7 @@ export function CredentialField({
         ) : options.length === 0 ? (
           <div className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 px-3 py-2 text-xs text-zinc-500 dark:text-zinc-500">
             {loadError
-              ? "Couldn't load saved credentials — try pasting a new one instead."
+              ? "Couldn't load saved credentials. Try pasting a new one instead."
               : `No saved ${label.toLowerCase()} credentials yet for this workspace. Paste one now and it'll be offered here next time.`}
           </div>
         ) : (
@@ -268,7 +268,7 @@ export function CredentialField({
       ) : (
         <div className="space-y-2 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 px-3 py-2.5">
           <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Connect {label.replace(/\s*(API )?(Key|Token).*$/i, "") || label} securely through Composio — no key to
+            Connect {label.replace(/\s*(API )?(Key|Token).*$/i, "") || label} securely through Composio. No key to
             copy or paste, and it&apos;s saved for reuse on future clients automatically.
           </p>
           <button

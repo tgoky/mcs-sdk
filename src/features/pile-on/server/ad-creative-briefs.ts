@@ -26,8 +26,8 @@ export interface AdCreativeBriefsInput {
 }
 
 const PILLARS: Array<{ id: AdCreativeBrief["pillar"]; description: string }> = [
-  { id: "common_questions", description: "Addresses the single most-asked question prospects have before booking a call — the surface-level, easy-to-answer one." },
-  { id: "deeper_questions", description: "Addresses a more nuanced, considered question — the kind someone asks after they've already done some research, not their first question." },
+  { id: "common_questions", description: "Addresses the single most-asked question prospects have before booking a call. The surface-level, easy-to-answer one." },
+  { id: "deeper_questions", description: "Addresses a more nuanced, considered question. The kind someone asks after they've already done some research, not their first question." },
   { id: "success_proof", description: "Leads with a concrete result or testimonial, not a claim about the offer itself." },
   { id: "objections", description: "Meets the single most common reason a qualified prospect hesitates to book, head-on." },
 ];
@@ -48,7 +48,7 @@ const NEEDS_PROOF_BRIEF: Omit<AdCreativeBrief, "id"> = {
   pillar: "success_proof",
   hook: "This brief needs a real result to lead with.",
   angle:
-    "A success-proof ad leads with something a real client actually said or achieved — not a general claim about the offer. Add a testimonial or a specific before/after result under Client Details → Voice & proof, then regenerate this brief.",
+    "A success-proof ad leads with something a real client actually said or achieved, not a general claim about the offer. Add a testimonial or a specific before/after result under Client Details → Voice & proof, then regenerate this brief.",
   talkingPoints: [],
   suggestedFormat: "",
   cta: "",
@@ -89,26 +89,26 @@ export async function buildAdCreativeBriefs(
 
   const system = `You are an ad creative strategist writing CREATIVE BRIEFS (not finished ad
 scripts) for ${input.buyer}. A brief tells a copywriter/video editor what
-to make — a hook, an angle, talking points, a suggested visual format, and
-a CTA — not the final word-for-word ad copy itself.
+to make, a hook, an angle, talking points, a suggested visual format, and
+a CTA, not the final word-for-word ad copy itself.
 
 Match the tone described in this brand voice profile as closely as
 possible: ${JSON.stringify(input.brandVoiceProfile ?? {})}
 
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
-${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")} — when it strengthens a brief, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Top call questions on file: ${JSON.stringify(input.topCallQuestions ?? [])}
+${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")}. When it strengthens a brief, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Top call questions on file: ${JSON.stringify(input.topCallQuestions ?? [])}
 Top objections on file: ${JSON.stringify(input.topObjections ?? [])}
 ${hasProof ? `Existing proof on file: ${JSON.stringify(input.existingProof?.testimonials ?? [])}` : ""}
 
 Generate exactly one brief per pillar below, using only the real data
-given above — never fabricate a specific claim, testimonial, or statistic
+given above: never fabricate a specific claim, testimonial, or statistic
 that isn't backed by it.
 
 Pillars:
 ${pillarsToGenerate.map((p) => `- ${p.id}: ${p.description}`).join("\n")}
 
 For each brief:
-- hook: the first line/visual beat that stops the scroll — specific, not generic.
+- hook: the first line/visual beat that stops the scroll: specific, not generic.
 - angle: 1-2 sentences on the core message/emotional angle.
 - talkingPoints: 3-4 concrete points the creative should hit, in order.
 - suggestedFormat: a concrete format suggestion (e.g. "UGC-style testimonial, handheld", "Founder talking-head, direct to camera", "Text-overlay stat hook with voiceover", "Before/after split-screen").
@@ -177,8 +177,8 @@ export async function regenerateObjectionsBrief(
 
   const system = `You are an ad creative strategist writing a single CREATIVE BRIEF (not a
 finished ad script) for ${input.buyer}. A brief tells a copywriter/video
-editor what to make — a hook, an angle, talking points, a suggested
-visual format, and a CTA — not the final word-for-word ad copy itself.
+editor what to make, a hook, an angle, talking points, a suggested
+visual format, and a CTA, not the final word-for-word ad copy itself.
 
 Match the tone described in this brand voice profile as closely as
 possible: ${JSON.stringify(input.brandVoiceProfile ?? {})}
@@ -189,10 +189,10 @@ ${JSON.stringify(input.topObjections ?? [])}
 
 Write ONE brief for this pillar: ${pillar.description}
 Prioritize the most recently-added objection(s) in the list above if
-several are present — that's the freshest signal of what's actually
+several are present, that's the freshest signal of what's actually
 costing deals right now.
 
-- hook: the first line/visual beat that stops the scroll — specific, not generic.
+- hook: the first line/visual beat that stops the scroll, specific, not generic.
 - angle: 1-2 sentences on the core message/emotional angle.
 - talkingPoints: 3-4 concrete points the creative should hit, in order.
 - suggestedFormat: a concrete format suggestion (e.g. "UGC-style testimonial, handheld", "Founder talking-head, direct to camera", "Text-overlay stat hook with voiceover", "Before/after split-screen").

@@ -16,7 +16,7 @@ export default async function CheckoutCompletePage({
       <div className="min-h-screen w-full bg-black text-white flex flex-col items-center justify-center px-6 py-16 text-center">
         <h1 className="text-xl font-semibold mb-2">Payment didn&apos;t go through</h1>
         <p className="text-sm text-zinc-400 mb-6 max-w-sm">
-          It was declined or canceled. No charge was made — try again.
+          It was declined or canceled. No charge was made. Try again.
         </p>
         <a href="/checkout" className="text-sm underline text-zinc-300 hover:text-white">
           Back to checkout

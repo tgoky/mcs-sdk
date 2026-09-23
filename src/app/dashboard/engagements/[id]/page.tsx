@@ -397,7 +397,7 @@ export default async function EngagementDetailPage({
                 <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                   Offensive Playbook
                 </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Schema/Wikidata, press outreach, and the Reddit ramp — Moves A, B, and C.</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Schema/Wikidata, press outreach, and the Reddit ramp. Moves A, B, and C.</p>
               </div>
             </div>
             <ArrowRight size={16} className="text-zinc-400 shrink-0" />
@@ -406,7 +406,7 @@ export default async function EngagementDetailPage({
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">
-            This client is paused — nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
+            This client is paused. Nightly briefs, leak map, win-back, weekly metrics, and booking polling are all
             skipping it.{engagement.pausedReason ? ` Reason: ${engagement.pausedReason}` : ""} Manual &quot;Run&quot; buttons
             below still work if you need to test something.
           </div>

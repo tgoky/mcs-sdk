@@ -108,7 +108,7 @@ export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session?.whopUserId) {
-      returnUrl.searchParams.set("composio_error", "Session expired — please sign in and try connecting again.");
+      returnUrl.searchParams.set("composio_error", "Session expired. Please sign in and try connecting again.");
       return NextResponse.redirect(returnUrl);
     }
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
@@ -123,13 +123,13 @@ export async function GET(request: Request) {
     // account into a victim's session.
     const originatingWorkspaceId = await consumeComposioConnectAttempt(state, provider);
     if (!originatingWorkspaceId || originatingWorkspaceId !== activeWorkspace.workspaceId) {
-      returnUrl.searchParams.set("composio_error", "This connection link is invalid or expired — please start connecting again from the app.");
+      returnUrl.searchParams.set("composio_error", "This connection link is invalid or expired. Please start connecting again from the app.");
       return NextResponse.redirect(returnUrl);
     }
 
     const { status: connectionStatus, toolkitSlug } = await finalizeComposioConnection(connectedAccountId);
     if (connectionStatus !== "ACTIVE") {
-      returnUrl.searchParams.set("composio_error", `${provider} connection ended up ${connectionStatus.toLowerCase()}, not active — try reconnecting.`);
+      returnUrl.searchParams.set("composio_error", `${provider} connection ended up ${connectionStatus.toLowerCase()}, not active. Try reconnecting.`);
       return NextResponse.redirect(returnUrl);
     }
 

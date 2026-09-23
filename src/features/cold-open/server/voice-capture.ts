@@ -72,7 +72,7 @@ export async function runVoiceCapture(tenant: any, runId: string, step: StepTool
   try {
     const config = await (step ? step.run("load-cold-open-config", () => getColdOpenConfig(engagementId)) : getColdOpenConfig(engagementId));
     if (!config?.voiceProfile) {
-      throw new Error("No voice profile found for this engagement — save the Voice Capture form before this skill can run.");
+      throw new Error("No voice profile found for this engagement. Save the Voice Capture form before this skill can run.");
     }
 
     const icpSlugs = config.icps.map((i) => i.slug);

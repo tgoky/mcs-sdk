@@ -117,8 +117,8 @@ export async function runBatchLive(engagementId: string, runId: string, specs: P
       whatWorked: created.map((id) => `Created ${id}`),
       whatFailed: failed.map((f) => `${f.code}: ${f.error}`),
       openItems: [
-        ...(failed.length ? ["Retry the failed subset — idempotency keys are preserved per code index."] : []),
-        "Read-back verification not yet implemented for promo codes — no confirmed GET-by-id endpoint. Spot-check in the Whop dashboard.",
+        ...(failed.length ? ["Retry the failed subset. Idempotency keys are preserved per code index."] : []),
+        "Read-back verification not yet implemented for promo codes. No confirmed GET-by-id endpoint. Spot-check in the Whop dashboard.",
       ],
       decisionsMade: [],
     },
@@ -150,7 +150,7 @@ export async function runBulkPromoCodes(engagementId: string, specs: PromoCodeSp
       );
       await finishRun(runId, {
         status: "skipped",
-        summary: { whatWasAttempted: ["Batch size check"], whatWorked: [], whatFailed: [], openItems: [`Queued for confirmation as ${pendingActionId} — batch exceeds the 25-code threshold.`], decisionsMade: [] },
+        summary: { whatWasAttempted: ["Batch size check"], whatWorked: [], whatFailed: [], openItems: [`Queued for confirmation as ${pendingActionId}. Batch exceeds the 25-code threshold.`], decisionsMade: [] },
       });
       return { status: "queued_for_confirmation", created: [], failed: [], pendingActionId };
     }
@@ -158,15 +158,15 @@ export async function runBulkPromoCodes(engagementId: string, specs: PromoCodeSp
     const dryRun = opts.dryRun ?? (await isDryRunRequired(engagementId, "whop-bulk-promo-codes"));
     if (dryRun) {
       for (const [i, spec] of specs.entries()) {
-        await logStep(runId, { phase: `code_${i}`, status: "success", detail: `[DRY RUN] Would create "${spec.code}" — ${spec.discountPercentage}% off, plans: ${spec.planIds.join(", ")}` });
+        await logStep(runId, { phase: `code_${i}`, status: "success", detail: `[DRY RUN] Would create "${spec.code}": ${spec.discountPercentage}% off, plans: ${spec.planIds.join(", ")}` });
       }
       await finishRun(runId, {
         summary: {
-          whatWasAttempted: ["Dry run — no writes issued"],
+          whatWasAttempted: ["Dry run: no writes issued"],
           whatWorked: specs.map((s) => `Would create ${s.code}`),
           whatFailed: [],
           openItems: ["Re-run with dryRun:false to execute for real."],
-          decisionsMade: ["First run of Bulk Promo Codes for this engagement — defaulted to dry-run per Section 8.2."],
+          decisionsMade: ["First run of Bulk Promo Codes for this engagement. Defaulted to dry-run per Section 8.2."],
         },
       });
       return { status: "dry_run", created: [], failed: [] };

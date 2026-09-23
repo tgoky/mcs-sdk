@@ -1251,14 +1251,14 @@ function QueueItemQuickActions({
           <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Confirm no-show and start Win-Back recovery">
             <UserX size={11} /> Confirm no-show
           </button>
-          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "showed")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they actually showed — no Win-Back">
+          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "showed")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they actually showed (no Win-Back)">
             <UserCheck size={11} /> Showed
           </button>
-          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "rescheduled")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they rescheduled — no Win-Back">
+          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "rescheduled")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they rescheduled (no Win-Back)">
             <CalendarClock size={11} /> Rescheduled
           </button>
           <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer disabled:opacity-60">
-            Not sure — dismiss
+            Not sure, dismiss
           </button>
         </>
       ) : item.category === "approve" ? (
@@ -1296,7 +1296,7 @@ function QueueItemQuickActions({
             <X size={11} /> Not now
           </button>
           {triggerErrorId === item.id && (
-            <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">Couldn&apos;t start the run — try again from the Queue.</p>
+            <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">Couldn&apos;t start the run. Try again from the Queue.</p>
           )}
         </>
       ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (

@@ -69,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const list = type === "email" ? assetMap.emails ?? [] : assetMap.sms ?? [];
       const idx = list.findIndex((m) => m.id === messageId);
       if (idx === -1) {
-        return { status: 404, error: "That touchpoint isn't part of the current cadence anymore — it may have been regenerated." } as const;
+        return { status: 404, error: "That touchpoint isn't part of the current cadence anymore. It may have been regenerated." } as const;
       }
 
       const nextAssetMap =

@@ -21,7 +21,7 @@ function client(): WhopSDK {
   if (!_client) {
     if (!WHOP_WEBHOOK_SECRET) {
       throw new Error(
-        "WHOP_WEBHOOK_SECRET is not set — cannot verify webhook signatures. " +
+        "WHOP_WEBHOOK_SECRET is not set. Cannot verify webhook signatures. " +
           "Copy it from Whop Dashboard → Developer → Webhooks after creating the endpoint."
       );
     }

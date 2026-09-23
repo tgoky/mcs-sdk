@@ -56,9 +56,9 @@ function actionSummary(run: SkillRun): string {
   if (s === "running" || s === "in_progress") return phaseLabel(run.phase);
   if (s === "failed" || s === "error") {
     if (run.errorMessage && run.errorMessage.length < 90) return run.errorMessage;
-    return "Win-back recovery cadence failed — click to view diagnostic log";
+    return "Win-back recovery cadence failed. Click to view diagnostic log";
   }
-  if (s === "timed_out") return "Timed out — exceeded max execution runtime";
+  if (s === "timed_out") return "Timed out (exceeded max execution runtime)";
   if (s === "cancelled") return "Cancelled by operator";
   return "Win-back recovery cadence triggered & active";
 }

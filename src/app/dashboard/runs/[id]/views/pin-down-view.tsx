@@ -297,7 +297,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             Good afternoon, {buyerName}
           </h1>
           <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans pt-1">
-            Your account setup is underway — check out your live page, ad briefs, and brand voice below.
+            Your account setup is underway. Check out your live page, ad briefs, and brand voice below.
           </p>
 
           {isLive && run.confirmationPageUrl && (

@@ -33,7 +33,7 @@ async function callClaudeForJson<T>(opts: ClaudeCallOptions, failureLabel: strin
   } catch {
     const retryOpts: ClaudeCallOptions = {
       ...opts,
-      userMessage: `${opts.userMessage}\n\nYour previous response was not valid JSON. Return ONLY the JSON object — no prose before or after it, no markdown code fences.`,
+      userMessage: `${opts.userMessage}\n\nYour previous response was not valid JSON. Return ONLY the JSON object. No prose before or after it, no markdown code fences.`,
     };
     const second = await callClaudeWithRetry(retryOpts);
     try {
@@ -137,7 +137,7 @@ const CADENCE_PLANS: Record<RecoveryWindowDays, CadencePlan> = {
 };
 
 const GHOST_DEFAULT_VOICE_GUARDRAILS = `
-Ghost-default messaging rules — the copy must read cleanly whether the
+Ghost-default messaging rules. The copy must read cleanly whether the
 prospect ghosted the call or actively cancelled it:
 - Never blame the prospect for missing the call.
 - Never imply the prospect "owes" a response.
@@ -191,8 +191,8 @@ Use exactly this merge syntax verbatim in the copy where relevant:
 Email guidance by id:
 - E1 (Soft re-open): open with "we did not connect" or "we missed you", offer reschedule, low-stakes signoff.
 - E2 (Quiet reminder): 3-5 sentences, the reschedule link is the centerpiece.
-- E3 (Useful resource): reference that a useful resource will be linked here (do not invent a real URL — write "[resource link]" as a placeholder), soft re-engagement, no hard ask.
-- E4 (Direct ask): more direct — either they still want the conversation or they don't, reschedule link included.
+- E3 (Useful resource): reference that a useful resource will be linked here (do not invent a real URL, write "[resource link]" as a placeholder), soft re-engagement, no hard ask.
+- E4 (Direct ask): more direct, either they still want the conversation or they don't, reschedule link included.
 - E5 / E6 (Last call): clean, short, last touch, implicitly frames that occasional updates may continue.
 
 SMS guidance: each message is under 160 characters including the merge
@@ -286,11 +286,11 @@ export async function buildLongTermNurture(
   const system = `You are the copywriting engine for a long-term, low-velocity nurture
 sequence for prospects who went all the way through ${input.buyer}'s active
 recovery window without rebooking a call, and are now considered a "lost"
-deal for now — not gone forever.
+deal for now, not gone forever.
 
 ${GHOST_DEFAULT_VOICE_GUARDRAILS}
 
-This is explicitly LOW-PRESSURE, LONG-HORIZON messaging — monthly cadence,
+This is explicitly LOW-PRESSURE, LONG-HORIZON messaging: monthly cadence,
 not a recovery push. No urgency language, no countdown framing, no
 "last chance" energy anywhere in this sequence. Assume the reader has not
 thought about this offer in weeks; each email should stand alone without
@@ -306,9 +306,9 @@ Use exactly this merge syntax verbatim in the copy where relevant:
 
 Email guidance by id:
 - N1 (No-pressure check-in): brief, no ask beyond "here if useful."
-- N2/N5/N8 (Useful resource or insight): reference that a useful resource will be linked here (write "[resource link]" as a placeholder, do not invent a real URL) — teach something, no pitch.
+- N2/N5/N8 (Useful resource or insight): reference that a useful resource will be linked here (write "[resource link]" as a placeholder, do not invent a real URL), teach something, no pitch.
 - N3/N6 (Light re-open): mention the reschedule link once, framed as an option, not a push.
-- N4/N7 (Social proof / case study): reference a result achieved by someone with a similar starting point (write "[case study link]" as a placeholder) — no fabricated specific numbers or names.
+- N4/N7 (Social proof / case study): reference a result achieved by someone with a similar starting point (write "[case study link]" as a placeholder), no fabricated specific numbers or names.
 - N9 (Final light re-open): closes the sequence, reschedule link included, warm and open-ended, no "this is your last email" framing.
 
 Return ONLY a JSON object with this exact shape, no prose, no markdown fences:

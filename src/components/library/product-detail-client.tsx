@@ -210,7 +210,7 @@ export function ProductDetailClient({
 
       {!installed && (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Not installed for this client yet — enabling any skill below installs {name} automatically, or click
+          Not installed for this client yet. Enabling any skill below installs {name} automatically, or click
           Install above to do it explicitly first.
         </div>
       )}

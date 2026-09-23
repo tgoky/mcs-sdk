@@ -48,7 +48,7 @@ export async function enableColdOpenSkillForEngagement(
   if (!row) return { ok: false, error: "Client not found." };
 
   if (COLD_OPEN_SKILL_MANIFEST[skillId].runOnSetup && enabled) {
-    return { ok: false, error: "ICP Lock runs once during setup and has to be configured from its own bridge page — not something this can turn on directly." };
+    return { ok: false, error: "ICP Lock runs once during setup and has to be configured from its own bridge page, not something this can turn on directly." };
   }
 
   if (enabled && !COLD_OPEN_SKILL_MANIFEST[skillId].runOnSetup && !(await isProductOnboarded("cold-open", engagementId))) {

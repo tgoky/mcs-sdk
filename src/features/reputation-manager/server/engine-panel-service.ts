@@ -25,7 +25,7 @@ const MAX_TOKENS_PER_ENGINE_RESPONSE = 600;
 export async function queryEngine(engineId: RepEngineId, operatorName: string, promptText: string, runId: string): Promise<RawFinding | { error: string; engineId: RepEngineId }> {
   const modelString = resolveEngineModel(engineId);
   if (!modelString) {
-    return { error: `No model configured for ${REP_ENGINE_LABELS[engineId]} (${engineId}) — skipped.`, engineId };
+    return { error: `No model configured for ${REP_ENGINE_LABELS[engineId]} (${engineId}). Skipped.`, engineId };
   }
   try {
     const result = await callOpenRouterModel(modelString, {
@@ -73,7 +73,7 @@ async function scoreFindings(operatorName: string, findings: RawFinding[], runId
         "numbered item, classify the ANSWER's sentiment toward the operator (positive, neutral, or negative), and " +
         "flag it (flagged: true) if it contains factual errors about the operator, confuses the operator with a " +
         "different person or company, makes a serious negative claim (scam, fraud, illegal, unsafe), or otherwise " +
-        "needs a human to actually look at it. Most answers won't need flagging — only flag real issues, not just " +
+        "needs a human to actually look at it. Most answers won't need flagging, only flag real issues, not just " +
         'mildly lukewarm phrasing. Respond with ONLY a JSON array, no preamble, no markdown fences:\n' +
         '[{"index": 0, "sentiment": "positive"|"neutral"|"negative", "flagged": boolean, "flagReason": "one sentence, or null if not flagged"}]',
       userMessage: numbered,
@@ -188,7 +188,7 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
       summary.openItems.push(
         configuredEngines.length === 0
           ? "Set at least one REP_ENGINE_MODEL_* env var to start checking anything."
-          : "This client's active-engines selection doesn't match any configured engine — check their identity graph settings."
+          : "This client's active-engines selection doesn't match any configured engine. Check their identity graph settings."
       );
       await finishRun(runId, { summary, status: "skipped" });
       return;
@@ -216,7 +216,7 @@ export async function runRepEnginePanel(tenant: any, runId: string, step: StepTo
     }
 
     if (rawFindings.length === 0) {
-      summary.whatFailed.push("Every engine query failed or was unconfigured — nothing to score or record.");
+      summary.whatFailed.push("Every engine query failed or was unconfigured. Nothing to score or record.");
       await finishRun(runId, { summary });
       return;
     }

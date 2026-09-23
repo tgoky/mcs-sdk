@@ -262,7 +262,7 @@ function GhlCalendarPicker({
       {error && <p className="text-[10px] font-mono text-rose-600 dark:text-rose-400 leading-relaxed">⚠ {error}</p>}
       {!error && !loading && options.length > 0 && (
         <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-          Picking the wrong calendar here is exactly what causes GHL 422 errors — select the one bookings actually land in.
+          Picking the wrong calendar here is exactly what causes GHL 422 errors. Select the one bookings actually land in.
         </p>
       )}
     </label>
@@ -704,8 +704,7 @@ export function EditStackSettings({
         </div>
       )}
       <p className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono leading-relaxed">
-        Fixes a mistake made during onboarding, or an account ID that changed on the buyer&apos;s end —
-        every platform this engagement can be connected to is editable here, not just booking.
+        Fixes a mistake made during onboarding, or an account ID that changed on the buyer&apos;s end. Every platform this engagement can be connected to is editable here, not just booking.
         This does not touch stored credential secrets; use &quot;Update credentials&quot; below for that.
       </p>
 
@@ -737,7 +736,7 @@ export function EditStackSettings({
             <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
               Drives when nightly briefs, credential-health checks, the lost-deal sweep, weekly metrics, and (for
               Reputation Manager clients) the AI-engine/Trustpilot/Reddit/X watches, crisis response, and daily
-              digest all fire for this client — each runs at this client&apos;s local hour, not the server&apos;s.
+              digest all fire for this client. Each runs at this client&apos;s local hour, not the server&apos;s.
             </p>
           </label>
         </div>
@@ -775,7 +774,7 @@ export function EditStackSettings({
             </label>
           )}
           <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
-            Also where Leak Map and Crisis Response deliver alerts, not just Call Brief — one webhook, shared across
+            Also where Leak Map and Crisis Response deliver alerts, not just Call Brief. One webhook, shared across
             whatever&apos;s enabled for this client.
           </p>
         </div>
@@ -795,7 +794,7 @@ export function EditStackSettings({
               onChange={(e) => setBookingPlatform(e.target.value)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {BOOKING_PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>{BOOKING_PLATFORM_LABELS[p]}</option>
               ))}
@@ -809,7 +808,7 @@ export function EditStackSettings({
               onChange={(e) => setWebhookMode(e.target.value as typeof webhookMode)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               <option value="webhook">
                 {platformSupportsAutoWebhook(bookingPlatform)
                   ? "Webhook (registered automatically)"
@@ -822,7 +821,7 @@ export function EditStackSettings({
             </select>
             {!platformSupportsAutoWebhook(bookingPlatform) && bookingPlatform && (
               <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-                {BOOKING_PLATFORM_LABELS[bookingPlatform as keyof typeof BOOKING_PLATFORM_LABELS] ?? "This platform"} can&apos;t register a webhook by itself — polling covers you every 5 min until you paste one in (see the sync status card below).
+                {BOOKING_PLATFORM_LABELS[bookingPlatform as keyof typeof BOOKING_PLATFORM_LABELS] ?? "This platform"} can&apos;t register a webhook by itself. Polling covers you every 5 min until you paste one in (see the sync status card below).
               </p>
             )}
           </label>
@@ -876,7 +875,7 @@ export function EditStackSettings({
               onChange={(e) => setHostingPlatform(e.target.value)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {HOSTING_PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>{HOSTING_PLATFORM_LABELS[p]}</option>
               ))}
@@ -939,7 +938,7 @@ export function EditStackSettings({
               onChange={(e) => setEmailPlatform(e.target.value as typeof emailPlatform)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {EMAIL_PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>{EMAIL_PLATFORM_LABELS[p]}</option>
               ))}
@@ -1003,14 +1002,14 @@ export function EditStackSettings({
           {emailPlatform === "ghl" && (
             bookingPlatform === "ghl_calendar" ? (
               <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed sm:col-span-2">
-                GoHighLevel CRM actions reuse the Location ID set under Booking above — no separate one needed here.
+                GoHighLevel CRM actions reuse the Location ID set under Booking above. No separate one needed here.
               </p>
             ) : (
               <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400 leading-relaxed sm:col-span-2">
                 GoHighLevel CRM actions need a Location ID, and this form only has a field for one when Booking
                 platform above is also GoHighLevel Calendar. With a different booking platform selected, Pile-On
                 and Win-Back enrollment for this GHL email connection will fail until Booking platform is set to
-                GoHighLevel Calendar too (see src/features/pile-on/server/enrollment-service.ts — it reads
+                GoHighLevel Calendar too (see src/features/pile-on/server/enrollment-service.ts. It reads
                 location_id off booking_platform_meta, not a GHL-email-specific field).
               </p>
             )
@@ -1032,7 +1031,7 @@ export function EditStackSettings({
               onChange={(e) => setSmsPlatform(e.target.value as typeof smsPlatform)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {SMS_PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>{SMS_PLATFORM_LABELS[p]}</option>
               ))}
@@ -1081,7 +1080,7 @@ export function EditStackSettings({
               onChange={(e) => setAdDataPlatform(e.target.value as typeof adDataPlatform)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {AD_DATA_PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>{AD_DATA_PLATFORM_LABELS[p]}</option>
               ))}
@@ -1126,7 +1125,7 @@ export function EditStackSettings({
               onChange={(e) => setConversationIntelligenceProvider(e.target.value as typeof conversationIntelligenceProvider)}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
             >
-              <option value="">— not set —</option>
+              <option value="">Not set</option>
               {CONVERSATION_INTELLIGENCE_PROVIDER_OPTIONS.map((p) => (
                 <option key={p} value={p}>{CONVERSATION_INTELLIGENCE_PROVIDER_LABELS[p]}</option>
               ))}
@@ -1143,13 +1142,13 @@ export function EditStackSettings({
                   onChange={(e) => setRecallRegion(e.target.value)}
                   className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
                 >
-                  <option value="">— defaults to US East —</option>
+                  <option value="">Defaults to US East</option>
                   {RECALL_REGION_OPTIONS.map((r) => (
                     <option key={r} value={r}>{RECALL_REGION_LABELS[r]}</option>
                   ))}
                 </select>
                 <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">
-                  Must match the region shown in this client&apos;s own Recall.ai dashboard — a mismatch 404s every call.
+                  Must match the region shown in this client&apos;s own Recall.ai dashboard. A mismatch 404s every call.
                 </p>
               </label>
 
@@ -1180,12 +1179,12 @@ export function EditStackSettings({
                   >
                     {typeof window !== "undefined" ? window.location.origin : ""}/api/recall
                   </span>{" "}
-                  and paste the signing secret shown there — without it, incoming call events fail signature verification and get rejected.
+                  and paste the signing secret shown there. Without it, incoming call events fail signature verification and get rejected.
                 </p>
               </label>
 
               <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400 leading-relaxed sm:col-span-2">
-                The Recall.ai API key itself is entered separately under &quot;Update credentials&quot; in the Modify menu, not here — this section only holds the connection settings.
+                The Recall.ai API key itself is entered separately under &quot;Update credentials&quot; in the Modify menu, not here. This section only holds the connection settings.
               </p>
             </>
           )}

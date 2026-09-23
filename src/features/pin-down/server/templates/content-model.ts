@@ -1,5 +1,5 @@
 // Shared content preparation for every Pin-Down confirmation page design.
-// Each template file in this folder is purely presentational — it takes a
+// Each template file in this folder is purely presentational --- it takes a
 // PageContentModel and returns HTML. All the "what does this page actually
 // say" logic (hero framing, which questions to show, whether to show
 // proof) lives here exactly once, so a content fix (like the one below)
@@ -7,20 +7,20 @@
 // be repeated 5 times.
 //
 // `buyer` below is the operator's own client/brand name (labelled "Client
-// Name" in the engagement wizard — see offer-step.tsx), not the individual
+// Name" in the engagement wizard --- see offer-step.tsx), not the individual
 // prospect who books a call. That distinction matters here specifically
 // because these pages are built and published as static HTML that every
-// future prospect who books lands on, not rebuilt per booking — onboarding
+// future prospect who books lands on, not rebuilt per booking --- onboarding
 // (onboarding-service.ts) builds it once, and confirmation-page-only.ts
 // can rebuild+republish it again on demand afterward (still the same
-// static-per-engagement model — a rebuild replaces the one live page, it
+// static-per-engagement model --- a rebuild replaces the one live page, it
 // doesn't create a per-prospect variant).
 // Every prospect who visits therefore sees byte-identical HTML; the only
 // thing that legitimately varies per visit is whatever the booking
 // platform's own redirect appends as URL query params. `/confirm/[id]`
-// (the unstyled internal fallback page) already reads exactly this —
+// (the unstyled internal fallback page) already reads exactly this ---
 // invitee_first_name, invitee_last_name, invitee_email, assigned_to,
-// event_start_time — from Calendly's documented redirect merge tokens.
+// event_start_time --- from Calendly's documented redirect merge tokens.
 // The 5 templates below use the same param names via buildMergeScriptTag()
 // so a prospect's first name / call time / assigned host resolve
 // client-side after the static page loads, instead of every visitor
@@ -50,21 +50,21 @@ export interface PageBuilderInput {
   /** A Loom/YouTube/Vimeo share link to the buyer's own recorded hero
    * video, once they've actually recorded the script script-builder.ts
    * generates. Every template ships a "recording in progress" placeholder
-   * by default (see buildHeroVideoBlock below) — this is the one field
+   * by default (see buildHeroVideoBlock below) --- this is the one field
    * that replaces it with a real embed. Anything that isn't a recognized
    * share link from one of those three providers is dropped rather than
    * embedded, same "allowlist and rebuild the URL ourselves" approach as
    * calendarAddToUrl below, not just HTML-escaped. */
   heroVideoUrl?: string;
   /** Raw scraped signal from the buyer's own site (design-scraper.ts),
-   * when a crawl produced one. Classified once, here, into DesignTokens —
+   * when a crawl produced one. Classified once, here, into DesignTokens ---
    * templates never see the raw form. Absent (undefined) is a completely
    * normal state (no domain yet, scrape failed, or the buyer's site
    * didn't yield enough signal) and falls back to DEFAULT_TOKENS, which
-   * is exactly today's hardcoded look for each archetype — a scrape can
+   * is exactly today's hardcoded look for each archetype --- a scrape can
    * only add a matched skin, it can never break the safe default. */
   designSignal?: RawSiteSignal;
-  /** Opt-in only — see ENTRANCE_ANIMATION_CSS's own comment for why this
+  /** Opt-in only --- see ENTRANCE_ANIMATION_CSS's own comment for why this
    * defaults to false rather than shipping on by default. */
   animationsEnabled?: boolean;
 }
@@ -93,30 +93,30 @@ export interface PageContentModel {
   showProof: boolean;
   calendarAddToUrl?: string;
   /** Already validated + rebuilt into a known-safe embed URL (see
-   * sanitizeVideoEmbedUrl) — templates can drop this straight into an
+   * sanitizeVideoEmbedUrl) --- templates can drop this straight into an
    * iframe src with no further checks. Undefined means "no real video
-   * yet," not "sanitization failed silently" — both look the same to a
+   * yet," not "sanitization failed silently" --- both look the same to a
    * template (show the placeholder), which is the point. */
   heroVideoUrl?: string;
   /** Deterministic short reference code derived from the buyer's name
-   * (e.g. "PD-JSC") — not a real tracking ID, just a docket-style flourish.
+   * (e.g. "PD-JSC") --- not a real tracking ID, just a docket-style flourish.
    * Used as a signature element by Ledger, Contract (agreement reference),
    * and The Golden Ticket (ticket-stub number). */
   reference: string;
-  /** Resolved once here from PageBuilderInput.designSignal — see that
+  /** Resolved once here from PageBuilderInput.designSignal --- see that
    * field's doc comment. `designTokens.confidence` is how every archetype
    * decides whether to render its site-matched skin or its static
    * default; templates should never need to look at anything else to
    * make that call. */
   designTokens: DesignTokens;
-  /** Already resolved to a plain boolean — see PageBuilderInput's own field
+  /** Already resolved to a plain boolean --- see PageBuilderInput's own field
    * for why this exists. Templates read this once, to set <body>'s class;
    * they never need the raw input shape. */
   animationsEnabled: boolean;
 }
 
 /**
- * Hero approach selection — OG SKILL.md Phase 2 "Auto-decided" rule:
+ * Hero approach selection --- OG SKILL.md Phase 2 "Auto-decided" rule:
  * cold + complex (>$5k) gets Research Assistance framing, warm/hot + high
  * price (>$10k) gets Urgency, warm + standard price gets FAQ.
  */
@@ -134,19 +134,19 @@ function selectHeroApproach(
 const HERO_COPY: Record<PageContentModel["heroApproach"], { eyebrow: string; length: string }> = {
   research_assistance: {
     eyebrow: "Your call is a working session, not a pitch.",
-    length: "2–3 min",
+    length: "2-3 min",
   },
   urgency: {
     eyebrow: "Here's exactly what happens between now and your call.",
-    length: "60–90 sec",
+    length: "60-90 sec",
   },
   faq: {
     eyebrow: "A few quick answers before we talk.",
-    length: "90 sec – 2 min",
+    length: "90 sec to 2 min",
   },
 };
 
-// Used only when the buyer hasn't submitted any top call questions yet —
+// Used only when the buyer hasn't submitted any top call questions yet ---
 // honest placeholder content instead of the old literal "Common question
 // #1/#2/#3" text, which shipped even when real questions existed because
 // the breakout section never actually read the `questions` array.
@@ -167,7 +167,7 @@ export function escapeHtml(s: string): string {
 
 /**
  * calendarAddToUrl is the one field on PageContentModel that's a real URL
- * headed for an `href="..."` attribute rather than plain text content —
+ * headed for an `href="..."` attribute rather than plain text content ---
  * escapeHtml alone (safe against attribute breakout) does nothing to stop
  * a `javascript:`/`data:` URI from executing on click. Allowlists
  * http(s)/mailto and HTML-escapes what's left; anything else (including
@@ -183,7 +183,7 @@ function sanitizeHref(url: string | undefined): string | undefined {
 
 /**
  * Recognizes a Loom/YouTube/Vimeo share link and rebuilds a fresh,
- * known-safe embed URL from just the extracted video ID — the raw input
+ * known-safe embed URL from just the extracted video ID --- the raw input
  * string is never itself echoed into the output, only a capture group
  * that a stricter regex has already constrained to safe characters. Any
  * link that doesn't match one of the three exactly falls through to
@@ -215,7 +215,7 @@ export function sanitizeVideoEmbedUrl(raw: string | undefined): string | undefin
  * out so a template only ever renders ONE of "placeholder" or "real
  * video" instead of five separate copies of that branch. Returns a
  * self-contained 16:9 box either way, styled inline so no template needs
- * a new CSS rule to support it — heroVideoUrl is already a fully-formed,
+ * a new CSS rule to support it --- heroVideoUrl is already a fully-formed,
  * sanitized embed URL by the time it reaches here (see
  * sanitizeVideoEmbedUrl), so this never re-validates it.
  */
@@ -259,7 +259,7 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
     }));
 
   return {
-    title: `You're confirmed — ${buyer}`,
+    title: `You're confirmed with ${buyer}`,
     buyer,
     host,
     heroApproach,
@@ -277,8 +277,8 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
   };
 }
 
-// ── Entrance animation (opt-in) ─────────────────────────────────────────
-// Off by default — a prospect landing here mid-decision shouldn't have
+// ------ Entrance animation (opt-in) ---------------------------------------------------------------------------------------------------------------------------
+// Off by default --- a prospect landing here mid-decision shouldn't have
 // motion sprung on them without the operator having actually chosen it,
 // and a subtle fade doesn't fix a page that isn't working, it just adds
 // risk for someone who never asked for it. An operator flips this on per
@@ -288,11 +288,11 @@ export function buildPageContentModel(input: PageBuilderInput): PageContentModel
 // setting, not something a viewer can toggle).
 //
 // Implementation is one shared CSS block plus a body class rather than
-// per-element markup changes — a template's own top-level `main > *`
+// per-element markup changes --- a template's own top-level `main > *`
 // children get a staggered fade-up automatically, so this drops into all
 // 10 templates (5 static, 5 site-matched) without editing their markup at
 // all. Entirely inert (zero visual change) unless both the class is
-// present AND the visitor's OS isn't requesting reduced motion — the
+// present AND the visitor's OS isn't requesting reduced motion --- the
 // @media query below means a `prefers-reduced-motion: reduce` visitor
 // never gets it regardless of the operator's setting, matching how every
 // other real product handles that preference.
@@ -308,20 +308,20 @@ export const ENTRANCE_ANIMATION_CSS = `
     @keyframes pd-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   }`;
 
-/** `<body class="...">`'s value — every template calls this instead of
+/** `<body class="...">`'s value --- every template calls this instead of
  * inlining the ternary, so the class name itself (and ENTRANCE_ANIMATION_CSS's
  * selector) can only ever drift out of sync in one place if it ever changes. */
 export function animationBodyClass(m: PageContentModel): string {
   return m.animationsEnabled ? "pd-anim" : "";
 }
 
-// ── Static templates' webfont (site-matched templates skip this — see
+// ------ Static templates' webfont (site-matched templates skip this --- see
 // their own dynamic/*.dynamic.ts files, which already render the buyer's
 // real detected font from the design scrape, a stronger signal than any
-// generic font choice here) ─────────────────────────────────────────────
+// generic font choice here) ---------------------------------------------------------------------------------------------------------------------------------------
 /**
  * `families` is the exact `family=...&family=...` query Google Fonts'
- * css2 endpoint expects — each static template passes its own, since
+ * css2 endpoint expects --- each static template passes its own, since
  * each picked a different face to match its own personality (see each
  * template's own file header). preconnect hints are included so the
  * font request doesn't cost a full extra DNS+TLS round trip on top of
@@ -333,10 +333,10 @@ export function buildGoogleFontLinks(families: string): string {
 <link href="https://fonts.googleapis.com/css2?${families}&display=swap" rel="stylesheet">`;
 }
 
-// ── Client-side prospect personalization ────────────────────────────────
+// ------ Client-side prospect personalization ------------------------------------------------------------------------------------------------
 // Every static page reads these from its own URL query string at load
 // time. Names match Calendly's redirect-URL merge tokens exactly (a
-// buyer wires these into their Calendly event's confirmation redirect —
+// buyer wires these into their Calendly event's confirmation redirect ---
 // the same convention /confirm/[id] already relies on), so no new booking
 // platform wiring is required for this to work end to end.
 export const MERGE_PARAMS = {
@@ -348,7 +348,7 @@ export const MERGE_PARAMS = {
   startTime: "event_start_time",
 } as const;
 
-/** Values the merge script resolves and can drop into the page — the
+/** Values the merge script resolves and can drop into the page --- the
  * first four plus `email`/`timezone` come straight from a URL param each;
  * `fullName` and `call_time` are derived (first+last name joined,
  * event_start_time formatted) rather than read directly. */
@@ -356,7 +356,7 @@ export type MergeKey = "firstName" | "lastName" | "fullName" | "email" | "host" 
 
 /**
  * A two-span pair: a server-rendered `fallback` shown by default (so the
- * page reads correctly even with zero query params — an operator
+ * page reads correctly even with zero query params --- an operator
  * previewing it, or a prospect who reached it some other way), and a
  * `resolved` version revealed in its place once the merge script confirms
  * real data came through in the URL. `resolved` can itself contain a bare
@@ -366,7 +366,7 @@ export function mergeField(group: MergeKey, fallback: string, resolved: string):
   return `<span class="mf-d" data-merge-group="${group}">${fallback}</span><span class="mf-l" data-merge-group="${group}" hidden>${resolved}</span>`;
 }
 
-/** Bare inline slot a `mergeField()` "resolved" string can embed — the
+/** Bare inline slot a `mergeField()` "resolved" string can embed --- the
  * script fills its textContent once the corresponding param resolves. */
 export function mergeSlot(key: MergeKey): string {
   return `<span data-merge="${key}"></span>`;
@@ -386,7 +386,7 @@ export function buildMergeScriptTag(): string {
   try {
     // Embedded on Webflow/WordPress/GHL this page runs inside a srcdoc
     // iframe (hosting.ts's wrapAsEmbeddableIframe), whose own location is
-    // about:srcdoc with no query string — the booking tool's params are on
+    // about:srcdoc with no query string --- the booking tool's params are on
     // the host page. The iframe is same-origin with it (no sandbox), so
     // read them from there.
     var search = window.location.search;

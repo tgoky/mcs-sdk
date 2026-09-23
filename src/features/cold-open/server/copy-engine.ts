@@ -69,7 +69,7 @@ async function assembleGenerate(config: CopyEngineConfig, lead: LeadRow): Promis
     `Never use em/en dashes, exclamation points, or emoji. Keep each body under 120 words. ` +
     `Return STRICT JSON only: {"subject": "...", "body1": "...", "body2": "...", "body3": "..."}`;
   const userMessage =
-    `SELLER: ${pid.name} — ${pid.valueProp} (${pid.url})\n` +
+    `SELLER: ${pid.name}, ${pid.valueProp} (${pid.url})\n` +
     `PROSPECT: ${lead.firstName || "there"} at ${lead.companyName}${lead.title ? `, ${lead.title}` : ""}${lead.city ? `, ${lead.city}` : ""}\n` +
     `ICP: ${lead.icp}\n\n` +
     `Write touch 1 (the opener, references the prospect's company by name), touch 2 (a follow-up with a different angle), ` +

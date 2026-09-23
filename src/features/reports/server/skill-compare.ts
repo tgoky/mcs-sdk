@@ -90,17 +90,17 @@ function statsLine(s: CompareSkillStat): string {
     s.needsAttention ? "failing on its most recent run" : null,
     s.outcomeLabel && s.outcomeValue ? `${s.outcomeLabel}: ${s.outcomeValue}` : "no tracked business outcome yet",
   ].filter(Boolean);
-  return `${s.name} — ${parts.join(", ")}`;
+  return `${s.name}: ${parts.join(", ")}`;
 }
 
 const SYSTEM_PROMPT = `You are comparing several automation skills for one client, side by side, for someone deciding where to focus attention or budget. Write a real comparative analysis, not a restated list of the numbers given.
 
 Rules:
 - Reference only the specific numbers given below. Never invent a cause, a number, or an explanation the data doesn't support.
-- Open by naming which skill is actually pulling its weight right now and which isn't, in one direct sentence — that's the headline, not buried.
+- Open by naming which skill is actually pulling its weight right now and which isn't, in one direct sentence. That's the headline, not buried.
 - Then explain the "why" behind the gap using only the given numbers (run volume, success rate, whether it's failing, its business outcome if one is given).
-- Close with one concrete recommendation: double down, fix, or deprioritize — named specifically, not generic advice.
-- A skill with "no runs yet" or "no tracked business outcome yet" — say that plainly, never guess a number for it.
+- Close with one concrete recommendation: double down, fix, or deprioritize ,  named specifically, not generic advice.
+- A skill with "no runs yet" or "no tracked business outcome yet". Say that plainly, never guess a number for it.
 - No boilerplate openers, no filler adjectives, no hedging language, no markdown headers.
 - 4-7 sentences total.`;
 

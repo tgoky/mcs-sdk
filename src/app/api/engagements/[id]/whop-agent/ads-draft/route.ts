@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "productId, creativeBrief, and budgetCents are required." }, { status: 400 });
   }
   if (body.budgetLevel !== "ad_group" && body.budgetLevel !== "campaign") {
-    return NextResponse.json({ error: "budgetLevel must be 'ad_group' or 'campaign' — budget lives at exactly one level." }, { status: 400 });
+    return NextResponse.json({ error: "budgetLevel must be 'ad_group' or 'campaign'. Budget lives at exactly one level." }, { status: 400 });
   }
 
   const runId = crypto.randomUUID();

@@ -46,7 +46,7 @@ export function AdsConsole({ engagementId }: { engagementId: string }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
-      setFlipMessage(`Queued as ${body.pendingActionId} — approve from the Queue (needs elevated scope, starts real Meta spend).`);
+      setFlipMessage(`Queued as ${body.pendingActionId}. Approve from the Queue (needs elevated scope, starts real Meta spend).`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to queue flip-to-active.");
     } finally {
@@ -58,7 +58,7 @@ export function AdsConsole({ engagementId }: { engagementId: string }) {
     <div className="space-y-5">
       <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-300">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-        <p>Beta-tier Whop feature. Media generation costs money before any draft exists — check your Whop balance first.</p>
+        <p>Beta-tier Whop feature. Media generation costs money before any draft exists. Check your Whop balance first.</p>
       </div>
 
       <div className="space-y-2">
@@ -84,12 +84,12 @@ export function AdsConsole({ engagementId }: { engagementId: string }) {
       {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
       {runId && (
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
-          Draft started — <Link href={`/dashboard/runs/${runId}`} className="underline font-semibold">view progress in Run History</Link>.
+          Draft started: <Link href={`/dashboard/runs/${runId}`} className="underline font-semibold">view progress in Run History</Link>.
         </p>
       )}
 
       <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 space-y-2">
-        <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400">Flip to active — spends real money</h3>
+        <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400">Flip to active (spends real money)</h3>
         <input value={adId} onChange={(e) => setAdId(e.target.value)} placeholder="Ad id (from the draft run above)" className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-mono" />
         <button type="button" onClick={queueFlip} disabled={submitting || !adId.trim()} className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 text-xs font-bold disabled:opacity-50">
           Queue flip-to-active for approval

@@ -111,7 +111,7 @@ export const executeSkillRun = inngest.createFunction(
       await logStep(runId, {
         phase: "skill_disabled",
         status: "skipped",
-        detail: `${skipReason} — run skipped.`,
+        detail: `${skipReason}. Run skipped.`,
       });
       await finishRun(runId, { status: "skipped" });
       return;
@@ -131,14 +131,14 @@ export const executeSkillRun = inngest.createFunction(
         await logStep(runId, {
           phase: "skill_disabled",
           status: "skipped",
-          detail: `${definition.name} is turned off for this engagement — nothing ran.`,
+          detail: `${definition.name} is turned off for this engagement. Nothing ran.`,
         });
         await finishRun(runId, { status: "skipped" });
         return;
       }
 
       if (!definition.execute) {
-        throw new Error(`${definition.name} has no direct executor — it only runs from its own event handlers.`);
+        throw new Error(`${definition.name} has no direct executor. It only runs from its own event handlers.`);
       }
 
       // Field-completeness gate (Phase 1 of the onboarding-gating plan):
@@ -158,7 +158,7 @@ export const executeSkillRun = inngest.createFunction(
         );
         if (missingFields.length > 0) {
           const detail = missingFields.map((f) => `${f.label}: ${f.reason}`).join(" | ");
-          throw new Error(`${definition.name} is missing required setup — ${detail}`);
+          throw new Error(`${definition.name} is missing required setup: ${detail}`);
         }
       }
 

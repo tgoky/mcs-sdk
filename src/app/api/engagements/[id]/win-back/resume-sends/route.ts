@@ -43,7 +43,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     const stack = tenant.stack as EngagementStack | null;
     if (!stack?.win_back_auto_paused) {
-      return NextResponse.json({ error: "Win-Back isn't auto-paused for this engagement — nothing to resume." }, { status: 409 });
+      return NextResponse.json({ error: "Win-Back isn't auto-paused for this engagement. Nothing to resume." }, { status: 409 });
     }
 
     await resumeWinBackSends(engagementId);

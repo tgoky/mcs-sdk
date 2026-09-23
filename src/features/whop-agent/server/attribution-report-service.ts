@@ -72,7 +72,7 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
     for (; page <= MAX_PAGES; page++) {
       const response = await client.request<WhopV2MembershipsResponse>("memberships_v2.list", "/api/v2/memberships", { query: { page, per: 100 } });
       if (!response.data) {
-        shapeMismatch = "GET /api/v2/memberships returned no `data` array — the undocumented v2 surface may have changed.";
+        shapeMismatch = "GET /api/v2/memberships returned no `data` array. The undocumented v2 surface may have changed.";
         break;
       }
       memberships.push(...response.data);
@@ -82,7 +82,7 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
 
     const expectedFieldsPresent = memberships.some((m) => "promo_code" in m || "affiliate_username" in m || "checkout_session" in m);
     if (memberships.length > 0 && !expectedFieldsPresent) {
-      shapeMismatch = (shapeMismatch ? shapeMismatch + " " : "") + "No membership carried promo_code/affiliate_username/checkout_session — expected v2 attribution fields may be missing or renamed.";
+      shapeMismatch = (shapeMismatch ? shapeMismatch + " " : "") + "No membership carried promo_code/affiliate_username/checkout_session. Expected v2 attribution fields may be missing or renamed.";
     }
 
     const acquisitionDataObserved = memberships.some((m) => m.acquisition_data != null);
@@ -90,7 +90,7 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
     await logStep(runId, { phase: "revenue_cross_check", status: "running" });
     const grossRevenueRes = await client.statsMetric("receipts:gross_revenue", { granularity: "weekly" }).catch(() => null);
     const statsGrossRevenue = latestValue(grossRevenueRes);
-    await logStep(runId, { phase: "revenue_cross_check", status: "success", detail: `Stats-engine gross revenue: ${statsGrossRevenue ?? "unavailable"}. Per-attribution-key revenue isn't exposed on this endpoint, so the cross-check compares presence, not amount — see this file's own note on WhopV2Membership.` });
+    await logStep(runId, { phase: "revenue_cross_check", status: "success", detail: `Stats-engine gross revenue: ${statsGrossRevenue ?? "unavailable"}. Per-attribution-key revenue isn't exposed on this endpoint, so the cross-check compares presence, not amount. See this file's own note on WhopV2Membership.` });
 
     const report: AttributionReport = {
       byPromoCode: group(memberships, "promo_code"),
@@ -99,7 +99,7 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
       totalMemberships: memberships.length,
       acquisitionDataObserved,
       shapeMismatch,
-      revenueCrossCheck: { statsGrossRevenue, note: "Per-key revenue not available on this endpoint — reported as membership counts per attribution key." },
+      revenueCrossCheck: { statsGrossRevenue, note: "Per-key revenue not available on this endpoint. Reported as membership counts per attribution key." },
     };
 
     await finishRun(runId, {
@@ -108,8 +108,8 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
         whatWorked: shapeMismatch ? [] : [`${memberships.length} memberships across ${report.byPromoCode.length} promo codes, ${report.byAffiliate.length} affiliates`],
         whatFailed: shapeMismatch ? [shapeMismatch] : [],
         openItems: [
-          acquisitionDataObserved ? "" : "acquisition_data was null on every sampled record — omitted rather than guessed at.",
-          "Per-attribution-key revenue not available on this endpoint — only membership counts are reported per key.",
+          acquisitionDataObserved ? "" : "acquisition_data was null on every sampled record. Omitted rather than guessed at.",
+          "Per-attribution-key revenue not available on this endpoint, only membership counts are reported per key.",
         ].filter(Boolean),
         decisionsMade: [],
       },

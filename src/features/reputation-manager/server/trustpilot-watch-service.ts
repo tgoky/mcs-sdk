@@ -269,7 +269,7 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "trustpilot_watch", status: "success", detail: "No reviews returned." });
-      summary.whatWorked.push("Checked Trustpilot — no reviews found.");
+      summary.whatWorked.push("Checked Trustpilot. No reviews found.");
       await finishRun(runId, { summary });
       return;
     }
@@ -287,7 +287,7 @@ export async function runRepTrustpilotWatch(tenant: any, runId: string, step: St
       await logStep(runId, {
         phase: "trustpilot_watch",
         status: "success",
-        detail: `Checked ${fetched.length} review(s) — all already on file.`,
+        detail: `Checked ${fetched.length} review(s). All already on file.`,
       });
       summary.whatWorked.push("No new reviews since last check.");
       await finishRun(runId, { summary });
@@ -363,7 +363,7 @@ export async function runRepTrustpilotDeepScan(
 
     if (fetched.length === 0) {
       await logStep(runId, { phase: "trustpilot_deep_scan", status: "success", detail: "No reviews found in that window." });
-      summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate} — no reviews found.`);
+      summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate}. No reviews found.`);
       await finishRun(runId, { summary });
       return;
     }
@@ -377,7 +377,7 @@ export async function runRepTrustpilotDeepScan(
       status: "success",
       detail: `${result.newCount} new review(s)${result.flaggedCount > 0 ? `, ${result.flaggedCount} flagged` : ""} found scanning back to ${sinceDate}.`,
     });
-    summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate} — found ${result.newCount} new review(s) beyond what the regular watch already had on file.`);
+    summary.whatWorked.push(`Scanned Trustpilot back to ${sinceDate}: found ${result.newCount} new review(s) beyond what the regular watch already had on file.`);
     if (result.flaggedCount > 0) summary.decisionsMade.push(`${result.flaggedCount} review(s) flagged for review.`);
 
     await finishRun(runId, { summary });

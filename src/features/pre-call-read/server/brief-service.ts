@@ -54,19 +54,19 @@ Known call questions: ${JSON.stringify(tenant.topCallQuestions ?? [])}
 
 ${
   researchSummary
-    ? `Public research findings on this prospect (use these for Prospect Overview and Company Context — do not repeat verbatim, synthesize naturally, and never state something the research below didn't actually establish):\n${researchSummary}`
-    : `Public research was not run for this prospect (their booking details didn't give us enough to confidently confirm identity — a personal email address, a common name, or missing company/LinkedIn info, so we deliberately didn't guess). Do not write an internal-sounding line like "research omitted" or reference a confidence score or threshold anywhere in the brief — the rep reading this doesn't know or care what Rule 14 is. Instead: if bookingNotes below has content, build Prospect Overview and Recommended Opening directly from what the prospect themselves wrote when booking — that is real signal even without research. If bookingNotes is empty too, write one honest, human sentence for Prospect Overview along the lines of "We don't have enough to verify who this is beyond what they told us booking the call — go in with open questions." Never fabricate a company, title, or background detail that isn't in bookingNotes.`
+    ? `Public research findings on this prospect (use these for Prospect Overview and Company Context: do not repeat verbatim, synthesize naturally, and never state something the research below didn't actually establish):\n${researchSummary}`
+    : `Public research was not run for this prospect (their booking details didn't give us enough to confidently confirm identity. A personal email address, a common name, or missing company/LinkedIn info, so we deliberately didn't guess). Do not write an internal-sounding line like "research omitted" or reference a confidence score or threshold anywhere in the brief ,  the rep reading this doesn't know or care what Rule 14 is. Instead: if bookingNotes below has content, build Prospect Overview and Recommended Opening directly from what the prospect themselves wrote when booking. That is real signal even without research. If bookingNotes is empty too, write one honest, human sentence for Prospect Overview along the lines of "We don't have enough to verify who this is beyond what they told us booking the call ,  go in with open questions." Never fabricate a company, title, or background detail that isn't in bookingNotes.`
 }
 
 ${
   call.bookingNotes && call.bookingNotes.length > 0
-    ? `What the prospect wrote on the booking form, in their own words (use this — it's the single best signal available when research is skipped, and still useful context when research ran too):\n${call.bookingNotes.map((n: { question: string; answer: string }) => `- ${n.question}: ${n.answer}`).join("\n")}`
+    ? `What the prospect wrote on the booking form, in their own words (use this: it's the single best signal available when research is skipped, and still useful context when research ran too):\n${call.bookingNotes.map((n: { question: string; answer: string }) => `- ${n.question}: ${n.answer}`).join("\n")}`
     : ""
 }
 
 ${
   engagementContext
-    ? `Engagement history data for the "Engagement History" section (use exactly what's here — do not embellish, and note explicitly if a source found nothing rather than omitting it silently):\n${engagementContext}`
+    ? `Engagement history data for the "Engagement History" section (use exactly what's here: do not embellish, and note explicitly if a source found nothing rather than omitting it silently):\n${engagementContext}`
     : ""
 }`;
 }
@@ -227,7 +227,7 @@ async function processSingleBriefCall(
     });
 
     if (dup.alreadyBriefed) {
-      await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h — skipped" });
+      await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h (skipped)" });
       return { status: "duplicate_skipped", callLabel };
     }
 
@@ -246,7 +246,7 @@ async function processSingleBriefCall(
       phase: "rule_14_gate",
       status: matchResult.passed ? "success" : "skipped",
       label: callLabel,
-      detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " — research omitted"}`,
+      detail: `Identity confidence ${matchResult.totalScore}/100${matchResult.passed ? "" : " (research omitted)"}`,
     });
 
     // ── Prospect research + BYOK enrichment (memoized as ONE step) ────
@@ -385,7 +385,7 @@ Name: ${call.name}
 Email: ${call.email}
 Company: ${call.company}
 Call time: ${call.callTime.toISOString()}
-Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "not confirmed — research skipped, rely on booking notes and be upfront about the gap"}${showRateLine ? `\n${showRateLine}` : ""}`;
+Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "not confirmed: research skipped, rely on booking notes and be upfront about the gap"}${showRateLine ? `\n${showRateLine}` : ""}`;
 
     const llmResult = await run(`synthesize-${call.id}`, () =>
       callClaudeWithRetry({
@@ -669,7 +669,7 @@ export async function executeNightlyBriefingCycle(
     await logStep(runId, {
       phase: "roster_fetch",
       status: "skipped",
-      detail: `${skipReason} — briefing cycle skipped.`,
+      detail: `${skipReason}. Briefing cycle skipped.`,
     });
     await finishRun(runId, { status: "skipped" });
     return 0;
@@ -729,7 +729,7 @@ export async function executeNightlyBriefingCycle(
     }));
 
     if (normalizedCalls.length === 0) {
-      summary.whatWorked.push("No calls scheduled tomorrow — nothing to brief.");
+      summary.whatWorked.push("No calls scheduled tomorrow. Nothing to brief.");
     }
 
     // 🌟 THE FIX: Isolate parallel fanning from non-Inngest script invocations
@@ -786,7 +786,7 @@ export async function executeNightlyBriefingCycle(
         // missing Slack webhook can never fail the whole nightly run.
         summary.whatWasAttempted.push(`Brief ${outcome.callLabel}.`);
         summary.openItems.push(
-          `Brief ready for ${outcome.callLabel} but not sent — ${outcome.detail}. It's readable now on the run's dashboard card; configure the missing credential to auto-deliver next time, or send it manually from there.`
+          `Brief ready for ${outcome.callLabel} but not sent: ${outcome.detail}. It's readable now on the run's dashboard card; configure the missing credential to auto-deliver next time, or send it manually from there.`
         );
         undeliveredReadyCount++;
       } else {
@@ -795,17 +795,17 @@ export async function executeNightlyBriefingCycle(
     }
 
     if (deliveredCount === 0 && undeliveredReadyCount === 0 && normalizedCalls.length > 0) {
-      summary.openItems.push("Every call on tomorrow's roster was already briefed in the last 24h — no new briefs sent.");
+      summary.openItems.push("Every call on tomorrow's roster was already briefed in the last 24h. No new briefs sent.");
     }
 
     const hadFailures = summary.whatFailed.length > 0;
     if (hadFailures && deliveredCount === 0 && undeliveredReadyCount === 0 && normalizedCalls.length > 0) {
-      await failRun(runId, new Error(`All ${normalizedCalls.length} call(s) failed to brief — see summary for per-call errors.`), { summary });
+      await failRun(runId, new Error(`All ${normalizedCalls.length} call(s) failed to brief. See summary for per-call errors.`), { summary });
       return deliveredCount;
     }
 
     if (hadFailures) {
-      summary.openItems.push(`${summary.whatFailed.length} of ${normalizedCalls.length} call(s) failed to brief tonight — see What Failed above.`);
+      summary.openItems.push(`${summary.whatFailed.length} of ${normalizedCalls.length} call(s) failed to brief tonight. See What Failed above.`);
     }
 
     await finishRun(runId, { summary });

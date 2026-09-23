@@ -103,10 +103,10 @@ function selectHeroApproach(
 
 const APPROACH_BRIEF: Record<string, string> = {
   research_assistance:
-    "Frame the call as a working session, not a pitch — the prospect is cold traffic evaluating a complex/high-consideration offer, so the video should lower anxiety by explaining what research/prep the team does before the call, not sell.",
+    "Frame the call as a working session, not a pitch. The prospect is cold traffic evaluating a complex/high-consideration offer, so the video should lower anxiety by explaining what research/prep the team does before the call, not sell.",
   urgency:
-    "The prospect is warm/hot and the offer is high-price — the video should reinforce that they made the right call booking, build anticipation, and set a confident, decisive tone without being pushy.",
-  faq: "Standard warm-lead confirmation tone — friendly, clear, sets expectations for what happens on the call.",
+    "The prospect is warm/hot and the offer is high-price. The video should reinforce that they made the right call booking, build anticipation, and set a confident, decisive tone without being pushy.",
+  faq: "Standard warm-lead confirmation tone. Friendly, clear, sets expectations for what happens on the call.",
 };
 
 // Same target lengths selectHeroApproach's own return values use per
@@ -153,7 +153,7 @@ function buildRecordingChecklist(
   const perScriptReminders = scripts.map((s) => ({
     scriptId: s.id,
     scriptTitle: s.title,
-    reminder: s.recordingPrompt || "No specific framing guidance generated for this script — use the general checklist below.",
+    reminder: s.recordingPrompt || "No specific framing guidance generated for this script. Use the general checklist below.",
   }));
 
   if (castingChoice === "animation") {
@@ -162,16 +162,16 @@ function buildRecordingChecklist(
     return {
       castingChoice,
       equipment: [
-        "USB condenser mic (or better) for the voiceover track — avoid built-in laptop/phone mics",
+        "USB condenser mic (or better) for the voiceover track. Avoid built-in laptop/phone mics",
         "Pop filter or foam windscreen",
         "Headphones for monitoring while recording",
       ],
       environment: [
-        "Small, soft-furnished room (closet, bedroom with a rug/curtains) to cut echo — avoid bare rooms or kitchens/bathrooms",
+        "Small, soft-furnished room (closet, bedroom with a rug/curtains) to cut echo. Avoid bare rooms or kitchens/bathrooms",
         "Record each script in one continuous take where possible; multiple short takes make it harder for an editor to match pacing",
       ],
       wardrobeAndFraming: [
-        "Not applicable — no on-camera talent. Instead: confirm brand colors, fonts, and any existing motion-graphics style guide with the animator before recording starts.",
+        "Not applicable. No on-camera talent. Instead: confirm brand colors, fonts, and any existing motion-graphics style guide with the animator before recording starts.",
         "Note approximate pacing (words per chapter/beat) alongside the voiceover file so the animator can time visuals to it.",
       ],
       perScriptReminders,
@@ -183,21 +183,21 @@ function buildRecordingChecklist(
   return {
     castingChoice,
     equipment: [
-      "Phone on a tripod (or webcam) at eye level — avoid handheld or upward angles",
-      "Clip-on lav mic or a dedicated USB mic — built-in camera/phone audio is usually the weakest link, not the video quality",
+      "Phone on a tripod (or webcam) at eye level. Avoid handheld or upward angles",
+      "Clip-on lav mic or a dedicated USB mic. Built-in camera/phone audio is usually the weakest link, not the video quality",
       "One key light in front (ring light or a window facing the presenter) plus, if possible, a second fill light to avoid harsh shadows",
     ],
     environment: [
       "Quiet room with minimal echo (soft furnishings help) and no foot traffic during recording",
-      "Background: clean, uncluttered, and either branded or neutral — nothing that competes visually with the presenter",
+      "Background: clean, uncluttered, and either branded or neutral. Nothing that competes visually with the presenter",
       castingChoice === "coach_on_camera"
         ? "Since this is objection-handling/empathy-heavy content, keep the presenter close enough to camera that facial expressions read clearly"
         : "Keep the framing consistent across hero and breakout scripts so they feel like one recording session, not disconnected clips",
     ],
     wardrobeAndFraming: [
-      `${onCameraLabel} in solid colors — avoid fine patterns/stripes, which can strobe on camera`,
+      `${onCameraLabel} in solid colors. Avoid fine patterns/stripes, which can strobe on camera`,
       "Frame from mid-chest up, eyes roughly one-third from the top of frame",
-      "Look directly into the camera lens, not at the screen/preview — this is what makes it feel like eye contact to the viewer",
+      "Look directly into the camera lens, not at the screen/preview. This is what makes it feel like eye contact to the viewer",
     ],
     perScriptReminders,
   };
@@ -226,7 +226,7 @@ Match the tone in this brand voice profile as closely as possible:
 ${JSON.stringify(input.brandVoiceProfile ?? {})}
 
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
-${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")} — when it strengthens a point, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Approach for the hero video: ${approach} — ${APPROACH_BRIEF[approach]}
+${competitorNames.length > 0 ? `Known competitors this prospect may be comparing against: ${competitorNames.join(", ")}. When it strengthens a point, differentiate against them by name rather than speaking only in generic terms. Never fabricate a specific claim about a competitor.\n` : ""}Approach for the hero video: ${approach}. ${APPROACH_BRIEF[approach]}
 Target hero length: ~${targetLengthSeconds} seconds (roughly ${Math.round(targetLengthSeconds / 6)}-${Math.round(
     (targetLengthSeconds * 1.3) / 6
   )} words at a natural talking pace).
@@ -241,11 +241,11 @@ Breakout topics (write exactly one script per topic, in this order):
 ${breakoutTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 
 Rules:
-- Word-for-word script text, not a bullet outline — this is read/performed
+- Word-for-word script text, not a bullet outline: this is read/performed
   on camera as written.
 - Speak AS ${host} to the prospect directly ("you"), never third person.
 - Never fabricate a specific stat, testimonial, or claim not present in
-  the existing proof data above — if you want to reference proof and none
+  the existing proof data above: if you want to reference proof and none
   is on file, speak generally about outcomes instead.
 - No stage directions in the script text itself; put those in the
   recordingPrompt field instead.

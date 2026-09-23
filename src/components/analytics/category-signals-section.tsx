@@ -18,7 +18,7 @@ export function CategorySignalsSection({ signals }: { signals: CategorySignal[] 
           By category
         </h2>
         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-          Anything flagged across every client, grouped by what kind of work it is — a category stays quiet until one
+          Anything flagged across every client, grouped by what kind of work it is. A category stays quiet until one
           of its workers actually has something real to flag.
         </p>
       </div>
@@ -47,7 +47,7 @@ export function CategorySignalsSection({ signals }: { signals: CategorySignal[] 
                   >
                     <TriangleAlert className="w-3 h-3 shrink-0 mt-0.5" />
                     <span>
-                      {item.buyer} — {item.label}: {item.displayValue}
+                      {item.buyer} , {item.label}: {item.displayValue}
                     </span>
                   </Link>
                 ))}

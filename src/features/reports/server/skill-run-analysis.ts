@@ -86,7 +86,7 @@ function statsLine(s: SkillRunAnalysisStats): string {
     s.successRate !== null ? `${s.successRate}% success rate` : "no runs yet",
     s.needsAttention ? "failing on its most recent run" : null,
     s.outcome
-      ? `business outcome — ${s.outcome.label}: ${s.outcome.displayValue}${s.outcome.trendLabel ? ` (${s.outcome.trendLabel})` : " (no baseline yet to compare against)"}`
+      ? `business outcome: ${s.outcome.label}: ${s.outcome.displayValue}${s.outcome.trendLabel ? ` (${s.outcome.trendLabel})` : " (no baseline yet to compare against)"}`
       : "no tracked business outcome yet for this skill",
   ].filter(Boolean);
   return parts.join(", ");
@@ -96,9 +96,9 @@ const SYSTEM_PROMPT = `You are analyzing ONE automation skill's actual performan
 
 Rules:
 - Reference only the specific numbers given below. Never invent a cause, a trend, or an explanation the data doesn't support.
-- Say plainly what's actually happening with this skill right now, and whether it's declining, improving, or steady — grounded only in the real trend given (or its absence). If there's no trend baseline yet, say that instead of guessing a direction.
+- Say plainly what's actually happening with this skill right now, and whether it's declining, improving, or steady, grounded only in the real trend given (or its absence). If there's no trend baseline yet, say that instead of guessing a direction.
 - If there's no tracked business outcome for this skill, say so plainly rather than treating run/success numbers as if they were one.
-- Close with one concrete next action specific to this skill's actual numbers — not generic advice.
+- Close with one concrete next action specific to this skill's actual numbers, not generic advice.
 - No boilerplate openers, no filler adjectives, no hedging language, no markdown headers.
 - 4-6 sentences total. Output only the analysis text, no preamble.`;
 

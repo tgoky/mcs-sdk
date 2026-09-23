@@ -94,7 +94,7 @@ export function DeleteClientSection({
       <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 flex items-center justify-between gap-3">
         <span className="text-xs font-mono text-amber-800 dark:text-amber-400">
           This client was deleted on {new Date(deletedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}.
-          Nothing was destroyed — it&apos;s hidden from lists and every automation is paused.
+          Nothing was destroyed. It&apos;s hidden from lists and every automation is paused.
         </span>
         <button
           onClick={restore}

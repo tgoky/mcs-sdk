@@ -147,7 +147,7 @@ export function InboxRow(props: InboxRowProps) {
             {props.title}{" "}
             {props.body && (
               <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                — {props.body}
+                · {props.body}
               </span>
             )}
           </p>

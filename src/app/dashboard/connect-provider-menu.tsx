@@ -83,7 +83,7 @@ export function ConnectProviderMenu({ recent }: { recent: RecentEngagement[] }) 
             </div>
           ) : (
             <div className="px-3 py-3 text-xs text-zinc-500 dark:text-zinc-500">
-              No clients yet — create one first, then connect Recall.ai from its Call Intelligence tab.
+              No clients yet. Create one first, then connect Recall.ai from its Call Intelligence tab.
             </div>
           )}
           <Link

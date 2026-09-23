@@ -84,13 +84,13 @@ export async function preconditionCheck(engagementId: string, skill: string): Pr
 
   const config = await getColdOpenConfig(engagementId);
   if (!config) {
-    return [`No Cold Open config found for this engagement — run ICP Lock first.`];
+    return [`No Cold Open config found for this engagement. Run ICP Lock first.`];
   }
 
   const failures: string[] = [];
   for (const req of requirements) {
     if (isEmpty(config[req.field])) {
-      failures.push(`${req.label} missing — run ${req.owner} first.`);
+      failures.push(`${req.label} missing: run ${req.owner} first.`);
     }
   }
   return failures;

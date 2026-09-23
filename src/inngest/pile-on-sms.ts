@@ -76,7 +76,7 @@ export const processPileOnSmsSequence = inngest.createFunction(
       const { waitForBlockerResolution } = await import("@/lib/human-blockers");
       const resolution = await waitForBlockerResolution(step, blockerId, "30d");
       if (!resolution) {
-        return { sent: 0, reason: "A2P 10DLC blocker unresolved after 30 days — sequence abandoned for this booking" };
+        return { sent: 0, reason: "A2P 10DLC blocker unresolved after 30 days. Sequence abandoned for this booking" };
       }
       // Resolution just wakes the run; the actual status flip on the
       // engagement (sms_a2p_10dlc_status -> "campaign_approved") is what
@@ -87,7 +87,7 @@ export const processPileOnSmsSequence = inngest.createFunction(
       const [refreshed] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
       const refreshedStack = refreshed?.stack as EngagementStack | null;
       if (refreshedStack?.sms_a2p_10dlc_status !== "campaign_approved") {
-        return { sent: 0, reason: "Blocker resolved but sms_a2p_10dlc_status still isn't campaign_approved — check the engagement config" };
+        return { sent: 0, reason: "Blocker resolved but sms_a2p_10dlc_status still isn't campaign_approved. Check the engagement config" };
       }
     }
 
@@ -135,7 +135,7 @@ export const processPileOnSmsSequence = inngest.createFunction(
       });
 
       if (!stillActive) {
-        return { sent, reason: "sms_platform reconfigured or cancelled mid-sequence — stopping" };
+        return { sent, reason: "sms_platform reconfigured or cancelled mid-sequence (stopping)" };
       }
 
       // Durably park the function run context until the next absolute milestone date arrives

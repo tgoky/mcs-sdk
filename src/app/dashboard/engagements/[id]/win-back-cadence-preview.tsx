@@ -24,7 +24,7 @@ interface Touch {
 }
 
 function dayLabel(offsetDays: number): string {
-  if (offsetDays === 0) return "Day 0 — same day";
+  if (offsetDays === 0) return "Day 0 (same day)";
   return `Day ${offsetDays}`;
 }
 
@@ -65,7 +65,7 @@ export function WinBackCadencePreview({
             <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
               No cadence has been generated yet. Win-Back builds this the first time its sequence runs for this
-              engagement — run it now to generate the emails and texts every recovered prospect will receive.
+              engagement. Run it now to generate the emails and texts every recovered prospect will receive.
             </p>
             <div className="mt-3 space-y-1.5 w-56">
               <button

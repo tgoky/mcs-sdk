@@ -134,7 +134,7 @@ const checkPileOn: Checker = async (engagementId) => {
   // truly-unset (never chosen) blocks. Nobody having decided yet is
   // different from having decided against it.
   if (stack.sms_platform === undefined) {
-    out.push(missing("smsPlatform", "SMS follow-ups", "Never set — pick a platform or explicitly choose none."));
+    out.push(missing("smsPlatform", "SMS follow-ups", "Never set. Pick a platform or explicitly choose none."));
   } else if (stack.sms_platform !== "none") {
     if (!stack.sms_platform_credentials_ref) {
       out.push(missing("smsPlatformCredential", "SMS platform credential", `${stack.sms_platform} is selected but has no connected credential.`));
@@ -157,7 +157,7 @@ const checkPileOn: Checker = async (engagementId) => {
   }
 
   if (stack.ad_data_platform === undefined) {
-    out.push(missing("adDataPlatform", "Ad-data cohort platform", "Never set — pick a platform or explicitly choose none."));
+    out.push(missing("adDataPlatform", "Ad-data cohort platform", "Never set. Pick a platform or explicitly choose none."));
   } else if (stack.ad_data_platform !== "none" && stack.ad_data_platform !== "native_crm" && !stack.ad_data_platform_credentials_ref) {
     out.push(missing("adDataPlatformCredential", "Ad-data platform credential", `${stack.ad_data_platform} is selected but has no connected credential.`));
   }
@@ -174,7 +174,7 @@ const checkWinBack: Checker = async (engagementId) => {
   // dailySendTolerance all have real, documented defaults in the schema
   // itself (time_slots / true / 30 / 2) — none of them block.
   if (stack.inbound_reply_mode === "native" && stack.email_platform === "hubspot" && !stack.hubspot_portal_id) {
-    out.push(missing("hubspotPortalId", "HubSpot portal ID", "Native inbound-reply mode on HubSpot is selected but no portal ID is set — inbound replies can't be routed."));
+    out.push(missing("hubspotPortalId", "HubSpot portal ID", "Native inbound-reply mode on HubSpot is selected but no portal ID is set. Inbound replies can't be routed."));
   }
 
   return out;
@@ -207,7 +207,7 @@ const checkPreCallRead: Checker = async (engagementId) => {
   const out: MissingField[] = [];
 
   if (stack.brief_landing_destination === undefined) {
-    out.push(missing("briefLandingDestination", "Where briefs land", "Never set — briefs have nowhere to go."));
+    out.push(missing("briefLandingDestination", "Where briefs land", "Never set. Briefs have nowhere to go."));
   } else if (
     stack.brief_landing_destination === "slack" &&
     !stack.slack_webhook_url &&
@@ -251,12 +251,12 @@ const checkPinDown: Checker = async (engagementId) => {
   const offer = row.offerDetails;
   const out: MissingField[] = [];
 
-  if (!stack?.buyer_domain) out.push(missing("buyerDomain", "Client domain", "No domain on file — voice extraction and smart pre-fill both need it."));
-  if (!row.rawVoiceCorpus) out.push(missing("rawVoiceCorpus", "Brand voice", "No voice corpus captured yet — the domain crawl may not have run or completed."));
+  if (!stack?.buyer_domain) out.push(missing("buyerDomain", "Client domain", "No domain on file. Voice extraction and smart pre-fill both need it."));
+  if (!row.rawVoiceCorpus) out.push(missing("rawVoiceCorpus", "Brand voice", "No voice corpus captured yet. The domain crawl may not have run or completed."));
 
   if (!offer?.name) out.push(missing("offerName", "What they're selling", "Not set."));
   if (!offer?.price) out.push(missing("offerPrice", "Price", "Not set."));
-  if (!offer?.vertical) out.push(missing("offerVertical", "Industry / vertical", "Not set — also feeds Leak Map's cross-client benchmarks."));
+  if (!offer?.vertical) out.push(missing("offerVertical", "Industry / vertical", "Not set. Also feeds Leak Map's cross-client benchmarks."));
   if (!offer?.icp) out.push(missing("offerIcp", "Ideal customer", "Not set."));
   if (!offer?.traffic_temperature) out.push(missing("trafficTemperature", "Lead source temperature", "Not set."));
 
@@ -290,40 +290,40 @@ const checkRepOnboarding: Checker = async (engagementId) => {
     .from(repIdentityGraphs)
     .where(eq(repIdentityGraphs.engagementId, engagementId))
     .limit(1);
-  if (!row) return [missing("repIdentityGraph", "Reputation Manager identity", "No identity graph on file for this client — rep-onboarding hasn't actually completed.")];
+  if (!row) return [missing("repIdentityGraph", "Reputation Manager identity", "No identity graph on file for this client (rep-onboarding hasn't actually completed).")];
   // A row existing does NOT mean setup finished: the rep-onboarding
   // bridge route inserts a blank placeholder (operatorName "",
   // soleAuthorityName "") as soon as the form is opened. Everything else
   // in repIdentityGraphs defaults to an empty array/object, which is a
   // legitimate "nothing captured yet" state, not a block.
   const out: MissingField[] = [];
-  if (!row.operatorName?.trim()) out.push(missing("operatorName", "Operator / business name", "Every Reputation Manager watch searches by this name — nothing can run until it's set."));
+  if (!row.operatorName?.trim()) out.push(missing("operatorName", "Operator / business name", "Every Reputation Manager watch searches by this name. Nothing can run until it's set."));
   if (!row.soleAuthorityName?.trim()) out.push(missing("soleAuthorityName", "Sole authority name", "Required before crisis escalation can run."));
   return out;
 };
 
 const checkIcpLock: Checker = async (engagementId) => {
   const config = await getColdOpenConfig(engagementId);
-  if (!config || config.icps.length === 0) return [missing("icps", "ICPs", "No ICP Lock config found — mirrors runIcpLock's own guard.")];
+  if (!config || config.icps.length === 0) return [missing("icps", "ICPs", "No ICP Lock config found. Mirrors runIcpLock's own guard.")];
   if (!config.productIdentity) return [missing("productIdentity", "Product identity", "No product name/URL/price/value-prop on file.")];
   return [];
 };
 
 const checkVoiceCapture: Checker = async (engagementId) => {
   const config = await getColdOpenConfig(engagementId);
-  if (!config?.voiceProfile) return [missing("voiceProfile", "Greeting, sign-off, and tone", "No voice profile found — mirrors runVoiceCapture's own guard.")];
+  if (!config?.voiceProfile) return [missing("voiceProfile", "Greeting, sign-off, and tone", "No voice profile found. Mirrors runVoiceCapture's own guard.")];
   return [];
 };
 
 const checkSourceConnect: Checker = async (engagementId) => {
   const config = await getColdOpenConfig(engagementId);
-  if (!config || config.leadSources.length === 0) return [missing("leadSources", "Lead sources", "No lead sources configured — mirrors runSourceConnect's own guard.")];
+  if (!config || config.leadSources.length === 0) return [missing("leadSources", "Lead sources", "No lead sources configured. Mirrors runSourceConnect's own guard.")];
   return [];
 };
 
 const checkSendConnect: Checker = async (engagementId) => {
   const config = await getColdOpenConfig(engagementId);
-  if (!config?.sendPlatform) return [missing("sendPlatform", "Sending platform", "No sending platform configured — mirrors runSendConnect's own guard.")];
+  if (!config?.sendPlatform) return [missing("sendPlatform", "Sending platform", "No sending platform configured. Mirrors runSendConnect's own guard.")];
   return [];
 };
 
@@ -331,7 +331,7 @@ const checkDailySend: Checker = async (engagementId) => {
   const config = await getColdOpenConfig(engagementId);
   const out: MissingField[] = [];
   if (!config?.sendPlatform) out.push(missing("sendPlatform", "Sending platform", "Run Send Connect first."));
-  if (!config?.dailySendSettings) out.push(missing("dailySendSettings", "Daily send volume/hour/copy mode", "No Daily Send settings on file — mirrors runDailySend's own guard."));
+  if (!config?.dailySendSettings) out.push(missing("dailySendSettings", "Daily send volume/hour/copy mode", "No Daily Send settings on file. Mirrors runDailySend's own guard."));
   return out;
 };
 
@@ -364,7 +364,7 @@ const checkWhopBridgeManager: Checker = async (engagementId) => {
   // fieldMapping (whop_bridge_field_mapping) defaults to an identity
   // mapping when unset per schema.ts's own comment — doesn't block.
   if (!stack?.whop_bridge_destination_url) {
-    return [missing("whop_bridge_destination_url", "Destination URL", "No sane default — unset means the bridge is configured to do nothing.")];
+    return [missing("whop_bridge_destination_url", "Destination URL", "No sane default. Unset means the bridge is configured to do nothing.")];
   }
   return [];
 };
@@ -431,7 +431,7 @@ if (process.env.NODE_ENV !== "production") {
   const inSync = declared.size === actual.size && [...declared].every((id) => actual.has(id));
   if (!inSync) {
     throw new Error(
-      "worker-config-completeness-shared.ts's CONFIG_CHECKED_WORKER_IDS and worker-config-completeness.ts's own CHECKERS have drifted apart — update both."
+      "worker-config-completeness-shared.ts's CONFIG_CHECKED_WORKER_IDS and worker-config-completeness.ts's own CHECKERS have drifted apart. Update both."
     );
   }
 }

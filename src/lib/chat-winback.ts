@@ -61,7 +61,7 @@ export async function previewManualWinBackEnrollment(opts: {
 
   const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
   if (!stack.email_platform || !stack.email_platform_credentials_ref) {
-    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a win-back." };
+    return { ok: false, error: "No email platform connected for this client yet. Connect one before trying a win-back." };
   }
 
   if (stack.email_platform === "smtp") {
@@ -87,7 +87,7 @@ export async function previewManualWinBackEnrollment(opts: {
       )
     )
     .limit(1);
-  if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence — no need to enroll again.` };
+  if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence. No need to enroll again.` };
 
   return { ok: true, actions: [`Would enroll ${opts.prospectEmail} in ${stack.email_platform}'s win-back recovery cadence.`] };
 }
@@ -107,7 +107,7 @@ export async function enrollProspectInWinBack(opts: {
 
   const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
   if (!stack.email_platform || !stack.email_platform_credentials_ref) {
-    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a win-back." };
+    return { ok: false, error: "No email platform connected for this client yet. Connect one before trying a win-back." };
   }
 
   const isSmtp = stack.email_platform === "smtp";

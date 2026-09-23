@@ -60,14 +60,14 @@ export const COLD_OPEN_SKILL_MANIFEST: Record<ColdOpenSkillId, ColdOpenSkillMani
   "icp-lock": {
     id: "icp-lock",
     name: "ICP Lock",
-    description: "Captures who this client sells to, their sizing sweet-spot and disqualifiers, and their product identity — the config spine every other Cold Open skill reads.",
+    description: "Captures who this client sells to, their sizing sweet-spot and disqualifiers, and their product identity. The config spine every other Cold Open skill reads.",
     runOnSetup: true,
     hasHingesPanel: true,
   },
   "voice-capture": {
     id: "voice-capture",
     name: "Voice Capture",
-    description: "Sets the greeting, sign-off, and tone Daily Send writes in — from the client's own site, or templates entered directly.",
+    description: "Sets the greeting, sign-off, and tone Daily Send writes in. From the client's own site, or templates entered directly.",
     runOnSetup: false,
     hasHingesPanel: true,
   },

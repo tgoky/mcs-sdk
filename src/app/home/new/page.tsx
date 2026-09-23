@@ -69,7 +69,7 @@ export default function NewWorkspacePage({
             Set up a new client
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            One workspace per client, fully separate from your others — pick which workers to run for them now, enable more from the Library any time.
+            One workspace per client, fully separate from your others. Pick which workers to run for them now, enable more from the Library any time.
           </p>
         </div>
 

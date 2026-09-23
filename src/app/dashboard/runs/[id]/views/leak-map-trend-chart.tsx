@@ -97,7 +97,7 @@ export function LeakMapTrendChart({ history }: { history: HistoryEntryLike[] }) 
       <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600">
         <TrendingUp size={22} />
         <p className="text-xs text-center max-w-xs">
-          Not enough audits yet to chart a trend — need at least 2 runs with the same metric before a line means anything.
+          Not enough audits yet to chart a trend. Need at least 2 runs with the same metric before a line means anything.
         </p>
       </div>
     );

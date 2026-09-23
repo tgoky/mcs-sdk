@@ -239,7 +239,7 @@ export async function POST(request: Request) {
           `[webhook] Cannot verify signature for unsupported platform: ${platform}`
         );
         return new Response(
-          "Unsupported booking platform — no verification method available",
+          "Unsupported booking platform. No verification method available",
           { status: 401 }
         );
       }
@@ -255,7 +255,7 @@ export async function POST(request: Request) {
       await db
         .update(engagements)
         .set({
-          stack: { ...stack, webhook_last_error: `Signature check failed on ${new Date().toISOString()} — check the header name/value configured in ${platform === "ghl_calendar" ? "your GHL workflow" : "OnceHub"} against Settings → Booking Sync.` },
+          stack: { ...stack, webhook_last_error: `Signature check failed on ${new Date().toISOString()}. Check the header name/value configured in ${platform === "ghl_calendar" ? "your GHL workflow" : "OnceHub"} against Settings → Booking Sync.` },
           updatedAt: new Date(),
         })
         .where(eq(engagements.engagementId, engagementId))
@@ -347,7 +347,7 @@ export async function POST(request: Request) {
       );
       await releaseDedupRow();
       return new Response(
-        "Rate limit exceeded for this engagement — too many booking events in a short window. This event will be retried automatically by the sending platform.",
+        "Rate limit exceeded for this engagement. Too many booking events in a short window. This event will be retried automatically by the sending platform.",
         { status: 429, headers: { "Retry-After": "120" } }
       );
     }
@@ -427,7 +427,7 @@ export async function POST(request: Request) {
         whatWorked: [],
         whatFailed: [message],
         openItems: [
-          "This booking event was not enrolled in any sequence — check the payload shape against the configured booking platform.",
+          "This booking event was not enrolled in any sequence. Check the payload shape against the configured booking platform.",
         ],
         decisionsMade: [],
       },

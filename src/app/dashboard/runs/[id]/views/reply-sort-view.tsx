@@ -20,7 +20,7 @@ const DISPOSITION_META: Record<string, { label: string; tone: Tone }> = {
   not_a_fit: { label: "Not a fit", tone: "neutral" },
   auto_reply: { label: "Auto-reply", tone: "neutral" },
   unsubscribe: { label: "Unsubscribe", tone: "neutral" },
-  unclassified: { label: "Unclassified — needs review", tone: "danger" },
+  unclassified: { label: "Unclassified (needs review)", tone: "danger" },
 };
 
 export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
@@ -31,7 +31,7 @@ export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
       <EmptyState
         icon={MessageSquare}
         title="No replies classified in this run"
-        description="No new replies came in during this run's window — a normal, healthy outcome, not a failure."
+        description="No new replies came in during this run's window. That's a normal, healthy outcome, not a failure."
       />
     );
   }

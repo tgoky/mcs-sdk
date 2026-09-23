@@ -28,7 +28,7 @@ let _client: WhopSDK | null = null;
 function client(): WhopSDK {
   if (!_client) {
     if (!WHOP_API_KEY) {
-      throw new Error("WHOP_API_KEY is not set — cannot create a checkout session");
+      throw new Error("WHOP_API_KEY is not set. Cannot create a checkout session");
     }
     _client = new WhopSDK({ apiKey: WHOP_API_KEY });
   }

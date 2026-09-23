@@ -285,7 +285,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   }
 
   if (textToAnalyze.trim().length < 20) {
-    notes.push("Couldn't pull readable text from the domain — fill in details manually.");
+    notes.push("Couldn't pull readable text from the domain. Fill in details manually.");
     return {
       domain: base,
       crawledAt: new Date().toISOString(),
@@ -302,7 +302,7 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   }
 
   if (usedFallback) {
-    notes.push("Used a basic HTML strip of the homepage — the voice corpus pipeline didn't return enough. Results may be less accurate.");
+    notes.push("Used a basic HTML strip of the homepage. The voice corpus pipeline didn't return enough. Results may be less accurate.");
   }
 
   let suggestedBuyerName: string | undefined;
@@ -404,18 +404,18 @@ Return nothing but the JSON object. No preamble, no markdown fences. If you aren
   }
 
   if (sources.length === 0) {
-    notes.push("Only the homepage was reachable — no separate sales or pricing page found for a richer voice sample.");
+    notes.push("Only the homepage was reachable. No separate sales or pricing page found for a richer voice sample.");
   }
   if (existingConfirmationPageUrl) {
     notes.push(
-      `Found an existing page at ${existingConfirmationPageUrl} — set stack.existing_confirmation_page_url to this to run the existing-page audit during setup.`
+      `Found an existing page at ${existingConfirmationPageUrl}. Set stack.existing_confirmation_page_url to this to run the existing-page audit during setup.`
     );
   }
   if (!detectedBookingPlatform) {
-    notes.push("Couldn't detect a recognizable booking platform from the homepage HTML — set booking_platform manually.");
+    notes.push("Couldn't detect a recognizable booking platform from the homepage HTML. Set booking_platform manually.");
   }
   if (!designSignal) {
-    notes.push("Couldn't extract visual design signal from the site — the confirmation page will use the default theme for whichever template you pick, not one matched to your site.");
+    notes.push("Couldn't extract visual design signal from the site. The confirmation page will use the default theme for whichever template you pick, not one matched to your site.");
   }
 
   return {
@@ -476,7 +476,7 @@ export async function auditExistingConfirmationPage(
       auditedUrl: url,
       auditedAt: now,
       existingPageStrengths: [],
-      existingPageWeaknesses: [`Could not fetch ${url} — it may require auth, be behind a redirect this crawler doesn't follow, or no longer exist.`],
+      existingPageWeaknesses: [`Could not fetch ${url}. It may require auth, be behind a redirect this crawler doesn't follow, or no longer exist.`],
       v1Improvements: ["Proceed with the standard Pin-Down page since the existing page couldn't be audited."],
     };
   }
@@ -500,7 +500,7 @@ Page content (text-extracted):
  ${text}
 ${
   competitorText
-    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted) — compare against it specifically, calling out what it does that this page doesn't and vice versa:\n${competitorText}\n`
+    ? `\nA competitor's confirmation page at ${competitorUrl} (text-extracted): compare against it specifically, calling out what it does that this page doesn't and vice versa:\n${competitorText}\n`
     : ""
 }
 
@@ -509,10 +509,10 @@ Return ONLY a JSON object:
   "existingPageStrengths": ["specific things this page already does well"],
   "existingPageWeaknesses": ["specific gaps or issues, e.g. no video, vague CTA, no reschedule path"],
   "v1Improvements": ["specific, concrete improvements the new Pin-Down page should make over this one"]${
-    competitorText ? ',\n  "competitorComparisonNotes": ["specific, concrete comparisons against the competitor page — what they do better, what this page does better"]' : ""
+    competitorText ? ',\n  "competitorComparisonNotes": ["specific, concrete comparisons against the competitor page. What they do better, what this page does better"]' : ""
   }
 }
-Be specific and concrete — no generic filler like "could be more engaging." Never fabricate content that isn't actually on either page.`;
+Be specific and concrete. No generic filler like "could be more engaging." Never fabricate content that isn't actually on either page.`;
 
   const result = await callClaudeWithRetry({
     model: MODEL.SYNTHESIS,
@@ -539,7 +539,7 @@ Be specific and concrete — no generic filler like "could be more engaging." Ne
       auditedUrl: url,
       auditedAt: now,
       existingPageStrengths: [],
-      existingPageWeaknesses: ["Audit generation returned an unparseable response — review the existing page manually."],
+      existingPageWeaknesses: ["Audit generation returned an unparseable response. Review the existing page manually."],
       v1Improvements: [],
     };
   }

@@ -560,7 +560,7 @@ export function IcpLockConfigForm({
               </div>
             ) : (
               <p className="text-xs text-amber-400">
-                ⚠️ 0 ICPs Defined — Add ICPs below in Scenario Tuning
+                ⚠️ 0 ICPs Defined. Add ICPs below in Scenario Tuning
               </p>
             )}
             <FactSuggestionList
@@ -844,7 +844,7 @@ export function IcpLockConfigForm({
                     max={500}
                     value={dailyVolume}
                     onChange={(e) => setDailyVolume(e.target.value)}
-                    placeholder="Not set — keep within your inboxes' warm-up limits"
+                    placeholder="Not set (keep within your inboxes' warm-up limits)"
                     className={FIELD_CLASS}
                   />
                 </div>

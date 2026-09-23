@@ -35,7 +35,7 @@ export const WORKER_BLOCKING_CONDITIONS: Record<string, BlockingCondition> = {
     if (!context?.hasOpenIncident) return null;
     return {
       conditionId: "rep-open-incident",
-      reason: `This client has an open reputation incident (severity ${context.severityScore ?? "?"}) — automated tone-sensitive copy is on hold until it's resolved.`,
+      reason: `This client has an open reputation incident (severity ${context.severityScore ?? "?"}). Automated tone-sensitive copy is on hold until it's resolved.`,
     };
   },
   // Phase 6 — Win-Back's bounce/complaint-rate auto-pause

@@ -50,7 +50,7 @@ export function verifyWhopWebhookSignature(rawBody: string, headers: WhopWebhook
   }
   const skewSeconds = Math.abs(Math.floor(Date.now() / 1000) - tsSec);
   if (skewSeconds > 5 * 60) {
-    return { ok: false, reason: `webhook-timestamp is ${skewSeconds}s old — rejected as a possible replay.` };
+    return { ok: false, reason: `webhook-timestamp is ${skewSeconds}s old. Rejected as a possible replay.` };
   }
 
   const signedContent = `${webhookId}.${webhookTimestamp}.${rawBody}`;

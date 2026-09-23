@@ -130,7 +130,7 @@ export async function harvestWhopPlans(engagementId: string, apiKey: string, acc
   await upsertClientFact(engagementId, "whopPlanOptions", plans, {
     source: "account",
     sourceDetail: "whop_bot_api_key",
-    evidence: `${plans.length} plans on the Whop account — which one is this offer?`,
+    evidence: `${plans.length} plans on the Whop account, which one is this offer?`,
   });
   return ["whopPlanOptions"];
 }

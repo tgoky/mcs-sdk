@@ -75,21 +75,21 @@ export async function resolveWebsiteDerivedChoices(engagementId: string) {
     trafficTemperature: {
       type: "choice",
       instructions:
-        "Based on this website's marketing copy, what temperature best describes how this business's leads typically arrive — how much they already know about the offer before being sold to?",
+        "Based on this website's marketing copy, what temperature best describes how this business's leads typically arrive. How much they already know about the offer before being sold to?",
       criteria: {
-        cold: "Outbound or cold-traffic offer — the copy is written to first introduce the problem and the business to someone unfamiliar with them.",
-        warm: "The copy assumes some prior familiarity — an email list, a retargeted visitor, or a referred lead who already knows roughly who this business is.",
-        hot: "The copy is written for someone who already actively wants this and is close to buying — pricing-forward, direct comparison, or a returning-customer tone.",
+        cold: "Outbound or cold-traffic offer. The copy is written to first introduce the problem and the business to someone unfamiliar with them.",
+        warm: "The copy assumes some prior familiarity. An email list, a retargeted visitor, or a referred lead who already knows roughly who this business is.",
+        hot: "The copy is written for someone who already actively wants this and is close to buying: pricing-forward, direct comparison, or a returning-customer tone.",
       },
     },
     castingChoice: {
       type: "choice",
       instructions:
-        "Based on this website's marketing copy, who is most likely to appear on camera for this business's sales calls or video content — who the copy is written in the voice of, or who it credits by name or role?",
+        "Based on this website's marketing copy, who is most likely to appear on camera for this business's sales calls or video content. Who the copy is written in the voice of, or who it credits by name or role?",
       criteria: {
         founder_on_camera: "The copy speaks in the founder's/owner's own voice, or names a single founder as the face of the business.",
-        coach_on_camera: "The copy centers a named coach, expert, or practitioner distinct from company branding — a personal-brand-driven offer.",
-        animation: "The copy reads as a purely product/software offer with no individual person featured — a team or brand voice, not a person.",
+        coach_on_camera: "The copy centers a named coach, expert, or practitioner distinct from company branding. A personal-brand-driven offer.",
+        animation: "The copy reads as a purely product/software offer with no individual person featured. A team or brand voice, not a person.",
         other: "None of the above clearly fits, or the copy gives no signal either way.",
       },
     },
@@ -122,11 +122,11 @@ export async function verifyReputationExtractions(
   }
 
   const VERIFICATION_LEVELS = [
-    "Fabricated — none of the entries are named or implied in the site copy",
-    "Mostly wrong — at most one entry is real; the rest are fabricated, misread, or the wrong kind of thing",
-    "Mixed — roughly half the entries are real and correctly scoped",
-    "Mostly right — nearly all entries are real and correctly scoped, minor gaps or one weak entry",
-    "Fully right — every entry is real, correctly scoped, and nothing obvious is missing",
+    "Fabricated: none of the entries are named or implied in the site copy",
+    "Mostly wrong: at most one entry is real; the rest are fabricated, misread, or the wrong kind of thing",
+    "Mixed: roughly half the entries are real and correctly scoped",
+    "Mostly right: nearly all entries are real and correctly scoped, minor gaps or one weak entry",
+    "Fully right: every entry is real, correctly scoped, and nothing obvious is missing",
   ];
 
   const questions: FieldQuestionMap = {};
@@ -174,11 +174,11 @@ export async function verifyReputationExtractions(
 // confident answer is always one of the shared benchmark groups.
 
 const SINGLE_VALUE_LEVELS = [
-  "Fabricated — the copy doesn't support this value at all",
-  "Mostly wrong — loosely related to the copy but misread or the wrong kind of thing",
-  "Plausible — consistent with the copy but only weakly or indirectly supported",
-  "Mostly right — clearly supported by the copy, with minor imprecision",
-  "Exactly right — the copy states this directly",
+  "Fabricated: the copy doesn't support this value at all",
+  "Mostly wrong: loosely related to the copy but misread or the wrong kind of thing",
+  "Plausible: consistent with the copy but only weakly or indirectly supported",
+  "Mostly right: clearly supported by the copy, with minor imprecision",
+  "Exactly right: the copy states this directly",
 ];
 
 const WEBSITE_READING_PROMPTS: Record<string, string> = {
@@ -266,18 +266,18 @@ export async function verifyWebsiteReadings(
 // would pass field-writeback's auto-apply threshold with no real check.
 
 const PRODUCT_IDENTITY_LEVELS = [
-  "Fabricated — the name and value proposition aren't supported by the site copy",
-  "Mostly wrong — at most one of the name or value proposition matches the copy; the rest is guessed or misread",
-  "Mixed — about half is supported by the copy; the rest is guessed",
-  "Mostly right — the name and value proposition match the copy; the price is missing, approximate, or weakly supported",
-  "Fully right — the name, the price (or its honest absence) and the value proposition all match the copy",
+  "Fabricated: the name and value proposition aren't supported by the site copy",
+  "Mostly wrong: at most one of the name or value proposition matches the copy; the rest is guessed or misread",
+  "Mixed: about half is supported by the copy; the rest is guessed",
+  "Mostly right: the name and value proposition match the copy; the price is missing, approximate, or weakly supported",
+  "Fully right: the name, the price (or its honest absence) and the value proposition all match the copy",
 ];
 
 // Team-size bands Jev picks from for each ICP — the fixed options keep the
 // answer to what the copy can actually support, instead of an invented
 // exact number.
 const TEAM_SIZE_BANDS: Record<string, { min?: number; max?: number; description: string }> = {
-  solo: { min: 1, max: 1, description: "Solo operators — one person running the business." },
+  solo: { min: 1, max: 1, description: "Solo operators. One person running the business." },
   "2-10": { min: 2, max: 10, description: "Small teams of roughly 2 to 10 people." },
   "11-50": { min: 11, max: 50, description: "Growing companies of roughly 11 to 50 people." },
   "51-200": { min: 51, max: 200, description: "Mid-sized companies of roughly 51 to 200 people." },
@@ -287,19 +287,19 @@ const TEAM_SIZE_BANDS: Record<string, { min?: number; max?: number; description:
 };
 
 const DISQUALIFIER_LEVELS = [
-  "Fabricated — none of these exclusions are supported by the copy",
-  "Mostly wrong — at most one exclusion is supported; the rest are guesses",
-  "Mixed — about half the exclusions are supported by the copy",
-  "Mostly right — nearly all exclusions follow from who the copy says this is (and isn't) for",
-  "Fully right — every exclusion follows directly from the copy",
+  "Fabricated: none of these exclusions are supported by the copy",
+  "Mostly wrong: at most one exclusion is supported; the rest are guesses",
+  "Mixed: about half the exclusions are supported by the copy",
+  "Mostly right: nearly all exclusions follow from who the copy says this is (and isn't) for",
+  "Fully right: every exclusion follows directly from the copy",
 ];
 
 const ICP_LEVELS = [
-  "Fabricated — none of these audiences are who the site copy is written for",
-  "Mostly wrong — at most one audience matches who the copy addresses; the rest are guesses",
-  "Mixed — roughly half the audiences match who the copy addresses",
-  "Mostly right — nearly all audiences match who the copy addresses, with minor gaps or one weak entry",
-  "Fully right — every audience is clearly who the copy is written for, and no obvious one is missing",
+  "Fabricated: none of these audiences are who the site copy is written for",
+  "Mostly wrong: at most one audience matches who the copy addresses; the rest are guesses",
+  "Mixed: roughly half the audiences match who the copy addresses",
+  "Mostly right: nearly all audiences match who the copy addresses, with minor gaps or one weak entry",
+  "Fully right: every audience is clearly who the copy is written for, and no obvious one is missing",
 ];
 
 function scoreToConfidence(answer: JevAnswer | undefined, levels: number): number | undefined {

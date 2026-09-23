@@ -102,7 +102,7 @@ export async function triggerSkillRunForEngagement(
     return {
       ok: false,
       status: 422,
-      error: "This runs automatically on its own schedule once Identity Setup is complete — there's no manual run yet.",
+      error: "This runs automatically on its own schedule once Identity Setup is complete. There's no manual run yet.",
     };
   }
   // Same real gap as Reputation Manager's above, for the same reason:
@@ -119,7 +119,7 @@ export async function triggerSkillRunForEngagement(
     return {
       ok: false,
       status: 422,
-      error: "This runs from its own setup form or on its configured schedule — there's no generic manual run for Cold Open skills yet.",
+      error: "This runs from its own setup form or on its configured schedule. There's no generic manual run for Cold Open skills yet.",
     };
   }
   return { ok: false, status: 400, error: `Unknown skill: ${skillName}` };

@@ -229,7 +229,7 @@ export class AuditEngine {
         let result = hasAnyUsableData
           ? "All tracked metrics nominal. No funnel leaks detected."
           : metrics.length > 0
-            ? "Not enough data yet to check for funnel leaks — every tracked metric is still below the minimum sample size. This isn't a clean bill of health, it's too early to tell either way."
+            ? "Not enough data yet to check for funnel leaks. Every tracked metric is still below the minimum sample size. This isn't a clean bill of health, it's too early to tell either way."
             : "No metrics could be pulled for this period yet.";
 
         // Leak Map recovery gap 1 — depth differs by cadence, not just
@@ -241,8 +241,8 @@ export class AuditEngine {
         // three.
         const depthInstruction =
           type === "weekly"
-            ? `This is the WEEKLY SUMMARY — be concise. Report only the top 3 ranked issues by severity and the top 3 ranked recommended actions. Skip metrics with no issue.`
-            : `This is the MONTHLY DEEP-DIVE — be exhaustive. Report EVERY metric provided, not just ones with issues (state "nominal" for metrics with no issue rather than omitting them), with trend framing (is this metric's current trajectory improving, flat, or declining based on current vs. prior), and give effort/impact estimates for every recommended action, not just the top few.`;
+            ? `This is the WEEKLY SUMMARY. Be concise. Report only the top 3 ranked issues by severity and the top 3 ranked recommended actions. Skip metrics with no issue.`
+            : `This is the MONTHLY DEEP-DIVE. Be exhaustive. Report EVERY metric provided, not just ones with issues (state "nominal" for metrics with no issue rather than omitting them), with trend framing (is this metric's current trajectory improving, flat, or declining based on current vs. prior), and give effort/impact estimates for every recommended action, not just the top few.`;
 
         // Leak Map recovery gap 7 — cross-client benchmark lines, one per
         // metric with a same-bucket benchmark available. Computed from
@@ -262,7 +262,7 @@ Overall severity: ${highestSeverity}
 
 ${
   benchmarkLines.length > 0
-    ? `Cross-client benchmark context (state these as informational color, not as the basis for severity — severity is already determined by this engagement's own current-vs-prior delta):\n${benchmarkLines.join("\n")}`
+    ? `Cross-client benchmark context (state these as informational color, not as the basis for severity: severity is already determined by this engagement's own current-vs-prior delta):\n${benchmarkLines.join("\n")}`
     : ""
 }
 
@@ -357,7 +357,7 @@ Use the brand voice parameters: ${JSON.stringify(tenant.brandVoiceProfile ?? {})
           type: "report_delivery_failed",
           severity: "warning",
           title: `Leak-Map report failed to deliver`,
-          body: `The audit report generated successfully but delivery via ${deliveryResult.channel} failed: ${deliveryResult.error ?? "unknown error"}. The report itself is safe — view it from this run's page.`,
+          body: `The audit report generated successfully but delivery via ${deliveryResult.channel} failed: ${deliveryResult.error ?? "unknown error"}. The report itself is safe. View it from this run's page.`,
           slackWebhookUrl: stack?.slack_webhook_url,
         });
       }

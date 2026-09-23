@@ -37,7 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (!(await hasCredential(id, "hubspot"))) {
-      return NextResponse.json({ error: "No HubSpot credential saved for this engagement yet — connect it first." }, { status: 400 });
+      return NextResponse.json({ error: "No HubSpot credential saved for this engagement yet. Connect it first." }, { status: 400 });
     }
 
     const token = await resolveCredential(id, "hubspot");
@@ -48,7 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       return NextResponse.json(
-        { error: `HubSpot rejected the account-info lookup [${res.status}]: ${body.slice(0, 300)} — the connected key may be missing the "account-info.security.read" scope. Enter the Portal ID by hand instead.` },
+        { error: `HubSpot rejected the account-info lookup [${res.status}]: ${body.slice(0, 300)}. The connected key may be missing the "account-info.security.read" scope. Enter the Portal ID by hand instead.` },
         { status: res.status }
       );
     }

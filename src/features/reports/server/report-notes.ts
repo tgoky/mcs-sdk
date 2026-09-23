@@ -102,18 +102,18 @@ export async function generateReportNote(
       .orderBy(desc(clientReportNotes.periodKey))
       .limit(2);
     if (priorRows.length > 0) {
-      priorNotesBlock = `\n\nNotes from the last ${priorRows.length} period(s), for reference only — do not reuse their opening words, sentence structure, or phrasing:\n${priorRows.map((r) => `[${r.periodKey}] ${r.notesText}`).join("\n")}`;
+      priorNotesBlock = `\n\nNotes from the last ${priorRows.length} period(s), for reference only: do not reuse their opening words, sentence structure, or phrasing:\n${priorRows.map((r) => `[${r.periodKey}] ${r.notesText}`).join("\n")}`;
     }
   }
 
-  const system = `You write short internal performance notes for a B2B sales-automation dashboard. The reader is the operator running this client's account — a professional who will read many of these over time and finds generic AI-sounding summaries actively annoying.
+  const system = `You write short internal performance notes for a B2B sales-automation dashboard. The reader is the operator running this client's account. A professional who will read many of these over time and finds generic AI-sounding summaries actively annoying.
 
 Rules:
 - 1-2 sentences. No more.
 - Reference only the specific numbers given. Never invent a cause, trend, or explanation the numbers don't support.
-- Do not restate every number — the raw metrics are already shown separately above this note. Only call out what's actually worth a human noticing: a real problem, a real win, or a real change worth watching.
+- Do not restate every number ,  the raw metrics are already shown separately above this note. Only call out what's actually worth a human noticing: a real problem, a real win, or a real change worth watching.
 - No boilerplate openers ("Overall,", "This week,", "In summary,"). No filler adjectives ("great", "solid", "strong performance"). No hedging ("it seems", "it appears").
-- If nothing here rises above routine, say the specific number that's routine in one short clause instead of padding — don't manufacture significance.
+- If nothing here rises above routine, say the specific number that's routine in one short clause instead of padding. Don't manufacture significance.
 - Vary sentence structure and word choice from the prior notes shown below, if any. Two periods with similar numbers should not produce similar-sounding notes.
 - Output only the note text. No preamble, no quotation marks, no markdown.`;
 

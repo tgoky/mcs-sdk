@@ -41,7 +41,7 @@ export function VoiceStep({
               Testimonials (optional)
             </label>
             <p className="text-[11px] mt-0.5 opacity-85" style={{ color: "var(--text-muted)" }}>
-              Social proof for whichever skills and agents use it — e.g. Pin-Down&apos;s confirmation page, Pile-On&apos;s ad briefs.
+              Social proof for whichever skills and agents use it, e.g. Pin-Down&apos;s confirmation page, Pile-On&apos;s ad briefs.
             </p>
           </div>
           <button

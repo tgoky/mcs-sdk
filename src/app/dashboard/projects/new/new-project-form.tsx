@@ -60,7 +60,7 @@ export function NewProjectForm({ clients }: { clients: Client[] }) {
       });
 
       if (!res.ok) {
-        setError("Couldn't create the project — try again.");
+        setError("Couldn't create the project. Try again.");
         return;
       }
 

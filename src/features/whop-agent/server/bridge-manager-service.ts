@@ -116,7 +116,7 @@ export async function notifyBridgeDeadLetter(engagementId: string, eventType: st
     type: "whop_webhook_health",
     severity: "critical",
     title: "Bridge delivery dead-lettered",
-    body: `${eventType} could not be delivered to ${destinationUrl} after 6 attempts over ~17 hours. Check the destination — Whop's own retry window (71h) is still running independently.`,
+    body: `${eventType} could not be delivered to ${destinationUrl} after 6 attempts over ~17 hours. Check the destination. Whop's own retry window (71h) is still running independently.`,
     slackWebhookUrl: (tenant.stack as EngagementStack | null)?.slack_webhook_url,
     workspaceId: tenant.workspaceId ?? undefined,
   }).catch((e) => console.error("[whop-agent bridge-manager] dead-letter notify failed (non-fatal):", e));

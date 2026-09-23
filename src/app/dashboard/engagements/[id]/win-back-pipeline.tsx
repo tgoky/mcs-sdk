@@ -41,11 +41,11 @@ type ListScope = "week" | "month";
 // carries the same lavender palette forward everywhere instead of just here.
 const STATUS_META: Record<WinBackEnrollmentStatus, { label: string; tone: Tone }> = {
   active: { label: "Active in cadence", tone: "warning" },
-  rebooked: { label: "Exited — rebooked", tone: "success" },
-  reply_exited: { label: "Exited — replied", tone: "info" },
-  manual_override: { label: "Exited — manual override", tone: "neutral" },
-  lost: { label: "Exited — window elapsed", tone: "neutral" },
-  corrected: { label: "Exited — outcome corrected", tone: "neutral" },
+  rebooked: { label: "Exited (rebooked)", tone: "success" },
+  reply_exited: { label: "Exited (replied)", tone: "info" },
+  manual_override: { label: "Exited (manual override)", tone: "neutral" },
+  lost: { label: "Exited (window elapsed)", tone: "neutral" },
+  corrected: { label: "Exited (outcome corrected)", tone: "neutral" },
 };
 
 function formatDayHeader(dateStr: string) {

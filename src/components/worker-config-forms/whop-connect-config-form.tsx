@@ -48,7 +48,7 @@ interface ConnectState {
 }
 
 const PROBE_LABELS: Record<string, { label: string; locksWhat: string }> = {
-  accounts: { label: "Account access", locksWhat: "Everything — key has no usable Whop account." },
+  accounts: { label: "Account access", locksWhat: "Everything. Key has no usable Whop account." },
   products: { label: "Products", locksWhat: "Catalog & product-launch skills" },
   plans: { label: "Plans", locksWhat: "Pricing skills" },
   memberships: { label: "Memberships", locksWhat: "Membership-driven skills" },
@@ -338,7 +338,7 @@ export function WhopConnectConfigForm({
         <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-400">
           <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold">Connection paused — credential error.</p>
+            <p className="font-bold">Connection paused. Credential error.</p>
             <p className="mt-0.5">
               {state.circuitBreakerReason ?? "Reconnect with a valid Whop Bot API key to resume scheduled automations."}
             </p>
@@ -509,7 +509,7 @@ export function WhopConnectConfigForm({
                   type="text"
                   value={saveOfferMessage}
                   onChange={(e) => setSaveOfferMessage(e.target.value)}
-                  placeholder="Not set — no offer is sent until you write one"
+                  placeholder="Not set: no offer is sent until you write one"
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>

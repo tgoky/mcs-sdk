@@ -67,8 +67,8 @@ export function RepRedditWatchConfigForm({
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
           The scheduled watch already searches recency-sorted for the operator name and high-priority entities from
-          Identity Setup daily — nothing to tune there. Reddit has no exact date-cutoff parameter like Trustpilot or
-          X do, so widening the scan means picking a top-ranked timeframe instead — each one is a genuinely separate
+          Identity Setup daily, nothing to tune there. Reddit has no exact date-cutoff parameter like Trustpilot or
+          X do, so widening the scan means picking a top-ranked timeframe instead, each one is a genuinely separate
           listing, not a deeper page of the same search.
         </p>
       </div>

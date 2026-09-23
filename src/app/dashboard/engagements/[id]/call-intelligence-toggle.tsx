@@ -118,7 +118,7 @@ export function CallIntelligenceToggle({
               Call intelligence
             </span>
             <span className="text-[11px] font-sans text-zinc-500 dark:text-zinc-400 leading-normal truncate">
-              {connected ? `Connected — ${conversationIntelligenceProviderLabel(provider)}` : "Not connected"}
+              {connected ? `Connected to ${conversationIntelligenceProviderLabel(provider)}` : "Not connected"}
             </span>
           </div>
         </button>

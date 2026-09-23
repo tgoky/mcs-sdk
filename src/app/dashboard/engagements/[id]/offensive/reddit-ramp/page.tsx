@@ -16,9 +16,9 @@ type Ramp = {
 
 const PHASE_LABELS: Record<string, string> = {
   not_started: "Not started",
-  weeks_1_2_foundation: "Weeks 1-2 — comment-only foundation",
-  weeks_3_4_unlock: "Weeks 3-4 — self-posts unlocking",
-  weeks_5_12_full_cadence: "Weeks 5-12 — full cadence",
+  weeks_1_2_foundation: "Weeks 1-2 (comment-only foundation)",
+  weeks_3_4_unlock: "Weeks 3-4 (self-posts unlocking)",
+  weeks_5_12_full_cadence: "Weeks 5-12 (full cadence)",
   complete: "90-day ramp complete",
 };
 
@@ -126,9 +126,9 @@ export default function RedditRampPage({ params }: { params: Promise<{ id: strin
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move C — Reddit Ramp</h1>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move C: Reddit Ramp</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          A 90-day plan for building real thread density by hand. Tracking only — nothing here posts or comments for you.
+          A 90-day plan for building real thread density by hand. Tracking only. Nothing here posts or comments for you.
         </p>
       </div>
 
@@ -178,9 +178,9 @@ export default function RedditRampPage({ params }: { params: Promise<{ id: strin
                 onChange={(e) => setNewTier(Number(e.target.value) as 1 | 2 | 3)}
                 className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-2 text-xs outline-none"
               >
-                <option value={1}>Tier 1 — comment weekly</option>
-                <option value={2}>Tier 2 — comment when relevant</option>
-                <option value={3}>Tier 3 — post once track record exists</option>
+                <option value={1}>Tier 1: comment weekly</option>
+                <option value={2}>Tier 2: comment when relevant</option>
+                <option value={3}>Tier 3: post once track record exists</option>
               </select>
               <button
                 onClick={addSubreddit}
@@ -243,7 +243,7 @@ export default function RedditRampPage({ params }: { params: Promise<{ id: strin
                 .reverse()
                 .map((a, i) => (
                   <div key={i} className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
-                    {new Date(a.occurredAt).toLocaleDateString()} — {a.type} in r/{a.subreddit}
+                    {new Date(a.occurredAt).toLocaleDateString()} : {a.type} in r/{a.subreddit}
                     {a.note ? `: ${a.note}` : ""}
                   </div>
                 ))}
@@ -253,7 +253,7 @@ export default function RedditRampPage({ params }: { params: Promise<{ id: strin
 
           <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 p-4 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Karma gate check</h2>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Enter what Reddit currently shows for this account — not fetched automatically.</p>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Enter what Reddit currently shows for this account, not fetched automatically.</p>
             <div className="flex gap-2">
               <input
                 placeholder="Karma"

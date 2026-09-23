@@ -84,7 +84,7 @@ export function ColdOpenSetupView({ detail }: { detail: ColdOpenSetupDetail }) {
           <div className="space-y-1.5">
             {config.leadSources.map((src, i) => (
               <p key={i} className="text-xs text-zinc-600 dark:text-zinc-400">
-                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{src.icp}</span> — {src.fetcherType}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">{src.icp}</span> : {src.fetcherType}
                 {src.dailyLimit ? ` · up to ${src.dailyLimit}/day` : ""}
               </p>
             ))}

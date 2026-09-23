@@ -59,7 +59,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
-      setQueuedMessage(`Pin for ${whopWebhookId} queued — approve it from the Queue.`);
+      setQueuedMessage(`Pin for ${whopWebhookId} queued. Approve it from the Queue.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to queue the pin.");
     } finally {
@@ -78,7 +78,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
-      setQueuedMessage(`Dedupe queued — approve it from the Queue to remove the duplicate subscription(s).`);
+      setQueuedMessage(`Dedupe queued. Approve it from the Queue to remove the duplicate subscription(s).`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to queue the dedupe.");
     } finally {
@@ -122,7 +122,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
                   <p className="text-xs text-zinc-700 dark:text-zinc-300">
                     <Copy className="inline w-3 h-3 mr-1 -mt-0.5" />
                     {group.whopWebhookIds.length} subscriptions point at <span className="font-mono">{group.url}</span> for{" "}
-                    <span className="font-mono">{group.events.join(", ")}</span> — every matching event fires this receiver {group.whopWebhookIds.length}x.
+                    <span className="font-mono">{group.events.join(", ")}</span> : every matching event fires this receiver {group.whopWebhookIds.length}x.
                   </p>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">{group.whopWebhookIds.join(", ")}</p>
                   <button
@@ -159,7 +159,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
           {report.unverifiable.length > 0 && (
             <Section title="Unverifiable envelopes (v2/v5)" icon={<AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                These carry an api_version of v2 or v5 and lack Standard Webhooks signatures — they cannot be HMAC-verified. The agent
+                These carry an api_version of v2 or v5 and lack Standard Webhooks signatures. They cannot be HMAC-verified. The agent
                 will never create one; these were found on the existing fleet.
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">{report.unverifiable.join(", ")}</p>
@@ -170,7 +170,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
             <Section title="Already disabled" icon={<AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}>
               {report.alreadyDisabled.map((d) => (
                 <p key={d.whopWebhookId} className="text-xs text-zinc-600 dark:text-zinc-400">
-                  <span className="font-mono">{d.whopWebhookId}</span> — {d.disabledReason ?? "no reason recorded"}. Not re-enabled
+                  <span className="font-mono">{d.whopWebhookId}</span> : {d.disabledReason ?? "no reason recorded"}. Not re-enabled
                   automatically; use the receiver health workspace once it detects a passing probe.
                 </p>
               ))}

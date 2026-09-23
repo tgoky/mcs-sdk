@@ -41,7 +41,7 @@ const WALKTHROUGH_STEPS = [
   "Go to Whop Dashboard → Settings → Payments.",
   "Find the purchase-cap increase request form.",
   "Enter the target approval amount and attach this packet's sales history and account-health summary.",
-  "Submit — Whop reviews within 24 hours. There is no API to check status; check back in the dashboard.",
+  "Submit. Whop reviews within 24 hours. There is no API to check status; check back in the dashboard.",
 ];
 
 /**
@@ -78,7 +78,7 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
       // that section blank and flag the operator to fill it manually."
       salesHistoryUnavailable = true;
       const message = err instanceof Error ? err.message : String(err);
-      await logStep(runId, { phase: "sales_history_pull", status: "failed", detail: `${message} — packet will note this section needs manual entry.` });
+      await logStep(runId, { phase: "sales_history_pull", status: "failed", detail: `${message}. Packet will note this section needs manual entry.` });
     }
 
     await logStep(runId, { phase: "account_health_read", status: "running" });
@@ -90,7 +90,7 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
       // Fail-open: "Account-health read fails — Assemble without it; do
       // not block the packet."
       const message = err instanceof Error ? err.message : String(err);
-      await logStep(runId, { phase: "account_health_read", status: "failed", detail: `${message} — assembling without account-health context.` });
+      await logStep(runId, { phase: "account_health_read", status: "failed", detail: `${message}. Assembling without account-health context.` });
     }
 
     const packet: PurchaseCapPacket = {
@@ -108,8 +108,8 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
           salesHistoryUnavailable ? "Packet assembled with sales history flagged for manual entry" : `Gross revenue: ${grossRevenue ?? "n/a"}, successful payments: ${successfulPayments ?? "n/a"}`,
           accountHealth ? `Account status: ${accountHealth.status ?? "unknown"}` : "Account-health section omitted (read failed)",
         ],
-        whatFailed: salesHistoryUnavailable ? ["Sales history unavailable — needs manual entry"] : [],
-        openItems: ["Submit is manual — Whop has no API for it. Operator should record the outcome once Whop responds."],
+        whatFailed: salesHistoryUnavailable ? ["Sales history unavailable. Needs manual entry"] : [],
+        openItems: ["Submit is manual. Whop has no API for it. Operator should record the outcome once Whop responds."],
         decisionsMade: [`Target approval amount: $${(input.targetApprovalAmountCents / 100).toFixed(2)}`, `Highest-priced offer: $${(input.highestPricedOfferCents / 100).toFixed(2)}`],
       },
     });

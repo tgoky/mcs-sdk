@@ -113,7 +113,7 @@ export function PileOnManualEnrollModal({
           <>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               For a prospect who booked outside a connected booking webhook, or whose enrollment webhook failed. Only enrolls their pre-call email
-              sequence — never SMS or an ad-data cohort sync (those need a real booking behind them).
+              sequence. Never SMS or an ad-data cohort sync (those need a real booking behind them).
             </p>
 
             <div className="space-y-2">
@@ -157,7 +157,7 @@ export function PileOnManualEnrollModal({
 
             {(step === "previewed" || step === "submitting") && preview && (
               <div className="space-y-2 surface-glass-1 rounded-xl p-3">
-                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen — nothing has been sent yet</p>
+                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen. Nothing has been sent yet</p>
                 <ul className="space-y-1.5">
                   {preview.actions.map((a, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300">
@@ -182,7 +182,7 @@ export function PileOnManualEnrollModal({
                         className="mt-0.5"
                         disabled={step === "submitting"}
                       />
-                      <span>I understand this may be a duplicate — enroll anyway.</span>
+                      <span>I understand this may be a duplicate. Enroll anyway.</span>
                     </label>
                   </div>
                 )}

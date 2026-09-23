@@ -69,15 +69,15 @@ async function loadEngagement(engagementId: string, workspaceId: string) {
  * helper so a change to the real function's requirements is a visible
  * diff here too, not a silent drift. */
 function missingPileOnMetaFor(platform: string, stack: Partial<EngagementStack>): string | null {
-  if (platform === "klaviyo" && !stack.target_list_id) return "target_list_id isn't configured for Klaviyo yet — set that up on the client's page first.";
+  if (platform === "klaviyo" && !stack.target_list_id) return "target_list_id isn't configured for Klaviyo yet. Set that up on the client's page first.";
   if (platform === "activecampaign" && (!stack.target_list_id || !stack.activecampaign_base_url)) {
     return "ActiveCampaign pile-on needs target_list_id and activecampaign_base_url configured on the client's page first.";
   }
   if (platform === "ghl" && (!stack.booking_platform_meta?.location_id || !stack.target_workflow_id)) {
     return "GoHighLevel pile-on needs a location id and target_workflow_id configured on the client's page first.";
   }
-  if (platform === "mailchimp" && !stack.target_list_id) return "target_list_id (audience ID) isn't configured for Mailchimp yet — set that up on the client's page first.";
-  if (platform === "convertkit" && !stack.target_list_id) return "target_list_id (form ID) isn't configured for ConvertKit yet — set that up on the client's page first.";
+  if (platform === "mailchimp" && !stack.target_list_id) return "target_list_id (audience ID) isn't configured for Mailchimp yet. Set that up on the client's page first.";
+  if (platform === "convertkit" && !stack.target_list_id) return "target_list_id (form ID) isn't configured for ConvertKit yet. Set that up on the client's page first.";
   return null;
 }
 
@@ -110,14 +110,14 @@ export async function previewManualPileOnEnrollment(opts: {
 
   const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
   if (!stack.email_platform || !stack.email_platform_credentials_ref) {
-    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a pile-on enrollment." };
+    return { ok: false, error: "No email platform connected for this client yet. Connect one before trying a pile-on enrollment." };
   }
   if (!SUPPORTED_PILE_ON_PLATFORMS.includes(stack.email_platform)) {
     return {
       ok: false,
       error:
         stack.email_platform === "smtp"
-          ? "SMTP has no Pile-On pre-call content to send yet — this direct-send platform only supports the Win-Back cadence, not Pile-On."
+          ? "SMTP has no Pile-On pre-call content to send yet. This direct-send platform only supports the Win-Back cadence, not Pile-On."
           : `${stack.email_platform} isn't a supported Pile-On platform.`,
     };
   }
@@ -131,7 +131,7 @@ export async function previewManualPileOnEnrollment(opts: {
   const existingBooking = await findExistingBooking(opts.engagementId, opts.prospectEmail);
   if (existingBooking) {
     warnings.push(
-      `A booking already exists on file for this email (status: ${existingBooking.status}, call time ${existingBooking.callTime.toISOString()}) — enrolling again may be a duplicate. Real enrollment will require force to proceed.`
+      `A booking already exists on file for this email (status: ${existingBooking.status}, call time ${existingBooking.callTime.toISOString()}). Enrolling again may be a duplicate. Real enrollment will require force to proceed.`
     );
   }
 
@@ -140,7 +140,7 @@ export async function previewManualPileOnEnrollment(opts: {
     actions.push("Would also exit them from their currently active win-back recovery cadence (they're coming back).");
   }
 
-  actions.push("Would NOT enroll in SMS or sync an ad-data cohort — those aren't replicated for manual enrollment (see this file's own header for why).");
+  actions.push("Would NOT enroll in SMS or sync an ad-data cohort. Those aren't replicated for manual enrollment (see this file's own header for why).");
 
   return { ok: true, actions, warnings };
 }
@@ -157,14 +157,14 @@ export async function enrollProspectInPileOn(opts: {
 
   const stack = (engagement.stack as Partial<EngagementStack> | null) ?? {};
   if (!stack.email_platform || !stack.email_platform_credentials_ref) {
-    return { ok: false, error: "No email platform connected for this client yet — connect one before trying a pile-on enrollment." };
+    return { ok: false, error: "No email platform connected for this client yet. Connect one before trying a pile-on enrollment." };
   }
 
   const existingBooking = await findExistingBooking(opts.engagementId, opts.prospectEmail);
   if (existingBooking && !opts.force) {
     return {
       ok: false,
-      error: `${opts.prospectEmail} already has a booking on file (status: ${existingBooking.status}) — this may be a duplicate enrollment. Confirm again to proceed anyway.`,
+      error: `${opts.prospectEmail} already has a booking on file (status: ${existingBooking.status}). This may be a duplicate enrollment. Confirm again to proceed anyway.`,
     };
   }
 

@@ -64,7 +64,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
       severity: "error",
       index: null,
       rule: "pool_too_large",
-      message: `${variants.length} variants — the max is ${MAX_POOL_SIZE} (Instantly A/Z). Trim the pool.`,
+      message: `${variants.length} variants: the max is ${MAX_POOL_SIZE} (Instantly A/Z). Trim the pool.`,
     });
   }
   if (variants.length < MIN_POOL_SIZE) {
@@ -72,7 +72,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
       severity: "warn",
       index: null,
       rule: "pool_too_small",
-      message: `only ${variants.length} variant(s) — Instantly's baseline is ${MIN_POOL_SIZE}-4. Add more so the rotation actually varies.`,
+      message: `only ${variants.length} variant(s): Instantly's baseline is ${MIN_POOL_SIZE}-4. Add more so the rotation actually varies.`,
     });
   }
 
@@ -89,7 +89,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
           severity: "error",
           index: i,
           rule: "first_name_token",
-          message: `contains '${token}' — first name in the subject line is a cold-email automation tell. Personalize the body, not the subject.`,
+          message: `contains '${token}'. First name in the subject line is a cold-email automation tell. Personalize the body, not the subject.`,
         });
         break;
       }
@@ -99,14 +99,14 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
         severity: "error",
         index: i,
         rule: "em_dash",
-        message: "contains an em/en dash — a strong AI tell. Use a comma, colon, or two shorter phrases.",
+        message: "contains an em/en dash. A strong AI tell. Use a comma, colon, or two shorter phrases.",
       });
     }
     if (template.includes("!")) {
-      out.push({ severity: "error", index: i, rule: "exclamation", message: "contains an exclamation point — reads as promotional. Remove it." });
+      out.push({ severity: "error", index: i, rule: "exclamation", message: "contains an exclamation point. Reads as promotional. Remove it." });
     }
     if (EMOJI_RE.test(template)) {
-      out.push({ severity: "error", index: i, rule: "emoji", message: "contains an emoji/pictograph — a promotions-tab signal. Remove it." });
+      out.push({ severity: "error", index: i, rule: "emoji", message: "contains an emoji/pictograph. A promotions-tab signal. Remove it." });
     }
     const low = template.trimStart().toLowerCase();
     for (const pref of FAKE_THREAD_PREFIXES) {
@@ -115,7 +115,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
           severity: "error",
           index: i,
           rule: "fake_thread_prefix",
-          message: `starts with a fake '${pref}' prefix — banned by Google/Yahoo/Microsoft bulk-sender rules. Drop it.`,
+          message: `starts with a fake '${pref}' prefix. Banned by Google/Yahoo/Microsoft bulk-sender rules. Drop it.`,
         });
         break;
       }
@@ -127,7 +127,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
         severity: "error",
         index: i,
         rule: "too_long",
-        message: `literal text is ${fixed.length} chars, over the ${MAX_SUBJECT_LENGTH}-char cap even before ${COMPANY_TOKEN} — no company name can shorten it. Tighten the wording (target 25-45 chars).`,
+        message: `literal text is ${fixed.length} chars, over the ${MAX_SUBJECT_LENGTH}-char cap even before ${COMPANY_TOKEN}. No company name can shorten it. Tighten the wording (target 25-45 chars).`,
       });
     }
 
@@ -137,7 +137,7 @@ export function validateSubjectPool(variants: string[]): SubjectPoolViolation[] 
         severity: "warn",
         index: i,
         rule: "not_lowercase",
-        message: "has upper-case letters — lowercase subjects read as personal, not blasted. Consider lowercasing (the runtime never forces it).",
+        message: "has upper-case letters. Lowercase subjects read as personal, not blasted. Consider lowercasing (the runtime never forces it).",
       });
     }
   });

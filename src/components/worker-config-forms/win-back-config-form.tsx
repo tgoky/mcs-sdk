@@ -233,14 +233,14 @@ export function WinBackConfigForm({
             value={inboundReplyMode}
             onChange={(v) => setInboundReplyMode(v as "native" | "forwarding" | "none")}
             options={[
-              { value: "none", label: "Off — cadence only stops on rebook or window elapse" },
-              { value: "forwarding", label: "Forwarding — client forwards replies through an inbound-parse bridge" },
-              { value: "native", label: "Native — HubSpot Conversations only" },
+              { value: "none", label: "Off: cadence only stops on rebook or window elapse" },
+              { value: "forwarding", label: "Forwarding: client forwards replies through an inbound-parse bridge" },
+              { value: "native", label: "Native: HubSpot Conversations only" },
             ]}
             helpText={
               inboundReplyMode === "native" && emailPlatform !== "hubspot"
-                ? "Native mode only works with HubSpot — Klaviyo and ActiveCampaign don't expose a stable reply webhook, use forwarding instead."
-                : "A reply of any kind halts the win-back cadence for that prospect — table stakes for anything calling itself win-back."
+                ? "Native mode only works with HubSpot. Klaviyo and ActiveCampaign don't expose a stable reply webhook, use forwarding instead."
+                : "A reply of any kind halts the win-back cadence for that prospect. Table stakes for anything calling itself win-back."
             }
           />
           {inboundReplyMode === "native" && emailPlatform === "hubspot" && (
@@ -275,7 +275,7 @@ export function WinBackConfigForm({
                   onChange={setHubspotPortalId}
                   helpText={
                     portalIdDetected
-                      ? "Overriding the auto-detected value — re-check the box above to go back to it."
+                      ? "Overriding the auto-detected value. Re-check the box above to go back to it."
                       : "Auto-detection needs the connected key's account-info.security.read scope. Settings → Account Setup → Account Defaults in your client's HubSpot account has the same number if you'd rather paste it."
                   }
                   required
@@ -288,7 +288,7 @@ export function WinBackConfigForm({
               className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
               style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
             >
-              A unique catcher URL generates once this is saved — point your client&apos;s Postmark/SendGrid inbound-parse
+              A unique catcher URL generates once this is saved. Point your client&apos;s Postmark/SendGrid inbound-parse
               bridge (or a forwarding rule through one) at it.
             </div>
           )}
@@ -307,7 +307,7 @@ export function WinBackConfigForm({
             </h2>
             <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
               Register this URL as a webhook in your client&apos;s {emailPlatform} account to enable auto-pause.
-              Optional — Win-Back runs fine without it, just without deliverability protection.
+              Optional. Win-Back runs fine without it, just without deliverability protection.
             </p>
           </div>
           <div
@@ -322,12 +322,12 @@ export function WinBackConfigForm({
               value={activecampaignWebhookSignatureHeader}
               onChange={setActivecampaignWebhookSignatureHeader}
               placeholder="X-My-Signature"
-              helpText="The custom header name you chose when creating this webhook in ActiveCampaign's UI — whichever one you flagged is_signature."
+              helpText="The custom header name you chose when creating this webhook in ActiveCampaign's UI. Whichever one you flagged is_signature."
             />
           )}
           {emailPlatform === "mailchimp" && (
             <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              Mailchimp has no signature header — the secret goes directly in the URL. Pick your own secret value
+              Mailchimp has no signature header. The secret goes directly in the URL. Pick your own secret value
               first, append <code>?secret=&lt;that value&gt;</code> to the URL above before pasting it into Mailchimp,
               then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
             </p>
@@ -342,7 +342,7 @@ export function WinBackConfigForm({
         </div>
       ) : (
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-          Not available for {emailPlatform || "this platform"} — see the note above if applicable.
+          Not available for {emailPlatform || "this platform"} : see the note above if applicable.
         </p>
       ),
     },
@@ -355,7 +355,7 @@ export function WinBackConfigForm({
           Configure Win-Back{buyer ? ` for ${buyer}` : ""}
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          These already have sane defaults — Win-Back runs fine without ever opening this screen. Come back here
+          These already have sane defaults. Win-Back runs fine without ever opening this screen. Come back here
           anytime to change how it reschedules or detects replies.
         </p>
       </div>
@@ -364,7 +364,7 @@ export function WinBackConfigForm({
         <div className="rounded-lg border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 p-3 space-y-2">
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wide text-rose-800 dark:text-rose-300">
-              Auto-paused{autoPausedAt ? ` — ${new Date(autoPausedAt).toLocaleString()}` : ""}
+              Auto-paused{autoPausedAt ? `: ${new Date(autoPausedAt).toLocaleString()}` : ""}
             </h2>
             <p className="text-[11px] text-rose-700 dark:text-rose-400 mt-0.5">
               {autoPausedReason ?? "A deliverability threshold was crossed."} Every active enrollment was unenrolled from{" "}
@@ -387,7 +387,7 @@ export function WinBackConfigForm({
         <div className="rounded-lg border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3">
           <p className="text-[11px] text-amber-800 dark:text-amber-400">
             <span className="font-bold">Bounce/complaint auto-pause isn&apos;t available for GHL yet.</span> GHL&apos;s
-            bounce/complaint data requires a Marketplace OAuth app this integration doesn&apos;t use today — not
+            bounce/complaint data requires a Marketplace OAuth app this integration doesn&apos;t use today, not
             monitored, not silently assumed healthy.
           </p>
         </div>
@@ -404,7 +404,7 @@ export function WinBackConfigForm({
             ? `Prospects who rebook during recovery get tagged on ${emailPlatform || "the ESP"}.`
             : "Rebooked prospects are not tagged on the ESP.",
           inboundReplyMode === "none"
-            ? "A reply doesn't stop the cadence — only a rebook or the recovery window elapsing does."
+            ? "A reply doesn't stop the cadence, only a rebook or the recovery window elapsing does."
             : inboundReplyMode === "native"
               ? "Any reply (via HubSpot Conversations) halts the recovery cadence for that prospect immediately."
               : "Any forwarded reply halts the recovery cadence for that prospect immediately.",

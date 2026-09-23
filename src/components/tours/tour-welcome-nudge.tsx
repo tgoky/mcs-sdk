@@ -91,7 +91,7 @@ export function TourWelcomeNudge({
     : installedProducts.length === 1
       ? {
           label: `Finish setting up ${installedProducts[0].name}`,
-          body: "You already picked it — enable a worker to start running it for real.",
+          body: "You already picked it. Enable a worker to start running it for real.",
           href: `/dashboard/library/${installedProducts[0].id}`,
         }
       : {
@@ -133,7 +133,7 @@ export function TourWelcomeNudge({
             Welcome to UTP
           </h2>
           <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            New workspace, real client — take a quick, real walkthrough of the dashboard, the Library, and
+            New workspace, real client. Take a quick, real walkthrough of the dashboard, the Library, and
             every worker, or jump straight to what&apos;s next.
           </p>
         </div>
@@ -150,7 +150,7 @@ export function TourWelcomeNudge({
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-white dark:text-zinc-900">Run the full walkthrough</span>
               <span className="block text-xs text-zinc-300 dark:text-zinc-600 leading-snug mt-0.5">
-                Dashboard, Library, and every worker — a few minutes, start to finish.
+                Dashboard, Library, and every worker. A few minutes, start to finish.
               </span>
             </span>
             <ArrowRight

@@ -13,7 +13,7 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
       <EmptyState
         icon={MessageCircle}
         title="No new mentions in this run"
-        description="This run found no new Reddit mentions since the last check — a normal, healthy outcome, not a failure."
+        description="This run found no new Reddit mentions since the last check. That's a normal, healthy outcome, not a failure."
       />
     );
   }

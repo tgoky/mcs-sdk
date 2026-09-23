@@ -127,7 +127,7 @@ type QueueTab = "all" | "approve" | "action_needed" | "alerts" | "closed";
 const ARCHIVE_OUTCOME_LABEL: Record<QueueArchiveItemDTO["outcome"], string> = {
   approved: "Approved",
   rejected: "Rejected",
-  execution_failed: "Approved — failed to run",
+  execution_failed: "Approved: failed to run",
   resolved: "Resolved",
   abandoned: "Abandoned",
 };
@@ -432,7 +432,7 @@ function QueueRow({
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("showed")}
                 className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
-                title="Log that they actually showed — no Win-Back"
+                title="Log that they actually showed (no Win-Back)"
               >
                 <UserCheck size={12} /> Showed
               </button>
@@ -440,7 +440,7 @@ function QueueRow({
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("rescheduled")}
                 className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
-                title="Log that they rescheduled — no Win-Back"
+                title="Log that they rescheduled (no Win-Back)"
               >
                 <CalendarClock size={12} /> Rescheduled
               </button>
@@ -449,9 +449,9 @@ function QueueRow({
               disabled={isBusy}
               onClick={() => onDecide("rejected")}
               className="hover-lift press-settle text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
-              title="Dismiss without logging anything — resolve it later from the roster"
+              title="Dismiss without logging anything. Resolve it later from the roster"
             >
-              Not sure — dismiss
+              Not sure, dismiss
             </button>
           </div>
         ) : (
@@ -1654,7 +1654,7 @@ export function QueuePanel({
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-1">
                 <p className="text-sm font-medium">Nothing closed yet</p>
                 <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 max-w-xs mx-auto">
-                  Approvals and blockers you decide on show up here — so you can double-check what you already acted on.
+                  Approvals and blockers you decide on show up here, so you can double-check what you already acted on.
                 </p>
               </div>
             ) : (

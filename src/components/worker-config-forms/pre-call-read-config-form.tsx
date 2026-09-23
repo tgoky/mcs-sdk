@@ -236,8 +236,8 @@ export function PreCallReadConfigForm({
           value={briefTriggerType}
           onChange={(v) => setBriefTriggerType(v as "nightly" | "dynamic_webhook")}
           options={[
-            { value: "nightly", label: "Nightly Batch — Group and brief tomorrow's roster at 20:00 UTC" },
-            { value: "dynamic_webhook", label: "Dynamic Poll — Brief individually within 15 minutes of entering the lead window" },
+            { value: "nightly", label: "Nightly Batch: Group and brief tomorrow's roster at 20:00 UTC" },
+            { value: "dynamic_webhook", label: "Dynamic Poll: Brief individually within 15 minutes of entering the lead window" },
           ]}
           helpText="Choose 'Dynamic' if your sales reps require briefs generated on-demand as soon as an upcoming call crosses into its imminent lead-time window."
         />
@@ -300,7 +300,7 @@ export function PreCallReadConfigForm({
         <div className="space-y-3">
           <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
             If the client already has their own Apollo or PDL subscription, it layers on top of standard web
-            research — never a required cost.
+            research. Never a required cost.
           </p>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
@@ -338,7 +338,7 @@ export function PreCallReadConfigForm({
           Configure Pre-Call Read{buyer ? ` for ${buyer}` : ""}
         </h1>
         <p className="text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-          These already have sane defaults — Pre-Call Read runs fine without ever opening this screen. Come back
+          These already have sane defaults. Pre-Call Read runs fine without ever opening this screen. Come back
           anytime to change the brief schedule or add video tracking / research sources.
         </p>
       </div>

@@ -69,7 +69,7 @@ export function CredentialsStep({
       {usesGhl && (
         <>
           <div className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium" style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}>
-            GoHighLevel Account — used below for{" "}
+            GoHighLevel Account: used below for{" "}
             {[bookingIsGhl && "booking", emailIsGhl && "email workflows", smsIsGhl && "SMS"].filter(Boolean).join(", ")}.
             One Private Integration Token covers all of these for its sub-account, so you only enter it once here.
           </div>
@@ -183,7 +183,7 @@ export function CredentialsStep({
           value={form.bookingStandingLink}
           onChange={(v) => set("bookingStandingLink", v)}
           placeholder={form.bookingPlatform === "calendly" ? "https://calendly.com/your-handle/event" : "https://cal.com/your-handle/event"}
-          helpText="The dropdown above couldn't pull your calendars automatically — paste your public booking page link here instead."
+          helpText="The dropdown above couldn't pull your calendars automatically. Paste your public booking page link here instead."
         />
       )}
 
@@ -194,7 +194,7 @@ export function CredentialsStep({
             className="md:col-span-2 rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
             style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
           >
-            No CRM or ESP account? This is the direct-send option — the app emails prospects itself, on its own schedule, using either Resend&apos;s API or your own mail server. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
+            No CRM or ESP account? This is the direct-send option. The app emails prospects itself, on its own schedule, using either Resend&apos;s API or your own mail server. This only runs the Win-Back recovery cadence; Pile-On needs an ESP.
           </div>
 
           <div className="md:col-span-2 flex gap-2 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
@@ -209,7 +209,7 @@ export function CredentialsStep({
               }
             >
               Resend (recommended)
-              <span className="block font-normal opacity-80 mt-0.5">Just an API key — better inbox deliverability, no server to run</span>
+              <span className="block font-normal opacity-80 mt-0.5">Just an API key: better inbox deliverability, no server to run</span>
             </button>
             <button
               type="button"

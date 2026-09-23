@@ -370,7 +370,7 @@ export function TeammatesChat({
         },
       ]);
     } catch {
-      setError("Network error — check your connection.");
+      setError("Network error. Check your connection.");
     } finally {
       setLoading(false);
     }

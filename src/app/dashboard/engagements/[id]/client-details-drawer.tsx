@@ -65,9 +65,9 @@ const NOTIFICATION_PACK_OPTIONS = [
 ];
 
 const TRAFFIC_TEMPERATURE_ITEMS: DropdownItem<"cold" | "warm" | "hot">[] = [
-  { key: "cold", label: "Cold — mostly unaware of the problem" },
-  { key: "warm", label: "Warm — aware, comparing options" },
-  { key: "hot", label: "Hot — ready to buy, comparing vendors" },
+  { key: "cold", label: "Cold: mostly unaware of the problem" },
+  { key: "warm", label: "Warm: aware, comparing options" },
+  { key: "hot", label: "Hot: ready to buy, comparing vendors" },
 ];
 
 // The fixed vertical list, plus an unlisted legacy value (typed before the
@@ -86,11 +86,11 @@ const CASTING_CHOICE_ITEMS: DropdownItem<string>[] = [
 ];
 
 const CONFIRMATION_TEMPLATE_ITEMS: DropdownItem<string>[] = [
-  { key: "contract", label: "Contract — formal, signature-style" },
-  { key: "goldenticket", label: "Golden Ticket — celebratory, exclusive" },
-  { key: "tentativehold", label: "Tentative Hold — urgency-driven" },
-  { key: "assessment", label: "Assessment — diagnostic framing" },
-  { key: "minimalist", label: "Minimalist — clean, no-frills" },
+  { key: "contract", label: "Contract (formal, signature-style)" },
+  { key: "goldenticket", label: "Golden Ticket (celebratory, exclusive)" },
+  { key: "tentativehold", label: "Tentative Hold (urgency-driven)" },
+  { key: "assessment", label: "Assessment (diagnostic framing)" },
+  { key: "minimalist", label: "Minimalist (clean, no-frills)" },
 ];
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -263,7 +263,7 @@ export function ClientDetailsDrawer({
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent widthClassName="w-full sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>Edit client details — {data.buyer}</SheetTitle>
+          <SheetTitle>Edit client details for {data.buyer}</SheetTitle>
           <SheetDescription>
             Offer, voice, prospect research, and notification settings captured during onboarding. Connection settings and
             credentials live under &quot;Edit stack settings&quot; and &quot;Update credentials&quot; instead.
@@ -431,7 +431,7 @@ export function ClientDetailsDrawer({
             </div>
           </Section>
 
-          <Section title="Prospect research" description="Top call questions read live on every Pre-Call Read brief — no regenerate needed for these two.">
+          <Section title="Prospect research" description="Top call questions read live on every Pre-Call Read brief. No regenerate needed for these two.">
             <div>
               <Label>Top call questions (one per line)</Label>
               <textarea className={inputClass} rows={3} value={topCallQuestions} onChange={(e) => setTopCallQuestions(e.target.value)} />
@@ -449,7 +449,7 @@ export function ClientDetailsDrawer({
               onSelect={(key) => setConfirmationPageTemplate(key)}
             />
             <p className="text-[11px] text-zinc-500">
-              Changes which design new confirmation pages use. Doesn&apos;t redeploy an already-live page on its own — save your changes,
+              Changes which design new confirmation pages use. Doesn&apos;t redeploy an already-live page on its own. Save your changes,
               then use &quot;Rebuild confirmation page&quot; below to apply them.
             </p>
           </Section>
@@ -475,7 +475,7 @@ export function ClientDetailsDrawer({
               <span>
                 Entrance animations
                 <span className="block text-[11px] text-zinc-500 mt-0.5">
-                  A subtle fade-in as the page loads. Off by default — turn on once you&apos;ve seen the page and want the
+                  A subtle fade-in as the page loads. Off by default. Turn on once you&apos;ve seen the page and want the
                   extra polish. Takes effect on the next rebuild.
                 </span>
               </span>
@@ -521,7 +521,7 @@ export function ClientDetailsDrawer({
 
           <Section
             title="Regenerate generated content"
-            description="These fields are baked into content generated once at onboarding — save your changes above first, then regenerate here to apply them."
+            description="These fields are baked into content generated once at onboarding. Save your changes above first, then regenerate here to apply them."
           >
             <div className="space-y-2">
               <TriggerSkillButton engagementId={data.engagementId} skillName="pre-call-read" label="Run pre-call read now" />
@@ -556,7 +556,7 @@ export function ClientDetailsDrawer({
               {regenerateMessage && <p className="text-[11px] text-zinc-400">{regenerateMessage}</p>}
               <p className="text-[11px] text-zinc-600">
                 Rebuilding republishes to the client&apos;s existing hosting platform if one&apos;s configured (or requires approval first,
-                if this engagement has approval turned on) — save any changes above first so the rebuild picks them up.
+                if this engagement has approval turned on). Save any changes above first so the rebuild picks them up.
               </p>
             </div>
           </Section>

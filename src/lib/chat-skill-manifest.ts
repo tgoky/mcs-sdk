@@ -54,57 +54,57 @@ export const CHAT_SKILL_MANIFEST: Record<ChatSkillId, ChatSkillManifestEntry> = 
   "pin-down-voice": {
     id: "pin-down-voice",
     name: "Brand Voice Extraction",
-    description: "Crawls a client's website and distills a brand voice profile from it — the same extraction Show Rate Setup runs, on its own, from just a URL.",
+    description: "Crawls a client's website and distills a brand voice profile from it. The same extraction Show Rate Setup runs, on its own, from just a URL.",
   },
   "pin-down-scripts": {
     id: "pin-down-scripts",
     name: "Hero + Breakout Video Scripts",
-    description: "Writes a hero confirmation-page video script plus breakout scripts for each top call question — the same script pack Show Rate Setup generates, standalone.",
+    description: "Writes a hero confirmation-page video script plus breakout scripts for each top call question. The same script pack Show Rate Setup generates, standalone.",
   },
   "pin-down-ad-briefs": {
     id: "pin-down-ad-briefs",
     name: "Ad Creative Briefs",
-    description: "Generates ad creative briefs across all 4 content pillars — the same output Show Rate Setup generates, standalone.",
+    description: "Generates ad creative briefs across all 4 content pillars. The same output Show Rate Setup generates, standalone.",
   },
   "pin-down-page-audit": {
     id: "pin-down-page-audit",
     name: "Confirmation Page Audit",
-    description: "Audits an existing confirmation page URL against what a well-built one should include, and notes concrete gaps — the same audit Show Rate Setup runs when a client already has a page, standalone. Does not build or deploy a new page — see pin-down-confirmation-page for that.",
+    description: "Audits an existing confirmation page URL against what a well-built one should include, and notes concrete gaps, the same audit Show Rate Setup runs when a client already has a page, standalone. Does not build or deploy a new page, see pin-down-confirmation-page for that.",
   },
   "pin-down-confirmation-page": {
     id: "pin-down-confirmation-page",
     name: "Rebuild Confirmation Page",
-    description: "Rebuilds and republishes the Pin-Down confirmation page using the client's current offer, testimonials, top call questions, hero video, and design match — the same build+deploy Show Rate Setup ran once at onboarding, standalone, on demand. Use after the client's offer, proof, or hero video changes, or their site gets a new look. Does not re-run voice extraction, scripts, or ad briefs — those are their own standalone actions.",
+    description: "Rebuilds and republishes the Pin-Down confirmation page using the client's current offer, testimonials, top call questions, hero video, and design match, the same build+deploy Show Rate Setup ran once at onboarding, standalone, on demand. Use after the client's offer, proof, or hero video changes, or their site gets a new look. Does not re-run voice extraction, scripts, or ad briefs, those are their own standalone actions.",
   },
   "rep-engine-adhoc-check": {
     id: "rep-engine-adhoc-check",
     name: "AI Engine Spot-Check",
     description:
-      "Asks the client's configured AI engines a live, one-off question right now — about the client themselves, or about a named competitor already tracked in their identity graph. A live snapshot, not part of the scheduled AI Engine Watch panel — nothing gets written to the client's monitoring history.",
+      "Asks the client's configured AI engines a live, one-off question right now, about the client themselves, or about a named competitor already tracked in their identity graph. A live snapshot, not part of the scheduled AI Engine Watch panel, nothing gets written to the client's monitoring history.",
   },
   "rep-crisis-stress-test": {
     id: "rep-crisis-stress-test",
     name: "Crisis Threshold Stress-Test",
     description:
-      "Scores a hypothetical finding through the exact same severity model the real Crisis Response skill uses, and reports whether it would cross this client's threshold — without declaring a real incident or notifying anyone. Lets an operator tune a client's threshold before a real crisis, not just react during one.",
+      "Scores a hypothetical finding through the exact same severity model the real Crisis Response skill uses, and reports whether it would cross this client's threshold. Without declaring a real incident or notifying anyone. Lets an operator tune a client's threshold before a real crisis, not just react during one.",
   },
   "rep-draft-response": {
     id: "rep-draft-response",
     name: "Draft a Response",
     description:
-      "Drafts a suggested public response to a flagged Trustpilot/Reddit/X finding (or an AI-engine answer), in the operator's own brand voice when one's on file. Does not post anywhere — the draft is for a human to review, edit, and post themselves.",
+      "Drafts a suggested public response to a flagged Trustpilot/Reddit/X finding (or an AI-engine answer), in the operator's own brand voice when one's on file. Does not post anywhere. The draft is for a human to review, edit, and post themselves.",
   },
   "rep-twitter-deep-scan": {
     id: "rep-twitter-deep-scan",
     name: "X/Twitter Deep Scan",
     description:
-      "Scans X/Twitter back to a specific date, further than the regular daily watch's recent-only window — using X's own since: search operator, not a guess. Real mentions found this way get added to the client's real monitoring history, same as the regular watch.",
+      "Scans X/Twitter back to a specific date, further than the regular daily watch's recent-only window. Using X's own since: search operator, not a guess. Real mentions found this way get added to the client's real monitoring history, same as the regular watch.",
   },
   "rep-trustpilot-deep-scan": {
     id: "rep-trustpilot-deep-scan",
     name: "Trustpilot Deep Scan",
     description:
-      "Scans Trustpilot back to a specific date using Outscraper's own documented cutoff parameter — a real, exact date-bound fetch, not a guess. Real reviews found this way get added to the client's real monitoring history, same as the regular watch.",
+      "Scans Trustpilot back to a specific date using Outscraper's own documented cutoff parameter. A real, exact date-bound fetch, not a guess. Real reviews found this way get added to the client's real monitoring history, same as the regular watch.",
   },
   "rep-reddit-deep-scan": {
     id: "rep-reddit-deep-scan",

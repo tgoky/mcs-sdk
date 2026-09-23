@@ -96,7 +96,7 @@ export async function upsertBookingRoster(
   }
 
   if (eventKind !== "created") {
-    return { wrote: false, reason: `Unclassified event kind (${eventKind}) — not written to roster` };
+    return { wrote: false, reason: `Unclassified event kind (${eventKind}), not written to roster` };
   }
 
   const callTime = extractCallTime(payload);

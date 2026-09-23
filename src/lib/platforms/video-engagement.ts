@@ -114,7 +114,7 @@ async function getYouTubeAggregateContext(accessToken: string, channelId: string
       watched: (row[1] ?? 0) > 0, // views > 0
       percentWatched: row[0] != null ? Math.round(row[0]) : null, // averageViewPercentage (aggregate, not per-prospect)
       lastWatchedAt: null,
-      note: "Aggregate video-level stats only — YouTube Analytics doesn't support per-viewer identity lookups, so this isn't specific to this prospect.",
+      note: "Aggregate video-level stats only. YouTube Analytics doesn't support per-viewer identity lookups, so this isn't specific to this prospect.",
     };
   } catch {
     return EMPTY;
@@ -134,7 +134,7 @@ async function getYouTubeAggregateContext(accessToken: string, channelId: string
 async function getLoomEngagement(): Promise<VideoEngagementSummary> {
   return {
     ...EMPTY,
-    note: "Loom has no public viewer-analytics API — engagement can't be pulled automatically for this platform.",
+    note: "Loom has no public viewer-analytics API. Engagement can't be pulled automatically for this platform.",
   };
 }
 

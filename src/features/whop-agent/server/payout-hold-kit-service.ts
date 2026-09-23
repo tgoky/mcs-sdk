@@ -45,7 +45,7 @@ export interface PayoutHoldPacket {
 
 function draftEscalationMessage(health: WhopAccountHealth | null, identity: WhopIdentityProfile | null): string {
   const lines = [
-    "Subject: Payout hold / suspension — requesting review",
+    "Subject: Payout hold / suspension (requesting review)",
     "",
     "Hello Whop Support,",
     "",
@@ -126,8 +126,8 @@ export async function assemblePayoutHoldPacket(engagementId: string): Promise<{ 
           identityProfile ? `Payout status: ${identityProfile.payout_status ?? "unknown"}` : "",
           `${payoutMethods.length} payout method(s) found`,
         ].filter(Boolean),
-        whatFailed: gatheredManually.length ? gatheredManually.map((g) => `${g} — needs manual gathering`) : [],
-        openItems: ["The agent does not contact Whop support — send the drafted escalation and packet yourself."],
+        whatFailed: gatheredManually.length ? gatheredManually.map((g) => `${g} (needs manual gathering)`) : [],
+        openItems: ["The agent does not contact Whop support. Send the drafted escalation and packet yourself."],
         decisionsMade: [],
       },
     });

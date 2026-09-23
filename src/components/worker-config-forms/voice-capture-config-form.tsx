@@ -150,7 +150,7 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
           onChange={setSubjectVariants}
           placeholder={"chatgpt on {company_name}\n{company_name}'s show rate\nquick read on {company_name}"}
           rows={4}
-          helpText="No em/en dashes, exclamation points, emoji, or {first_name} — these get rejected on save."
+          helpText="No em/en dashes, exclamation points, emoji, or {first_name}. These get rejected on save."
         />
       ),
     },
@@ -179,7 +179,7 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Voice Capture{buyer ? ` — ${buyer}` : ""}</h1>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Voice Capture{buyer ? `: ${buyer}` : ""}</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Greeting, sign-off, tone, and the rotated subject/body pools Daily Send writes with.</p>
         </div>
         <button type="button" onClick={onCancel} className="shrink-0 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">

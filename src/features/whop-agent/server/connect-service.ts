@@ -47,13 +47,13 @@ export async function connectWhopAccount(engagementId: string, apiKey: string): 
     const probe = await runScopeProbe(trimmed);
 
     if (probe.hardStopped) {
-      await logStep(runId, { phase: "scope_probe", status: "failed", detail: "GET /v1/accounts failed — key invalid or has no account." });
+      await logStep(runId, { phase: "scope_probe", status: "failed", detail: "GET /v1/accounts failed. Key invalid or has no account." });
       await finishRun(runId, {
         status: "skipped",
         summary: {
           whatWasAttempted: ["Ran the Whop scope probe"],
           whatWorked: [],
-          whatFailed: ["GET /v1/accounts rejected the key — nothing else could be probed"],
+          whatFailed: ["GET /v1/accounts rejected the key. Nothing else could be probed"],
           openItems: ["Operator needs to paste a valid Whop API key with an account attached"],
           decisionsMade: [],
         },
@@ -75,7 +75,7 @@ export async function connectWhopAccount(engagementId: string, apiKey: string): 
     await logStep(runId, {
       phase: "pin_selection",
       status: pinnedVersionDate ? "success" : "failed",
-      detail: pinnedVersionDate ? `Validated pin: ${pinnedVersionDate}` : "No candidate date validated — webhook/REST calls will run unpinned until this is resolved.",
+      detail: pinnedVersionDate ? `Validated pin: ${pinnedVersionDate}` : "No candidate date validated. Webhook/REST calls will run unpinned until this is resolved.",
     });
 
     await logStep(runId, { phase: "persist_connection", status: "running" });
@@ -117,7 +117,7 @@ export async function connectWhopAccount(engagementId: string, apiKey: string): 
         whatWasAttempted: ["Probed 15 Whop endpoints", "Detected credential type", "Validated an Api-Version-Date pin"],
         whatWorked: [`${unlockedCount} of ${Object.keys(probe.results).length} probes unlocked`, `Credential type: ${credentialType}`],
         whatFailed: lockedLabels.length ? [`Locked: ${lockedLabels.join(", ")}`] : [],
-        openItems: pinnedVersionDate ? [] : ["No validated version-date pin — resolve before enabling webhook-driven skills"],
+        openItems: pinnedVersionDate ? [] : ["No validated version-date pin. Resolve before enabling webhook-driven skills"],
         decisionsMade: [`Stored Bot API key for this engagement`, `Pinned version date: ${pinnedVersionDate ?? "none"}`],
       },
     });

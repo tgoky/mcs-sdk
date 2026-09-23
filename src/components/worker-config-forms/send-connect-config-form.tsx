@@ -200,12 +200,12 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
               </button>
             </div>
             {icps.length === 0 && (
-              <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400">No ICPs locked yet — run ICP Lock first, then come back to map each one to a campaign.</p>
+              <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400">No ICPs locked yet. Run ICP Lock first, then come back to map each one to a campaign.</p>
             )}
             {fetchingCampaigns && <p className="text-[11px] italic font-mono text-zinc-500 dark:text-zinc-400 animate-pulse">⚡ Contacting {SEND_PLATFORM_LABELS[platform]}… fetching live campaigns…</p>}
             {campaignsError && !fetchingCampaigns && (
               <div className="rounded-sm p-3 text-[11px] font-mono border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 shadow-sm">
-                ⚠ Couldn&apos;t load campaigns: {campaignsError} — you can still paste a campaign id by hand below.
+                ⚠ Couldn&apos;t load campaigns: {campaignsError} : you can still paste a campaign id by hand below.
               </div>
             )}
             {mapRows.map((row, i) => (
@@ -293,7 +293,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
   const summaryLines: string[] = [
     `Outbound sends go through ${SEND_PLATFORM_LABELS[platform]}.`,
     cleanRows.length === 0
-      ? "No ICP has a campaign mapped yet — nothing will send until at least one is."
+      ? "No ICP has a campaign mapped yet. Nothing will send until at least one is."
       : `${cleanRows.length} ICP${cleanRows.length === 1 ? "" : "s"} mapped to a live campaign.`,
     pushIcpList.length === 0
       ? "Every matched lead is held for human review before sending."
@@ -304,7 +304,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Send Connect{buyer ? ` — ${buyer}` : ""}</h1>
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Send Connect{buyer ? ` for ${buyer}` : ""}</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">The sending platform, campaign map, and which ICPs are allowed to auto-push.</p>
         </div>
         <button type="button" onClick={onCancel} className="shrink-0 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">

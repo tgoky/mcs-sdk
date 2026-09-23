@@ -57,12 +57,12 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
 
   const client = await WhopAgentClient.forEngagement(engagementId);
   if (!client.accountId) {
-    throw new Error("This connection has no Whop account id on file — reconnect before creating a webhook.");
+    throw new Error("This connection has no Whop account id on file. Reconnect before creating a webhook.");
   }
   if (!client.pinnedVersionDate) {
     // Section 2.6: "the agent never creates an unpinned webhook under any
     // circumstance." Enforced here, not left to the caller to remember.
-    throw new Error("No validated Api-Version-Date pin on file — cannot create a webhook until pin selection succeeds.");
+    throw new Error("No validated Api-Version-Date pin on file. Cannot create a webhook until pin selection succeeds.");
   }
 
   const url = webhookReceiverUrl(engagementId);
@@ -75,7 +75,7 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
 
   const secret = created.secret ?? created.signing_secret ?? created.webhook_secret;
   if (!secret) {
-    throw new Error("Whop did not return a signing secret for the new webhook subscription — cannot verify future deliveries on it.");
+    throw new Error("Whop did not return a signing secret for the new webhook subscription. Cannot verify future deliveries on it.");
   }
 
   const groupKey = duplicateGroupKey(url, sortedEvents);

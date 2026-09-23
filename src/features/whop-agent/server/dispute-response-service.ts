@@ -91,7 +91,7 @@ async function draftNarrative(runId: string, dispute: WhopDispute, alert: WhopDi
     runId,
     maxTokens: 700,
     system:
-      "You write the factual narrative for a Whop payment dispute's evidence submission. Write only what the provided facts support — never invent dates, amounts, or claims not given to you. " +
+      "You write the factual narrative for a Whop payment dispute's evidence submission. Write only what the provided facts support. Never invent dates, amounts, or claims not given to you. " +
       "Structure: 1) what the customer purchased and when, 2) evidence of service delivery / access / usage if provided, 3) a factual, non-defensive statement of why the charge was legitimate. " +
       "Keep it to 3-5 sentences, professional, no exclamation points, no invented specifics. Respond with ONLY the narrative text.",
     userMessage: [
@@ -122,7 +122,7 @@ export async function assembleDisputeResponse(engagementId: string, disputeId: s
       // Section 5.10: pre-chargeback window still open — the recommended
       // action may be a proactive refund rather than an evidence packet.
       // That's an operator decision this agent surfaces, not makes.
-      await logStep(runId, { phase: "actionable_branch", status: "success", detail: "Alert is actionable — pre-chargeback window still open. Consider a proactive refund before the chargeback lands." });
+      await logStep(runId, { phase: "actionable_branch", status: "success", detail: "Alert is actionable. Pre-chargeback window still open. Consider a proactive refund before the chargeback lands." });
     }
 
     await logStep(runId, { phase: "evidence_window_check", status: "running" });
@@ -157,7 +157,7 @@ export async function assembleDisputeResponse(engagementId: string, disputeId: s
       // that draft rather than assembling from zero."
       usedGeneratedResponse = true;
       notes = dispute.generated_response_attachment;
-      await logStep(runId, { phase: "narrative_draft", status: "success", detail: "Whop had already generated a draft — using it as the starting point." });
+      await logStep(runId, { phase: "narrative_draft", status: "success", detail: "Whop had already generated a draft. Using it as the starting point." });
     } else {
       await logStep(runId, { phase: "narrative_draft", status: "running" });
       notes = await draftNarrative(runId, dispute, alert, courseCompletionSummary);
@@ -175,7 +175,7 @@ export async function assembleDisputeResponse(engagementId: string, disputeId: s
         whatWasAttempted: ["Evidence window check", "Course completion gather", "Narrative draft"],
         whatWorked: [usedGeneratedResponse ? "Improved Whop's own generated draft" : "Drafted narrative from scratch", courseCompletionSummary ? "Course completion evidence included" : ""].filter(Boolean),
         whatFailed: [],
-        openItems: gatheredManually.map((g) => `${g} — attach manually before submitting`),
+        openItems: gatheredManually.map((g) => `${g} (attach manually before submitting)`),
         decisionsMade: [],
       },
     });
@@ -196,13 +196,13 @@ export async function queueDisputeEvidenceSubmit(engagementId: string, disputeId
   const client = await WhopAgentClient.forEngagement(engagementId);
   const dispute = await checkEvidenceWindow(client, disputeId);
   if (dispute.evidence_editable === false) {
-    throw new Error(`Evidence window closed: ${dispute.evidence_locked_reason ?? "unknown reason"} — cannot queue submission.`);
+    throw new Error(`Evidence window closed: ${dispute.evidence_locked_reason ?? "unknown reason"}. Cannot queue submission.`);
   }
   return queuePendingAction(
     engagementId,
     "whop_dispute_evidence_submit",
     { disputeId, draft },
-    `Submit dispute evidence for ${disputeId}? This is the most consequential customer-facing communication Whop mediates — review the narrative before approving.`
+    `Submit dispute evidence for ${disputeId}? This is the most consequential customer-facing communication Whop mediates. Review the narrative before approving.`
   );
 }
 
@@ -213,7 +213,7 @@ export async function executeDisputeEvidenceSubmit(engagementId: string, dispute
   // queue and approval.
   const dispute = await checkEvidenceWindow(client, disputeId);
   if (dispute.evidence_editable === false) {
-    throw new Error(`Evidence window closed between queue and approval: ${dispute.evidence_locked_reason ?? "unknown reason"} — submit aborted.`);
+    throw new Error(`Evidence window closed between queue and approval: ${dispute.evidence_locked_reason ?? "unknown reason"}. Submit aborted.`);
   }
 
   await client.request("disputes.evidence_submit", `/v1/disputes/${disputeId}/evidence`, {
@@ -224,6 +224,6 @@ export async function executeDisputeEvidenceSubmit(engagementId: string, dispute
 
   const verify = await checkEvidenceWindow(client, disputeId);
   if (verify.evidence_editable !== false) {
-    throw new Error(`Read-back after submitting evidence for ${disputeId} did not confirm the lock — flagging for manual verification in the Whop portal.`);
+    throw new Error(`Read-back after submitting evidence for ${disputeId} did not confirm the lock. Flagging for manual verification in the Whop portal.`);
   }
 }

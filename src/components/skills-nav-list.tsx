@@ -163,7 +163,7 @@ function InstalledSkillsList({
               href="/dashboard/library"
               className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
             >
-              No skills installed yet — visit the Library to turn one on.
+              No skills installed yet. Visit the Library to turn one on.
             </Link>
           ) : (
             <div className="grid grid-cols-3 gap-1.5 px-0.5 pt-0.5">
@@ -188,7 +188,7 @@ function InstalledSkillsList({
                         <AnySkillBadge skill={entry.skillId} size={18} />
                         {needsAttention && (
                           <span
-                            title={`${entry.label} — failing on its most recent run`}
+                            title={`${entry.label} is failing on its most recent run`}
                             className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950"
                           />
                         )}

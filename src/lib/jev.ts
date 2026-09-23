@@ -119,11 +119,11 @@ function resolveTransport(): { url: string; apiKey: string; defaultModel: string
   const useOpenRouter = process.env.JEV_TRANSPORT === "openrouter";
   if (useOpenRouter) {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error("OPENROUTER_API_KEY not set — required for JEV_TRANSPORT=openrouter.");
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY not set. Required for JEV_TRANSPORT=openrouter.");
     return { url: OPENROUTER_URL, apiKey, defaultModel: OPENROUTER_MODEL };
   }
   const apiKey = process.env.TYPESAFE_API_KEY;
-  if (!apiKey) throw new Error("TYPESAFE_API_KEY not set — required to call Jev directly. Set JEV_TRANSPORT=openrouter to use OPENROUTER_API_KEY instead.");
+  if (!apiKey) throw new Error("TYPESAFE_API_KEY not set. Required to call Jev directly. Set JEV_TRANSPORT=openrouter to use OPENROUTER_API_KEY instead.");
   return { url: TYPESAFE_DIRECT_URL, apiKey, defaultModel: TYPESAFE_DIRECT_MODEL };
 }
 

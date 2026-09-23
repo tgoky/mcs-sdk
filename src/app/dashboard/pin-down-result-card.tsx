@@ -117,7 +117,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
             {isPasteReady ? "!" : "✓"}
           </span>
           <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {isPasteReady ? "Setup complete — one manual step left" : "Setup complete"}
+            {isPasteReady ? "Setup complete: one manual step left" : "Setup complete"}
           </span>
         </div>
         <p className="text-sm font-normal leading-relaxed">
@@ -185,7 +185,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       {data.pinDownPageAudit && (
         <div className="rounded-lg p-4 space-y-3 shadow-sm bg-card border border-border">
           <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
-            Existing Page Audit — {data.pinDownPageAudit.auditedUrl}
+            Existing Page Audit: {data.pinDownPageAudit.auditedUrl}
           </p>
           {data.pinDownPageAudit.existingPageStrengths.length > 0 && (
             <div>

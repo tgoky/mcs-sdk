@@ -42,10 +42,10 @@ Match this brand voice as closely as SMS's terse format allows:
 ${JSON.stringify(input.brandVoiceProfile ?? {})}
 
 Offer: ${JSON.stringify(input.offerDetails ?? {})}
-Top objections on file (use at most one, only if it fits naturally — don't force it): ${JSON.stringify(input.topObjections ?? [])}
+Top objections on file (use at most one, only if it fits naturally, don't force it): ${JSON.stringify(input.topObjections ?? [])}
 
 Write exactly 3 SMS messages for the pre-call sequence:
-1. Immediate booking confirmation — warm, short, sets the date/time expectation (assume the actual date/time is merge-tagged in by the platform, don't invent one).
+1. Immediate booking confirmation, warm, short, sets the date/time expectation (assume the actual date/time is merge-tagged in by the platform, don't invent one).
 2. A reminder/value-reinforcement message sent partway through the wait, reinforcing why the call is worth keeping.
 3. A final reminder shortly before the call, with a clear "see you soon" close.
 
@@ -53,7 +53,7 @@ Hard rules:
 - Each message under 320 characters (2 SMS segments), ideally under 160 (1 segment).
 - No emoji unless the brand voice explicitly reads as casual/playful.
 - Never fabricate a specific stat or claim not present in the offer/voice data above.
-- Do not include a STOP/HELP compliance line yourself — that's appended separately.
+- Do not include a STOP/HELP compliance line yourself, that's appended separately.
 - Plain text only, no markdown.
 
 Return ONLY a JSON array, no prose, no markdown fences:

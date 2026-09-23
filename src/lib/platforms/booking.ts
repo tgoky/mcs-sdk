@@ -564,7 +564,7 @@ export class CalendlyClient {
     if (!res.ok) {
       const errorText = await res.text().catch(() => "unknown");
       throw new Error(
-        `Calendly profile check failed [${res.status}] — check the API key. Response: ${errorText}`
+        `Calendly profile check failed [${res.status}]. Check the API key. Response: ${errorText}`
       );
     }
     const data = await res.json();
@@ -981,7 +981,7 @@ export class GHLCalendarClient {
     const calendars = data.calendars ?? [];
     const chosen = calendars.find((c) => c.isActive !== false) ?? calendars[0];
     if (!chosen) {
-      throw new Error(`No calendars found for GHL location ${this.locationId} — nothing to poll.`);
+      throw new Error(`No calendars found for GHL location ${this.locationId}. Nothing to poll.`);
     }
     this.calendarIdCache = chosen.id;
     return chosen.id;
