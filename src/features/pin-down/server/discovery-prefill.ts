@@ -1,6 +1,18 @@
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
-import { scrapeVoiceCorpus } from "./voice-scraper";
-import { scrapeDesignSignal, type DesignSignalResult } from "./design-scraper";
+import { crawlSite } from "./voice-scraper";
+import { designSignalFromHtml, scrapeDesignSignal, type DesignSignalResult } from "./design-scraper";
+import {
+  detectTechStack,
+  extractBookingLinks,
+  extractContactAndBrand,
+  extractJsonLd,
+  extractSocialProfiles,
+  linksFromHtml,
+  type BookingLink,
+  type ContactAndBrand,
+  type JsonLdSignals,
+  type TechStack,
+} from "./site-signals";
 import { fetchWithTimeout } from "@/lib/http";
 
 /**
@@ -13,7 +25,7 @@ import { fetchWithTimeout } from "@/lib/http";
  */
 
 export interface HarvestedReviewBaseline {
-  platform: "trustpilot" | "google" | "g2";
+  platform: "trustpilot" | "google" | "g2" | "site";
   rating?: number;
   reviewCount?: number;
   label?: string;
@@ -43,7 +55,37 @@ export interface DiscoveryPrefillResult {
   detectedBookingPlatform?: string;
   detectedHostingPlatform?: string;
   designSignal?: DesignSignalResult;
+  /** Everything read from the site beyond the basics above. */
+  deep?: DeepSiteReading;
   notes: string[];
+}
+
+export interface SiteTestimonial {
+  quote: string;
+  name?: string;
+  role?: string;
+  company?: string;
+  result?: string;
+  sourceUrl?: string;
+}
+
+export interface DeepSiteReading {
+  testimonials: SiteTestimonial[];
+  faqs: { question: string; answer?: string }[];
+  objections: string[];
+  offers: { name: string; price?: string; billing?: string; description?: string }[];
+  guarantee?: string;
+  founder?: { name: string; role?: string };
+  team: { name: string; role?: string }[];
+  primaryCta?: string;
+  caseStudyResults: string[];
+  pressMentions: string[];
+  socialProfiles: Record<string, string>;
+  bookingLinks: BookingLink[];
+  techStack: TechStack;
+  contact: ContactAndBrand & { address?: string };
+  jsonLd: Pick<JsonLdSignals, "organizationName" | "rating" | "offers">;
+  pagesRead: { kind: string; url: string; wordCount: number }[];
 }
 
 const CONFIRMATION_PAGE_PATHS = [
@@ -121,20 +163,43 @@ export function extractEmbeddedVideoUrl(html: string | null): string | undefined
   return match?.[1];
 }
 
-async function detectExistingConfirmationPage(base: string): Promise<string | undefined> {
-  const results = await Promise.all(
-    CONFIRMATION_PAGE_PATHS.map(async (path) => {
-      const html = await fetchRaw(`${base}${path}`, 3000);
-      return html && html.length > 500 ? `${base}${path}` : undefined;
-    })
-  );
-  return results.find((url): url is string => Boolean(url));
+const CONFIRMATION_WORDING = /\b(you'?re (all )?(set|booked|confirmed|in)|call (is )?(confirmed|booked|scheduled)|booking (is )?confirmed|see you (on|soon)|thank(s| you) for (booking|scheduling)|what to expect|before (our|your) call|next steps)\b/i;
+
+function titleOf(html: string): string {
+  return (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").trim().toLowerCase();
 }
 
-function detectBookingPlatform(homepageHtml: string | null): string | undefined {
-  if (!homepageHtml) return undefined;
-  for (const sig of BOOKING_PLATFORM_SIGNATURES) {
-    if (sig.pattern.test(homepageHtml)) return sig.platform;
+/**
+ * Finds a confirmation page the client already has. Many sites answer any
+ * address with their homepage (and a 200), which used to make every one of
+ * them "have" a confirmation page; a page only counts now when it differs
+ * from what the site returns for a nonsense address and reads like a
+ * confirmation.
+ */
+async function detectExistingConfirmationPage(base: string): Promise<string | undefined> {
+  const [nonsense, ...candidates] = await Promise.all([
+    fetchRaw(`${base}/__not-a-real-page-${Date.now().toString(36)}`, 3000),
+    ...CONFIRMATION_PAGE_PATHS.map((path) => fetchRaw(`${base}${path}`, 3000).then((html) => ({ path, html }))),
+  ]) as [string | null, ...{ path: string; html: string | null }[]];
+  const fallbackTitle = nonsense ? titleOf(nonsense) : null;
+  const fallbackLength = nonsense?.length ?? 0;
+  for (const c of candidates) {
+    if (!c.html || c.html.length < 500) continue;
+    const sameAsFallback =
+      nonsense !== null && titleOf(c.html) === fallbackTitle && Math.abs(c.html.length - fallbackLength) < Math.max(200, fallbackLength * 0.03);
+    if (sameAsFallback) continue;
+    if (!CONFIRMATION_WORDING.test(stripHtmlForFallback(c.html))) continue;
+    return `${base}${c.path}`;
+  }
+  return undefined;
+}
+
+function detectBookingPlatform(pages: (string | null)[]): string | undefined {
+  for (const html of pages) {
+    if (!html) continue;
+    for (const sig of BOOKING_PLATFORM_SIGNATURES) {
+      if (sig.pattern.test(html)) return sig.platform;
+    }
   }
   return undefined;
 }
@@ -248,41 +313,131 @@ export async function fetchTrustpilotBaseline(domain: string): Promise<Harvested
   return null;
 }
 
+// ── The reading ────────────────────────────────────────────────────────
+
+/** Characters of crawled copy Claude reads: the whole deep crawl, not the
+ * first homepage-sized slice (6,000 characters used to cut off the
+ * pricing and proof pages the crawl had just paid for). */
+const READING_CHAR_BUDGET = 60_000;
+
+function normalizeForMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201c\u201d"'`*_>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** A testimonial or FAQ is only kept when its words are really on the site:
+ * the first stretch of it must appear in the crawled copy. Claude can't
+ * invent proof this way. */
+function appearsInCopy(snippet: string, copy: string): boolean {
+  const s = normalizeForMatch(snippet);
+  if (s.length < 12) return false;
+  return copy.includes(s.slice(0, Math.min(60, s.length)));
+}
+
+function strings(v: unknown, max = 12): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, max) : [];
+}
+
+function text(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() && v.trim().toLowerCase() !== "null" ? v.trim() : undefined;
+}
+
 /**
- * Runs the smart pre-fill pass.
+ * Runs the smart pre-fill pass: one deep crawl (voice-scraper.ts), the
+ * free signals from every page's HTML (site-signals.ts), and one Claude
+ * reading of all the copy.
  */
 export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPrefillResult> {
   const base = normalizeDomain(domain);
   const notes: string[] = [];
 
-  const [
-    homepageHtml,
-    { corpus, sources },
-    existingConfirmationPageUrl,
-    designSignal,
-    reviewBaseline,
-  ] = await Promise.all([
-    fetchRaw(base),
-    scrapeVoiceCorpus(domain),
+  const [crawl, existingConfirmationPageUrl, trustpilotBaseline] = await Promise.all([
+    crawlSite(domain),
     detectExistingConfirmationPage(base),
-    scrapeDesignSignal(domain).catch(() => null),
     fetchTrustpilotBaseline(base).catch(() => null),
   ]);
+  const { corpus, sources } = crawl;
 
-  const detectedBookingPlatform = detectBookingPlatform(homepageHtml);
+  // The rendered homepage from the crawl; a plain fetch only when the
+  // crawl couldn't get one.
+  const homepageHtml = crawl.homepageHtml ?? (await fetchRaw(base));
+  const pageHtml = [homepageHtml, ...sources.filter((s) => s.kind !== "marketing_site").map((s) => s.html ?? null)].filter(
+    (h): h is string => Boolean(h)
+  );
+  const allLinks = [
+    ...sources.flatMap((s) => s.links ?? []),
+    ...pageHtml.flatMap((h) => linksFromHtml(h, base)),
+  ];
+
+  // ── Free signals ──
+  const jsonLd = pageHtml.map(extractJsonLd).reduce<JsonLdSignals>(
+    (acc, j) => ({
+      organizationName: acc.organizationName ?? j.organizationName,
+      logoUrl: acc.logoUrl ?? j.logoUrl,
+      sameAs: [...acc.sameAs, ...j.sameAs],
+      telephone: acc.telephone ?? j.telephone,
+      email: acc.email ?? j.email,
+      address: acc.address ?? j.address,
+      offers: [...acc.offers, ...j.offers],
+      faqs: [...acc.faqs, ...j.faqs],
+      rating: acc.rating ?? j.rating,
+      reviews: [...acc.reviews, ...j.reviews],
+      people: [...acc.people, ...j.people],
+    }),
+    { sameAs: [], offers: [], faqs: [], reviews: [], people: [] }
+  );
+  const socialProfiles = extractSocialProfiles([...allLinks, ...jsonLd.sameAs]);
+  const bookingLinks = pageHtml.flatMap(extractBookingLinks).filter((l, i, arr) => arr.findIndex((x) => x.url === l.url) === i);
+  const techStack = detectTechStack(pageHtml);
+  const contact = homepageHtml ? extractContactAndBrand(homepageHtml, base) : { emails: [], phones: [] };
+
+  const detectedBookingPlatform = bookingLinks[0]?.platform ?? detectBookingPlatform(pageHtml);
   const detectedHostingPlatform = detectHostingPlatform(homepageHtml);
-  const suggestedHandles = extractSocialAndReviewHandles(homepageHtml, base);
-  const suggestedHeroVideoUrl = extractEmbeddedVideoUrl(homepageHtml);
+  // The long-standing handle map, now from every page and every network.
+  const suggestedHandles = { ...extractSocialAndReviewHandles(homepageHtml, base), ...socialProfiles };
+  const suggestedHeroVideoUrl = pageHtml.map(extractEmbeddedVideoUrl).find(Boolean);
+  // Colors and fonts from the homepage HTML the crawl already has; a
+  // separate paid call only when it has none.
+  const designSignal = designSignalFromHtml(homepageHtml) ?? (homepageHtml ? null : await scrapeDesignSignal(domain).catch(() => null));
+  const reviewBaseline: HarvestedReviewBaseline | null =
+    trustpilotBaseline ??
+    (jsonLd.rating ? { platform: "site", rating: jsonLd.rating.value, reviewCount: jsonLd.rating.count, label: "From the site's own review data" } : null);
 
   let textToAnalyze = "";
   let usedFallback = false;
-
   if (corpus && corpus.trim().length > 50) {
     textToAnalyze = corpus;
   } else if (homepageHtml) {
     textToAnalyze = stripHtmlForFallback(homepageHtml);
     usedFallback = true;
   }
+
+  const deep: DeepSiteReading = {
+    testimonials: [],
+    faqs: jsonLd.faqs.slice(0, 20),
+    objections: [],
+    offers: [],
+    team: [],
+    caseStudyResults: [],
+    pressMentions: [],
+    socialProfiles,
+    bookingLinks,
+    techStack,
+    contact: {
+      ...contact,
+      emails: [...new Set([...(jsonLd.email ? [jsonLd.email.toLowerCase()] : []), ...contact.emails])],
+      phones: [...new Set([...(jsonLd.telephone ? [jsonLd.telephone] : []), ...contact.phones])],
+      logoUrl: contact.logoUrl ?? jsonLd.logoUrl,
+      address: jsonLd.address,
+    },
+    jsonLd: { organizationName: jsonLd.organizationName, rating: jsonLd.rating, offers: jsonLd.offers },
+    pagesRead: sources.map((s) => ({ kind: s.kind, url: s.url, wordCount: s.wordCount })),
+  };
+  const founderFromLd = jsonLd.people.find((p) => /founder|ceo|owner/i.test(p.jobTitle ?? ""));
+  if (founderFromLd) deep.founder = { name: founderFromLd.name, role: founderFromLd.jobTitle };
 
   if (textToAnalyze.trim().length < 20) {
     notes.push("Couldn't pull readable text from the domain. Fill in details manually.");
@@ -297,12 +452,13 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
       detectedBookingPlatform,
       detectedHostingPlatform,
       designSignal: designSignal ?? undefined,
+      deep,
       notes,
     };
   }
 
   if (usedFallback) {
-    notes.push("Used a basic HTML strip of the homepage. The voice corpus pipeline didn't return enough. Results may be less accurate.");
+    notes.push("Used a basic HTML strip of the homepage. The crawl didn't return enough. Results may be less accurate.");
   }
 
   let suggestedBuyerName: string | undefined;
@@ -314,97 +470,120 @@ export async function runDiscoveryPrefill(domain: string): Promise<DiscoveryPref
   let suggestedEntities: string[] | undefined;
   let suggestedSeedPrompts: string[] | undefined;
 
+  // Structured data the site publishes about itself, given to Claude as
+  // the most reliable evidence on the page.
+  const structuredHints = {
+    organizationName: jsonLd.organizationName,
+    offers: jsonLd.offers.slice(0, 10),
+    people: jsonLd.people.slice(0, 10),
+  };
+
   try {
     const result = await callClaudeWithRetry({
-      model: MODEL.FAST,
-      system: `You infer basic business facts and reputation intelligence from marketing site text. Given the text below, return ONLY a JSON object:
+      model: MODEL.SYNTHESIS,
+      system: `You read a business's website (several pages, each headed [page_kind url]) and pull out the facts a sales team needs. Return ONLY a JSON object:
 {
-  "buyer_name": "the company or personal brand name, or null if unclear",
-  "offer_name": "the primary product/service/offer name being sold, or null if unclear",
-  "offer_price": "pricing details or estimated tier e.g. $997, $5k/mo, or null if unclear",
-  "offer_vertical": "industry or vertical e.g. B2B SaaS, Agency, Coaching, Fitness, or null if unclear",
-  "icp": "one sentence describing who this is for (their ideal customer), or null if unclear",
-  "competitors": ["2 to 4 direct category competitors or alternative solutions named or implied in the text, or [] if none"],
-  "entities": ["sub-brands, proprietary product/tier names, or featured publications, or [] if none"],
-  "seed_prompts": ["5 to 8 starting questions prospective customers would ask an AI engine (ChatGPT/Claude/Perplexity) about this business, or [] if none"]
+  "buyer_name": "the company or personal brand name, or null",
+  "offer_name": "the main offer people book a call about, or null",
+  "offer_price": "its price exactly as the site states it (e.g. $997, $5k/mo), or null if the site doesn't state one",
+  "offer_vertical": "industry, e.g. B2B SaaS, Agency, Coaching, Fitness, or null",
+  "icp": "one sentence on who this is for, or null",
+  "offers": [{ "name": "each offer or pricing tier", "price": "as stated, or null", "billing": "one-time / monthly / yearly / null", "description": "one line" }],
+  "testimonials": [{ "quote": "the testimonial copied WORD FOR WORD from the page", "name": "person or null", "role": "their title or null", "company": "or null", "result": "the outcome they describe, short, or null", "source_page": "the url it was on" }],
+  "faqs": [{ "question": "copied word for word", "answer": "the site's answer, shortened to 1-2 sentences" }],
+  "objections": ["worries or hesitations the copy answers or implies, phrased the way a prospect would say them (e.g. 'Is this too expensive for a small team?')"],
+  "guarantee": "the guarantee or refund terms as stated, or null",
+  "founder": { "name": "founder or main expert, or null", "role": "or null" },
+  "team": [{ "name": "named team members", "role": "or null" }],
+  "primary_cta": "the main call to action's wording, e.g. 'Book a strategy call', or null",
+  "case_study_results": ["specific results with numbers, e.g. 'Took Acme from $10k to $40k/mo in 90 days'"],
+  "press_mentions": ["publications or brands in 'as seen in' / logos sections"],
+  "competitors": ["2 to 4 direct competitors or alternatives named or implied"],
+  "entities": ["sub-brands, product or tier names, featured publications"],
+  "seed_prompts": ["5 to 8 questions a prospect would ask an AI engine about this business"]
 }
-Return nothing but the JSON object. No preamble, no markdown fences. If you aren't reasonably confident, use null or [] rather than guessing.`,
-      userMessage: textToAnalyze.slice(0, 6000),
-      maxTokens: 750,
+Rules: use only what the pages say. Copy testimonials and FAQ questions exactly; never write one. If something isn't there, use null or []. No preamble, no markdown fences.`,
+      userMessage: `Structured data the site publishes about itself:\n${JSON.stringify(structuredHints)}\n\nPages:\n${textToAnalyze.slice(0, READING_CHAR_BUDGET)}`,
+      maxTokens: 4000,
     });
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
+      const copy = normalizeForMatch(textToAnalyze + " " + pageHtml.map(stripHtmlForFallback).join(" "));
 
-      suggestedBuyerName =
-        parsed.buyer_name ??
-        parsed.buyerName ??
-        parsed.company_name ??
-        parsed.companyName ??
-        parsed.brand_name ??
-        undefined;
+      suggestedBuyerName = text(parsed.buyer_name) ?? jsonLd.organizationName;
+      suggestedOfferName = text(parsed.offer_name);
+      suggestedOfferPrice = text(parsed.offer_price);
+      suggestedOfferVertical = text(parsed.offer_vertical);
+      suggestedIcp = text(parsed.icp);
+      const competitors = strings(parsed.competitors, 6);
+      if (competitors.length) suggestedCompetitors = competitors;
+      const entities = strings(parsed.entities, 10);
+      if (entities.length) suggestedEntities = entities;
+      const prompts = strings(parsed.seed_prompts, 8);
+      if (prompts.length) suggestedSeedPrompts = prompts;
 
-      suggestedOfferName =
-        parsed.offer_name ??
-        parsed.offerName ??
-        parsed.product_name ??
-        parsed.productName ??
-        parsed.service_name ??
-        undefined;
-
-      suggestedOfferPrice =
-        parsed.offer_price ??
-        parsed.offerPrice ??
-        parsed.price ??
-        undefined;
-
-      suggestedOfferVertical =
-        parsed.offer_vertical ??
-        parsed.offerVertical ??
-        parsed.vertical ??
-        parsed.industry ??
-        undefined;
-
-      suggestedIcp =
-        parsed.icp ??
-        parsed.ideal_customer ??
-        parsed.idealCustomer ??
-        parsed.target_customer ??
-        parsed.targetCustomer ??
-        parsed.who_is_the_ideal_customer ??
-        parsed.target_audience ??
-        undefined;
-
-      if (Array.isArray(parsed.competitors)) {
-        const list = parsed.competitors
-          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
-          .map((item: string) => item.trim());
-        if (list.length > 0) suggestedCompetitors = list;
+      if (Array.isArray(parsed.offers)) {
+        deep.offers = parsed.offers
+          .filter((o: { name?: unknown }) => text(o?.name))
+          .slice(0, 12)
+          .map((o: Record<string, unknown>) => ({ name: text(o.name)!, price: text(o.price), billing: text(o.billing), description: text(o.description) }));
       }
-
-      if (Array.isArray(parsed.entities)) {
-        const list = parsed.entities
-          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
-          .map((item: string) => item.trim());
-        if (list.length > 0) suggestedEntities = list;
+      if (Array.isArray(parsed.testimonials)) {
+        deep.testimonials = parsed.testimonials
+          .filter((t: { quote?: unknown }) => text(t?.quote) && appearsInCopy(String(t.quote), copy))
+          .slice(0, 12)
+          .map((t: Record<string, unknown>) => ({
+            quote: text(t.quote)!,
+            name: text(t.name),
+            role: text(t.role),
+            company: text(t.company),
+            result: text(t.result),
+            sourceUrl: text(t.source_page),
+          }));
       }
-
-      const rawPrompts = parsed.seed_prompts ?? parsed.seedPrompts;
-      if (Array.isArray(rawPrompts)) {
-        const list = rawPrompts
-          .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
-          .map((item: string) => item.trim())
-          .slice(0, 8);
-        if (list.length > 0) suggestedSeedPrompts = list;
+      // The site's own review markup counts as testimonials too.
+      for (const r of jsonLd.reviews) {
+        if (deep.testimonials.length >= 12) break;
+        if (!deep.testimonials.some((t) => normalizeForMatch(t.quote) === normalizeForMatch(r.body))) deep.testimonials.push({ quote: r.body, name: r.author });
       }
+      if (Array.isArray(parsed.faqs)) {
+        const seen = new Set(deep.faqs.map((f) => normalizeForMatch(f.question)));
+        for (const f of parsed.faqs as Record<string, unknown>[]) {
+          const q = text(f?.question);
+          if (!q || seen.has(normalizeForMatch(q)) || !appearsInCopy(q, copy)) continue;
+          seen.add(normalizeForMatch(q));
+          deep.faqs.push({ question: q, answer: text(f.answer) });
+          if (deep.faqs.length >= 20) break;
+        }
+      }
+      deep.objections = strings(parsed.objections, 10);
+      deep.guarantee = text(parsed.guarantee);
+      const founderName = text(parsed.founder?.name);
+      if (!deep.founder && founderName) deep.founder = { name: founderName, role: text(parsed.founder?.role) };
+      if (Array.isArray(parsed.team)) {
+        deep.team = parsed.team
+          .filter((m: { name?: unknown }) => text(m?.name))
+          .slice(0, 12)
+          .map((m: Record<string, unknown>) => ({ name: text(m.name)!, role: text(m.role) }));
+      }
+      deep.primaryCta = text(parsed.primary_cta);
+      deep.caseStudyResults = strings(parsed.case_study_results, 10);
+      deep.pressMentions = strings(parsed.press_mentions, 12);
     }
-  } catch (e: any) {
-    notes.push(`Couldn't infer buyer/offer details from the crawl: ${e.message}`);
+  } catch (e: unknown) {
+    notes.push(`Couldn't read the offer details from the crawl: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  if (sources.length === 0) {
-    notes.push("Only the homepage was reachable. No separate sales or pricing page found for a richer voice sample.");
+  // A price the site publishes in its structured data beats a reading.
+  const publishedPrice = jsonLd.offers.find((o) => o.price);
+  if (!suggestedOfferPrice && publishedPrice?.price) {
+    suggestedOfferPrice = `${publishedPrice.currency === "USD" || !publishedPrice.currency ? "$" : `${publishedPrice.currency} `}${publishedPrice.price}`;
+  }
+
+  if (sources.length <= 1) {
+    notes.push("Only the homepage was reachable. No separate sales or pricing page found for a richer reading.");
   }
   if (existingConfirmationPageUrl) {
     notes.push(
@@ -412,7 +591,7 @@ Return nothing but the JSON object. No preamble, no markdown fences. If you aren
     );
   }
   if (!detectedBookingPlatform) {
-    notes.push("Couldn't detect a recognizable booking platform from the homepage HTML. Set booking_platform manually.");
+    notes.push("Couldn't detect a recognizable booking platform on the site. Set booking_platform manually.");
   }
   if (!designSignal) {
     notes.push("Couldn't extract visual design signal from the site. The confirmation page will use the default theme for whichever template you pick, not one matched to your site.");
@@ -437,6 +616,7 @@ Return nothing but the JSON object. No preamble, no markdown fences. If you aren
     detectedBookingPlatform,
     detectedHostingPlatform,
     designSignal: designSignal ?? undefined,
+    deep,
     notes,
   };
 }

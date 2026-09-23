@@ -170,17 +170,24 @@ export interface DesignSignalResult extends RawSiteSignal {
   screenshotUrl?: string;
 }
 
+/** The design signal from HTML already fetched (the site crawl's rendered
+ * homepage), so reading a site's look costs no extra call. */
+export function designSignalFromHtml(rawHtml: string | null | undefined): DesignSignalResult | null {
+  if (!rawHtml || rawHtml.length < 200) return null;
+  return {
+    classTokens: extractClassTokens(rawHtml),
+    colorMentions: extractColorMentions(rawHtml),
+    fontFamilyMentions: extractFontFamilyMentions(rawHtml),
+    looksDark: detectLooksDark(rawHtml),
+  };
+}
+
 export async function scrapeDesignSignal(domain: string): Promise<DesignSignalResult | null> {
   const base = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
   const fetched = await fetchRenderedHtmlViaFirecrawl(base);
   if (!fetched) return null;
 
   const { rawHtml, screenshotUrl } = fetched;
-  return {
-    classTokens: extractClassTokens(rawHtml),
-    colorMentions: extractColorMentions(rawHtml),
-    fontFamilyMentions: extractFontFamilyMentions(rawHtml),
-    looksDark: detectLooksDark(rawHtml),
-    screenshotUrl,
-  };
+  const signal = designSignalFromHtml(rawHtml);
+  return signal ? { ...signal, screenshotUrl } : null;
 }

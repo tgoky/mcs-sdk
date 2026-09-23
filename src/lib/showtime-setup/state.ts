@@ -54,6 +54,10 @@ function suggested(value: string, evidence: string | null, sourceDetail: string 
   return { value, tier: "likely", source: "rule", sourceDetail, evidence, confidence: null };
 }
 
+function listOf<T>(fact: ClientFact | undefined): T[] {
+  return fact && fact.status !== "rejected" && Array.isArray(fact.value) ? (fact.value as T[]) : [];
+}
+
 const ASK: SetupValue = { value: null, tier: "ask", source: null, sourceDetail: null, evidence: null, confidence: null };
 
 export async function loadShowtimeSetupState(engagementId: string, workspaceId: string): Promise<ShowtimeSetupState | null> {
@@ -125,8 +129,8 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
     );
     // The one that looks like this client's goes first.
     savedConnections.sort((a, b) => Number(b.bestMatch) - Number(a.bestMatch));
-    const siteFactKey = t.group === "booking" ? "bookingPlatform" : t.group === "hosting" ? "hostingPlatform" : null;
-    const siteFact = siteFactKey ? facts[siteFactKey] : undefined;
+    const siteFactKey = t.group === "booking" ? "bookingPlatform" : t.group === "hosting" ? "hostingPlatform" : "siteEmailPlatformHint";
+    const siteFact = facts[siteFactKey];
     const check = facts[`accountCheck:${t.provider}`]?.value as { matches?: boolean; probability?: number } | undefined;
     tools.push({
       provider: t.provider,
@@ -231,6 +235,17 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       !nonEmpty(offer.price) && planOptions && planOptions.status !== "rejected" && Array.isArray(planOptions.value)
         ? (planOptions.value as { name?: string; price?: string }[])
         : [],
+    siteReading: {
+      testimonials: listOf(facts.siteTestimonials),
+      faqs: listOf(facts.siteFaqs),
+      objections: listOf(facts.siteObjections),
+      objectionsTier: factTier(facts.siteObjections),
+      socialProfiles:
+        facts.socialProfiles && facts.socialProfiles.status !== "rejected" && typeof facts.socialProfiles.value === "object"
+          ? (facts.socialProfiles.value as Record<string, string>)
+          : {},
+      pagesRead: ((facts.siteCrawl?.value as { pages?: unknown[] } | undefined)?.pages ?? []).length,
+    },
     existingPage: {
       url:
         (typeof stack.existing_confirmation_page_url === "string" && stack.existing_confirmation_page_url) ||

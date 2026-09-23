@@ -10,7 +10,8 @@ import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-bri
 import { buildScriptPack } from "./script-builder";
 import { auditExistingConfirmationPage } from "./discovery-prefill";
 import { createPlatformAdapterDraft } from "./doc-researcher";
-import { scrapeVoiceCorpus, scrapeEspBroadcasts } from "./voice-scraper";
+import { scrapeVoiceCorpus, scrapeEspBroadcasts, type ScrapedSource } from "./voice-scraper";
+import { getClientFact } from "@/lib/client-facts";
 import { scrapeDesignSignal } from "./design-scraper";
 import { buildSmsSequence } from "@/features/pile-on/server/sms-sequence-builder";
 import { auditExistingPileOnSequence } from "@/features/pile-on/server/existing-sequence-builder";
@@ -283,10 +284,11 @@ export async function runPinDownOnboarding(
       const scrapeResult = await run("voice-scrape", async () => {
         await logStep(runId, { phase: "voice_scrape", status: "running" });
         try {
-const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
-  finalStack.buyer_domain!,
-  runId // 👈 Pass runId here
-);
+          // Setup already read this site (discover-client.ts); reuse that
+          // crawl rather than paying for the same pages again. A different
+          // domain, or no crawl on file, crawls fresh.
+          const cachedCrawl = await readCachedSiteCrawl(engagementId, finalStack.buyer_domain!);
+          const { corpus: scrapedCorpus, sources } = cachedCrawl ?? (await scrapeVoiceCorpus(finalStack.buyer_domain!, runId));
           let espSources: Array<{ text: string; wordCount: number }> = [];
           if (finalStack.email_platform) {
             const emailCred = await resolveCredential(engagementId, finalStack.email_platform).catch(() => null);
@@ -376,7 +378,8 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
       designSignal = await run("design-scrape", async () => {
         await logStep(runId, { phase: "design_scrape", status: "running" });
         try {
-          const signal = await scrapeDesignSignal(finalStack.buyer_domain!);
+          // Same reuse for the site's look: read from the setup crawl's HTML.
+          const signal = (await readCachedDesignSignal(engagementId, finalStack.buyer_domain!)) ?? (await scrapeDesignSignal(finalStack.buyer_domain!));
           await logStep(runId, {
             phase: "design_scrape",
             status: signal ? "success" : "skipped",
@@ -1010,4 +1013,27 @@ const { corpus: scrapedCorpus, sources } = await scrapeVoiceCorpus(
     await failRun(runId, error, { summary });
     throw error;
   }
+}
+
+// ── Reusing the setup crawl ─────────────────────────────────────────────
+
+function bareHost(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
+}
+
+/** The crawl setup already did of this same domain, shaped like a fresh
+ * scrapeVoiceCorpus result, or null when there isn't one to reuse. */
+async function readCachedSiteCrawl(engagementId: string, domain: string): Promise<{ corpus: string; sources: ScrapedSource[] } | null> {
+  const [corpus, crawl] = await Promise.all([getClientFact(engagementId, "rawVoiceCorpus"), getClientFact(engagementId, "siteCrawl")]);
+  if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) return null;
+  if (bareHost(corpus.sourceDetail) !== bareHost(domain)) return null;
+  const pages = ((crawl?.value as { pages?: { kind: ScrapedSource["kind"]; url: string; wordCount: number }[] } | undefined)?.pages ?? []).map((p) => ({ ...p, text: "" }));
+  return { corpus: corpus.value, sources: pages.length ? pages : [{ kind: "marketing_site", url: domain, wordCount: corpus.value.split(/\s+/).length, text: "" }] };
+}
+
+async function readCachedDesignSignal(engagementId: string, domain: string): Promise<Awaited<ReturnType<typeof scrapeDesignSignal>>> {
+  const fact = await getClientFact(engagementId, "designSignal");
+  if (!fact || !fact.value || typeof fact.value !== "object") return null;
+  if (bareHost(fact.sourceDetail) !== bareHost(domain)) return null;
+  return fact.value as Awaited<ReturnType<typeof scrapeDesignSignal>>;
 }

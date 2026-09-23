@@ -9,7 +9,7 @@ import { askJev } from "@/lib/jev";
 import { callClaude } from "@/lib/llm";
 import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
-import { resolveColdOpenDerivedFields, verifyWebsiteReadings } from "@/lib/field-resolvers";
+import { resolveColdOpenDerivedFields, resolveDeepSiteReadings, verifyWebsiteReadings } from "@/lib/field-resolvers";
 
 type Fact = { key: string; value: unknown; source: string; status: string; confidence: number | null };
 
@@ -227,5 +227,48 @@ describe("verifyWebsiteReadings", () => {
     const result = await verifyWebsiteReadings("e1");
     expect(result.skipped).toBe(true);
     expect(askJev).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveDeepSiteReadings", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("scores objections, picks the main offer among tiers and the sales-call link among several", async () => {
+    factStore({
+      rawVoiceCorpus: { value: "site copy" },
+      siteObjections: { value: ["Is it worth it?"], source: "llm" },
+      offerTiers: { value: [{ name: "Starter", price: "$99" }, { name: "Scale Sprint", price: "$2,500" }], source: "llm" },
+      bookingLinks: { value: [{ url: "https://calendly.com/a/support", platform: "calendly" }, { url: "https://calendly.com/a/strategy", platform: "calendly", event: "strategy" }] },
+    });
+    vi.mocked(askJev).mockResolvedValue({
+      model: "jev-1",
+      usage: { inputTokens: 1, outputTokens: 0 },
+      costInCents: 0,
+      answers: {
+        objectionsVerification: { type: "score", score: 4, confidence: 0.9, legend: {}, probabilities: {} },
+        mainOffer: { type: "choice", choice: "1", confidence: 0.8, probabilities: {} },
+        salesCallLink: { type: "choice", choice: "1", confidence: 0.95, probabilities: {} },
+      },
+    } as any);
+
+    await resolveDeepSiteReadings("e1");
+
+    expect(upsertFor("siteObjections")?.[3]).toMatchObject({ source: "jev", confidence: 90 });
+    expect(upsertFor("offerName")?.[2]).toBe("Scale Sprint");
+    expect(upsertFor("offerPrice")?.[2]).toBe("$2,500");
+    expect(upsertFor("salesCallBookingLink")?.[2]).toMatchObject({ url: "https://calendly.com/a/strategy" });
+  });
+
+  it("never re-picks an offer a person already settled, and takes a lone booking link as is", async () => {
+    factStore({
+      rawVoiceCorpus: { value: "site copy" },
+      offerName: { value: "Mine", status: "confirmed" },
+      offerTiers: { value: [{ name: "A" }, { name: "B" }], source: "llm" },
+      bookingLinks: { value: [{ url: "https://calendly.com/a/strategy", platform: "calendly" }] },
+    });
+    await resolveDeepSiteReadings("e1");
+    expect(askJev).not.toHaveBeenCalled();
+    expect(upsertFor("offerName")).toBeUndefined();
+    expect(upsertFor("salesCallBookingLink")?.[3]).toMatchObject({ source: "website" });
   });
 });

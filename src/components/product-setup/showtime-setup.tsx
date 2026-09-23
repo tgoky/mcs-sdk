@@ -976,6 +976,36 @@ function Review({
                     template={data.preview.template}
                     domain={domain}
                   />
+                  {(data.siteReading.testimonials.length > 0 || data.siteReading.faqs.length > 0) && (
+                    <>
+                      {" "}It uses{" "}
+                      {data.siteReading.testimonials.length > 0 && (
+                        <SiteListToken
+                          tokenKey="site.testimonials"
+                          tokenProps={tokenProps}
+                          label={`${data.siteReading.testimonials.length} testimonial${data.siteReading.testimonials.length === 1 ? "" : "s"}`}
+                          title="Testimonials from your site"
+                          source={`Copied word for word from ${domain}.`}
+                          items={data.siteReading.testimonials.map((t) => ({
+                            primary: `“${t.quote}”`,
+                            secondary: [t.name, t.role, t.company].filter(Boolean).join(", "),
+                          }))}
+                        />
+                      )}
+                      {data.siteReading.testimonials.length > 0 && data.siteReading.faqs.length > 0 ? " and " : ""}
+                      {data.siteReading.faqs.length > 0 && (
+                        <SiteListToken
+                          tokenKey="site.faqs"
+                          tokenProps={tokenProps}
+                          label={`${data.siteReading.faqs.length} question${data.siteReading.faqs.length === 1 ? "" : "s"}`}
+                          title="Questions from your FAQ"
+                          source={`Your own FAQ on ${domain}, shown to bookers before the call.`}
+                          items={data.siteReading.faqs.map((f) => ({ primary: f.question, secondary: f.answer }))}
+                        />
+                      )}{" "}
+                      from your site.
+                    </>
+                  )}
                   {data.existingPage.url && (
                     <span className="mt-1 block text-[13px] text-[var(--text-muted)]">
                       You already have one at{" "}
@@ -1056,6 +1086,25 @@ function Review({
                 }
               />
               .
+              {data.siteReading.objections.length > 0 && (
+                <>
+                  {" "}Each one prepares the rep for the{" "}
+                  <SiteListToken
+                    tokenKey="site.objections"
+                    tokenProps={tokenProps}
+                    tier={data.siteReading.objectionsTier}
+                    label={`${data.siteReading.objections.length} objection${data.siteReading.objections.length === 1 ? "" : "s"}`}
+                    title="Objections your site answers"
+                    source={
+                      data.siteReading.objectionsTier === "done"
+                        ? `Read from ${domain} and checked against it.`
+                        : `Read from ${domain}. We're not fully sure of these yet.`
+                    }
+                    items={data.siteReading.objections.map((o) => ({ primary: o }))}
+                  />{" "}
+                  your site already answers.
+                </>
+              )}
             </SkillSwitchRow>
 
             <SkillSwitchRow {...skillRow("win-back")}>
@@ -1174,6 +1223,38 @@ function PagePreview({
         </p>
       </div>
     </AnchoredCard>
+  );
+}
+
+/** A count in a sentence ("3 testimonials") that opens the list it counts. */
+function SiteListToken({
+  tokenKey,
+  tokenProps,
+  label,
+  title,
+  source,
+  items,
+  tier = "done",
+}: {
+  tokenKey: string;
+  tokenProps: TokenProps;
+  label: string;
+  title: string;
+  source: string;
+  items: { primary: string; secondary?: string }[];
+  tier?: TrustTier;
+}) {
+  return (
+    <FactToken {...tokenProps(tokenKey)} display={label} placeholder={label} tier={tier} title={title} source={source} width={380}>
+      <ul className="-mx-1 max-h-80 space-y-2.5 overflow-y-auto px-1">
+        {items.map((item, i) => (
+          <li key={i} className="text-sm leading-relaxed">
+            <p className="text-[var(--text-primary)]">{item.primary}</p>
+            {item.secondary && <p className="mt-0.5 text-xs text-[var(--text-muted)]">{item.secondary}</p>}
+          </li>
+        ))}
+      </ul>
+    </FactToken>
   );
 }
 

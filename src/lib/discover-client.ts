@@ -18,6 +18,7 @@ import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { runDiscoveryPrefill } from "@/features/pin-down/server/discovery-prefill";
 import {
   resolveColdOpenDerivedFields,
+  resolveDeepSiteReadings,
   resolveWebsiteDerivedChoices,
   verifyReputationExtractions,
   verifyWebsiteReadings,
@@ -154,6 +155,34 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
     await writeSuggestion("reviewBaseline", prefill.suggestedReviewBaseline, "Harvested from public review platform.");
   }
 
+  // ── The deep reading: proof, questions, offers, and the free signals ──
+  // Testimonials and FAQ questions were checked word for word against the
+  // crawled copy (discovery-prefill.ts), so they're stored as read from the
+  // site. Everything Claude inferred is stored as a reading, for Jev to
+  // score (resolveDeepSiteReadings) before anything trusts it.
+  const deep = prefill.deep;
+  if (deep) {
+    await writeSuggestion("siteTestimonials", deep.testimonials, `Copied from ${siteDomain}, each checked word for word against the page.`);
+    await writeSuggestion("siteFaqs", deep.faqs, `FAQ read from ${siteDomain}${deep.jsonLd ? " (including its published FAQ data)" : ""}.`);
+    await writeReading("siteObjections", deep.objections.length ? deep.objections : undefined, `Objections the copy on ${siteDomain} answers, read by Claude.`);
+    await writeReading("offerTiers", deep.offers.length ? deep.offers : undefined, `Offers and price tiers read from ${siteDomain} by Claude.`);
+    await writeReading("offerGuarantee", deep.guarantee, `Guarantee or refund terms read from ${siteDomain} by Claude.`);
+    await writeReading("founder", deep.founder, `Founder named on ${siteDomain}.`);
+    await writeReading("teamMembers", deep.team.length ? deep.team : undefined, `Team named on ${siteDomain}.`);
+    await writeReading("primaryCta", deep.primaryCta, `The main call to action on ${siteDomain}.`);
+    await writeReading("caseStudyResults", deep.caseStudyResults.length ? deep.caseStudyResults : undefined, `Results claimed on ${siteDomain}.`);
+    await writeReading("pressMentions", deep.pressMentions.length ? deep.pressMentions : undefined, `"As seen in" mentions on ${siteDomain}.`);
+    await writeSuggestion("socialProfiles", Object.keys(deep.socialProfiles).length ? deep.socialProfiles : undefined, `Profiles linked from ${siteDomain}.`);
+    await writeSuggestion("bookingLinks", deep.bookingLinks, `Booking links found on ${siteDomain}.`);
+    await writeSuggestion("techStack", deep.techStack, `Tools whose scripts run on ${siteDomain}.`);
+    await writeSuggestion("contactInfo", deep.contact, `Contact details and brand images from ${siteDomain}.`);
+    await writeSuggestion("siteCrawl", { pages: deep.pagesRead, crawledAt: prefill.crawledAt }, `Pages read from ${siteDomain}.`);
+    // The email tool whose tracking runs on the most pages. A hint for the
+    // setup screen ("seen on your site"), not a choice: a site can carry a
+    // HubSpot form while the CRM is something else.
+    await writeSuggestion("siteEmailPlatformHint", deep.techStack.emailCrm[0], `Its tracking script runs on ${siteDomain}.`);
+  }
+
   // Upfront Same-Name Domain Collision Harvester
   if (prefill.suggestedBuyerName) {
     try {
@@ -177,6 +206,7 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
       ["reputation extractions", verifyReputationExtractions],
       ["website readings", verifyWebsiteReadings],
       ["cold open fields", resolveColdOpenDerivedFields],
+      ["deep site readings", resolveDeepSiteReadings],
     ];
     for (const [label, resolve] of resolvers) {
       try {

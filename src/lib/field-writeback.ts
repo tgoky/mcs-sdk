@@ -232,6 +232,52 @@ const WRITEBACKS: Record<string, WritebackDef> = {
     },
   },
 
+  // ── SHOWTIME CONTENT FROM THE DEEP CRAWL ──────────────────────────────
+  // Only ever fills an empty slot: a proof block, call questions or
+  // objections someone already wrote are never replaced by the crawl.
+  siteTestimonials: {
+    // Copied word for word from the site (checked in discovery-prefill.ts).
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value)) return;
+      const [row] = await db.select({ existingProof: engagements.existingProof }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      if (row?.existingProof?.testimonials?.length) return;
+      // The confirmation page only shows a proof block when an entry has a
+      // name, a role and a quote (its own rule); a company stands in for a
+      // missing role.
+      const testimonials = (value as { quote?: string; name?: string; role?: string; company?: string; sourceUrl?: string }[])
+        .filter((t) => t?.quote && t.name && (t.role || t.company))
+        .slice(0, 6)
+        .map((t) => ({ name: t.name!, role: (t.role || t.company)!, company: t.company, quote: t.quote!, sourceUrl: t.sourceUrl }));
+      if (testimonials.length === 0) return;
+      await db.update(engagements).set({ existingProof: { testimonials }, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
+    },
+  },
+  siteFaqs: {
+    // The questions are the site's own words (checked in discovery-prefill.ts).
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value)) return;
+      const [row] = await db.select({ topCallQuestions: engagements.topCallQuestions }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      if (row?.topCallQuestions?.length) return;
+      const questions = (value as { question?: string }[]).map((f) => f?.question?.trim()).filter((q): q is string => Boolean(q)).slice(0, 8);
+      if (questions.length === 0) return;
+      await db.update(engagements).set({ topCallQuestions: questions, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
+    },
+  },
+  siteObjections: {
+    // Inferred by Claude, so only once Jev has scored the list well.
+    isTrusted: isTrustedJev,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value)) return;
+      const [row] = await db.select({ topObjections: engagements.topObjections }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      if (row?.topObjections?.length) return;
+      const objections = (value as unknown[]).filter((o): o is string => typeof o === "string" && o.trim().length > 0).slice(0, 8);
+      if (objections.length === 0) return;
+      await db.update(engagements).set({ topObjections: objections, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
+    },
+  },
+
   // ── REPUTATION MANAGER IDENTITY GRAPH WRITEBACKS ───────────────────────
   operatorName: {
     isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),

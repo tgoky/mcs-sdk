@@ -21,6 +21,14 @@ export const revalidate = 0;
 // takes a while; a reused read returns in a second or two.
 export const maxDuration = 120;
 
+function countLabel(n: number, noun: string): string | null {
+  return n > 0 ? `${n} ${noun}${n === 1 ? "" : "s"}` : null;
+}
+
+function countOf(fact: { value: unknown; status: string } | undefined, noun: string): string | null {
+  return fact && fact.status !== "rejected" && Array.isArray(fact.value) ? countLabel(fact.value.length, noun) : null;
+}
+
 function bareHost(value: string): string | null {
   const v = value.trim();
   if (!v) return null;
@@ -111,6 +119,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           ["design", facts.designSignal ? "Brand colors and fonts" : null],
           ["video", text("heroVideoUrl") && "Video on your homepage"],
           ["booking-seen", facts.bookingPlatform?.source === "website" ? `${findShowtimeTool(String(facts.bookingPlatform.value), "booking")?.label ?? "Booking tool"} on your site` : null],
+          ["email-seen", typeof facts.siteEmailPlatformHint?.value === "string" ? `${findShowtimeTool(String(facts.siteEmailPlatformHint.value), "email")?.label ?? "Email tool"} on your site` : null],
+          ["testimonials", countOf(facts.siteTestimonials, "testimonial")],
+          ["faqs", countOf(facts.siteFaqs, "FAQ")],
+          ["objections", countOf(facts.siteObjections, "objection")],
+          ["offers", countOf(facts.offerTiers, "offer")],
+          ["socials", facts.socialProfiles && typeof facts.socialProfiles.value === "object" ? countLabel(Object.keys(facts.socialProfiles.value as object).length, "social profile") : null],
+          ["pages", facts.siteCrawl ? countLabel(((facts.siteCrawl.value as { pages?: unknown[] }).pages ?? []).length, "page") + " read" : null],
         ];
         for (const [key, label] of found) if (label) step({ id: `found-${key}`, label, status: "done" });
 

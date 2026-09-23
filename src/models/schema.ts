@@ -927,7 +927,7 @@ export const engagements = pgTable("engagements", {
 voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
     scrapedAt: string;
     sources: Array<{
-      kind: "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page" | "esp_broadcast";
+      kind: "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "faq_page" | "booking_page" | "supporting_page" | "esp_broadcast";
       url?: string;
       wordCount: number;
     }>;

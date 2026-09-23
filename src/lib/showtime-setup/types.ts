@@ -95,6 +95,15 @@ export interface ShowtimeSetupState {
   /** A confirmation page the client already has (found on their site or
    * saved), and whether Pin-Down should keep it instead of building one. */
   existingPage: { url: string | null; reuse: boolean };
+  /** What the deep crawl pulled for the skills to use. */
+  siteReading: {
+    testimonials: { quote: string; name?: string; role?: string; company?: string }[];
+    faqs: { question: string; answer?: string }[];
+    objections: string[];
+    objectionsTier: TrustTier;
+    socialProfiles: Record<string, string>;
+    pagesRead: number;
+  };
   preview: {
     designSignal: unknown;
     template: string;

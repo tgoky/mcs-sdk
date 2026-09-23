@@ -545,3 +545,124 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
 
   return { resolved, skipped: resolved.length === 0 };
 }
+
+// ── Deep site readings: score and pick ─────────────────────────────────
+//
+// The deep crawl (discovery-prefill.ts) reads much more than the offer:
+// every tier, testimonials, FAQs, objections, booking links. Testimonials
+// and FAQ questions are already checked word for word against the page;
+// what's inferred or ambiguous goes through Jev here, choosing only among
+// what the site actually shows:
+//   - objections: scored as a list against the copy, like the reputation
+//     lists above, so a list Claude stretched never reaches the briefs
+//   - the main offer: with several tiers, which one people book a call
+//     about (that's the one the confirmation page and briefs are about)
+//   - the sales-call booking link: with several, which one books it
+
+const OBJECTION_LEVELS = [
+  "Fabricated: none of these worries follow from what the copy addresses",
+  "Mostly wrong: at most one is a worry the copy actually answers",
+  "Mixed: about half are worries the copy answers or clearly implies",
+  "Mostly right: nearly all are worries the copy answers or clearly implies",
+  "Fully right: every one is a worry the copy directly answers",
+];
+
+export async function resolveDeepSiteReadings(engagementId: string): Promise<{ resolved: string[]; skipped: boolean }> {
+  const corpus = await getClientFact(engagementId, "rawVoiceCorpus");
+  if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) return { resolved: [], skipped: true };
+  const siteCopy = corpus.value.slice(0, 40_000);
+
+  const [objections, tiers, links, offerName] = await Promise.all([
+    getClientFact(engagementId, "siteObjections"),
+    getClientFact(engagementId, "offerTiers"),
+    getClientFact(engagementId, "bookingLinks"),
+    getClientFact(engagementId, "offerName"),
+  ]);
+  const open = (f: Awaited<ReturnType<typeof getClientFact>>) => Boolean(f) && f!.status === "suggested";
+
+  const objectionList = open(objections) && Array.isArray(objections!.value) ? (objections!.value as string[]) : [];
+  const tierList =
+    Array.isArray(tiers?.value) && tiers!.status !== "rejected" ? (tiers!.value as { name: string; price?: string }[]).filter((t) => t?.name) : [];
+  const linkList =
+    Array.isArray(links?.value) && links!.status !== "rejected" ? (links!.value as { url: string; event?: string; platform: string }[]).filter((l) => l?.url) : [];
+  // Only pick the main offer when a person hasn't settled it.
+  const pickOffer = tierList.length >= 2 && (!offerName || offerName.status === "suggested");
+
+  const questions: FieldQuestionMap = {};
+  const state: Record<string, unknown> = { siteCopy };
+  if (objectionList.length) {
+    state.proposedObjections = objectionList;
+    questions.objectionsVerification = {
+      type: "score",
+      instructions: "Score how well these proposed prospect worries match what the site copy actually answers or clearly implies.",
+      criteria: OBJECTION_LEVELS,
+    };
+  }
+  if (pickOffer) {
+    questions.mainOffer = {
+      type: "choice",
+      instructions: "Which of these offers is the one prospects book a sales call about (usually the main, highest-touch offer)?",
+      criteria: Object.fromEntries(tierList.slice(0, 50).map((t, i) => [String(i), `${t.name}${t.price ? ` (${t.price})` : ""}`])),
+    };
+  }
+  if (linkList.length >= 2) {
+    questions.salesCallLink = {
+      type: "choice",
+      instructions: "Which of these booking links books the sales or strategy call (not a support, onboarding or internal meeting)?",
+      criteria: Object.fromEntries(linkList.slice(0, 50).map((l, i) => [String(i), `${l.url}${l.event ? ` (event: ${l.event})` : ""}`])),
+    };
+  }
+
+  const resolved: string[] = [];
+  // A single booking link is simply the one, no question needed.
+  if (linkList.length === 1) {
+    await upsertClientFact(engagementId, "salesCallBookingLink", linkList[0], {
+      source: "website",
+      sourceDetail: "bookingLinks",
+      evidence: "The only booking link on the site.",
+    });
+    resolved.push("salesCallBookingLink");
+  }
+  if (Object.keys(questions).length === 0) return { resolved, skipped: resolved.length === 0 };
+
+  const result = await askJev({ state, questions });
+
+  const objectionScore = scoreToConfidence(result.answers.objectionsVerification, OBJECTION_LEVELS.length);
+  if (objectionScore !== undefined) {
+    await upsertClientFact(engagementId, "siteObjections", objectionList, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: objectionScore,
+      evidence: `Read from the site by Claude, scored against the copy by Jev (model ${result.model}).`,
+    });
+    resolved.push("siteObjections");
+  }
+
+  const offerAnswer = result.answers.mainOffer;
+  if (pickOffer && offerAnswer && offerAnswer.type === "choice") {
+    const tier = tierList[Number(offerAnswer.choice)];
+    if (tier) {
+      const confidence = Math.round(offerAnswer.confidence * 100);
+      const evidence = `Chosen by Jev as the offer people book a call about, from ${tierList.length} offers on the site (model ${result.model}).`;
+      await upsertClientFact(engagementId, "offerName", tier.name, { source: "jev", sourceDetail: "offerTiers", confidence, evidence });
+      if (tier.price) await upsertClientFact(engagementId, "offerPrice", tier.price, { source: "jev", sourceDetail: "offerTiers", confidence, evidence });
+      resolved.push("offerName");
+    }
+  }
+
+  const linkAnswer = result.answers.salesCallLink;
+  if (linkAnswer && linkAnswer.type === "choice") {
+    const link = linkList[Number(linkAnswer.choice)];
+    if (link) {
+      await upsertClientFact(engagementId, "salesCallBookingLink", link, {
+        source: "jev",
+        sourceDetail: "bookingLinks",
+        confidence: Math.round(linkAnswer.confidence * 100),
+        evidence: `Chosen by Jev from ${linkList.length} booking links on the site (model ${result.model}).`,
+      });
+      resolved.push("salesCallBookingLink");
+    }
+  }
+
+  return { resolved, skipped: resolved.length === 0 };
+}

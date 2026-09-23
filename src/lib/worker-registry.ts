@@ -259,14 +259,14 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "topCallQuestions",
       label: "Common call questions",
       kind: "ask",
-      description: "Plausibly derivable from FAQ content in a future pass, but not built — honestly ask for now rather than claim an unbuilt capability. Enriches call-prep once available; the confirmation page doesn't need it to go live.",
+      description: "Filled from the site's own FAQ by the deep crawl (siteFaqs, questions checked word for word against the page) when the site has one; otherwise asked. Enriches call-prep; the confirmation page doesn't need it to go live.",
       tier: "deferrable",
     },
     {
       key: "topObjections",
       label: "Common objections",
       kind: "ask",
-      description: "Same reasoning as topCallQuestions — real content only the operator has today.",
+      description: "Filled from the objections the site's copy answers (siteObjections, read by Claude and scored by Jev before it's used); otherwise asked.",
       tier: "deferrable",
     },
     {

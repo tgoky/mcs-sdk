@@ -1,12 +1,28 @@
 // src/features/pin-down/server/voice-scraper.ts
+//
+// The website crawl. One paid Firecrawl call per page returns the page's
+// readable text (for the voice corpus and Claude's reading of the offer),
+// its rendered HTML and its links (for everything site-signals.ts reads
+// for free: structured data, social profiles, booking links, the tools
+// the site runs, colors and fonts). Before, the homepage was paid for
+// twice (text here, HTML again in design-scraper.ts) and a third time
+// fetched without JavaScript for social links and booking detection, and
+// only four pages could use Firecrawl at all.
 import { fetchWithTimeout } from "@/lib/http";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 
-interface ScrapedSource {
-  kind: "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page";
+export type PageKind = "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "faq_page" | "booking_page" | "supporting_page";
+
+export interface ScrapedSource {
+  kind: PageKind;
   url: string;
   wordCount: number;
+  /** Readable text; empty when the page is thin (a bare booking embed). */
   text: string;
+  /** Rendered HTML, when the page was fetched (for site-signals.ts). */
+  html?: string;
+  /** Every link on the page, when the crawler returned them. */
+  links?: string[];
 }
 
 interface DiscoveredLink {
@@ -17,7 +33,7 @@ interface DiscoveredLink {
 
 interface RankedCandidate {
   url: string;
-  kind: "about_page" | "sales_page" | "pricing_page" | "proof_page" | "supporting_page";
+  kind: Exclude<PageKind, "marketing_site">;
   priority: number;
 }
 
@@ -26,24 +42,39 @@ interface FirecrawlBudget {
   max: number;
 }
 
-const CRAWL_TIMEOUT_MS = 5000;
-const FIRECRAWL_TIMEOUT_MS = 15000;
-const FIRECRAWL_MAP_TIMEOUT_MS = 6000;
-const MAX_CHARS_PER_PAGE = 12000;
+interface FetchedPage {
+  text: string | null;
+  html: string | null;
+  links: string[];
+}
+
+const CRAWL_TIMEOUT_MS = 6000;
+const FIRECRAWL_TIMEOUT_MS = 20000;
+const FIRECRAWL_MAP_TIMEOUT_MS = 8000;
+const MAX_CHARS_PER_PAGE = 20000;
+// Rendered HTML kept per page for signal extraction. Big enough for the
+// head (scripts, JSON-LD, meta) and the footer (social links).
+const MAX_HTML_CHARS_PER_PAGE = 400_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-const THIN_PAGE_WORD_THRESHOLD = 20;
+// JS-built sites (Framer, Wix, React) paint after load; the homepage waits
+// for them. Other pages are usually server-rendered once the site is.
+const HOMEPAGE_WAIT_MS = 2500;
 
-const WORD_BUDGET_TARGET = 5000;
-const MAX_PAGES_PER_CRAWL = 8;
-const MAX_FIRECRAWL_SCRAPE_CALLS = 4;
-const FETCH_BATCH_SIZE = 3;
-const CRAWL_BUDGET_MS = 20000;
+// A deep read, once per client: every product reuses it (discover-client.ts
+// only crawls again when the domain changes).
+const WORD_BUDGET_TARGET = 15000;
+const MAX_PAGES_PER_CRAWL = 10;
+const MAX_FIRECRAWL_SCRAPE_CALLS = 10;
+const FETCH_BATCH_SIZE = 4;
+const CRAWL_BUDGET_MS = 45000;
 
-const SALES_STATIC_PATHS = ["/sales", "/sale", "/offer", "/work-with-us", "/apply", "/get-started"];
-const ABOUT_STATIC_PATHS = ["/about", "/about-us", "/our-story", "/story", "/mission", "/manifesto"];
-const PROOF_STATIC_PATHS = ["/case-studies", "/results", "/testimonials", "/success-stories"];
+const SALES_STATIC_PATHS = ["/sales", "/offer", "/work-with-us", "/apply", "/get-started", "/services", "/program"];
+const ABOUT_STATIC_PATHS = ["/about", "/about-us", "/our-story", "/team"];
+const PROOF_STATIC_PATHS = ["/case-studies", "/results", "/testimonials", "/success-stories", "/reviews"];
 const PRICING_STATIC_PATHS = ["/pricing", "/plans", "/packages"];
+const FAQ_STATIC_PATHS = ["/faq", "/faqs"];
+const BOOKING_STATIC_PATHS = ["/book", "/book-a-call", "/schedule", "/call", "/strategy-call"];
 
 // ── Content Quality Gate ─────────────────────────────────────────────────
 
@@ -89,7 +120,7 @@ function looksLikeRealContent(text: string): boolean {
 
 // ── HTML Cleaning & Parsing ─────────────────────────────────────────────
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -111,9 +142,9 @@ function normalizeDomain(domain: string): string {
   return d;
 }
 
-// ── Tier 2 (now fallback): Direct HTTP fetch ─────────────────────────────
+// ── Fallback: direct HTTP fetch (free, no JavaScript) ────────────────────
 
-async function fetchPageText(url: string): Promise<string | null> {
+async function fetchPageDirect(url: string): Promise<FetchedPage | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CRAWL_TIMEOUT_MS);
@@ -127,19 +158,15 @@ async function fetchPageText(url: string): Promise<string | null> {
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html")) return null;
     const html = await res.text();
-    return htmlToText(html).slice(0, MAX_CHARS_PER_PAGE);
+    return { text: htmlToText(html).slice(0, MAX_CHARS_PER_PAGE), html: html.slice(0, MAX_HTML_CHARS_PER_PAGE), links: [] };
   } catch {
     return null;
   }
 }
 
-// ── Tier 1 (now primary): Firecrawl /v2/scrape ──────────────────────────
+// ── Primary: Firecrawl /v2/scrape, one call per page ────────────────────
 
-async function fetchPageTextViaFirecrawl(
-  url: string,
-  budget: FirecrawlBudget,
-  deadline: number
-): Promise<string | null> {
+async function fetchPageViaFirecrawl(url: string, budget: FirecrawlBudget, deadline: number, opts: { waitFor?: number } = {}): Promise<FetchedPage | null> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey || budget.used >= budget.max) return null;
   if (Date.now() >= deadline) return null;
@@ -158,8 +185,16 @@ async function fetchPageTextViaFirecrawl(
         },
         body: JSON.stringify({
           url,
-          formats: ["markdown"],
+          // Text for reading, raw HTML and links for the free signals, in
+          // the same call. (No "json" format: our own Claude + Jev pass
+          // does the structured reading.)
+          formats: ["markdown", "rawHtml", "links"],
+          // Readable text without nav and footer; rawHtml is the page as
+          // served either way, so footer links and scripts survive.
           onlyMainContent: true,
+          ...(opts.waitFor ? { waitFor: opts.waitFor } : {}),
+          // Firecrawl stops the job when we would stop waiting anyway.
+          timeout: Math.max(1000, Math.min(FIRECRAWL_TIMEOUT_MS, remaining)),
         }),
       },
       Math.min(FIRECRAWL_TIMEOUT_MS, remaining)
@@ -167,8 +202,14 @@ async function fetchPageTextViaFirecrawl(
     if (!res.ok) return null;
     const data = await res.json();
     const markdown: string | undefined = data?.data?.markdown;
-    if (!markdown) return null;
-    return markdown.slice(0, MAX_CHARS_PER_PAGE);
+    const rawHtml: string | undefined = data?.data?.rawHtml;
+    const links: unknown = data?.data?.links;
+    if (!markdown && !rawHtml) return null;
+    return {
+      text: markdown ? markdown.slice(0, MAX_CHARS_PER_PAGE) : null,
+      html: rawHtml ? rawHtml.slice(0, MAX_HTML_CHARS_PER_PAGE) : null,
+      links: Array.isArray(links) ? links.filter((l): l is string => typeof l === "string") : [],
+    };
   } catch {
     return null;
   }
@@ -177,40 +218,36 @@ async function fetchPageTextViaFirecrawl(
 // ── Unified fetch with quality gate ──────────────────────────────────────
 
 /**
- * Firecrawl first (clean Markdown, JS rendering, noise stripped).
- * Direct fetch second (zero-cost safety net when Firecrawl fails,
- * is unconfigured, or the budget is exhausted).
- *
- * Both paths go through looksLikeRealContent() to prevent nav bars,
- * footers, cookie banners, and Cloudflare challenge pages from
- * reaching Claude as if they were marketing copy.
+ * Firecrawl first (rendered, clean text, links), a free direct fetch when
+ * Firecrawl fails, is unconfigured, or the budget is spent. The text goes
+ * through looksLikeRealContent() so nav bars and challenge pages never
+ * reach Claude as copy; the HTML is kept either way, because a thin page
+ * (a booking page that's just a Calendly embed) still carries signals.
  */
-async function fetchPageTextWithFallback(
-  url: string,
-  deadline: number,
-  firecrawlBudget: FirecrawlBudget
-): Promise<string | null> {
+async function fetchPageWithFallback(url: string, deadline: number, firecrawlBudget: FirecrawlBudget, opts: { waitFor?: number } = {}): Promise<FetchedPage | null> {
   if (Date.now() >= deadline) return null;
 
-  // ── TIER 1: Firecrawl ──
+  let page: FetchedPage | null = null;
   if (firecrawlBudget.used < firecrawlBudget.max && process.env.FIRECRAWL_API_KEY) {
-    const firecrawlResult = await fetchPageTextViaFirecrawl(url, firecrawlBudget, deadline);
-    if (firecrawlResult && looksLikeRealContent(firecrawlResult)) {
-      return firecrawlResult;
+    page = await fetchPageViaFirecrawl(url, firecrawlBudget, deadline, opts);
+  }
+  if ((!page || !page.html || !page.text || !looksLikeRealContent(page.text)) && Date.now() < deadline) {
+    const direct = await fetchPageDirect(url);
+    if (direct) {
+      page = {
+        text: page?.text && looksLikeRealContent(page.text) ? page.text : direct.text,
+        html: page?.html ?? direct.html,
+        links: page?.links?.length ? page.links : direct.links,
+      };
     }
   }
-
-  // ── TIER 2: Direct fetch (fallback) ──
-  if (Date.now() >= deadline) return null;
-  const direct = await fetchPageText(url);
-  if (direct && looksLikeRealContent(direct)) {
-    return direct;
-  }
-
-  return null;
+  if (!page) return null;
+  return { ...page, text: page.text && looksLikeRealContent(page.text) ? page.text : null };
 }
 
 // ── AI Link Classification Engine ──────────────────────────────────────────
+
+const PAGE_KINDS = ["sales_page", "about_page", "proof_page", "pricing_page", "faq_page", "booking_page", "supporting_page"] as const;
 
 async function classifySiteLinksWithAI(
   links: DiscoveredLink[],
@@ -218,34 +255,33 @@ async function classifySiteLinksWithAI(
 ): Promise<RankedCandidate[]> {
   if (links.length === 0) return [];
 
-  const linkPayload = links.slice(0, 100).map((l) => ({
+  const linkPayload = links.slice(0, 150).map((l) => ({
     url: l.url,
     title: l.title || "",
     description: l.description || "",
   }));
 
-  const system = `You are an expert Web Crawling Agent for brand voice analysis. 
-Analyze the provided website links and identify up to 8 pages that carry the highest concentration of the founder's authentic voice, core offer positioning, philosophy, and customer proof.
+  const system = `You pick which pages of a business's website to read, to learn its offer, prices, proof, brand voice and how people book.
+Choose up to 9 pages. Always include, when they exist: the pricing page, the main offer or sales page, the about/founder page, the testimonials or case studies page, the FAQ page, and the booking or "book a call" page. Skip blog posts, legal pages, logins, carts, tag and author archives.
 
-Categories to assign:
-- "sales_page": Primary sales page, main VSL, core offer, work-with-us, application
-- "about_page": Founder story, manifesto, mission, philosophy, origin story, who we are
-- "proof_page": Case studies, client results, testimonials, reviews
-- "pricing_page": Pricing plans, packages, tiers
-- "supporting_page": Services breakdown, how it works, FAQs
-- "ignore": Privacy policy, terms, login, cart, generic blog posts, author archives
+Categories:
+- "sales_page": main offer, VSL, work-with-us, application, services
+- "about_page": founder story, team, mission
+- "proof_page": case studies, results, testimonials, reviews
+- "pricing_page": pricing, plans, packages
+- "faq_page": FAQ, common questions
+- "booking_page": book a call, schedule, calendar
+- "supporting_page": how it works, other offers
+- "ignore": everything else
 
-Return ONLY a JSON array of objects:
-[
-  { "url": "string", "kind": "sales_page|about_page|proof_page|pricing_page|supporting_page", "priority": 1-3 }
-]`;
+Return ONLY a JSON array: [{ "url": "string", "kind": "one of the categories", "priority": 1-3 }]`;
 
   try {
     const res = await callClaudeWithRetry({
       model: MODEL.SYNTHESIS,
       system,
       userMessage: `Categorize these links:\n${JSON.stringify(linkPayload)}`,
-      maxTokens: 1200,
+      maxTokens: 1400,
       runId,
     });
 
@@ -256,14 +292,8 @@ Return ONLY a JSON array of objects:
     if (!Array.isArray(parsed)) return [];
 
     return parsed
-      .filter(
-        (item: any) =>
-          item.url &&
-          item.kind &&
-          item.kind !== "ignore" &&
-          ["sales_page", "about_page", "proof_page", "pricing_page", "supporting_page"].includes(item.kind)
-      )
-      .map((item: any) => ({
+      .filter((item: { url?: unknown; kind?: unknown }) => typeof item.url === "string" && PAGE_KINDS.includes(item.kind as (typeof PAGE_KINDS)[number]))
+      .map((item: { url: string; kind: RankedCandidate["kind"]; priority?: unknown }) => ({
         url: item.url,
         kind: item.kind,
         priority: typeof item.priority === "number" ? item.priority : 2,
@@ -278,10 +308,12 @@ function staticFallbackCandidates(base: string): RankedCandidate[] {
     paths.map((p) => ({ url: `${base}${p}`, kind, priority }));
 
   return [
+    ...make(PRICING_STATIC_PATHS, "pricing_page", 1),
     ...make(SALES_STATIC_PATHS, "sales_page", 1),
     ...make(ABOUT_STATIC_PATHS, "about_page", 1),
-    ...make(PROOF_STATIC_PATHS, "proof_page", 2),
-    ...make(PRICING_STATIC_PATHS, "pricing_page", 2),
+    ...make(PROOF_STATIC_PATHS, "proof_page", 1),
+    ...make(FAQ_STATIC_PATHS, "faq_page", 2),
+    ...make(BOOKING_STATIC_PATHS, "booking_page", 2),
   ];
 }
 
@@ -303,18 +335,20 @@ async function discoverCandidateUrls(
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ url: base, limit: 150 }),
+        body: JSON.stringify({ url: base, limit: 200 }),
       },
       Math.min(FIRECRAWL_MAP_TIMEOUT_MS, remaining - 1000)
     );
     if (!res.ok) return staticFallbackCandidates(base);
     const data = await res.json();
-    const rawLinks: any[] = data?.links ?? [];
+    const rawLinks: unknown[] = data?.links ?? [];
     if (rawLinks.length === 0) return staticFallbackCandidates(base);
 
     const links: DiscoveredLink[] = rawLinks
-      .map((l) => (typeof l === "string" ? { url: l } : { url: l?.url, title: l?.title, description: l?.description }))
-      .filter((l): l is DiscoveredLink => Boolean(l.url));
+      .map((l) =>
+        typeof l === "string" ? { url: l } : { url: (l as DiscoveredLink)?.url, title: (l as DiscoveredLink)?.title, description: (l as DiscoveredLink)?.description }
+      )
+      .filter((l): l is DiscoveredLink => typeof l.url === "string" && Boolean(l.url));
 
     if (links.length === 0) return staticFallbackCandidates(base);
 
@@ -327,44 +361,42 @@ async function discoverCandidateUrls(
   }
 }
 
-// ── Main Web Scraper Function ───────────────────────────────────────────
+// ── The crawl ────────────────────────────────────────────────────────────
 
-export async function scrapeVoiceCorpus(
-  domain: string,
-  runId?: string
-): Promise<{
+export interface SiteCrawl {
+  /** Readable text of every page with real copy, for voice and reading. */
   corpus: string;
   sources: ScrapedSource[];
-}> {
+  /** The homepage's rendered HTML, for design and signals. */
+  homepageHtml: string | null;
+}
+
+export async function crawlSite(domain: string, runId?: string): Promise<SiteCrawl> {
   const base = normalizeDomain(domain);
   const sources: ScrapedSource[] = [];
   const deadline = Date.now() + CRAWL_BUDGET_MS;
   const firecrawlBudget: FirecrawlBudget = { used: 0, max: MAX_FIRECRAWL_SCRAPE_CALLS };
   let totalWords = 0;
 
-  // 1. Fetch Homepage
-  const homepageText = await fetchPageTextWithFallback(base, deadline, firecrawlBudget);
-  if (homepageText) {
-    const wc = homepageText.split(/\s+/).length;
-    if (wc > 20) {
-      sources.push({ kind: "marketing_site", url: base, wordCount: wc, text: homepageText });
-      totalWords += wc;
-    }
+  // 1. Homepage (waits for JS-built sites) and page discovery, in parallel.
+  const [homepage, discovered] = await Promise.all([
+    fetchPageWithFallback(base, deadline, firecrawlBudget, { waitFor: HOMEPAGE_WAIT_MS }),
+    discoverCandidateUrls(base, deadline, runId),
+  ]);
+  if (homepage) {
+    const wc = homepage.text ? homepage.text.split(/\s+/).length : 0;
+    sources.push({ kind: "marketing_site", url: base, wordCount: wc, text: homepage.text ?? "", html: homepage.html ?? undefined, links: homepage.links });
+    totalWords += wc;
   }
 
-  // 2. Discover & Classify Candidates with AI
-  const discovered = await discoverCandidateUrls(base, deadline, runId);
+  // 2. The chosen pages, most important first, in parallel batches.
   const rankedCandidates = discovered
-    .filter((c) => c.url !== base)
+    .filter((c) => c.url.replace(/\/+$/, "") !== base)
     .sort((a, b) => a.priority - b.priority || a.url.length - b.url.length);
-
   const usedUrls = new Set<string>([base]);
 
-  // 3. Batched Parallel Crawl Walk
   for (let i = 0; i < rankedCandidates.length; i += FETCH_BATCH_SIZE) {
-    if (sources.length >= MAX_PAGES_PER_CRAWL || totalWords >= WORD_BUDGET_TARGET || Date.now() >= deadline) {
-      break;
-    }
+    if (sources.length >= MAX_PAGES_PER_CRAWL || totalWords >= WORD_BUDGET_TARGET || Date.now() >= deadline) break;
 
     const batch = rankedCandidates.slice(i, i + FETCH_BATCH_SIZE).filter((c) => !usedUrls.has(c.url));
     if (batch.length === 0) continue;
@@ -372,9 +404,13 @@ export async function scrapeVoiceCorpus(
 
     const results = await Promise.allSettled(
       batch.map(async (c): Promise<ScrapedSource | null> => {
-        const text = await fetchPageTextWithFallback(c.url, deadline, firecrawlBudget);
-        const wc = text ? text.split(/\s+/).length : 0;
-        return wc > 30 ? { kind: c.kind, url: c.url, wordCount: wc, text: text! } : null;
+        const page = await fetchPageWithFallback(c.url, deadline, firecrawlBudget);
+        if (!page) return null;
+        const wc = page.text ? page.text.split(/\s+/).length : 0;
+        // A thin page still counts when its HTML carries signals (a
+        // booking page that's just an embed).
+        if (wc <= 30 && !(c.kind === "booking_page" && page.html)) return null;
+        return { kind: c.kind, url: c.url, wordCount: wc, text: wc > 30 ? page.text! : "", html: page.html ?? undefined, links: page.links };
       })
     );
 
@@ -386,7 +422,22 @@ export async function scrapeVoiceCorpus(
     }
   }
 
-  const corpus = sources.map((s) => s.text).join("\n\n---\n\n");
+  const corpus = sources
+    .filter((s) => s.text)
+    .map((s) => `[${s.kind} ${s.url}]\n${s.text}`)
+    .join("\n\n---\n\n");
+  return { corpus, sources, homepageHtml: homepage?.html ?? null };
+}
+
+/** The crawl as the voice pipeline has always used it. */
+export async function scrapeVoiceCorpus(
+  domain: string,
+  runId?: string
+): Promise<{
+  corpus: string;
+  sources: ScrapedSource[];
+}> {
+  const { corpus, sources } = await crawlSite(domain, runId);
   return { corpus, sources };
 }
 
