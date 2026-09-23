@@ -77,7 +77,7 @@
 // channel every tenant is guaranteed to have) from being written.
 import { db } from "@/lib/db";
 import { notifications, users } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { findOrCreateThreadForEvent, appendMessage } from "@/lib/chat-threads";
 import { sendOperatorPageSms } from "@/lib/platforms/sms";
@@ -196,11 +196,54 @@ export interface NotifyOptions {
   smsToPhone?: string;
 }
 
+const REPEAT_PREFIX = /^\((\d+)× in the last day\) /;
+
+/** "(3× in the last day) <latest body>" — the previous count plus one. */
+export function repeatedNotificationBody(previousBody: string, latestBody: string): string {
+  const count = Number(previousBody.match(REPEAT_PREFIX)?.[1] ?? 1) + 1;
+  return `(${count}× in the last day) ${latestBody}`;
+}
+
+/** An unread notification identical to this one (same client, type and
+ * title) from the last 24h, if any. A failed lookup returns null, so the
+ * caller just inserts a new row. */
+async function findRepeatNotification(opts: NotifyOptions): Promise<{ id: string; body: string } | null> {
+  try {
+    const [row] = await db
+      .select({ id: notifications.id, body: notifications.body })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.whopUserId, opts.whopUserId),
+          opts.engagementId ? eq(notifications.engagementId, opts.engagementId) : isNull(notifications.engagementId),
+          eq(notifications.type, opts.type),
+          eq(notifications.title, opts.title),
+          eq(notifications.read, false),
+          gt(notifications.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
+        )
+      )
+      .orderBy(desc(notifications.createdAt))
+      .limit(1);
+    return row?.id ? row : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function notifyUser(opts: NotifyOptions): Promise<void> {
   // ── 1. In-app (default on — see persistInApp above) ─────────────────
   if (opts.persistInApp !== false) {
     try {
-      await db.insert(notifications).values({
+      // The same unread alert again within a day (a skill failing on every
+      // run) updates the existing row instead of adding another — the
+      // list used to show twenty identical rows.
+      const repeat = await findRepeatNotification(opts);
+      if (repeat) {
+        await db
+          .update(notifications)
+          .set({ body: repeatedNotificationBody(repeat.body, opts.body), runId: opts.runId ?? null, severity: opts.severity, createdAt: new Date() })
+          .where(eq(notifications.id, repeat.id));
+      } else await db.insert(notifications).values({
         id: crypto.randomUUID(),
         whopUserId: opts.whopUserId,
         engagementId: opts.engagementId ?? null,

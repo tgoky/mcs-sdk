@@ -18,6 +18,7 @@
 //     plumbing, throttling, and the merge-field completeness check.
 
 import { resolveCredential } from "@/lib/credentials";
+import { providerErrorReason } from "@/lib/provider-error";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
 
 export const MERGE_FIELDS = ["subject", "body1", "body2", "body3"] as const;
@@ -66,20 +67,8 @@ export function espApiBase(platform: ColdOpenSendPlatformId, configured: string 
   return (configured || ESP_API_BASES[platform]).replace(/\/$/, "");
 }
 
-/** A short, safe reason from an upstream error body: the provider's own
- * message/error field if it has one, never the raw body. */
-export function upstreamErrorReason(raw: string): string {
-  try {
-    const data = JSON.parse(raw) as Record<string, unknown>;
-    for (const key of ["message", "error", "error_message", "detail"]) {
-      const v = data?.[key];
-      if (typeof v === "string" && v.trim()) return `: ${v.trim().slice(0, 200)}`;
-    }
-  } catch {
-    // not JSON
-  }
-  return "";
-}
+/** Kept under this name for the adapters; see provider-error.ts. */
+export const upstreamErrorReason = providerErrorReason;
 
 /** Honest shape for an ESP's raw JSON response: this app never assumes
  * the full documented shape of a third-party API is stable, only that a

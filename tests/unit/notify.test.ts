@@ -34,7 +34,7 @@ describe("notifyUser", () => {
     // Restore the default db behavior after any test that swapped it out.
     vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) } as any);
     vi.mocked(db.select).mockReturnValue({
-      from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([]) })) })),
+      from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([]), orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([]) })) })) })),
     } as any);
   });
 
@@ -121,7 +121,7 @@ describe("notifyUser", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })),
+        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]), orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })) })),
       })),
     } as any);
     global.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
@@ -146,7 +146,7 @@ describe("notifyUser", () => {
     process.env.RESEND_FROM_EMAIL = "notifications@mudd.ventures";
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })),
+        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]), orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })) })),
       })),
     } as any);
     global.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
@@ -172,7 +172,7 @@ describe("notifyUser", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })),
+        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]), orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })) })),
       })),
     } as any);
     global.fetch = vi.fn().mockResolvedValue({ ok: false, text: async () => "invalid api key" }) as unknown as typeof fetch;
@@ -196,7 +196,7 @@ describe("notifyUser", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })),
+        where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]), orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ email: "sarah@acme.com" }]) })) })),
       })),
     } as any);
 
@@ -211,5 +211,35 @@ describe("notifyUser", () => {
     expect(db.insert).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith("https://hooks.slack.com/services/down", expect.anything());
     expect(fetchMock).toHaveBeenCalledWith("https://api.resend.com/emails", expect.anything());
+  });
+});
+
+describe("repeatedNotificationBody", () => {
+  it("counts repeats in the body", async () => {
+    const { repeatedNotificationBody } = await import("@/lib/notify");
+    expect(repeatedNotificationBody("Pin-Down failed.", "Pin-Down failed again.")).toBe("(2× in the last day) Pin-Down failed again.");
+    expect(repeatedNotificationBody("(2× in the last day) x", "y")).toBe("(3× in the last day) y");
+  });
+});
+
+describe("notifyUser repeat collapsing", () => {
+  it("updates an identical unread notification instead of adding another", async () => {
+    vi.clearAllMocks();
+    const set = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+    (db as any).update = vi.fn(() => ({ set }));
+    vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) } as any);
+    vi.mocked(db.select).mockReturnValue({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue([]),
+          orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([{ id: "n1", body: "Pin-Down failed for Acme Co." }]) })),
+        })),
+      })),
+    } as any);
+
+    await notifyUser(baseOpts);
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ body: "(2× in the last day) Pin-Down failed for Acme Co." }));
   });
 });

@@ -316,22 +316,6 @@
   --chart-surface: #1a1a19;
 }
 
-/* Page-level ambient wash — pure CSS, no image asset. Replaces the idea
-   of gluing a light source behind every individual glass card (a hack
-   repeated per component, and exactly what caused the edge-bleed bug in
-   GlowBacklight) with one soft, colorful layer behind the whole page:
-   every glass card's backdrop-filter picks up real material to diffuse
-   automatically, the same way the home page's photo background does it,
-   but built from theme colors already in use elsewhere (the lavender
-   accent) instead of a new binary asset. Dark mode only — light mode's
-   plain background already reads well against the lighter glass tiers. */
-.dark .bg-ambient-glow {
-  background:
-    radial-gradient(ellipse 55% 45% at 15% 10%, rgba(197, 183, 234, 0.16), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 88% 25%, rgba(111, 168, 255, 0.12), transparent 60%),
-    radial-gradient(ellipse 55% 50% at 45% 95%, rgba(197, 183, 234, 0.12), transparent 60%);
-}
-
 /* ────────────────────────────────────────────────────────────────────── */
 /* ELEVATION SYSTEM                                                       */
 /* Replaces the one-off "rounded-lg border border-zinc-200/70 dark:border-*/
@@ -341,8 +325,9 @@
 /* tier, tinted from ink/black rather than pure black; a translucent glass */
 /* fill so backdrop-blur has something to blur against instead of         */
 /* bg-transparent leaving it inert; and a slight-overshoot spring curve   */
-/* for press/settle feedback instead of a flat opacity dim. No gradients  */
-/* anywhere in this system by design. */
+/* for press/settle feedback instead of a flat opacity dim. Gradients   */
+/* here are limited to the soft glow layered on glass surfaces and the  */
+/* opt-in .surface-blend-page wash below.                               */
 /* ────────────────────────────────────────────────────────────────────── */
 :root {
   --shadow-elevation-1: 0 1px 2px rgba(28, 24, 38, 0.05), 0 1px 1px rgba(28, 24, 38, 0.04);
@@ -453,18 +438,27 @@
    with a slight overshoot instead of stopping dead, and the shadow
    compresses to read as "pressed in." Both keyed off transform + shadow
    only — no color/opacity shift, no gradient. */
+/* These rules are unlayered, so their `transition` overrides Tailwind's
+   transition-colors utility on the same element; the color properties are
+   listed here too so hover color changes still fade instead of snapping. */
 .hover-lift {
-  transition: transform 200ms var(--ease-spring), box-shadow 200ms ease-out;
+  transition: transform 200ms var(--ease-spring), box-shadow 200ms ease-out, color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
 }
 .hover-lift:hover {
   transform: translateY(-1px);
 }
 .press-settle {
-  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease-out;
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease-out, color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
 }
 .press-settle:active {
   transform: scale(0.97) translateY(0);
   box-shadow: var(--shadow-elevation-1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift:hover,
+  .press-settle:active {
+    transform: none;
+  }
 }
 
 /* The "icon takes over" feel primary-rail.tsx's own labeled items

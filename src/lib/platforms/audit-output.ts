@@ -20,6 +20,7 @@
  */
 
 
+import { providerErrorReason } from "@/lib/provider-error";
 import { fetchWithTimeout } from "@/lib/http";
 export interface AuditOutputResult {
   delivered: boolean;
@@ -109,7 +110,7 @@ export async function deliverAuditReport(
       }),
     });
     if (!res.ok) {
-      return { delivered: false, channel: "email", error: `Resend returned [${res.status}]: ${(await res.text()).slice(0, 300)}` };
+      return { delivered: false, channel: "email", error: `Resend returned [${res.status}]${providerErrorReason(await res.text())}` };
     }
     return { delivered: true, channel: "email" };
   } catch (e: any) {

@@ -47,7 +47,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
             data-tour="top-nav-create"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#e40014] hover:bg-[#e40014]/90 dark:bg-rose-600 dark:hover:bg-rose-500 text-white rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 rounded-full transition-all shadow-xs active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Create</span>

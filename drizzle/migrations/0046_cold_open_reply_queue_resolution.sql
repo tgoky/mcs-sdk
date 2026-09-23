@@ -1,1 +1,0 @@
-ALTER TABLE "cold_open_replies" ADD COLUMN "queue_resolved_at" timestamp;

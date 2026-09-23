@@ -13,6 +13,7 @@ import { fetchWithTimeout } from "@/lib/http";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { postToClientSlack } from "@/lib/slack-delivery";
+import { providerErrorReason } from "@/lib/provider-error";
 
 // ── Platform response shapes ────────────────────────────────────────────
 // Same rationale as the equivalent block in booking.ts: these cover only
@@ -1646,7 +1647,7 @@ export class ResendClient {
     });
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
-      throw new Error(`Resend send failed [${response.status}]: ${errorBody.slice(0, 300)}`);
+      throw new Error(`Resend send failed [${response.status}]${providerErrorReason(errorBody)}`);
     }
   }
 
