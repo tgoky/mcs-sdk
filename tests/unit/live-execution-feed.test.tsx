@@ -70,29 +70,8 @@ describe("LiveExecutionFeed", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("stops polling once paused, and resumes when toggled back on", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ runs: [run()] }) });
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    render(<LiveExecutionFeed initialRuns={[run()]} />) as unknown as typeof fetch;
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    fireEvent.click(screen.getByText("[ Pause live ]"));
-    fetchMock.mockClear();
-
-    await act(async () => {
-      vi.advanceTimersByTime(15000);
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText("[ Resume live ]"));
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(fetchMock).toHaveBeenCalled();
-  });
+  // The Pause/Resume live button is commented out in live-execution-feed.tsx,
+  // so its test is retired with it.
 
   it("aborts the in-flight request and stops the interval on unmount (no stray state updates)", async () => {
     let capturedSignal: AbortSignal | undefined;

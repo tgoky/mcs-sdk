@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, within, fireEvent, act } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import { QueuePanel, type QueueItemDTO } from "@/app/dashboard/queue-panel";
-import { LiveExecutionFeed } from "@/app/dashboard/live-execution-feed";
 
 const CLIENTS = [
   { engagementId: "eng-acme", buyer: "Acme Co" },
@@ -19,19 +18,6 @@ function queueItem(overrides: Partial<QueueItemDTO> = {}): QueueItemDTO {
     buyer: "Acme Co",
     runId: null,
     createdAt: new Date().toISOString(),
-    ...overrides,
-  };
-}
-
-function run(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: `run-${Math.random()}`,
-    skillName: "pile-on",
-    status: "success",
-    phase: null,
-    startedAt: new Date().toISOString(),
-    buyerName: "Acme Co",
-    engagementId: "eng-acme",
     ...overrides,
   };
 }
@@ -165,73 +151,5 @@ describe("Client scope rail — QueuePanel", () => {
   });
 });
 
-describe("Client scope rail — LiveExecutionFeed", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("defaults to All: existing flat run list shown, no roster", async () => {
-    global.fetch = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch;
-    await act(async () => {
-      render(<LiveExecutionFeed initialRuns={[run({ buyerName: "Acme Co" })]} clients={CLIENTS} />);
-    });
-    expect(screen.getByText("Acme Co")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Search clients...")).not.toBeInTheDocument();
-  });
-
-  it("Clients scope with nothing picked shows the roster (running/failed/completed rollup), not run rows", async () => {
-    global.fetch = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch;
-    await act(async () => {
-      render(
-        <LiveExecutionFeed
-          initialRuns={[
-            run({ id: "r1", buyerName: "Acme Co", engagementId: "eng-acme", status: "running" }),
-            run({ id: "r2", buyerName: "Acme Co", engagementId: "eng-acme", status: "running" }),
-            run({ id: "r3", buyerName: "Globex Inc", engagementId: "eng-globex", status: "success" }),
-          ]}
-          clients={CLIENTS}
-        />
-      );
-    });
-
-    fireEvent.click(within(getScopeTablist()).getByRole("tab", { name: /^Clients/ }));
-
-    const acmeRow = screen.getByTestId("roster-row-eng-acme");
-    expect(within(acmeRow).getByText("2")).toBeInTheDocument(); // 2 running
-    expect(screen.getByTestId("roster-row-eng-globex")).toBeInTheDocument();
-  });
-
-  it("picking a client from the rail scopes runs down to that client", async () => {
-    global.fetch = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch;
-    await act(async () => {
-      render(
-        <LiveExecutionFeed
-          initialRuns={[
-            run({ id: "r1", buyerName: "Acme Co", engagementId: "eng-acme" }),
-            run({ id: "r2", buyerName: "Globex Inc", engagementId: "eng-globex" }),
-          ]}
-          clients={CLIENTS}
-        />
-      );
-    });
-
-    fireEvent.click(within(getScopeTablist()).getByRole("tab", { name: /^Clients/ }));
-    fireEvent.click(screen.getByTestId("rail-client-eng-acme"));
-
-    // Scope to the run table itself — the rail (still visible in Clients
-    // mode) also shows "Acme Co" as a list entry, so an unscoped query
-    // here would be ambiguous.
-    const table = screen.getByRole("table");
-    expect(within(table).getByText("Acme Co")).toBeInTheDocument();
-    expect(within(table).queryByText("Globex Inc")).not.toBeInTheDocument();
-  });
-
-  it("omitting the clients prop renders exactly as before — no rail at all", async () => {
-    global.fetch = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch;
-    await act(async () => {
-      render(<LiveExecutionFeed initialRuns={[run({ buyerName: "Unscoped Co" })]} />);
-    });
-    expect(screen.getByText("Unscoped Co")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /^Clients/ })).not.toBeInTheDocument();
-  });
-});
+// LiveExecutionFeed's client-scope rail was removed (the workspace is the
+// client), so its tests went with it.

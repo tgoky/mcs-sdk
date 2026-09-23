@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 
 /**
  * A "day in the life" simulation covering the specific path this session's
@@ -33,7 +32,7 @@ function resetStore() {
 
 const CURRENT_KEY = "c".repeat(64);
 
-describe("Lifecycle simulation: sign-in -> Home -> Showtime -> booking -> notification", () => {
+describe("Lifecycle simulation: connect a booking tool -> failure -> notification -> read", () => {
   beforeEach(() => {
     resetStore();
     vi.resetModules();
@@ -87,48 +86,11 @@ describe("Lifecycle simulation: sign-in -> Home -> Showtime -> booking -> notifi
   });
 
   it("walks the full journey end to end", async () => {
-    // ── Chapter 1: unauthenticated visit is turned away ──────────────────
-    vi.doMock("@/lib/session", () => ({
-      getSession: vi.fn().mockResolvedValue({}),
-    }));
-    {
-      const DashboardLayout = (await import("@/app/dashboard/layout")).default;
-      await expect(DashboardLayout({ children: <div /> })).rejects.toThrow(
-        "NEXT_REDIRECT:/api/auth/login"
-      );
-    }
-
-    // Re-authenticate for the rest of the journey. resetModules() is
-    // required here — doMock alone only affects imports that happen after
-    // it, and @/app/dashboard/layout (along with everything it transitively
-    // imports) is already cached from chapter 1's import above.
-    vi.doMock("@/lib/session", () => ({
-      getSession: vi.fn().mockResolvedValue({ whopUserId: "user-1", email: "sarah@acme.com" }),
-    }));
-    vi.resetModules();
-
-    // ── Chapter 2: signs in, lands on the workspace hub ───────────────────
-    {
-      const WorkspaceHomePage = (await import("@/app/home/page")).default;
-      render(await WorkspaceHomePage());
-      expect(screen.getByText("Welcome back, sarah")).toBeInTheDocument();
-      const showtimeCard = screen.getByRole("heading", { name: "Showtime" }).closest("a")!;
-      expect(showtimeCard).toHaveAttribute("href", "/dashboard");
-    }
-
-    // ── Chapter 3: opens Showtime — the dashboard shell renders with a
-    //    way back Home ───────────────────────────────────────────────────
-    {
-      cleanup(); // leaving Home, the workspace hub is no longer on screen
-      const DashboardLayout = (await import("@/app/dashboard/layout")).default;
-      const element = await DashboardLayout({ children: <div>dashboard content</div> });
-      await act(async () => {
-        render(element);
-        await Promise.resolve();
-      });
-      expect(screen.getByText("Home").closest("a")).toHaveAttribute("href", "/home");
-      expect(screen.getByText("dashboard content")).toBeInTheDocument();
-    }
+    // The UI chapters that rendered the old home-page product cards, the
+    // old dashboard layout and the NotificationBell component were retired
+    // with those screens; the journey below is the part that's still the
+    // same code path: credential storage, notify's fan-out, and the
+    // notification routes the in-app panel reads.
 
     // ── Chapter 4: connects a booking platform credential during setup —
     //    no real Calendly account, just the API key a buyer would paste
@@ -168,25 +130,12 @@ describe("Lifecycle simulation: sign-in -> Home -> Showtime -> booking -> notifi
       );
     }
 
-    // ── Chapter 6: the buyer comes back to the dashboard — the bell picks
-    //    up the notification on this fresh mount and they read it ────────
+    // ── Chapter 6: the notifications panel's data source returns it ────
     {
-      cleanup();
-      global.fetch = vi.fn(async (url: string) => {
-        if (url === "/api/notifications") {
-          const GET = (await import("@/app/api/notifications/route")).GET;
-          const res = await GET();
-          return { ok: true, json: async () => res.json() as any };
-        }
-        return { ok: true, json: async () => ({}) };
-      }) as unknown as typeof fetch;
-
-      const { NotificationBell } = await import("@/app/dashboard/notification-bell");
-      render(<NotificationBell />);
-
-      expect(await screen.findByText("1")).toBeInTheDocument(); // unread badge
-      fireEvent.click(screen.getByLabelText("Notifications"));
-      expect(await screen.findByText("Pin-Down couldn't reach Calendly")).toBeInTheDocument();
+      const GET = (await import("@/app/api/notifications/route")).GET;
+      const data = await (await GET()).json();
+      const list = (data.notifications ?? data) as Array<{ title: string }>;
+      expect(list.some((n) => n.title === "Pin-Down couldn't reach Calendly")).toBe(true);
     }
 
     // ── Chapter 7: buyer marks it read — reflected in the shared store ────

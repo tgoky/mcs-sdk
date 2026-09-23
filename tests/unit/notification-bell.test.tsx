@@ -1,157 +1,54 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import { NotificationBell } from "@/app/dashboard/notification-bell";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { NotificationList } from "@/app/dashboard/notification-bell";
+import type { NotificationRow } from "@/app/dashboard/use-notifications";
 
-function notif(overrides: Partial<Record<string, unknown>> = {}) {
+// The standalone NotificationBell component was replaced by the right
+// utility panel; NotificationList is what it renders.
+
+function row(overrides: Partial<NotificationRow> = {}): NotificationRow {
   return {
-    id: "notif-1",
+    id: "n1",
     type: "run_failed",
-    severity: "critical" as const,
-    title: "A run failed",
-    body: "Pin-Down failed for Acme Co.",
-    runId: "run-1",
-    engagementId: "eng-1",
+    severity: "critical",
+    title: "Pin-Down failed",
+    body: "The booking tool rejected the key.",
     read: false,
     createdAt: new Date().toISOString(),
+    runId: null,
+    engagementId: null,
     ...overrides,
-  };
+  } as NotificationRow;
 }
 
-describe("NotificationBell", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.useRealTimers();
-  });
-
-  it("loads notifications on mount and shows the unread badge", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [notif()], unreadCount: 1 }),
-    }) as unknown as typeof fetch;
-
-    await act(async () => {
-      render(<NotificationBell />);
-      await Promise.resolve();
-    });
-
-    expect(screen.getByText("1")).toBeInTheDocument();
-  });
-
-  it("caps the visible badge at '9+' for large unread counts", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [], unreadCount: 25 }),
-    }) as unknown as typeof fetch;
-    await act(async () => {
-      render(<NotificationBell />);
-      await Promise.resolve();
-    });
-    expect(screen.getByText("9+")).toBeInTheDocument();
-  });
-
-  it("shows no badge and an empty-state message when there's nothing unread", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [], unreadCount: 0 }),
-    }) as unknown as typeof fetch;
-    await act(async () => {
-      render(<NotificationBell />);
-      await Promise.resolve();
-    });
-    fireEvent.click(screen.getByLabelText("Notifications"));
+describe("NotificationList", () => {
+  it("shows an empty state when there's nothing", () => {
+    render(<NotificationList notifs={[]} unreadCount={0} markAllRead={vi.fn()} markRead={vi.fn()} />);
     expect(screen.getByText(/Nothing yet/)).toBeInTheDocument();
+    expect(screen.queryByText("[ Mark all read ]")).not.toBeInTheDocument();
   });
 
-  it("opens the dropdown, shows the list, and marks all read", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [notif()], unreadCount: 1 }),
-    }) as unknown as typeof fetch;
-    await act(async () => {
-      render(<NotificationBell />);
-      await Promise.resolve();
-    });
-
-    fireEvent.click(screen.getByLabelText("Notifications"));
-    expect(screen.getByText("A run failed")).toBeInTheDocument();
-
-    const markAllFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    global.fetch = markAllFetch as unknown as typeof fetch;
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("[ Mark all read ]"));
-      await Promise.resolve();
-    }) as unknown as typeof fetch;
-
-    expect(markAllFetch).toHaveBeenCalledWith("/api/notifications/all/read", { method: "POST" });
-    // Unread badge should be gone (optimistic update happened immediately,
-    // not waiting on the network round trip).
-    expect(screen.queryByText("1")).not.toBeInTheDocument();
+  it("lists notifications and marks all read", () => {
+    const markAllRead = vi.fn();
+    render(<NotificationList notifs={[row()]} unreadCount={1} markAllRead={markAllRead} markRead={vi.fn()} />);
+    expect(screen.getByText("Pin-Down failed")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("[ Mark all read ]"));
+    expect(markAllRead).toHaveBeenCalled();
   });
 
-  it("closes the dropdown on an outside click", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [], unreadCount: 0 }),
-    }) as unknown as typeof fetch;
-    await act(async () => {
-      render(<NotificationBell />);
-      await Promise.resolve();
-    });
-
-    fireEvent.click(screen.getByLabelText("Notifications"));
-    expect(screen.getByText(/Nothing yet/)).toBeInTheDocument();
-
-    fireEvent.mouseDown(document.body);
-    expect(screen.queryByText(/Nothing yet/)).not.toBeInTheDocument();
+  it("marks one read when it's opened, and links to its run", () => {
+    const markRead = vi.fn();
+    render(<NotificationList notifs={[row({ runId: "run-9" })]} unreadCount={1} markAllRead={vi.fn()} markRead={markRead} />);
+    const link = screen.getByText("Pin-Down failed").closest("a")!;
+    expect(link).toHaveAttribute("href", "/dashboard/runs/run-9");
+    fireEvent.click(link);
+    expect(markRead).toHaveBeenCalledWith("n1");
   });
 
-  it("polls again after 30s, and stops polling once unmounted", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ notifications: [], unreadCount: 0 }),
-    });
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    const { unmount } = render(<NotificationBell />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    fetchMock.mockClear();
-
-    await act(async () => {
-      vi.advanceTimersByTime(30_000);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    unmount();
-    fetchMock.mockClear();
-
-    await act(async () => {
-      vi.advanceTimersByTime(60_000);
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const stateUpdateWarnings = consoleError.mock.calls.filter((args) =>
-      String(args[0]).includes("unmounted component")
-    );
-    expect(stateUpdateWarnings).toHaveLength(0);
-    consoleError.mockRestore();
-  });
-
-  it("never throws when the API call fails — polling degrades silently", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
-    await expect(
-      act(async () => {
-        render(<NotificationBell />);
-        await Promise.resolve();
-      })
-    ).resolves.not.toThrow();
-    // Bell renders with no badge rather than crashing the dashboard shell.
-    expect(screen.getByLabelText("Notifications")).toBeInTheDocument();
+  it("doesn't mark an already-read notification again", () => {
+    const markRead = vi.fn();
+    render(<NotificationList notifs={[row({ read: true })]} unreadCount={0} markAllRead={vi.fn()} markRead={markRead} />);
+    fireEvent.click(screen.getByText("Pin-Down failed"));
+    expect(markRead).not.toHaveBeenCalled();
   });
 });

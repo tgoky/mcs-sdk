@@ -1,65 +1,60 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-vi.mock("@/lib/session", () => ({
-  getSession: vi.fn(),
+vi.mock("@/lib/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/lib/workspace", () => ({
+  listWorkspaces: vi.fn(),
+  getInstalledPackagesByWorkspace: vi.fn(),
+  getPrimaryEngagementIdsForWorkspaces: vi.fn(),
+}));
+vi.mock("@/lib/engagement-skills", () => ({ getEnabledWorkerIdsForEngagement: vi.fn() }));
+vi.mock("@/lib/user-avatar", () => ({ getUserAvatar: vi.fn() }));
+vi.mock("@/app/home/workspace-home-client", () => ({
+  WorkspaceHomeClient: ({ workspaceList }: { workspaceList: Array<{ name: string }> }) => (
+    <ul data-testid="workspaces">{workspaceList.map((w) => <li key={w.name}>{w.name}</li>)}</ul>
+  ),
 }));
 
 import { getSession } from "@/lib/session";
+import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdsForWorkspaces } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getUserAvatar } from "@/lib/user-avatar";
 import WorkspaceHomePage from "@/app/home/page";
 
-async function renderHomePage() {
-  const element = await WorkspaceHomePage();
-  render(element);
-}
-
 describe("WorkspaceHomePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getSession).mockResolvedValue({ whopUserId: "u1", email: "sarah@acme.com" } as any);
+    vi.mocked(listWorkspaces).mockResolvedValue([{ workspaceId: "ws1", name: "Acme" }, { workspaceId: "ws2", name: "Beta" }] as any);
+    vi.mocked(getInstalledPackagesByWorkspace).mockResolvedValue(new Map([["ws1", ["showtime"]]]));
+    vi.mocked(getPrimaryEngagementIdsForWorkspaces).mockResolvedValue(new Map([["ws1", "e1"]]));
+    vi.mocked(getEnabledWorkerIdsForEngagement).mockResolvedValue(["pin-down"] as any);
+    vi.mocked(getUserAvatar).mockResolvedValue({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
+  });
+
   it("greets the user by the local part of their email", async () => {
-    vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
-    await renderHomePage();
+    render(await WorkspaceHomePage());
     expect(screen.getByText("Welcome back, sarah")).toBeInTheDocument();
   });
 
-  it("falls back to a generic greeting when there's no email on the session", async () => {
-    vi.mocked(getSession).mockResolvedValue({} as any);
-    await renderHomePage();
-    expect(screen.getByText("Welcome back, there")).toBeInTheDocument();
+  it("lists every workspace", async () => {
+    render(await WorkspaceHomePage());
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.getByText("Beta")).toBeInTheDocument();
   });
 
-  it("shows Showtime as available and links it to /dashboard", async () => {
-    vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
-    await renderHomePage();
-
-    const showtimeHeading = screen.getByRole("heading", { name: "Showtime" });
-    const card = showtimeHeading.closest("a");
-    expect(card).toHaveAttribute("href", "/dashboard");
-    expect(screen.getByRole("button", { name: /Open Showtime/ })).not.toBeDisabled();
-  });
-
-  it("shows Reputation Manager as available and links it to /dashboard/reputation-manager", async () => {
-    vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
-    await renderHomePage();
-
-    const heading = screen.getByRole("heading", { name: "Reputation Manager" });
-    const card = heading.closest("a");
-    expect(card).toHaveAttribute("href", "/dashboard/reputation-manager");
-    expect(screen.getByRole("button", { name: /Open Reputation Manager/ })).not.toBeDisabled();
+  it("looks up primary engagements once for all workspaces, and skills only where one exists", async () => {
+    await WorkspaceHomePage();
+    expect(getPrimaryEngagementIdsForWorkspaces).toHaveBeenCalledTimes(1);
+    expect(getPrimaryEngagementIdsForWorkspaces).toHaveBeenCalledWith(["ws1", "ws2"]);
+    expect(getEnabledWorkerIdsForEngagement).toHaveBeenCalledTimes(1);
+    expect(getEnabledWorkerIdsForEngagement).toHaveBeenCalledWith("e1");
   });
 
   it("provides a sign-out control that posts to the logout route", async () => {
-    vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
-    await renderHomePage();
-    const form = screen.getByText("Sign out").closest("form");
-    expect(form).toHaveAttribute("action", "/api/auth/logout");
-    expect(form).toHaveAttribute("method", "POST");
-  });
-
-  it("never reintroduces the old animated/pulsing decorative elements", async () => {
-    vi.mocked(getSession).mockResolvedValue({ email: "sarah@acme.com" } as any);
     const { container } = render(await WorkspaceHomePage());
-    // Regression guard for the specific "looks AI-generated" complaint this
-    // rewrite fixed: no pulsing status dots, no animated gradients.
-    expect(container.querySelector(".animate-pulse")).toBeNull();
-    expect(container.querySelector('[class*="gradient"]')).toBeNull();
+    const form = container.querySelector('form[action="/api/auth/logout"]');
+    expect(form).not.toBeNull();
+    expect(form).toHaveAttribute("method", "POST");
   });
 });
