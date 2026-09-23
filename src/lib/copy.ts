@@ -587,16 +587,6 @@ export const DASHBOARD_COPY = {
     systemIntegrityClear: "No issues",
     systemIntegrityFound: "Needs attention",
   },
-  shortcuts: {
-    manageEngagements: {
-      title: "Client Profile",
-      description: "This client's full account, workers, and run history.",
-    },
-    manageCredentials: {
-      title: "Manage Credentials",
-      description: "Add, update, or remove your connected account keys.",
-    },
-  },
 };
 
 // ---------------------------------------------------------------------------

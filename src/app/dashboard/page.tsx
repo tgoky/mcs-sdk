@@ -17,7 +17,6 @@ import { getReportBlocksForEngagement } from "@/lib/worker-report-blocks";
 import { isProductId } from "@/lib/product-catalog";
 import { DASHBOARD_COPY as copy } from "@/lib/copy";
 import { getWeekWindows, weeklyTrendLabel, summarizeIssues } from "@/lib/dashboard-stats";
-import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { TourWelcomeNudge } from "@/components/tours/tour-welcome-nudge";
 
@@ -311,33 +310,9 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* Shortcuts */}
-        {primaryEngagementId && (
-          <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-zinc-200 dark:border-zinc-900">
-            <Link
-              href={`/dashboard/engagements/${primaryEngagementId}`}
-              className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-xs"
-            >
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">
-                {copy.shortcuts.manageEngagements.title}
-              </p>
-              <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
-                {copy.shortcuts.manageEngagements.description}
-              </p>
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className="group block p-4 rounded-lg bg-zinc-100/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-800 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/20 transition-all shadow-xs"
-            >
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-400 group-hover:text-zinc-900 group-hover:dark:text-zinc-100 transition-colors">
-                Settings & booking sync
-              </p>
-              <p className="text-xs font-normal text-zinc-400 dark:text-zinc-600 mt-1">
-                Manage connected accounts, and switch any engagement between auto-polling and instant webhook sync.
-              </p>
-            </Link>
-          </div>
-        )}
+        {/* The two shortcut cards that lived here (client page, settings)
+            repeated links the sidebar already has; removed to keep this
+            page to the stats and the one activity list. */}
       </div>
     </div>
   );

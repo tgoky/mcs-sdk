@@ -591,14 +591,22 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
               const isToday = cellDate.getTime() === today.getTime();
               const isPast = cellDate < today;
+              // A day with nothing on it isn't a button: 30-odd clickable
+              // "No activity" cells read as noise. Today stays clickable so
+              // the day view is always one click away.
+              const hasActivity =
+                Boolean(metric) &&
+                (metric.totalCalls > 0 || (["pile-on", "win-back", "leak-map"] as ActivitySkill[]).some((s) => metric.activityBySkill[s] > 0));
+              const interactive = hasActivity || isToday;
+              const Cell = interactive ? "button" : "div";
 
               return (
-                <button
+                <Cell
                   key={idx}
-                  type="button"
-                  onClick={() => { setSelectedDate(date); setMode("day"); }}
+                  {...(interactive ? { type: "button" as const, onClick: () => { setSelectedDate(date); setMode("day"); } } : {})}
                   className={cn(
-                    "press-settle group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer font-sans",
+                    "group relative flex min-h-[105px] flex-col justify-between border-b border-r border-zinc-200 dark:border-zinc-800/60 p-2 text-left transition-all font-sans",
+                    interactive && "press-settle hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 cursor-pointer",
                     !isCurrentMonth && "bg-zinc-100/50 dark:bg-zinc-900/20 opacity-40",
                     isCurrentMonth && isPast && "bg-zinc-200/35 dark:bg-zinc-900/60",
                     isCurrentMonth && !isPast && !isToday && "bg-white dark:bg-zinc-950"
@@ -666,11 +674,9 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                           .map((s) => `${metric.activityBySkill[s]} ${ACTIVITY_SKILL_LABEL[s]}`)
                           .join(" · ")}
                       </span>
-                    ) : (
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono italic block">No activity</span>
-                    )}
+                    ) : null}
                   </div>
-                </button>
+                </Cell>
               );
             })}
           </div>

@@ -2,7 +2,7 @@ import { getSession } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
 import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdsForWorkspaces } from "@/lib/workspace";
-import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getEnabledWorkerIdsForEngagements } from "@/lib/engagement-skills";
 import { getUserAvatar } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { WorkspaceHomeClient } from "./workspace-home-client";
@@ -34,13 +34,11 @@ export default async function WorkspaceHomePage() {
   // Primary engagements resolved in one query for every workspace, not
   // one lookup per card.
   const engagementIdByWorkspace = await getPrimaryEngagementIdsForWorkspaces(workspaceList.map((w) => w.workspaceId));
-  const enabledEntries = await Promise.all(
-    workspaceList.map(async (w) => {
-      const engagementId = engagementIdByWorkspace.get(w.workspaceId);
-      const enabled = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
-      return [w.workspaceId, enabled] as const;
-    })
-  );
+  const enabledByEngagement = await getEnabledWorkerIdsForEngagements([...engagementIdByWorkspace.values()]);
+  const enabledEntries = workspaceList.map((w) => {
+    const engagementId = engagementIdByWorkspace.get(w.workspaceId);
+    return [w.workspaceId, engagementId ? enabledByEngagement.get(engagementId) ?? [] : []] as const;
+  });
   const enabledSkillsByWorkspace: Record<string, string[]> = Object.fromEntries(enabledEntries);
 
   return (

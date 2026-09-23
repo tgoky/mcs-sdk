@@ -1,0 +1,24 @@
+# Blocks a broken main: every push and pull request must typecheck and
+# pass the test suite. (Lint isn't gated yet — it has pre-existing
+# errors — and `next build` needs real environment values.)
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { listWorkspaces, getPrimaryEngagementIdsForWorkspaces } from "@/lib/workspace";
-import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getEnabledWorkerIdsForEngagements } from "@/lib/engagement-skills";
 
 export const runtime = "nodejs";
 
@@ -29,14 +29,11 @@ export async function GET() {
   const workspaceList = await listWorkspaces(session.whopUserId);
   const engagementIdByWorkspace = await getPrimaryEngagementIdsForWorkspaces(workspaceList.map((w) => w.workspaceId));
 
-  const summaries: WorkspaceSummary[] = await Promise.all(
-    workspaceList.map(async (w) => {
-      const engagementId = engagementIdByWorkspace.get(w.workspaceId);
-      if (!engagementId) return { workspaceId: w.workspaceId, skillCount: 0 };
-      const enabled = await getEnabledWorkerIdsForEngagement(engagementId);
-      return { workspaceId: w.workspaceId, skillCount: enabled.length };
-    })
-  );
+  const enabledByEngagement = await getEnabledWorkerIdsForEngagements([...engagementIdByWorkspace.values()]);
+  const summaries: WorkspaceSummary[] = workspaceList.map((w) => {
+    const engagementId = engagementIdByWorkspace.get(w.workspaceId);
+    return { workspaceId: w.workspaceId, skillCount: engagementId ? enabledByEngagement.get(engagementId)?.length ?? 0 : 0 };
+  });
 
   return NextResponse.json({ summaries });
 }

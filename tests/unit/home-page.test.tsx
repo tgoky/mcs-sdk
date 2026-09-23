@@ -7,7 +7,7 @@ vi.mock("@/lib/workspace", () => ({
   getInstalledPackagesByWorkspace: vi.fn(),
   getPrimaryEngagementIdsForWorkspaces: vi.fn(),
 }));
-vi.mock("@/lib/engagement-skills", () => ({ getEnabledWorkerIdsForEngagement: vi.fn() }));
+vi.mock("@/lib/engagement-skills", () => ({ getEnabledWorkerIdsForEngagements: vi.fn() }));
 vi.mock("@/lib/user-avatar", () => ({ getUserAvatar: vi.fn() }));
 vi.mock("@/app/home/workspace-home-client", () => ({
   WorkspaceHomeClient: ({ workspaceList }: { workspaceList: Array<{ name: string }> }) => (
@@ -17,7 +17,7 @@ vi.mock("@/app/home/workspace-home-client", () => ({
 
 import { getSession } from "@/lib/session";
 import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdsForWorkspaces } from "@/lib/workspace";
-import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { getEnabledWorkerIdsForEngagements } from "@/lib/engagement-skills";
 import { getUserAvatar } from "@/lib/user-avatar";
 import WorkspaceHomePage from "@/app/home/page";
 
@@ -28,7 +28,7 @@ describe("WorkspaceHomePage", () => {
     vi.mocked(listWorkspaces).mockResolvedValue([{ workspaceId: "ws1", name: "Acme" }, { workspaceId: "ws2", name: "Beta" }] as any);
     vi.mocked(getInstalledPackagesByWorkspace).mockResolvedValue(new Map([["ws1", ["showtime"]]]));
     vi.mocked(getPrimaryEngagementIdsForWorkspaces).mockResolvedValue(new Map([["ws1", "e1"]]));
-    vi.mocked(getEnabledWorkerIdsForEngagement).mockResolvedValue(["pin-down"] as any);
+    vi.mocked(getEnabledWorkerIdsForEngagements).mockResolvedValue(new Map([["e1", ["pin-down"]]]) as any);
     vi.mocked(getUserAvatar).mockResolvedValue({ avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null });
   });
 
@@ -43,12 +43,12 @@ describe("WorkspaceHomePage", () => {
     expect(screen.getByText("Beta")).toBeInTheDocument();
   });
 
-  it("looks up primary engagements once for all workspaces, and skills only where one exists", async () => {
+  it("looks up engagements and enabled skills once for all workspaces", async () => {
     await WorkspaceHomePage();
     expect(getPrimaryEngagementIdsForWorkspaces).toHaveBeenCalledTimes(1);
     expect(getPrimaryEngagementIdsForWorkspaces).toHaveBeenCalledWith(["ws1", "ws2"]);
-    expect(getEnabledWorkerIdsForEngagement).toHaveBeenCalledTimes(1);
-    expect(getEnabledWorkerIdsForEngagement).toHaveBeenCalledWith("e1");
+    expect(getEnabledWorkerIdsForEngagements).toHaveBeenCalledTimes(1);
+    expect(getEnabledWorkerIdsForEngagements).toHaveBeenCalledWith(["e1"]);
   });
 
   it("provides a sign-out control that posts to the logout route", async () => {

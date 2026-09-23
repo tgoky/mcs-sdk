@@ -111,10 +111,13 @@ const TAG_SWATCHES = [
   { hex: "#1c1c1c", label: "Dark Charcoal", hasBorder: true },
 ];
 
+// Label colors, not status colors: green/red/amber already mean
+// success/failure/warning elsewhere, so the defaults avoid them. (Ids are
+// unchanged so anyone's saved tags keep working.)
 const DEFAULT_TAGS: CustomTag[] = [
-  { id: "tag-lime-alerts", name: "alerts", colorHex: "#a0d646", targetCategory: "alert" },
+  { id: "tag-lime-alerts", name: "alerts", colorHex: "#8580f0", targetCategory: "alert" },
   { id: "tag-pindown", name: "tasks", colorHex: "#3b71e8", targetSkill: "pin-down" },
-  { id: "tag-urgent", name: "actions", colorHex: "#f897a6", targetCategory: "action_needed" },
+  { id: "tag-urgent", name: "actions", colorHex: "#b06ed6", targetCategory: "action_needed" },
 ];
 
 const POLL_MS = 8_000;
