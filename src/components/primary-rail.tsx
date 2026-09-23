@@ -10,7 +10,6 @@ import {
   Settings,
   Home,
   Check,
-  Calendar,
   Sliders,
   Plus,
   UserPlus,
@@ -588,14 +587,8 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <span>Set out of office</span>
-                    </button>
-
+                    {/* "Set out of office" and "Upgrade account" buttons lived here
+                        with no action behind them; removed until they do something. */}
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
 
                     <div className="space-y-1">
@@ -617,13 +610,6 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                         <span>Invite to Showtime</span>
                       </Link>
                     </div>
-
-                    <button
-                      type="button"
-                      className="w-full mt-1 flex items-center justify-center px-3 py-2 text-xs font-semibold bg-[#f0ebf8] hover:bg-[#e3dcf3] dark:bg-purple-950/50 dark:hover:bg-purple-900/60 text-[#2a233c] dark:text-purple-200 border border-[#d6caec] dark:border-purple-800/60 rounded-xl transition-colors cursor-pointer"
-                    >
-                      <span>Upgrade account</span>
-                    </button>
 
                     <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
 

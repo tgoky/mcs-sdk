@@ -11,7 +11,7 @@ import { OverviewStatsPanel } from "../overview-stats-panel";
 import { QueuePanel } from "../queue-panel";
 import { LiveExecutionFeed } from "../live-execution-feed";
 import { redirect } from "next/navigation";
-import { Link } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

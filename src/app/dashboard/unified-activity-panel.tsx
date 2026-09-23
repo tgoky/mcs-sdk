@@ -242,7 +242,7 @@ export function UnifiedActivityPanel({
 }) {
   const router = useRouter();
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
-  const { busyId, errorId, errorText, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
+  const { busyIds, errors, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
     useQueueItemActions((id) => setResolvedIds((prev) => new Set(prev).add(id)));
   const { busyKey: cancellingRunId, run: runQuickAction } = useQuickActions();
 
@@ -425,6 +425,9 @@ export function UnifiedActivityPanel({
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
   const [railWidth, setRailWidth] = useState(readStoredRailWidth);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
+  // Queue items whose "Run again" started a run, so the button says so
+  // instead of silently reverting to its idle label.
+  const [triggeredIds, setTriggeredIds] = useState<ReadonlySet<string>>(new Set());
   const [triggerErrorId, setTriggerErrorId] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
 
@@ -445,7 +448,21 @@ export function UnifiedActivityPanel({
     const result = await triggerSkillRun(engagementId, skillName);
     setTriggeringId(null);
     if (!result.ok) setTriggerErrorId(item.id);
+    else {
+      setTriggeredIds((prev) => new Set(prev).add(item.id));
+      router.refresh();
+    }
   }
+
+  // The list is server-rendered; re-fetch it periodically while the tab is
+  // visible so new items, finished runs and cancelled runs show up without
+  // a manual reload. router.refresh keeps this panel's own state.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [router]);
 
   const railFiltered = useMemo(() => {
     return items.filter((item) => {
@@ -993,8 +1010,8 @@ export function UnifiedActivityPanel({
               // one consistent with the rest of the panel's borders.
               <div className="rounded-md overflow-hidden border border-zinc-200/80 dark:border-sidebar-border">
                 {pagedItems.map((item) => {
-                  const isBusy = busyId === item.queueItem?.id;
-                  const isTriggering = triggeringId === item.id;
+                  const isBusy = item.queueItem ? busyIds.has(item.queueItem.id) : false;
+                  const isTriggering = item.queueItem ? triggeringId === item.queueItem.id : false;
                   const isCancelling = cancellingRunId === `cancel-${item.runId}`;
                   const repair = item.queueItem ? getRepairAction(item.queueItem) : null;
 
@@ -1029,9 +1046,9 @@ export function UnifiedActivityPanel({
                               repair={repair}
                               isBusy={isBusy}
                               isTriggering={isTriggering}
+                              triggered={item.queueItem ? triggeredIds.has(item.queueItem.id) : false}
                               triggerErrorId={triggerErrorId}
-                              errorId={errorId}
-                              errorText={errorText}
+                              errorText={item.queueItem ? errors.get(item.queueItem.id) ?? null : null}
                               decide={decide}
                               resolveSweepNoShow={resolveSweepNoShow}
                               dismissSyncSetup={dismissSyncSetup}
@@ -1052,9 +1069,7 @@ export function UnifiedActivityPanel({
                             type="button"
                             disabled={isCancelling}
                             onClick={() =>
-                              runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => {
-                                /* list re-fetches on next server nav; nothing to do client-side for a one-shot dashboard tile */
-                              })
+                              runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => router.refresh())
                             }
                             className={btnGhost}
                           >
@@ -1145,11 +1160,11 @@ export function UnifiedActivityPanel({
                       <QueueItemQuickActions
                         item={selectedItem.queueItem}
                         repair={selectedItem.queueItem ? getRepairAction(selectedItem.queueItem) : null}
-                        isBusy={busyId === selectedItem.queueItem.id}
-                        isTriggering={triggeringId === selectedItem.id}
+                        isBusy={busyIds.has(selectedItem.queueItem.id)}
+                        isTriggering={triggeringId === selectedItem.queueItem.id}
+                        triggered={triggeredIds.has(selectedItem.queueItem.id)}
                         triggerErrorId={triggerErrorId}
-                        errorId={errorId}
-                        errorText={errorText}
+                        errorText={errors.get(selectedItem.queueItem.id) ?? null}
                         decide={decide}
                         resolveSweepNoShow={resolveSweepNoShow}
                         dismissSyncSetup={dismissSyncSetup}
@@ -1203,8 +1218,8 @@ function QueueItemQuickActions({
   repair,
   isBusy,
   isTriggering,
+  triggered,
   triggerErrorId,
-  errorId,
   errorText,
   decide,
   resolveSweepNoShow,
@@ -1216,9 +1231,11 @@ function QueueItemQuickActions({
   repair: ReturnType<typeof getRepairAction>;
   isBusy: boolean;
   isTriggering: boolean;
+  /** "Run again" already started a run for this item. */
+  triggered: boolean;
   triggerErrorId: string | null;
-  errorId: string | null;
-  errorText: string;
+  /** This row's own last error, if any. */
+  errorText: string | null;
   decide: ReturnType<typeof useQueueItemActions>["decide"];
   resolveSweepNoShow: ReturnType<typeof useQueueItemActions>["resolveSweepNoShow"];
   dismissSyncSetup: ReturnType<typeof useQueueItemActions>["dismissSyncSetup"];
@@ -1267,8 +1284,8 @@ function QueueItemQuickActions({
       ) : item.category === "action_needed" && item.source === "run_failure" ? (
         <>
           {repair?.kind === "trigger" ? (
-            <button type="button" disabled={isBusy || isTriggering} onClick={() => onRunRepairTrigger(item, repair.engagementId, repair.skillName)} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
-              <RotateCcw size={11} /> {isTriggering ? "Running…" : repair.label}
+            <button type="button" disabled={isBusy || isTriggering || triggered} onClick={() => onRunRepairTrigger(item, repair.engagementId, repair.skillName)} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
+              {triggered ? <Check size={11} /> : <RotateCcw size={11} />} {triggered ? "Run started" : isTriggering ? "Starting…" : repair.label}
             </button>
           ) : (repair?.kind === "link" ? repair.href : itemHref) ? (
             <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
@@ -1282,6 +1299,12 @@ function QueueItemQuickActions({
             <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">Couldn&apos;t start the run — try again from the Queue.</p>
           )}
         </>
+      ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (
+        // A reply has one terminal state (handled) — Resolve and Dismiss
+        // both called the same endpoint, so only one action is offered.
+        <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
+          <Check size={11} /> Mark handled
+        </button>
       ) : item.category === "action_needed" ? (
         <>
           <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
@@ -1297,7 +1320,7 @@ function QueueItemQuickActions({
         </button>
       )}
 
-      {errorId === item.id && errorText && <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">{errorText}</p>}
+      {errorText && <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">{errorText}</p>}
     </>
   );
 }

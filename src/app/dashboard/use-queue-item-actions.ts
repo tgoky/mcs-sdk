@@ -20,14 +20,33 @@ import type { QueueItem } from "@/lib/queue";
  * can just filter it out immediately).
  */
 export function useQueueItemActions(onResolved: (itemId: string) => void) {
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [errorId, setErrorId] = useState<string | null>(null);
-  const [errorText, setErrorText] = useState<string>(copy.errors.generic);
+  // Per row, not one shared slot: with a single busyId, the first of two
+  // in-flight actions to finish re-enabled the other row's buttons (and a
+  // second error replaced the first row's message).
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
+  const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const setBusy = useCallback((id: string, busy: boolean) => {
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const setError = useCallback((id: string, message: string | null) => {
+    setErrors((prev) => {
+      const next = new Map(prev);
+      if (message === null) next.delete(id);
+      else next.set(id, message);
+      return next;
+    });
+  }, []);
 
   const runMutation = useCallback(
     async (item: Pick<QueueItem, "id">, url: string, body?: object, method: "POST" | "PATCH" = "POST") => {
-      setBusyId(item.id);
-      setErrorId(null);
+      setBusy(item.id, true);
+      setError(item.id, null);
       try {
         const res = await fetch(url, {
           method,
@@ -39,19 +58,17 @@ export function useQueueItemActions(onResolved: (itemId: string) => void) {
             res.status === 403
               ? copy.errors.adminOnly
               : (await res.json().then((d) => d?.error).catch(() => null)) || copy.errors.generic;
-          setErrorId(item.id);
-          setErrorText(message);
+          setError(item.id, message);
           return;
         }
         onResolved(item.id);
       } catch {
-        setErrorId(item.id);
-        setErrorText(copy.errors.generic);
+        setError(item.id, copy.errors.generic);
       } finally {
-        setBusyId(null);
+        setBusy(item.id, false);
       }
     },
-    [onResolved]
+    [onResolved, setBusy, setError]
   );
 
   const decide = useCallback(
@@ -75,8 +92,8 @@ export function useQueueItemActions(onResolved: (itemId: string) => void) {
   const resolveSweepNoShow = useCallback(
     async (item: Pick<QueueItem, "id" | "engagementId" | "sweepNoShowReview">, outcome: "showed" | "rescheduled") => {
       if (!item.engagementId || !item.sweepNoShowReview) return;
-      setBusyId(item.id);
-      setErrorId(null);
+      setBusy(item.id, true);
+      setError(item.id, null);
       try {
         const res = await fetch(`/api/engagements/${item.engagementId}/bookings/${item.sweepNoShowReview.bookingId}/outcome`, {
           method: "POST",
@@ -88,27 +105,33 @@ export function useQueueItemActions(onResolved: (itemId: string) => void) {
             res.status === 403
               ? copy.errors.adminOnly
               : (await res.json().then((d) => d?.error).catch(() => null)) || copy.errors.generic;
-          setErrorId(item.id);
-          setErrorText(message);
+          setError(item.id, message);
           return;
         }
         // The real outcome is on file now — this pending action's own
         // question is already answered, so close it the same way a plain
         // reject would, just with something more specific already recorded.
-        await fetch(`/api/actions/${item.id}/review`, {
+        // If closing it fails, say so and keep the row: reporting success
+        // here used to leave the action pending while the list hid it.
+        const closed = await fetch(`/api/actions/${item.id}/review`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ decision: "rejected" }),
-        }).catch(() => {});
+        })
+          .then((r) => r.ok)
+          .catch(() => false);
+        if (!closed) {
+          setError(item.id, "The outcome was saved, but this item couldn't be closed. Try again.");
+          return;
+        }
         onResolved(item.id);
       } catch {
-        setErrorId(item.id);
-        setErrorText(copy.errors.generic);
+        setError(item.id, copy.errors.generic);
       } finally {
-        setBusyId(null);
+        setBusy(item.id, false);
       }
     },
-    [onResolved]
+    [onResolved, setBusy, setError]
   );
 
   const dismissSyncSetup = useCallback(
@@ -127,5 +150,5 @@ export function useQueueItemActions(onResolved: (itemId: string) => void) {
     [runMutation]
   );
 
-  return { busyId, errorId, errorText, runMutation, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure };
+  return { busyIds, errors, runMutation, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure };
 }

@@ -20,6 +20,7 @@ import {
 import { DASHBOARD_COPY as copy, QUEUE_COPY as queueCopy, skillName } from "@/lib/copy";
 import { VerboseTime } from "@/components/relative-time";
 import { useQueueItemActions } from "./use-queue-item-actions";
+import { summarizeIssues } from "@/lib/dashboard-stats";
 import { getRepairAction } from "@/lib/queue-repair-action";
 import { triggerSkillRun } from "@/lib/quick-actions";
 import type { QueueItem } from "@/lib/queue";
@@ -77,7 +78,8 @@ export function OverviewStatsPanel({
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [triggerErrorId, setTriggerErrorId] = useState<string | null>(null);
-  const { busyId, errorId, errorText, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure, runMutation } =
+  const [triggeredIds, setTriggeredIds] = useState<ReadonlySet<string>>(new Set());
+  const { busyIds, errors, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure, runMutation } =
     useQueueItemActions((id) => setResolvedIds((prev) => new Set(prev).add(id)));
 
   async function runRepairTrigger(item: QueueItem, engagementId: string, skillNameToRun: string) {
@@ -86,10 +88,18 @@ export function OverviewStatsPanel({
     const result = await triggerSkillRun(engagementId, skillNameToRun);
     setTriggeringId(null);
     if (!result.ok) setTriggerErrorId(item.id);
+    else setTriggeredIds((prev) => new Set(prev).add(item.id));
   }
 
   // Actionable issue items (excluding fyi-only and anything just resolved)
   const actionableIssues = queueItems.filter((i) => i.category !== "fyi" && !resolvedIds.has(i.id));
+
+  // The headline count and breakdown come from the server once; items
+  // resolved here are subtracted so the tile doesn't keep counting them.
+  const resolvedIssueCount = resolvedIds.size > 0 ? summarizeIssues(queueItems.filter((i) => resolvedIds.has(i.id))).count : 0;
+  const liveIssuesCount = Math.max(0, issuesCount - resolvedIssueCount);
+  const liveIssuesBreakdown =
+    resolvedIssueCount > 0 ? summarizeIssues(queueItems.filter((i) => !resolvedIds.has(i.id))).breakdown : issuesBreakdown;
 
   // Breakdown counts for expanded issues view
   const approveCount = actionableIssues.filter((i) => i.category === "approve").length;
@@ -229,21 +239,21 @@ export function OverviewStatsPanel({
           <div className="space-y-3 sm:min-w-[220px]">
             <div>
               <div className="flex items-baseline space-x-2">
-                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{issuesCount}</span>
+                <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{liveIssuesCount}</span>
                 <span
                   className={`text-xs font-mono ${
-                    issuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
+                    liveIssuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
                   }`}
                 >
-                  {issuesCount > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
+                  {liveIssuesCount > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
-                {issuesBreakdown ?? "All systems operating normally"}
+                {liveIssuesBreakdown ?? "All systems operating normally"}
               </p>
             </div>
 
-            {issuesCount > 0 && (
+            {liveIssuesCount > 0 && (
               <div className="space-y-1.5 text-[11px] font-mono">
                 {approveCount > 0 && (
                   <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400">
@@ -280,7 +290,7 @@ export function OverviewStatsPanel({
                   const repair = getRepairAction(item);
                   const itemHref =
                     item.fixHref ?? (item.engagementId ? `/dashboard/engagements/${item.engagementId}` : "/dashboard/queue");
-                  const isBusy = busyId === item.id;
+                  const isBusy = busyIds.has(item.id);
                   const isTriggering = triggeringId === item.id;
                   const btnBase =
                     "hover-lift press-settle inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60";
@@ -394,11 +404,12 @@ export function OverviewStatsPanel({
                             {repair?.kind === "trigger" ? (
                               <button
                                 type="button"
-                                disabled={isBusy || isTriggering}
+                                disabled={isBusy || isTriggering || triggeredIds.has(item.id)}
                                 onClick={() => runRepairTrigger(item, repair.engagementId, repair.skillName)}
                                 className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}
                               >
-                                <RotateCcw size={11} /> {isTriggering ? "Running…" : repair.label}
+                                {triggeredIds.has(item.id) ? <Check size={11} /> : <RotateCcw size={11} />}{" "}
+                                {triggeredIds.has(item.id) ? "Run started" : isTriggering ? "Starting…" : repair.label}
                               </button>
                             ) : (repair?.kind === "link" ? repair.href : itemHref) ? (
                               <Link
@@ -417,6 +428,16 @@ export function OverviewStatsPanel({
                               </p>
                             )}
                           </>
+                        ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (
+                          // One terminal state for a reply — see queue-panel.tsx.
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => decide(item, "resolved")}
+                            className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}
+                          >
+                            <Check size={11} /> Mark handled
+                          </button>
                         ) : item.category === "action_needed" ? (
                           <>
                             <button
@@ -443,8 +464,8 @@ export function OverviewStatsPanel({
                         )}
                       </div>
 
-                      {errorId === item.id && errorText && (
-                        <p className="text-[10.5px] text-rose-600 dark:text-rose-400 font-mono pl-3">{errorText}</p>
+                      {errors.get(item.id) && (
+                        <p className="text-[10.5px] text-rose-600 dark:text-rose-400 font-mono pl-3">{errors.get(item.id)}</p>
                       )}
                     </div>
                   );
@@ -501,17 +522,17 @@ export function OverviewStatsPanel({
             <ChevronRight className="w-3 h-3 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
           </p>
           <div className="flex items-baseline space-x-2">
-            <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{issuesCount}</span>
+            <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{liveIssuesCount}</span>
             <span
               className={`text-xs font-mono ${
-                issuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
+                liveIssuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
               }`}
             >
-              {issuesCount > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
+              {liveIssuesCount > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
             </span>
           </div>
-          {issuesBreakdown ? (
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">{issuesBreakdown}</p>
+          {liveIssuesBreakdown ? (
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">{liveIssuesBreakdown}</p>
           ) : (
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">Click to view breakdown</p>
           )}

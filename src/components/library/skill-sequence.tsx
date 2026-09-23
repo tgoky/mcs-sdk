@@ -30,7 +30,9 @@ function healthDotClass(stat: WorkerOverviewStat | undefined): string {
 }
 
 function nodeStatLabel(stat: WorkerOverviewStat | undefined): string {
-  if (!stat || stat.runsInWindow === 0) return "Not run yet";
+  // The stat covers the last 7 days only — a skill with older runs isn't
+  // "not run yet".
+  if (!stat || stat.runsInWindow === 0) return "No runs in 7 days";
   if (stat.needsAttention > 0) return `${stat.needsAttention} need${stat.needsAttention === 1 ? "s" : ""} attention`;
   return `${stat.runsInWindow} runs/7d`;
 }

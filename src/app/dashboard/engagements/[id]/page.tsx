@@ -51,6 +51,8 @@ import { latestStepLabel } from "@/lib/run-display";
 
 export const revalidate = 0;
 
+const RUN_HISTORY_LIMIT = 300;
+
 export default async function EngagementDetailPage({
   params,
 }: {
@@ -108,9 +110,14 @@ export default async function EngagementDetailPage({
     })
     .from(skillRuns)
     .where(eq(skillRuns.engagementId, id))
-    .orderBy(desc(skillRuns.startedAt));
+    .orderBy(desc(skillRuns.startedAt))
+    // Bounded: this page shows recent history (full history is on the
+    // runs page), and each row's steps JSON can be large.
+    .limit(RUN_HISTORY_LIMIT);
 
-  const runs = runsRaw.map((r) => ({ ...r, subjectLabel: latestStepLabel(r.steps) }));
+  const runHistoryCapped = runsRaw.length === RUN_HISTORY_LIMIT;
+  // steps is only needed for the label; it isn't passed to the client.
+  const runs = runsRaw.map(({ steps, ...r }) => ({ ...r, subjectLabel: latestStepLabel(steps) }));
 
   const stack = engagement.stack as Record<string, string> | null;
   const requireApproval = (engagement.stack as EngagementStack | null)?.require_approval_for_side_effects ?? false;
@@ -471,7 +478,7 @@ export default async function EngagementDetailPage({
 
         {/* Run History — fully client-side filtering now, see
             run-history-panel.tsx's own header for why. */}
-        {runs.length > 0 && <RunHistoryPanel engagementId={id} runs={runs} />}
+        {runs.length > 0 && <RunHistoryPanel engagementId={id} runs={runs} capped={runHistoryCapped} />}
 
         {runs.length === 0 && (
           <div className="h-32 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1.5 transition-colors">

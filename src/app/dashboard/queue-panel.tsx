@@ -704,7 +704,7 @@ export function QueuePanel({
   // source/category) — shared with the dashboard's "Needs attention"
   // overview tile via use-queue-item-actions.ts, so both surfaces offer
   // the exact same real actions instead of drifting apart.
-  const { busyId, errorId, errorText, runMutation, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
+  const { busyIds, errors, runMutation, decide, resolveSweepNoShow, dismissSyncSetup, dismissRunFailure } =
     useQueueItemActions(closeItemWithAnimation);
 
   // "Closed" tab — what the user already decided, read back from the DB
@@ -1121,8 +1121,8 @@ export function QueuePanel({
         <div className={`overflow-hidden ${isClosing ? "pointer-events-none" : ""}`}>
           <QueueRow
             item={item}
-            isBusy={busyId === item.id}
-            errorText={errorId === item.id ? errorText : null}
+            isBusy={busyIds.has(item.id)}
+            errorText={errors.get(item.id) ?? null}
             href={openHref(item)}
             onDecide={(decision) => decide(item, decision)}
             onDismissSyncSetup={() => dismissSyncSetup(item)}

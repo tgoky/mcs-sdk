@@ -57,6 +57,7 @@ export function useTour() {
 export function TourProvider({
   engagementId,
   initialProgress,
+  operatorHasSeenTours = false,
   children,
 }: {
   /** The workspace's primary engagement — every tour is scoped to it,
@@ -66,6 +67,9 @@ export function TourProvider({
    * there's nothing to point at yet for a brand-new workspace. */
   engagementId: string | null;
   initialProgress: TourProgressMap;
+  /** Any of this operator's clients has tour progress — the welcome nudge
+   * is shown once per operator, not once per workspace. */
+  operatorHasSeenTours?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -199,7 +203,7 @@ export function TourProvider({
   // instead of a second endpoint for what's functionally the same fact
   // ("this workspace has seen the tours and made a choice about them").
   const dismissWelcome = useCallback(() => persist("welcome-nudge", "completed", "dismissed", []), [persist]);
-  const hasSeenWelcome = Boolean(progressByTour["welcome-nudge"]) || Object.keys(progressByTour).length > 0;
+  const hasSeenWelcome = operatorHasSeenTours || Boolean(progressByTour["welcome-nudge"]) || Object.keys(progressByTour).length > 0;
 
   const value = useMemo<TourContextValue>(
     () => ({

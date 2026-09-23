@@ -77,7 +77,16 @@ const chipBase = "px-2.5 py-1 rounded-md text-[11px] font-mono border transition
 const chipActive = "bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100";
 const chipInactive = "bg-transparent border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800";
 
-export function RunHistoryPanel({ engagementId, runs }: { engagementId: string; runs: RunRow[] }) {
+export function RunHistoryPanel({
+  engagementId,
+  runs,
+  capped = false,
+}: {
+  engagementId: string;
+  runs: RunRow[];
+  /** Only the most recent runs were loaded, so counts are lower bounds. */
+  capped?: boolean;
+}) {
   const [skill, setSkill] = useState<string | null>(null);
   const [month, setMonth] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
@@ -207,7 +216,7 @@ export function RunHistoryPanel({ engagementId, runs }: { engagementId: string; 
         <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter runs by module">
           <button type="button" onClick={() => setSkill(null)} role="tab" aria-selected={!skill} className={`${chipBase} ${!skill ? chipActive : chipInactive}`}>
             All
-            <span className={`${!skill ? "opacity-70" : "opacity-50"} ml-0.5`}>{runs.length}</span>
+            <span className={`${!skill ? "opacity-70" : "opacity-50"} ml-0.5`}>{runs.length}{capped ? "+" : ""}</span>
           </button>
           {skillsWithRuns.map(([s, count]) => (
             <button

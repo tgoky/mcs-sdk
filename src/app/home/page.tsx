@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HOME_COPY } from "@/lib/copy";
-import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { listWorkspaces, getInstalledPackagesByWorkspace, getPrimaryEngagementIdsForWorkspaces } from "@/lib/workspace";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getUserAvatar } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
@@ -31,9 +31,12 @@ export default async function WorkspaceHomePage() {
   // (see getPrimaryEngagementIdForWorkspace's own doc) — looked up per
   // workspace so the card grid can show "Enabled skills" as the real
   // enabled subset, not just every skill the installed product ships with.
+  // Primary engagements resolved in one query for every workspace, not
+  // one lookup per card.
+  const engagementIdByWorkspace = await getPrimaryEngagementIdsForWorkspaces(workspaceList.map((w) => w.workspaceId));
   const enabledEntries = await Promise.all(
     workspaceList.map(async (w) => {
-      const engagementId = await getPrimaryEngagementIdForWorkspace(w.workspaceId);
+      const engagementId = engagementIdByWorkspace.get(w.workspaceId);
       const enabled = engagementId ? await getEnabledWorkerIdsForEngagement(engagementId) : [];
       return [w.workspaceId, enabled] as const;
     })

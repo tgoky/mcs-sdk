@@ -7,9 +7,6 @@ import {
   User, 
   Bell, 
   Globe, 
-  Settings, 
-  Users, 
-  CreditCard,
   KeyRound,
   RefreshCw
 } from "lucide-react";
@@ -35,14 +32,8 @@ const SETTINGS_NAV_GROUPS: NavGroup[] = [
       { label: "Booking Sync", href: "/dashboard/settings/booking-sync", icon: RefreshCw },
     ],
   },
-  {
-    title: "WORKSPACE SETTINGS",
-    items: [
-      { label: "General", href: "/dashboard/settings/workspace", icon: Settings },
-      { label: "Members", href: "/dashboard/settings/members", icon: Users },
-      { label: "Billing", href: "/dashboard/settings/billing", icon: CreditCard },
-    ],
-  },
+  // A "Workspace settings" group (General, Members, Billing) linked to
+  // pages that don't exist yet; it comes back when they do.
 ];
 
 export function SettingsSidebar() {

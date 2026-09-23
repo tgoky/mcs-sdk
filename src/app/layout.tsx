@@ -3,8 +3,12 @@ import { Manrope, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
+// Its own variable name: globals.css maps the theme's --font-sans to it.
+// Naming this "--font-sans" made the theme's `--font-sans: var(--font-sans)`
+// refer to itself, which is invalid, so text fell back to the browser's
+// default serif.
 const manrope = Manrope({
-  variable: "--font-sans",
+  variable: "--font-manrope",
   subsets: ["latin"],
   weight: ["200", "300", "400", "500", "600", "700"],
 });
@@ -29,9 +33,9 @@ export default function RootLayout({
 }>) {
   return (
     // suppressHydrationWarning prevents Next.js attribute mismatch warnings when next-themes injects the active class
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${geistMono.variable}`}>
       <body
-        className={`${manrope.variable} ${geistMono.variable} antialiased bg-background text-foreground selection:bg-zinc-800 dark:selection:bg-zinc-200 transition-colors duration-200`}
+        className={`font-sans antialiased bg-background text-foreground selection:bg-zinc-800 dark:selection:bg-zinc-200 transition-colors duration-200`}
       >
        <ThemeProvider
   attribute="class"

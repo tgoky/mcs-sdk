@@ -8,19 +8,21 @@
 //     (apify/sales_nav are connect-only today — see source-connect.ts).
 //   - Enrichment/verification stages (Apify-only in the source pack) are
 //     not ported.
-//   - Historical dedupe is a real DB check, scoped simpler than the
-//     source's configurable `lead_dedupe.historical_days` window: any
-//     lead already pushed (or dry-run-pushed) for this engagement, on any
-//     campaign, is skipped as a duplicate — never spam the same person
-//     twice because two ICPs both matched them.
+//   - Historical dedupe is a real DB check (see EXCLUDED_STATUSES below):
+//     a lead already pushed, held, or decided on for this engagement, on
+//     any campaign, is skipped — never spam the same person twice because
+//     two ICPs both matched them. Dry-run rows only count while live
+//     sending is off, so turning it on doesn't strand every lead a dry run
+//     already touched. Errors are retried (up to MAX_PUSH_ATTEMPTS) and
+//     dead domains are rechecked after DEAD_DOMAIN_RECHECK_DAYS.
 //   - dry-run is the default: coldOpenConfig.dailySendSettings.liveSendEnabled
 //     must be explicitly turned on before a push actually reaches the ESP,
 //     same contract the source pack's CLI holds itself to (see schema.ts's
 //     own comment on that field).
 
 import { db } from "@/lib/db";
-import { coldOpenLeads, type ColdOpenRunSummary } from "@/models/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { coldOpenLeads, type ColdOpenLeadStatus, type ColdOpenRunSummary } from "@/models/schema";
+import { eq, and, or, inArray, sql } from "drizzle-orm";
 import { getColdOpenConfig, upsertColdOpenConfig, preconditionCheck, setColdOpenPhaseState, type ColdOpenConfigRow } from "./config";
 import { CsvFetcher } from "./fetchers/csv";
 import type { LeadRow } from "./fetchers/base";
@@ -54,18 +56,34 @@ export async function saveDailySendSettings(engagementId: string, input: DailySe
 
 const CSV_SOURCE_FETCH_CEILING = 10_000;
 
+/** A lead with one of these on file is never selected again. */
+const ALWAYS_EXCLUDED_STATUSES = ["pushed", "held", "discarded", "claiming"] as const;
+/** Push failures are retried on later runs, up to this many attempts. */
+export const MAX_PUSH_ATTEMPTS = 3;
+/** A domain found dead isn't rechecked for this long. */
+export const DEAD_DOMAIN_RECHECK_DAYS = 30;
+/** Statuses a later run may overwrite with a newer outcome. Everything
+ * else (pushed, held, discarded, claiming) is final for that row. */
+const RETRYABLE_STATUSES = ["error", "dry_run", "skipped_filtered", "skipped_dead"] as const;
+/** Upper bound on liveness checks per run, as a multiple of the volume, so
+ * a list that's mostly dead can't make one run check thousands of sites. */
+const LIVENESS_CHECK_MULTIPLIER = 4;
+
 export interface LeadSelection {
   fetched: number;
   mapped: number;
   campaignMapMisses: number;
   fetchErrors: string[];
-  deduped: { lead: LeadRow; campaignId: string }[];
+  /** Every lead not already handled, in source order — not yet capped to
+   * the day's volume (that happens after liveness, in runDailySend). */
+  newLeads: { lead: LeadRow; campaignId: string }[];
 }
 
 /**
- * Fetch every configured lead source, map to a campaign, exclude anyone
- * already contacted, then cap to this run's volume/per-source dailyLimit
- * budget — in that order.
+ * Fetch every configured lead source, map to a campaign, and exclude
+ * anyone already handled. The volume/per-source dailyLimit cap is applied
+ * later, to leads whose domain is live, so dead domains don't use up the
+ * day's volume.
  *
  * Fix: csv sources used to be fetched with the fetch-time `limit` capped
  * to this run's remaining volume budget, meaning every run parsed only
@@ -89,7 +107,7 @@ export async function fetchAndSelectNewLeads(
   // import comment elsewhere in this codebase for the same quirk); these
   // two fields are plain JSON already, so there's nothing to jsonify away.
   config: Pick<ColdOpenConfigRow, "leadSources" | "campaignMap">,
-  volume: number
+  liveSend: boolean
 ): Promise<LeadSelection> {
   // ── FETCH ────────────────────────────────────────────────────────────
   const fetched: LeadRow[] = [];
@@ -142,29 +160,75 @@ export async function fetchAndSelectNewLeads(
             // parks a lead there mid-approval; even more "already
             // handled" than "held" itself, so it must not be re-fetched
             // out from under an in-flight approve/discard.
-            .where(and(eq(coldOpenLeads.engagementId, engagementId), inArray(coldOpenLeads.email, candidateEmails), inArray(coldOpenLeads.status, ["pushed", "dry_run", "held", "discarded", "claiming"])))
+            .where(
+              and(
+                eq(coldOpenLeads.engagementId, engagementId),
+                inArray(coldOpenLeads.email, candidateEmails),
+                or(
+                  inArray(coldOpenLeads.status, [...ALWAYS_EXCLUDED_STATUSES, ...(liveSend ? [] : (["dry_run"] as const))]),
+                  and(eq(coldOpenLeads.status, "error"), sql`coalesce((${coldOpenLeads.statusDetail} ->> 'attempts')::int, 1) >= ${MAX_PUSH_ATTEMPTS}`),
+                  and(
+                    eq(coldOpenLeads.status, "skipped_dead"),
+                    sql`coalesce((${coldOpenLeads.statusDetail} ->> 'checkedAt')::timestamptz, ${coldOpenLeads.createdAt}) > now() - make_interval(days => ${DEAD_DOMAIN_RECHECK_DAYS})`
+                  )
+                )
+              )
+            )
         ).map((r) => r.email.toLowerCase())
       )
     : new Set<string>();
 
-  const newLeads = mapped.filter(({ lead }) => !alreadyContacted.has(lead.email.toLowerCase()));
+  // Also one row per person within this run: the same email under two
+  // ICPs (or twice in a file) is only taken the first time it appears.
+  const seenThisRun = new Set<string>();
+  const newLeads = mapped.filter(({ lead }) => {
+    const email = lead.email.toLowerCase();
+    if (alreadyContacted.has(email) || seenThisRun.has(email)) return false;
+    seenThisRun.add(email);
+    return true;
+  });
 
-  // ── VOLUME CAP ───────────────────────────────────────────────────────
-  // Respects each source's own dailyLimit and the engagement's overall
-  // volume, applied to new leads only, in source order (first-configured
-  // source gets priority on the shared volume budget).
-  const perSourceUsed = new Map<string, number>();
-  const deduped: typeof newLeads = [];
-  for (const item of newLeads) {
-    if (deduped.length >= volume) break;
-    const source = config.leadSources.find((s) => s.icp === item.lead.icp);
-    const used = perSourceUsed.get(item.lead.icp) ?? 0;
-    if (source?.dailyLimit !== undefined && used >= source.dailyLimit) continue;
-    deduped.push(item);
-    perSourceUsed.set(item.lead.icp, used + 1);
-  }
+  return { fetched: fetched.length, mapped: mapped.length, campaignMapMisses, fetchErrors, newLeads };
+}
 
-  return { fetched: fetched.length, mapped: mapped.length, campaignMapMisses, fetchErrors, deduped };
+/**
+ * Records one lead's outcome for this run. A lead already on file with a
+ * retryable status (an earlier error, dry run, filter skip, or dead
+ * domain) is updated to the new outcome and moved to this run; a final
+ * status (pushed, held, discarded, claiming) is never overwritten. Errors
+ * carry an attempt count, which the selection above uses to stop retrying
+ * after MAX_PUSH_ATTEMPTS.
+ */
+async function recordLead(
+  engagementId: string,
+  runId: string,
+  lead: LeadRow,
+  campaignId: string,
+  status: ColdOpenLeadStatus,
+  detail: Record<string, unknown>,
+  pushedAt: Date | null = null
+): Promise<void> {
+  const statusDetail = status === "error" ? { ...detail, attempts: 1 } : detail;
+  await db
+    .insert(coldOpenLeads)
+    .values({
+      engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
+      firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
+      icp: lead.icp, source: lead.source, campaignId, status, statusDetail, pushedAt,
+    })
+    .onConflictDoUpdate({
+      target: [coldOpenLeads.engagementId, coldOpenLeads.email, coldOpenLeads.campaignId],
+      set: {
+        runId,
+        status,
+        pushedAt,
+        statusDetail:
+          status === "error"
+            ? sql`${JSON.stringify(detail)}::jsonb || jsonb_build_object('attempts', case when ${coldOpenLeads.status} = 'error' then coalesce((${coldOpenLeads.statusDetail} ->> 'attempts')::int, 1) + 1 else 1 end)`
+            : sql`${JSON.stringify(statusDetail)}::jsonb`,
+      },
+      setWhere: inArray(coldOpenLeads.status, [...RETRYABLE_STATUSES]),
+    });
 }
 
 export async function runDailySend(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
@@ -187,37 +251,60 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
     const volume = config.dailySendSettings.volume;
     summary.whatWasAttempted.push(`Fetching up to ${volume} lead(s) across ${config.leadSources.length} source(s).`);
 
-    const selection = await fetchAndSelectNewLeads(runId, engagementId, config, volume);
+    const dryRun = !config.dailySendSettings.liveSendEnabled;
+    const selection = await fetchAndSelectNewLeads(runId, engagementId, config, !dryRun);
     runSummary.fetched = selection.fetched;
     runSummary.skippedFiltered += selection.campaignMapMisses;
-    runSummary.duplicate = selection.mapped - selection.deduped.length;
+    runSummary.duplicate = selection.mapped - selection.newLeads.length;
     runSummary.errors.push(...selection.fetchErrors);
-    const { deduped } = selection;
 
-    // ── LIVENESS ───────────────────────────────────────────────────────
-    const liveness = await verifyDomains(deduped.map(({ lead }) => lead.domain));
-    const live = deduped.filter(({ lead }) => liveness.get(lead.domain)?.alive !== false);
-    runSummary.skippedDead = deduped.length - live.length;
-    for (const { lead, campaignId } of deduped) {
-      if (liveness.get(lead.domain)?.alive === false) {
-        await db.insert(coldOpenLeads).values({
-          engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
-          firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
-          icp: lead.icp, source: lead.source, campaignId, status: "skipped_dead",
-          statusDetail: { reason: liveness.get(lead.domain)?.status ?? "unknown" },
-        }).onConflictDoNothing();
+    // ── LIVENESS + VOLUME CAP ──────────────────────────────────────────
+    // Liveness is checked first, in batches, and only live leads count
+    // toward the day's volume and each source's dailyLimit — so a list
+    // with dead domains up front still yields a full day of sends.
+    const live: typeof selection.newLeads = [];
+    const perSourceUsed = new Map<string, number>();
+    const sourceFull = (icp: string) => {
+      const limit = config.leadSources.find((s) => s.icp === icp)?.dailyLimit;
+      return limit !== undefined && (perSourceUsed.get(icp) ?? 0) >= limit;
+    };
+    const maxChecks = volume * LIVENESS_CHECK_MULTIPLIER;
+    let checked = 0;
+    let cursor = 0;
+    while (live.length < volume && cursor < selection.newLeads.length && checked < maxChecks) {
+      const batch: typeof selection.newLeads = [];
+      while (batch.length < Math.min(volume - live.length, maxChecks - checked) && cursor < selection.newLeads.length) {
+        const item = selection.newLeads[cursor++];
+        if (!sourceFull(item.lead.icp)) batch.push(item);
+      }
+      if (batch.length === 0) break;
+      checked += batch.length;
+      const liveness = await verifyDomains(batch.map(({ lead }) => lead.domain));
+      for (const item of batch) {
+        const result = liveness.get(item.lead.domain.trim().toLowerCase());
+        if (result?.alive === false) {
+          runSummary.skippedDead++;
+          await recordLead(engagementId, runId, item.lead, item.campaignId, "skipped_dead", {
+            reason: result.status,
+            checkedAt: new Date().toISOString(),
+          });
+          continue;
+        }
+        if (live.length < volume && !sourceFull(item.lead.icp)) {
+          live.push(item);
+          perSourceUsed.set(item.lead.icp, (perSourceUsed.get(item.lead.icp) ?? 0) + 1);
+        }
       }
     }
 
     await logStep(runId, {
       phase: "dedupe_liveness",
       status: "success",
-      detail: `${selection.mapped} mapped, ${runSummary.duplicate} already contacted, ${runSummary.skippedDead} dead domain(s) — ${live.length} remain.`,
+      detail: `${selection.mapped} mapped, ${runSummary.duplicate} already handled, ${runSummary.skippedDead} dead domain(s) — ${live.length} selected for today.`,
     });
 
     // ── ASSEMBLE + PUSH ────────────────────────────────────────────────
     const adapter = createEspAdapter(engagementId, config.sendPlatform.platform, { baseUrl: config.sendPlatform.baseUrl });
-    const dryRun = !config.dailySendSettings.liveSendEnabled;
     const reviewRequired = new Set(config.reviewRequiredIcps);
     const autoPush = new Set(config.autoPushIcps);
 
@@ -225,23 +312,15 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
       const copy = await assembleCopyForLead(config, lead);
       if (!copy) {
         runSummary.skippedFiltered++;
-        await db.insert(coldOpenLeads).values({
-          engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
-          firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
-          icp: lead.icp, source: lead.source, campaignId, status: "skipped_filtered",
-          statusDetail: { reason: `no copy could be assembled for ICP '${lead.icp}' in ${config.dailySendSettings.copyMode} mode` },
-        }).onConflictDoNothing();
+        await recordLead(engagementId, runId, lead, campaignId, "skipped_filtered", {
+          reason: `no copy could be assembled for ICP '${lead.icp}' in ${config.dailySendSettings.copyMode} mode`,
+        });
         continue;
       }
 
       if (reviewRequired.has(lead.icp) && !autoPush.has(lead.icp)) {
         runSummary.held++;
-        await db.insert(coldOpenLeads).values({
-          engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
-          firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
-          icp: lead.icp, source: lead.source, campaignId, status: "held",
-          statusDetail: { reason: `icp '${lead.icp}' is review-required`, copy },
-        }).onConflictDoNothing();
+        await recordLead(engagementId, runId, lead, campaignId, "held", { reason: `icp '${lead.icp}' is review-required`, copy });
         continue;
       }
 
@@ -253,21 +332,11 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
           dryRun
         );
         if (result.status === "pushed") runSummary.pushed++;
-        await db.insert(coldOpenLeads).values({
-          engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
-          firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
-          icp: lead.icp, source: lead.source, campaignId, status: result.status,
-          statusDetail: result.detail, pushedAt: result.status === "pushed" ? new Date() : null,
-        }).onConflictDoNothing();
+        await recordLead(engagementId, runId, lead, campaignId, result.status, result.detail, result.status === "pushed" ? new Date() : null);
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         runSummary.errors.push(`push[${lead.email}]: ${detail}`);
-        await db.insert(coldOpenLeads).values({
-          engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
-          firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
-          icp: lead.icp, source: lead.source, campaignId, status: "error",
-          statusDetail: { error: detail },
-        }).onConflictDoNothing();
+        await recordLead(engagementId, runId, lead, campaignId, "error", { error: detail });
       }
     }
     runSummary.kept = live.length;

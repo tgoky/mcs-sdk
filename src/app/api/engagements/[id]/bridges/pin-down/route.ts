@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeVideoEmbedUrl } from "@/features/pin-down/server/templates/content-model";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -227,6 +228,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const brief = text(body.briefLandingDestination);
     if (brief && !DELIVERABLE_BRIEF_DESTINATIONS.includes(brief as (typeof DELIVERABLE_BRIEF_DESTINATIONS)[number])) {
       return NextResponse.json({ error: `Briefs can't be delivered to "${brief}". Pick Slack or a CRM note.` }, { status: 400 });
+    }
+
+    // A video link the confirmation page can't embed used to be saved and
+    // then silently replaced by the placeholder. (A bare id without a
+    // scheme is left alone — Pre-Call Read stores a Vidalytics video id in
+    // this same field.)
+    if (typeof body.heroVideoUrl === "string" && /^https?:\/\//i.test(body.heroVideoUrl.trim()) && !sanitizeVideoEmbedUrl(body.heroVideoUrl)) {
+      return NextResponse.json(
+        { error: "That video link can't be embedded on the confirmation page. Use a YouTube, Vimeo or Loom share link." },
+        { status: 400 }
+      );
     }
 
     const updatedStack: Partial<EngagementStack> = {

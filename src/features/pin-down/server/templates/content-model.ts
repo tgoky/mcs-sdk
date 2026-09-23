@@ -384,7 +384,16 @@ export function buildMergeScriptTag(): string {
   return `<script>
 (function () {
   try {
-    var p = new URLSearchParams(window.location.search);
+    // Embedded on Webflow/WordPress/GHL this page runs inside a srcdoc
+    // iframe (hosting.ts's wrapAsEmbeddableIframe), whose own location is
+    // about:srcdoc with no query string — the booking tool's params are on
+    // the host page. The iframe is same-origin with it (no sandbox), so
+    // read them from there.
+    var search = window.location.search;
+    if (!search && window.parent && window.parent !== window) {
+      try { search = window.parent.location.search; } catch (e) { search = ""; }
+    }
+    var p = new URLSearchParams(search);
     var firstName = (p.get("${MERGE_PARAMS.firstName}") || "").trim();
     var lastName = (p.get("${MERGE_PARAMS.lastName}") || "").trim();
     var email = (p.get("${MERGE_PARAMS.email}") || "").trim();
@@ -418,6 +427,21 @@ export function buildMergeScriptTag(): string {
       if (!val) return;
       document.querySelectorAll('[data-merge="' + key + '"]').forEach(function (el) { el.textContent = val; });
     });
+  } catch (e) {}
+  // Size the embedding iframe to this page's content instead of a fixed
+  // 100vh (which cut long pages off and left short ones with dead space).
+  // Only applies when framed by a same-origin host (the srcdoc embed).
+  try {
+    var frame = window.frameElement;
+    if (frame) {
+      var fit = function () {
+        var h = document.documentElement.scrollHeight + "px";
+        if (frame.style.height !== h) frame.style.height = h;
+      };
+      fit();
+      window.addEventListener("load", fit);
+      if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+    }
   } catch (e) {}
 })();
 </script>`;

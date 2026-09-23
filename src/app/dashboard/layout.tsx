@@ -13,7 +13,7 @@ import { TourOverlay } from "@/components/tours/tour-overlay";
 import { ToastProvider } from "@/components/toast/toast-provider";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -62,11 +62,19 @@ export default async function DashboardLayout({
         .limit(1)
         .then((r) => (r[0]?.stack as EngagementStack | null) ?? null)
     : null;
+  // The first-visit welcome is per operator, not per client: once they've
+  // dismissed it or taken any tour in any of their workspaces, a new
+  // workspace doesn't greet them again.
+  const [seenTours] = await db
+    .select({ id: engagements.id })
+    .from(engagements)
+    .where(and(eq(engagements.whopUserId, whopUserId), sql`${engagements.stack} -> 'tour_state' <> '{}'::jsonb`))
+    .limit(1);
 
   return (
     <BreadcrumbProvider>
       <ToastProvider>
-        <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}}>
+        <TourProvider engagementId={primaryEngagementId} initialProgress={tourStack?.tour_state ?? {}} operatorHasSeenTours={Boolean(seenTours)}>
         {/* Real-time booking toast listener */}
         <BookingToast />
 

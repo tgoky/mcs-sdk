@@ -10,7 +10,7 @@
 // This reproduces exactly that scenario against a real database: seed
 // rows simulating "day 1 already contacted the first N leads," then
 // confirm fetchAndSelectNewLeads actually surfaces leads further down
-// the file on "day 2," respecting the volume cap on the new leads only.
+// the file on "day 2," (The volume cap itself now runs after liveness, in runDailySend.)
 import { describe, it, expect, afterEach } from "vitest";
 import crypto from "crypto";
 
@@ -53,52 +53,41 @@ d("fetchAndSelectNewLeads — csv sources progress past already-contacted leads"
 
     const { fetchAndSelectNewLeads } = await import("@/features/cold-open/server/daily-send");
 
-    // Day 1: nothing contacted yet — should get the first VOLUME leads.
-    const day1 = await fetchAndSelectNewLeads(runId, engagementId, config, VOLUME);
-    expect(day1.fetched).toBe(TOTAL_LEADS); // fetched the whole file...
-    expect(day1.deduped).toHaveLength(VOLUME); // ...but capped new leads to volume
-    const day1Emails = day1.deduped.map((d) => d.lead.email.toLowerCase());
-    expect(day1Emails).toEqual(Array.from({ length: VOLUME }, (_, i) => `lead${i}@example${i}.com`));
+    // Day 1: nothing handled yet — every lead in the file is new. (The
+    // volume cap is applied later, in runDailySend, after liveness.)
+    const day1 = await fetchAndSelectNewLeads(runId, engagementId, config, true);
+    expect(day1.fetched).toBe(TOTAL_LEADS);
+    expect(day1.newLeads).toHaveLength(TOTAL_LEADS);
+    const day1Sent = day1.newLeads.slice(0, VOLUME);
+    const day1Emails = day1Sent.map((d) => d.lead.email.toLowerCase());
 
-    // Simulate day 1's run actually contacting them (what runDailySend's
-    // push loop would have written).
-    for (const { lead, campaignId } of day1.deduped) {
-      await db.insert(coldOpenLeads).values({
-        engagementId,
-        runId,
-        email: lead.email,
-        domain: lead.domain,
-        companyName: lead.companyName,
-        campaignId,
-        status: "dry_run",
-      });
+    // Simulate day 1's run pushing its first VOLUME leads.
+    for (const { lead, campaignId } of day1Sent) {
+      await db.insert(coldOpenLeads).values({ engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName, campaignId, status: "pushed" });
     }
 
-    // Day 2: the exact same file, same config. This is what was broken —
-    // it used to fetch only the first VOLUME rows again, see them all as
-    // already-contacted, and end up with zero new leads forever.
-    const day2 = await fetchAndSelectNewLeads(runId, engagementId, config, VOLUME);
-    expect(day2.deduped).toHaveLength(VOLUME);
-    const day2Emails = day2.deduped.map((d) => d.lead.email.toLowerCase());
-    // Must be the NEXT VOLUME leads (indices 10-19), not a repeat of day 1's.
-    expect(day2Emails).toEqual(Array.from({ length: VOLUME }, (_, i) => `lead${i + VOLUME}@example${i + VOLUME}.com`));
+    // Day 2: same file, same config — the pushed leads are gone and the
+    // list starts at the next one.
+    const day2 = await fetchAndSelectNewLeads(runId, engagementId, config, true);
+    expect(day2.newLeads).toHaveLength(TOTAL_LEADS - VOLUME);
+    const day2Emails = day2.newLeads.map((d) => d.lead.email.toLowerCase());
+    expect(day2Emails[0]).toBe(`lead${VOLUME}@example${VOLUME}.com`);
     expect(day2Emails.some((e) => day1Emails.includes(e))).toBe(false);
   });
 
-  it("respects a per-source dailyLimit on top of the overall volume, applied to new leads only", async () => {
+  it("dry-run rows only block a lead while live sending is off", async () => {
     const { db } = await import("@/lib/db");
-    const { engagements, workspaces } = await import("@/models/schema");
+    const { engagements, workspaces, coldOpenLeads } = await import("@/models/schema");
     await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
     await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
-
     const config = {
-      leadSources: [{ icp: "smb", fetcherType: "csv" as const, csvContent: csvFor(50), csvMapping: { email: "email", companyName: "company" }, dailyLimit: 5 }],
+      leadSources: [{ icp: "smb", fetcherType: "csv" as const, csvContent: csvFor(3), csvMapping: { email: "email", companyName: "company" } }],
       campaignMap: { smb: "campaign_1" },
     };
+    await db.insert(coldOpenLeads).values({ engagementId, runId, email: "lead0@example0.com", domain: "example0.com", companyName: "Company 0", campaignId: "campaign_1", status: "dry_run" });
 
     const { fetchAndSelectNewLeads } = await import("@/features/cold-open/server/daily-send");
-    const result = await fetchAndSelectNewLeads(runId, engagementId, config, 20);
-    // dailyLimit (5) is stricter than volume (20) for this one source.
-    expect(result.deduped).toHaveLength(5);
+    expect((await fetchAndSelectNewLeads(runId, engagementId, config, false)).newLeads).toHaveLength(2);
+    expect((await fetchAndSelectNewLeads(runId, engagementId, config, true)).newLeads).toHaveLength(3);
   });
 });
