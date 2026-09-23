@@ -143,7 +143,10 @@ describe("credentials — encrypt/decrypt round trip", () => {
     // Flip a character in the stored ciphertext — AES-GCM's auth tag must
     // catch this rather than decrypt() returning corrupted plaintext.
     const row = fakeDb.__rows.find((r) => r.engagementId === "eng-3")!;
-    row.encryptedValue = row.encryptedValue.slice(0, -4) + (row.encryptedValue.endsWith("A") ? "B" : "A") + row.encryptedValue.slice(-3);
+    // (Check the character being replaced, not the last one — otherwise an
+    // "A" already at that spot is "replaced" with "A" and nothing changes.)
+    const at = row.encryptedValue.length - 4;
+    row.encryptedValue = row.encryptedValue.slice(0, at) + (row.encryptedValue[at] === "A" ? "B" : "A") + row.encryptedValue.slice(at + 1);
 
     fakeDb.__setLookup("eng-3", "calendly");
     await expect(resolveCredential("eng-3", "calendly")).rejects.toThrow();
