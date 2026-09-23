@@ -53,9 +53,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     weeklyScheduleDayOfWeek: weekly?.dayOfWeek ?? 1,
     weeklyScheduleHour: weekly?.hourLocal ?? 9,
     monthlyScheduleDayOfMonth: monthly?.dayOfMonth ?? 1,
-    leakMapTimezone: weekly?.timezone ?? monthly?.timezone ?? "UTC",
+    // Falls back to the client timezone a connected account reported
+    // (stack.timezone, via field-writeback) before UTC.
+    leakMapTimezone: weekly?.timezone ?? monthly?.timezone ?? row.stack?.timezone ?? "UTC",
     auditOutputFormat: row.stack?.audit_output_format ?? "dashboard_only",
     leakMapReportEmail: row.stack?.leak_map_report_email ?? "",
+    // Only needed for email delivery; the signed-in user's own address is
+    // the obvious first answer, offered as a suggestion rather than filled.
+    suggestions:
+      !row.stack?.leak_map_report_email && session.email
+        ? {
+            leakMapReportEmail: {
+              value: session.email,
+              source: "user",
+              sourceDetail: null,
+              confidence: null,
+              evidence: "The email on your account.",
+              derived: true,
+              label: "your account",
+            },
+          }
+        : {},
     // For the "Slack delivery reuses the webhook from Pre-Call Read"
     // hint — slackWebhookUrl itself is a shared field, owned by the
     // general wizard, not this route.

@@ -341,6 +341,7 @@ export default async function EngagementDetailPage({
                     hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
                     hasScriptPack: Boolean(engagement.pinDownScriptPack),
                     suggestedOfferName: suggestedString("offerName"),
+                    suggestedOfferPrice: suggestedString("offerPrice"),
                     suggestedOfferVertical: suggestedString("offerVertical"),
                     suggestedOfferIcp: suggestedString("offerIcp"),
                     suggestedTrafficTemperature: suggestedString("trafficTemperature"),

@@ -574,6 +574,24 @@ const STACK_CREDENTIAL_MARKERS: ReadonlyArray<{
 ];
 
 /**
+ * Marks the chosen platforms' credentials as connected when their keys are
+ * already saved. syncStackCredentialMarkers only runs when a key is saved,
+ * and only for a platform that's already selected — so a key saved first
+ * (Connections page, Reuse saved, a key pasted in a dossier before saving
+ * the platform choice) left that platform blocked on "no connected
+ * credential" once it was picked. Call this after saving platform choices.
+ */
+export async function syncMarkersForChosenPlatforms(engagementId: string, platforms: Array<string | null | undefined>): Promise<void> {
+  const noKeyNeeded = new Set(["none", "native_crm", "discover_from_docs", "unsupported", "plain_html"]);
+  for (const platform of new Set(platforms)) {
+    if (!platform || noKeyNeeded.has(platform)) continue;
+    if (await hasCredential(engagementId, platform)) {
+      await syncStackCredentialMarkers(engagementId, platform, true);
+    }
+  }
+}
+
+/**
  * Fixes a real bug found by this session's own Showtime audit: storeCredential/
  * linkEngagementToVault/unlinkEngagementFromVault above only ever touch the
  * credentialsRefs table — but worker-config-completeness.ts's checkers and

@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { TEMPLATE_IDS } from "@/features/pin-down/server/templates/types";
+import { normalizeVertical } from "@/lib/verticals";
 import {
   NOTIFICATION_PACK,
   activateNotificationPackAlert,
@@ -105,14 +106,20 @@ export async function PATCH(
       if (o.hybrid_mode_enabled !== undefined && typeof o.hybrid_mode_enabled !== "boolean") {
         return NextResponse.json({ error: "offerDetails.hybrid_mode_enabled must be a boolean." }, { status: 400 });
       }
+      // No invented traffic temperature: it's a required answer, so an
+      // unset one stays unset (and blocks Pin-Down) until someone picks it.
       nextOfferDetails = {
         name: "",
         price: "",
         icp: "",
-        traffic_temperature: "warm",
         hybrid_mode_enabled: false,
         ...existing.offerDetails,
         ...o,
+        // Store the fixed list's id for a matching vertical so benchmarks
+        // group correctly; keep an unlisted value as typed.
+        ...(typeof o.vertical === "string" && o.vertical.trim()
+          ? { vertical: normalizeVertical(o.vertical) ?? o.vertical.trim() }
+          : {}),
       } as typeof existing.offerDetails;
     }
 

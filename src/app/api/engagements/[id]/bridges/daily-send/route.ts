@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
   const [row] = await db
-    .select({ buyer: engagements.buyer })
+    .select({ buyer: engagements.buyer, stack: engagements.stack })
     .from(engagements)
     .where(and(eq(engagements.engagementId, id), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
     .limit(1);
@@ -31,6 +31,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const config = await getColdOpenConfig(id);
   return NextResponse.json({
     buyer: row.buyer,
+    // The client timezone a connected account reported, for the form to
+    // default to before any settings are saved.
+    clientTimezone: row.stack?.timezone ?? null,
     dailySendSettings: config?.dailySendSettings ?? null,
     lastRunAt: config?.lastRunAt ?? null,
     lastRunSummary: config?.lastRunSummary ?? null,

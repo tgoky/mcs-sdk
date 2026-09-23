@@ -17,7 +17,9 @@
 import { askJev, type JevQuestion, type JevAnswer } from "@/lib/jev";
 import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { callClaude, MODEL } from "@/lib/llm";
-import type { ColdOpenIcp } from "@/models/schema";
+import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
+import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
+import { VERTICALS, isListedVertical, verticalLabel } from "@/lib/verticals";
 
 export interface FieldQuestionMap {
   [fieldKey: string]: JevQuestion;
@@ -161,7 +163,151 @@ export async function verifyReputationExtractions(
   return { verified, skipped: false };
 }
 
+// ── Website-read single values: score before they can auto-apply ───────
+//
+// discover-client writes Claude's readings of the site copy (operator name,
+// offer name, price, ICP) as source "llm", which field-writeback never
+// trusts. This scores each one against the same copy and rewrites it as a
+// "jev" fact carrying the real score, so only a well-supported reading
+// crosses the auto-apply threshold. offerVertical is classified rather
+// than scored: Jev picks from the fixed list in verticals.ts, so a
+// confident answer is always one of the shared benchmark groups.
+
+const SINGLE_VALUE_LEVELS = [
+  "Fabricated — the copy doesn't support this value at all",
+  "Mostly wrong — loosely related to the copy but misread or the wrong kind of thing",
+  "Plausible — consistent with the copy but only weakly or indirectly supported",
+  "Mostly right — clearly supported by the copy, with minor imprecision",
+  "Exactly right — the copy states this directly",
+];
+
+const WEBSITE_READING_PROMPTS: Record<string, string> = {
+  operatorName: "Score how accurately the proposed business name matches how the site copy names the business itself.",
+  offerName: "Score how accurately the proposed offer name matches the main offer the site copy is selling.",
+  offerPrice: "Score how accurately the proposed price matches a price the site copy actually states. An invented price is fabricated.",
+  offerIcp: "Score how accurately the proposed ideal customer matches who the site copy is written for.",
+};
+
+export async function verifyWebsiteReadings(
+  engagementId: string
+): Promise<{ verified: string[]; skipped: boolean }> {
+  const corpus = await getClientFact(engagementId, "rawVoiceCorpus");
+  if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) {
+    return { verified: [], skipped: true };
+  }
+
+  const candidates: { factKey: string; value: string }[] = [];
+  for (const factKey of Object.keys(WEBSITE_READING_PROMPTS)) {
+    const fact = await getClientFact(engagementId, factKey);
+    if (fact && fact.source === "llm" && fact.status === "suggested" && typeof fact.value === "string" && fact.value.trim()) {
+      candidates.push({ factKey, value: fact.value });
+    }
+  }
+
+  // Classify the vertical when there's no answer from the list yet: no
+  // fact, or an unscored reading / free-text account value that isn't a
+  // listed id. A listed account value or a human's answer is left alone.
+  const verticalFact = await getClientFact(engagementId, "offerVertical");
+  const classifyVertical =
+    !verticalFact ||
+    (verticalFact.status === "suggested" && !(verticalFact.source !== "llm" && isListedVertical(String(verticalFact.value))));
+
+  if (candidates.length === 0 && !classifyVertical) return { verified: [], skipped: true };
+
+  const state: Record<string, unknown> = { siteCopy: corpus.value };
+  const questions: FieldQuestionMap = {};
+  for (const { factKey, value } of candidates) {
+    state[`proposed${factKey.charAt(0).toUpperCase()}${factKey.slice(1)}`] = value;
+    questions[`${factKey}Verification`] = { type: "score", instructions: WEBSITE_READING_PROMPTS[factKey], criteria: SINGLE_VALUE_LEVELS };
+  }
+  if (classifyVertical) {
+    questions.offerVertical = {
+      type: "choice",
+      instructions: "Which vertical best describes the business this site copy is selling for? Pick the closest fit.",
+      criteria: Object.fromEntries(VERTICALS.map((v) => [v.id, `${v.label}: ${v.description}`])),
+    };
+  }
+
+  const result = await askJev({ state, questions });
+
+  const verified: string[] = [];
+  const verticalAnswer = result.answers.offerVertical;
+  if (classifyVertical && verticalAnswer && verticalAnswer.type === "choice" && isListedVertical(verticalAnswer.choice)) {
+    await upsertClientFact(engagementId, "offerVertical", verticalAnswer.choice, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: Math.round(verticalAnswer.confidence * 100),
+      evidence: `Vertical "${verticalLabel(verticalAnswer.choice)}" chosen by Jev from the fixed list, based on site copy (model ${result.model}).`,
+    });
+    verified.push("offerVertical");
+  }
+
+  for (const { factKey, value } of candidates) {
+    const answer = result.answers[`${factKey}Verification`];
+    if (!answer || answer.type !== "score") continue;
+    const quality = answer.score / (SINGLE_VALUE_LEVELS.length - 1);
+    await upsertClientFact(engagementId, factKey, value, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: Math.round(quality * answer.confidence * 100),
+      evidence: `Read from site copy by Claude, scored ${answer.score.toFixed(2)}/${SINGLE_VALUE_LEVELS.length - 1} by Jev (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`,
+    });
+    verified.push(factKey);
+  }
+  return { verified, skipped: false };
+}
+
 // ── Cold Open derived facts: extract ICPs, Voice, Product Identity ─────
+//
+// Same two-step shape as verifyReputationExtractions above: Claude extracts
+// candidates from the site copy, then Jev scores those candidates against
+// the same copy, and the score is what gets stored as confidence. Claude's
+// own output never carries a confidence of its own — a made-up number here
+// would pass field-writeback's auto-apply threshold with no real check.
+
+const PRODUCT_IDENTITY_LEVELS = [
+  "Fabricated — the name and value proposition aren't supported by the site copy",
+  "Mostly wrong — at most one of the name or value proposition matches the copy; the rest is guessed or misread",
+  "Mixed — about half is supported by the copy; the rest is guessed",
+  "Mostly right — the name and value proposition match the copy; the price is missing, approximate, or weakly supported",
+  "Fully right — the name, the price (or its honest absence) and the value proposition all match the copy",
+];
+
+// Team-size bands Jev picks from for each ICP — the fixed options keep the
+// answer to what the copy can actually support, instead of an invented
+// exact number.
+const TEAM_SIZE_BANDS: Record<string, { min?: number; max?: number; description: string }> = {
+  solo: { min: 1, max: 1, description: "Solo operators — one person running the business." },
+  "2-10": { min: 2, max: 10, description: "Small teams of roughly 2 to 10 people." },
+  "11-50": { min: 11, max: 50, description: "Growing companies of roughly 11 to 50 people." },
+  "51-200": { min: 51, max: 200, description: "Mid-sized companies of roughly 51 to 200 people." },
+  "201-1000": { min: 201, max: 1000, description: "Larger companies of roughly 201 to 1,000 people." },
+  "1000+": { min: 1001, description: "Enterprises with more than 1,000 people." },
+  unclear: { description: "The copy gives no real signal about company size for this audience." },
+};
+
+const DISQUALIFIER_LEVELS = [
+  "Fabricated — none of these exclusions are supported by the copy",
+  "Mostly wrong — at most one exclusion is supported; the rest are guesses",
+  "Mixed — about half the exclusions are supported by the copy",
+  "Mostly right — nearly all exclusions follow from who the copy says this is (and isn't) for",
+  "Fully right — every exclusion follows directly from the copy",
+];
+
+const ICP_LEVELS = [
+  "Fabricated — none of these audiences are who the site copy is written for",
+  "Mostly wrong — at most one audience matches who the copy addresses; the rest are guesses",
+  "Mixed — roughly half the audiences match who the copy addresses",
+  "Mostly right — nearly all audiences match who the copy addresses, with minor gaps or one weak entry",
+  "Fully right — every audience is clearly who the copy is written for, and no obvious one is missing",
+];
+
+function scoreToConfidence(answer: JevAnswer | undefined, levels: number): number | undefined {
+  if (!answer || answer.type !== "score") return undefined;
+  const quality = answer.score / (levels - 1);
+  return Math.round(quality * answer.confidence * 100);
+}
+
 export async function resolveColdOpenDerivedFields(
   engagementId: string
 ): Promise<{ resolved: string[]; skipped: boolean }> {
@@ -169,121 +315,232 @@ export async function resolveColdOpenDerivedFields(
   if (!corpus || typeof corpus.value !== "string" || !corpus.value.trim()) {
     return { resolved: [], skipped: true };
   }
+  const siteCopy = corpus.value;
 
-  const existingProduct = await getClientFact(engagementId, "productIdentity");
-  const existingIcps = await getClientFact(engagementId, "icps");
-  const existingVoice = await getClientFact(engagementId, "voiceProfile");
-
-  if (
-    existingProduct && existingProduct.status !== "suggested" &&
-    existingIcps && existingIcps.status !== "suggested" &&
-    existingVoice && existingVoice.status !== "suggested"
-  ) {
+  // Human-touched facts (confirmed / edited / rejected) are never re-suggested.
+  const isOpen = (fact: Awaited<ReturnType<typeof getClientFact>>) => !fact || fact.status === "suggested";
+  const [existingProduct, existingIcps, existingVoice, existingSizing] = await Promise.all([
+    getClientFact(engagementId, "productIdentity"),
+    getClientFact(engagementId, "icps"),
+    getClientFact(engagementId, "voiceProfile"),
+    getClientFact(engagementId, "sizingBounds"),
+  ]);
+  const wantProduct = isOpen(existingProduct);
+  const wantIcps = isOpen(existingIcps);
+  const wantVoice = isOpen(existingVoice);
+  // Sizing is keyed to the ICP slugs extracted in this same pass, so it's
+  // only proposed alongside a fresh ICP suggestion.
+  const wantSizing = isOpen(existingSizing) && wantIcps;
+  if (!wantProduct && !wantIcps && !wantVoice && !wantSizing) {
     return { resolved: [], skipped: true };
   }
 
-  // 1. Resolve Jev choice for outreach tone
-  const toneResult = await askJev({
-    state: corpus.value,
-    questions: {
-      voiceTone: {
-        type: "choice",
-        instructions: "Based on this website's marketing copy, what tone best characterizes their cold outreach and brand messaging?",
-        criteria: {
-          Professional: "Corporate, formal, authoritative, and structured copy.",
-          Direct: "Concise, results-oriented, pitch-focused copy with zero fluff.",
-          Casual: "Conversational, friendly, approachable, and lighthearted copy.",
-          Warm: "Empathetic, consultative, relationship-first copy.",
-        },
-      },
-    },
-  });
-
-  const toneAnswer = toneResult.answers.voiceTone;
-  const detectedTone = toneAnswer && toneAnswer.type === "choice" ? toneAnswer.choice : "Professional";
-  const toneConfidence = toneAnswer && toneAnswer.type === "choice" ? Math.round(toneAnswer.confidence * 100) : 80;
-
-  const resolved: string[] = [];
-
-  // 2. Extract structured Product Identity & ICPs via Claude
+  // 1. Claude extracts candidates. Missing values stay missing — no
+  //    placeholder names, prices, or ICPs are invented to fill gaps.
+  let parsed: {
+    productName?: unknown;
+    productPrice?: unknown;
+    productValueProp?: unknown;
+    icps?: unknown;
+    greeting?: unknown;
+    signOff?: unknown;
+  } | null = null;
   try {
     const claudeResult = await callClaude({
       model: MODEL.FAST,
       system: `You analyze website marketing text and extract structured sales data for an outbound Cold Open campaign.
 Return ONLY a valid JSON object in the following format:
 {
-  "productName": "extracted product or company name",
-  "productPrice": "pricing details or estimated tier e.g. $499/mo or Custom",
-  "productValueProp": "concise 1-sentence value proposition",
+  "productName": "the product or company name exactly as the copy presents it, or null if unclear",
+  "productPrice": "the price exactly as stated in the copy (e.g. $499/mo), or null if the copy doesn't state one",
+  "productValueProp": "concise 1-sentence value proposition drawn from the copy, or null if unclear",
   "icps": [
     {
       "slug": "url-safe-slug-e-g-b2b-saas-founders",
       "label": "Human readable ICP Label e.g. B2B SaaS Founders",
-      "weight": 0.5
+      "weight": 0.5,
+      "disqualifiers": ["kinds of prospects the copy says this is NOT for, e.g. 'B2C', 'pre-revenue'; empty if the copy doesn't say"]
     }
   ],
-  "greeting": "Default email greeting e.g. Hi {first_name},",
-  "signOff": "Default email sign-off e.g. Best,"
+  "greeting": "Email greeting in the copy's tone e.g. Hi {first_name},",
+  "signOff": "Email sign-off in the copy's tone e.g. Best,"
 }
-Make sure weights across ICPs sum to 1.0. Slug must be lowercase and hyphenated. Do not include markdown code fences or preambles.`,
-      userMessage: corpus.value.slice(0, 6000),
+Only include ICPs the copy is clearly written for; return an empty list if none are clear. Only list disqualifiers the copy actually states or clearly implies. Weights across ICPs sum to 1.0. Slugs are lowercase and hyphenated. Never guess a price. Do not include markdown code fences or preambles.`,
+      userMessage: siteCopy.slice(0, 6000),
       maxTokens: 1000,
     });
-
     const jsonMatch = claudeResult.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      if (!existingProduct || existingProduct.status === "suggested") {
-        const productIdentity = {
-          name: String(parsed.productName || "Main Product"),
-          url: "",
-          price: String(parsed.productPrice || ""),
-          valueProp: String(parsed.productValueProp || ""),
-        };
-        await upsertClientFact(engagementId, "productIdentity", productIdentity, {
-          source: "jev",
-          sourceDetail: "rawVoiceCorpus",
-          confidence: 85,
-          evidence: `Extracted product identity from site copy via Claude + Jev.`,
-        });
-        resolved.push("productIdentity");
-      }
-
-      if (!existingIcps || existingIcps.status === "suggested") {
-        if (Array.isArray(parsed.icps) && parsed.icps.length > 0) {
-          const shapedIcps: ColdOpenIcp[] = parsed.icps.map((item: any, idx: number) => ({
-            slug: String(item.slug || `icp-${idx + 1}`).toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-            label: String(item.label || `ICP ${idx + 1}`),
-            weight: typeof item.weight === "number" ? item.weight : 1 / parsed.icps.length,
-          }));
-          await upsertClientFact(engagementId, "icps", shapedIcps, {
-            source: "jev",
-            sourceDetail: "rawVoiceCorpus",
-            confidence: 85,
-            evidence: `Extracted ${shapedIcps.length} target ICPs from site copy.`,
-          });
-          resolved.push("icps");
-        }
-      }
-
-      if (!existingVoice || existingVoice.status === "suggested") {
-        const voiceProfile = {
-          greeting: String(parsed.greeting || "Hi {first_name},"),
-          signOff: String(parsed.signOff || "Best,"),
-          tone: detectedTone,
-        };
-        await upsertClientFact(engagementId, "voiceProfile", voiceProfile, {
-          source: "jev",
-          sourceDetail: "rawVoiceCorpus",
-          confidence: toneConfidence,
-          evidence: `Derived brand voice profile with ${detectedTone} tone from site copy.`,
-        });
-        resolved.push("voiceProfile");
-      }
-    }
+    if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
   } catch (err) {
     console.warn(`[field-resolvers] resolveColdOpenDerivedFields extraction failed for ${engagementId}:`, err);
+  }
+
+  const str = (v: unknown) => (typeof v === "string" && v.trim() && v.trim().toLowerCase() !== "null" ? v.trim() : "");
+
+  const productName = str(parsed?.productName);
+  const productValueProp = str(parsed?.productValueProp);
+  const productPrice = str(parsed?.productPrice);
+  const domain = await getPrimaryDomainForEngagement(engagementId);
+  const productCandidate =
+    wantProduct && productName && productValueProp
+      ? { name: productName, url: domain ? `https://${domain}` : "", price: productPrice, valueProp: productValueProp }
+      : null;
+
+  const rawIcps = Array.isArray(parsed?.icps) ? (parsed?.icps as Array<Record<string, unknown>>) : [];
+  const labelledIcps = rawIcps.filter((item) => str(item?.label));
+  const icpCandidate: ColdOpenIcp[] | null =
+    wantIcps && labelledIcps.length > 0
+      ? labelledIcps.map((item, idx) => ({
+          slug: (str(item.slug) || str(item.label)).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || `icp-${idx + 1}`,
+          label: str(item.label),
+          weight: typeof item.weight === "number" && item.weight > 0 ? item.weight : 1 / labelledIcps.length,
+        }))
+      : null;
+
+  // 2. Jev scores the candidates against the same copy, and picks the tone,
+  //    in one call.
+  const questions: FieldQuestionMap = {};
+  const state: Record<string, unknown> = { siteCopy };
+  if (productCandidate) {
+    state.proposedProductIdentity = { name: productCandidate.name, price: productCandidate.price || null, valueProp: productCandidate.valueProp };
+    questions.productIdentityVerification = {
+      type: "score",
+      instructions:
+        "Score how accurately the proposed product identity (name, price, value proposition) reflects what the site copy actually says. A missing price is correct when the copy states none; an invented price is wrong.",
+      criteria: PRODUCT_IDENTITY_LEVELS,
+    };
+  }
+  if (icpCandidate) {
+    state.proposedIcps = icpCandidate.map((i) => i.label);
+    questions.icpsVerification = {
+      type: "score",
+      instructions:
+        "Score how accurately the proposed ideal customer profiles reflect who the site copy is actually written for and selling to.",
+      criteria: ICP_LEVELS,
+    };
+  }
+  // Sizing is proposed per ICP only when the ICPs themselves were just
+  // extracted — the slugs must match what's suggested alongside them.
+  const sizingIcps = wantSizing && icpCandidate ? icpCandidate : [];
+  const disqualifiersBySlug: Record<string, string[]> = {};
+  for (const [idx, icp] of sizingIcps.entries()) {
+    const raw = labelledIcps[idx]?.disqualifiers;
+    disqualifiersBySlug[icp.slug] = Array.isArray(raw) ? raw.map(str).filter(Boolean) : [];
+    questions[`teamSize_${icp.slug}`] = {
+      type: "choice",
+      instructions: `Based on the site copy, what size are the companies in this target audience: "${icp.label}"?`,
+      criteria: Object.fromEntries(Object.entries(TEAM_SIZE_BANDS).map(([band, b]) => [band, b.description])),
+    };
+  }
+  const anyDisqualifiers = Object.values(disqualifiersBySlug).some((d) => d.length > 0);
+  if (anyDisqualifiers) {
+    state.proposedDisqualifiers = disqualifiersBySlug;
+    questions.disqualifiersVerification = {
+      type: "score",
+      instructions: "Score how well the proposed per-audience exclusions follow from what the site copy says the offer is and isn't for.",
+      criteria: DISQUALIFIER_LEVELS,
+    };
+  }
+
+  if (wantVoice) {
+    questions.voiceTone = {
+      type: "choice",
+      instructions: "Based on this website's marketing copy, what tone best characterizes their cold outreach and brand messaging?",
+      criteria: {
+        Professional: "Corporate, formal, authoritative, and structured copy.",
+        Direct: "Concise, results-oriented, pitch-focused copy with zero fluff.",
+        Casual: "Conversational, friendly, approachable, and lighthearted copy.",
+        Warm: "Empathetic, consultative, relationship-first copy.",
+      },
+    };
+  }
+  if (Object.keys(questions).length === 0) {
+    return { resolved: [], skipped: true };
+  }
+
+  const result = await askJev({ state, questions });
+  const resolved: string[] = [];
+
+  if (productCandidate) {
+    const answer = result.answers.productIdentityVerification;
+    await upsertClientFact(engagementId, "productIdentity", productCandidate, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: scoreToConfidence(answer, PRODUCT_IDENTITY_LEVELS.length),
+      evidence:
+        answer && answer.type === "score"
+          ? `Claude-extracted product identity scored ${answer.score.toFixed(2)}/${PRODUCT_IDENTITY_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`
+          : "Claude-extracted product identity; Jev returned no score, so it stays a suggestion.",
+    });
+    resolved.push("productIdentity");
+  }
+
+  if (icpCandidate) {
+    const answer = result.answers.icpsVerification;
+    await upsertClientFact(engagementId, "icps", icpCandidate, {
+      source: "jev",
+      sourceDetail: "rawVoiceCorpus",
+      confidence: scoreToConfidence(answer, ICP_LEVELS.length),
+      evidence:
+        answer && answer.type === "score"
+          ? `Claude-extracted ICPs scored ${answer.score.toFixed(2)}/${ICP_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`
+          : "Claude-extracted ICPs; Jev returned no score, so they stay a suggestion.",
+    });
+    resolved.push("icps");
+  }
+
+  if (sizingIcps.length > 0) {
+    const bounds: Record<string, ColdOpenSizingBound> = {};
+    const confidences: number[] = [];
+    for (const icp of sizingIcps) {
+      const band = result.answers[`teamSize_${icp.slug}`];
+      const bandDef = band && band.type === "choice" ? TEAM_SIZE_BANDS[band.choice] : undefined;
+      if (band && band.type === "choice" && bandDef && band.choice !== "unclear") confidences.push(Math.round(band.confidence * 100));
+      bounds[icp.slug] = {
+        ...(band && band.type === "choice" && bandDef && band.choice !== "unclear" ? { teamSizeMin: bandDef.min, teamSizeMax: bandDef.max } : {}),
+        disqualifyIf: disqualifiersBySlug[icp.slug] ?? [],
+      };
+    }
+    const disqConfidence = scoreToConfidence(result.answers.disqualifiersVerification, DISQUALIFIER_LEVELS.length);
+    if (disqConfidence !== undefined) confidences.push(disqConfidence);
+    const hasContent = Object.values(bounds).some((b) => b.teamSizeMin !== undefined || b.disqualifyIf.length > 0);
+    if (hasContent) {
+      await upsertClientFact(engagementId, "sizingBounds", bounds, {
+        source: "jev",
+        sourceDetail: "rawVoiceCorpus",
+        // The weakest part decides: one confident band doesn't vouch for a
+        // guessed exclusion list.
+        confidence: confidences.length > 0 ? Math.min(...confidences) : undefined,
+        evidence: `Team-size bands chosen by Jev per ICP; exclusions proposed by Claude and scored by Jev (model ${result.model}).`,
+      });
+      resolved.push("sizingBounds");
+    }
+  }
+
+  const toneAnswer = result.answers.voiceTone;
+  if (wantVoice && toneAnswer && toneAnswer.type === "choice") {
+    const extractedGreeting = str(parsed?.greeting);
+    const extractedSignOff = str(parsed?.signOff);
+    const greetingNote =
+      extractedGreeting && extractedSignOff
+        ? "greeting and sign-off extracted by Claude"
+        : "greeting/sign-off not found in the copy, so the generic defaults are used";
+    await upsertClientFact(
+      engagementId,
+      "voiceProfile",
+      {
+        greeting: extractedGreeting || "Hi {first_name},",
+        signOff: extractedSignOff || "Best,",
+        tone: toneAnswer.choice,
+      },
+      {
+        source: "jev",
+        sourceDetail: "rawVoiceCorpus",
+        confidence: Math.round(toneAnswer.confidence * 100),
+        evidence: `Tone "${toneAnswer.choice}" chosen by Jev from site copy (model ${result.model}); ${greetingNote}.`,
+      }
+    );
+    resolved.push("voiceProfile");
   }
 
   return { resolved, skipped: resolved.length === 0 };

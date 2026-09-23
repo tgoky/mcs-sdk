@@ -82,7 +82,11 @@ const COLD_OPEN_SEND_PLATFORM_IDS: Record<string, string> = {
 // statsMetric (the same source the monitor uses), not from these list
 // endpoints — a separate, more careful piece than this harvest.
 export async function harvestWhopPlans(engagementId: string, apiKey: string, accountId: string): Promise<string[]> {
-  const res = await fetchWithTimeout(`https://api.whop.com/v1/plans?account_id=${encodeURIComponent(accountId)}&limit=1`, {
+  // One page of up to 50 plans. UNVERIFIED against Whop's docs: this app's
+  // probe only ever sends limit=1, so the page-size ceiling and Whop's
+  // pagination scheme haven't been confirmed — a creator with more than 50
+  // plans may not see them all here. Confirm both before relying on it.
+  const res = await fetchWithTimeout(`https://api.whop.com/v1/plans?account_id=${encodeURIComponent(accountId)}&limit=50`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) throw new Error(`Whop plans fetch failed [${res.status}]`);
@@ -90,20 +94,45 @@ export async function harvestWhopPlans(engagementId: string, apiKey: string, acc
   // Envelope shape (data.data vs a bare array vs data.plans) wasn't
   // pinned down in what was relayed — read defensively across the
   // plausible shapes rather than assume one.
-  const list = Array.isArray(data) ? data : (data?.data ?? data?.plans ?? []);
-  const plan = list[0];
-  if (!plan) return [];
+  type RawPlan = {
+    id?: string;
+    title?: string;
+    name?: string;
+    formatted_price?: string;
+    renewal_price?: number | string | null;
+    currency?: string;
+    product?: { title?: string; name?: string };
+  };
+  const list: RawPlan[] = Array.isArray(data) ? data : (data?.data ?? data?.plans ?? []);
 
-  const priceValue: string | undefined =
-    plan.formatted_price || (plan.renewal_price != null && plan.currency ? `${plan.renewal_price} ${plan.currency}` : undefined);
-  if (!priceValue) return [];
+  const plans = list
+    .map((plan) => {
+      const price: string | undefined =
+        plan.formatted_price || (plan.renewal_price != null && plan.currency ? `${plan.renewal_price} ${plan.currency}` : undefined);
+      const name: string = String(plan.title ?? plan.name ?? plan.product?.title ?? plan.product?.name ?? plan.id ?? "").trim();
+      return price ? { name, price } : null;
+    })
+    .filter((p): p is { name: string; price: string } => p !== null);
 
-  await upsertClientFact(engagementId, "offerPrice", priceValue, {
+  if (plans.length === 0) return [];
+
+  if (plans.length === 1) {
+    await upsertClientFact(engagementId, "offerPrice", plans[0].price, {
+      source: "account",
+      sourceDetail: "whop_bot_api_key",
+      evidence: "The Whop account's only plan (renewal_price, or formatted_price when present).",
+    });
+    return ["offerPrice"];
+  }
+
+  // Several plans: the app can't know which one this offer is, so nothing
+  // is filled in. The list is kept for the dossier to offer as a pick.
+  await upsertClientFact(engagementId, "whopPlanOptions", plans, {
     source: "account",
     sourceDetail: "whop_bot_api_key",
-    evidence: "Whop's own /v1/plans renewal_price (or formatted_price when present).",
+    evidence: `${plans.length} plans on the Whop account — which one is this offer?`,
   });
-  return ["offerPrice"];
+  return ["whopPlanOptions"];
 }
 
 // ── Twilio: US A2P 10DLC campaign status -> smsA2p10dlcStatus ───────────
@@ -160,7 +189,18 @@ export async function harvestTwilioA2PStatus(engagementId: string, authToken: st
     sourceDetail: "twilio",
     evidence: `Twilio's own Usa2p campaign_status: ${campaign.campaign_status ?? "null"}.`,
   });
-  return ["smsA2p10dlcStatus"];
+  // "brand_registered" is also what a FAILED campaign maps to (the brand
+  // must be approved for a campaign to exist at all), which reads like
+  // progress. Keep Twilio's raw status too so the app can say the campaign
+  // was rejected and needs resubmitting.
+  if (campaign.campaign_status) {
+    await upsertClientFact(engagementId, "smsA2pCampaignStatus", campaign.campaign_status, {
+      source: "account",
+      sourceDetail: "twilio",
+      evidence: "Twilio's own Usa2p campaign_status.",
+    });
+  }
+  return campaign.campaign_status ? ["smsA2p10dlcStatus", "smsA2pCampaignStatus"] : ["smsA2p10dlcStatus"];
 }
 
 // ── Cal.com: /v2/me -> bookingPlatform, timezone ─────────────────────────
@@ -227,9 +267,6 @@ export function isHarvestablePasteKeyProvider(provider: string): boolean {
  * never be able to turn a successful credential save into an error for
  * the person who just pasted a working key.
  *
- * No provider is implemented yet (HARVESTABLE_PROVIDERS is empty), so
- * this always returns { factsWritten: [] } today — this function and its
- * call site are real and wired, only the provider coverage is pending.
  * Adding a provider: verify its account-metadata endpoint against that
  * vendor's own docs first (see this file's header), then add one case
  * here and one entry to HARVESTABLE_PROVIDERS, importing upsertClientFact
@@ -261,6 +298,11 @@ export async function harvestPasteKeyMetadata(
       default:
         factsWritten = [];
     }
+    // Connecting any account is a chance to do the website work too — crawl
+    // if a domain is on file and the site hasn't been crawled yet.
+    import("@/lib/discover-client")
+      .then(({ discoverClientIfNotYetCrawled }) => discoverClientIfNotYetCrawled(engagementId))
+      .catch((err) => console.warn(`[paste-key-harvest] post-harvest crawl failed for ${engagementId}:`, err));
     return { factsWritten };
   } catch (err: any) {
     console.error(`[paste-key-harvest] ${provider} harvest failed for engagement ${engagementId}:`, err);

@@ -3,12 +3,15 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
+import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
+import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
 import { and, eq } from "drizzle-orm";
 import {
   linkEngagementToVault,
   unlinkEngagementFromVault,
   vaultCredentialBelongsToTenant,
   syncStackCredentialMarkers,
+  resolveVaultCredentialValue,
 } from "@/lib/credentials";
 
 /**
@@ -85,6 +88,19 @@ export async function POST(
     // syncStackCredentialMarkers' own doc comment for the full bug this
     // closes.
     await syncStackCredentialMarkers(engagementId, provider, true);
+
+    // Reusing a saved connection is the same event as connecting one: run
+    // the provider's harvest for this client (which also starts the website
+    // crawl when a domain is known and the site isn't crawled yet).
+    // Fire-and-forget — a harvest failure must never fail the link.
+    resolveVaultCredentialValue(vaultId)
+      .then((value) =>
+        isHarvestableProvider(provider)
+          ? harvestAccountMetadata(engagementId, provider, value)
+          : harvestPasteKeyMetadata(engagementId, provider, value)
+      )
+      .catch((err) => console.error(`[credentials/link] harvest after link failed for ${provider}:`, err));
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[engagements/[id]/credentials/link POST]", err);

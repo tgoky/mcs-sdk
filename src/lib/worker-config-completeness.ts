@@ -208,8 +208,12 @@ const checkPreCallRead: Checker = async (engagementId) => {
 
   if (stack.brief_landing_destination === undefined) {
     out.push(missing("briefLandingDestination", "Where briefs land", "Never set — briefs have nowhere to go."));
-  } else if (stack.brief_landing_destination === "slack" && !stack.slack_webhook_url) {
-    out.push(missing("slackWebhookUrl", "Slack webhook URL", "Slack delivery is selected but no webhook URL is set."));
+  } else if (
+    stack.brief_landing_destination === "slack" &&
+    !stack.slack_webhook_url &&
+    !(stack.slack_channel_id && (await hasCredential(engagementId, "slack")))
+  ) {
+    out.push(missing("slackWebhookUrl", "Slack webhook or channel", "Slack delivery is selected but there's no webhook URL or connected Slack channel."));
   }
 
   // videoEngagementPlatform, conversationIntelligenceProvider,

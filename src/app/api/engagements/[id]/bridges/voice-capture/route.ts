@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
 import { saveVoiceCapture, type VoiceCaptureInput } from "@/features/cold-open/server/voice-capture";
+import { getClientFact, recordDossierDecisions } from "@/lib/client-facts";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -34,8 +35,25 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const config = await getColdOpenConfig(id);
+  // The voice read from the client's website, offered while no voice is
+  // saved yet. Shown whether or not it cleared the auto-apply threshold
+  // (with its score), since nothing here fills it in by itself.
+  const voiceFact = config?.voiceProfile ? null : await getClientFact(id, "voiceProfile");
+  const suggestions =
+    voiceFact && voiceFact.status !== "rejected"
+      ? {
+          voiceProfile: {
+            value: voiceFact.value,
+            source: voiceFact.source,
+            sourceDetail: voiceFact.sourceDetail,
+            confidence: voiceFact.confidence,
+            evidence: voiceFact.evidence,
+          },
+        }
+      : {};
   return NextResponse.json({
     buyer: row.buyer,
+    suggestions,
     voiceProfile: config?.voiceProfile ?? null,
     subjectVariants: config?.subjectVariants ?? [],
     bodyVariantPools: config?.bodyVariantPools ?? {},
@@ -80,6 +98,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+
+    // Kept the website's voice -> confirmed; changed it -> edited, so it
+    // isn't suggested again.
+    await recordDossierDecisions(id, {
+      voiceProfile: { greeting: input.greeting.trim(), signOff: input.signOff.trim(), tone: input.tone.trim() },
+    }).catch((err) => console.error(`[bridges/voice-capture] recording suggestion decision failed for ${id}:`, err));
 
     return NextResponse.json({ ok: true, warnings: result.warnings });
   } catch (error: unknown) {

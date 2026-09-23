@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/lib/workspace", () => ({
+  getActiveWorkspace: vi.fn().mockResolvedValue({ workspaceId: "ws-1" }),
+  isPackageInstalledInWorkspace: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
 
 import { getSession } from "@/lib/session";

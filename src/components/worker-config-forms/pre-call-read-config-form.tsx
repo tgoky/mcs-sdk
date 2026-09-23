@@ -12,6 +12,7 @@ import { ChoiceCardGroup } from "@/components/choice-card-group";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
 import { PreCallReadLivePreview } from "./pre-call-read-live-preview";
+import { FactSuggestionChip, type FactSuggestionDTO } from "@/components/fact-suggestion";
 
 export function PreCallReadConfigForm({
   engagementId,
@@ -32,6 +33,15 @@ export function PreCallReadConfigForm({
   const [videoEngagementWistiaVideoId, setVideoEngagementWistiaVideoId] = useState("");
   const [videoEngagementYoutubeChannelId, setVideoEngagementYoutubeChannelId] = useState("");
   const [prospectResearchSourcesUsed, setProspectResearchSourcesUsed] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
+  const [briefLandingDestination, setBriefLandingDestination] = useState("");
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState("");
+  // Two ways to reach Slack: sign in (Composio) and pick a channel, or paste
+  // an incoming-webhook URL. See src/lib/slack-delivery.ts.
+  const [slackMode, setSlackMode] = useState<"signin" | "webhook">("signin");
+  const [slackConnected, setSlackConnected] = useState(false);
+  const [slackChannels, setSlackChannels] = useState<Array<{ id: string; name: string }>>([]);
+  const [slackChannelId, setSlackChannelId] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -53,6 +63,14 @@ export function PreCallReadConfigForm({
         setVideoEngagementWistiaVideoId(data.videoEngagementWistiaVideoId ?? "");
         setVideoEngagementYoutubeChannelId(data.videoEngagementYoutubeChannelId ?? "");
         setProspectResearchSourcesUsed(data.prospectResearchSourcesUsed ?? []);
+        setSuggestions(data.suggestions ?? {});
+        setBriefLandingDestination(data.briefLandingDestination ?? "");
+        setSlackWebhookUrl(data.slackWebhookUrl ?? "");
+        setSlackConnected(Boolean(data.slackConnected));
+        setSlackChannels(data.slackChannels ?? []);
+        setSlackChannelId(data.slackChannelId ?? "");
+        // A client already on a webhook (and not signed in) stays on it.
+        setSlackMode(data.slackWebhookUrl && !data.slackChannelId ? "webhook" : "signin");
       } catch (e: unknown) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -63,6 +81,20 @@ export function PreCallReadConfigForm({
       cancelled = true;
     };
   }, [engagementId]);
+
+  // After Slack is connected in place, pick up the channel list the harvest
+  // just wrote. The harvest runs in the background, so it can lag a moment.
+  async function refreshSlack() {
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/bridges/pre-call-read`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSlackConnected(Boolean(data.slackConnected));
+      setSlackChannels(data.slackChannels ?? []);
+    } catch {
+      // Leave what's shown; the user can reload.
+    }
+  }
 
   function toggleSource(source: "apollo" | "pdl", checked: boolean) {
     setProspectResearchSourcesUsed((prev) => (checked ? [...prev, source] : prev.filter((s) => s !== source)));
@@ -83,6 +115,14 @@ export function PreCallReadConfigForm({
           videoEngagementWistiaVideoId,
           videoEngagementYoutubeChannelId,
           prospectResearchSourcesUsed,
+          briefLandingDestination: briefLandingDestination || undefined,
+          // Only the chosen Slack setup is sent; the other is cleared so
+          // briefs don't keep going to a setup the user moved away from.
+          ...(briefLandingDestination === "slack"
+            ? slackMode === "signin"
+              ? { slackChannelId, slackWebhookUrl: "" }
+              : { slackWebhookUrl, slackChannelId: "" }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -112,6 +152,80 @@ export function PreCallReadConfigForm({
   }
 
   const steps: ProgressiveFlowStep[] = [
+    {
+      id: "brief-destination",
+      label: "Where briefs land",
+      isComplete:
+        briefLandingDestination === "crm_note" ||
+        (briefLandingDestination === "slack" &&
+          (slackMode === "webhook" ? slackWebhookUrl.trim().length > 0 : slackConnected && Boolean(slackChannelId))),
+      content: (
+        <div className="space-y-3">
+          <ChoiceCardGroup
+            label="Where finished briefs are delivered"
+            value={briefLandingDestination}
+            onChange={setBriefLandingDestination}
+            options={[
+              { value: "slack", label: "Slack channel" },
+              { value: "crm_note", label: "CRM note (HubSpot, Klaviyo or GoHighLevel)" },
+            ]}
+            helpText="A CRM note lands on the prospect's contact record, with no Slack setup."
+          />
+          <FactSuggestionChip
+            engagementId={engagementId}
+            factKey="briefLandingDestination"
+            suggestion={briefLandingDestination ? undefined : suggestions.briefLandingDestination}
+            currentValue={briefLandingDestination}
+            display={(v) => (v === "crm_note" ? "CRM note" : String(v))}
+            onUse={(v) => setBriefLandingDestination(String(v))}
+          />
+          {briefLandingDestination === "slack" && (
+            <>
+              <ChoiceCardGroup
+                label="How to reach Slack"
+                value={slackMode}
+                onChange={(v) => setSlackMode(v as "signin" | "webhook")}
+                options={[
+                  { value: "signin", label: "Sign in with Slack and pick a channel" },
+                  { value: "webhook", label: "Paste an incoming-webhook URL" },
+                ]}
+                helpText="Signed-in posts are text only (no Approve/Reject buttons); webhook posts keep the buttons."
+              />
+              {slackMode === "signin" ? (
+                <>
+                  <CredentialRow engagementId={engagementId} provider="slack" label="Slack" onSaved={refreshSlack} />
+                  {slackConnected && slackChannels.length > 0 && (
+                    <SelectField
+                      label="Channel"
+                      value={slackChannelId}
+                      onChange={setSlackChannelId}
+                      options={[{ value: "", label: "Pick a channel" }, ...slackChannels.map((c) => ({ value: c.id, label: c.name }))]}
+                      helpText="Public channels in the connected workspace. Invite the Slack app to the channel so it can post there."
+                    />
+                  )}
+                  {slackConnected && slackChannels.length === 0 && (
+                    <div className="text-[11px] text-zinc-400">
+                      Slack is connected but no channels have been read yet.{" "}
+                      <button type="button" onClick={refreshSlack} className="font-semibold text-amber-400 hover:underline cursor-pointer">
+                        Check again
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <InputField
+                  label="Slack webhook URL"
+                  value={slackWebhookUrl}
+                  onChange={setSlackWebhookUrl}
+                  placeholder="https://hooks.slack.com/services/..."
+                  required
+                />
+              )}
+            </>
+          )}
+        </div>
+      ),
+    },
     {
       id: "brief-schedule",
       label: "Brief schedule",
@@ -147,6 +261,14 @@ export function PreCallReadConfigForm({
               { value: "loom", label: "Loom" },
             ]}
             helpText="Vidalytics/Wistia give per-prospect watch data if your video embed passes their email. YouTube can only report aggregate stats, and Loom has no analytics API at all."
+          />
+          <FactSuggestionChip
+            engagementId={engagementId}
+            factKey="videoEngagementPlatform"
+            suggestion={videoEngagementPlatform === "none" ? suggestions.videoEngagementPlatform : undefined}
+            currentValue={videoEngagementPlatform}
+            display={(v) => ({ youtube_analytics: "YouTube", wistia: "Wistia", vidalytics: "Vidalytics", loom: "Loom" })[String(v)] ?? String(v)}
+            onUse={(v) => setVideoEngagementPlatform(String(v))}
           />
           {(videoEngagementPlatform === "vidalytics" || videoEngagementPlatform === "wistia" || videoEngagementPlatform === "youtube_analytics") && (
             <CredentialRow

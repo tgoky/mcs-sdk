@@ -71,6 +71,13 @@ export function SourceConnectConfigForm({ engagementId, onCancel, cancelLabel = 
               apifyActorId: s.apifyActorId ?? "",
             }))
           );
+        } else {
+          // Nothing saved yet: start with one row per locked ICP, on the
+          // source that's already connected (Apify key) or CSV.
+          const icps: { slug: string }[] = Array.isArray(data.icps) ? data.icps : [];
+          const fetcherType: ColdOpenLeadSourceType = data.defaultFetcherType === "apify" ? "apify" : "csv";
+          if (icps.length > 0) setRows(icps.map((i) => ({ ...emptyRow(), icp: i.slug, fetcherType })));
+          else setRows([{ ...emptyRow(), fetcherType }]);
         }
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");

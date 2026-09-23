@@ -41,6 +41,7 @@ import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-li
 import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { matchesWeeklySchedule, matchesMonthlySchedule, matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
+import { hasSlackConnection, postToClientSlack } from "@/lib/slack-delivery";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
 import { and, eq, lt, gte, isNull, notInArray } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
@@ -1108,9 +1109,10 @@ export const pendingActionDigestCron = inngest.createFunction(
           .from(engagements)
           .where(eq(engagements.engagementId, engagementId))
           .limit(1);
-        const slackWebhookUrl = (engagement?.stack as EngagementStack | null)?.slack_webhook_url;
+        const stack = engagement?.stack as EngagementStack | null;
+        const slackWebhookUrl = stack?.slack_webhook_url;
 
-        if (slackWebhookUrl) {
+        if (slackWebhookUrl || (await hasSlackConnection(engagementId, stack))) {
           const MAX_LISTED = 10;
           const listed = rows.slice(0, MAX_LISTED);
           const lines = listed.map((r) => {
@@ -1130,12 +1132,8 @@ export const pendingActionDigestCron = inngest.createFunction(
             (overflow > 0 ? `\n…and ${overflow} more` : "") +
             `\n<${appUrl}/dashboard/queue|Review in Queue →>`;
 
-          await fetch(slackWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          }).catch((e) => {
-            console.error("[pending-action-digest] Slack delivery failed:", e.message);
+          await postToClientSlack(engagementId, slackWebhookUrl, { text }).catch((e) => {
+            console.error("[pending-action-digest] Slack delivery failed:", e instanceof Error ? e.message : e);
           });
           engagementsPinged++;
         }

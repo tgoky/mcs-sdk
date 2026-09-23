@@ -18,6 +18,8 @@
 // than that route already accepts from a human typing into a select.
 
 import { db } from "@/lib/db";
+import { hasCredential, resolveCredential, syncMarkersForChosenPlatforms } from "@/lib/credentials";
+import { harvestTwilioA2PStatus } from "@/lib/paste-key-harvest";
 import { engagements } from "@/models/schema";
 import type { EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
@@ -31,13 +33,23 @@ export type EnablePileOnResult =
   | { ok: false; error: string; bridgeHref?: string; productId?: "showtime"; onboardingWorkerName?: string };
 
 const VALID_SMS_PLATFORMS = ["twilio", "ghl_sms", "hubspot_sms", "none"];
+
+/** The sending details each SMS platform needs (sms.ts reads these from
+ * sms_platform_meta). Only non-empty values are written, merged over what's
+ * saved, so leaving a field blank on a revisit keeps it. */
+export interface SmsPlatformMetaInput {
+  twilio_account_sid?: string;
+  twilio_messaging_service_sid?: string;
+  twilio_from_number?: string;
+  ghl_location_id?: string;
+}
 const VALID_AD_DATA_PLATFORMS = ["hyros", "native_crm", "google_sheets", "none"];
 
 export async function enablePileOnForEngagement(
   whopUserId: string,
   workspaceId: string,
   engagementId: string,
-  opts?: { smsPlatform?: string; adDataPlatform?: string }
+  opts?: { smsPlatform?: string; adDataPlatform?: string; smsPlatformMeta?: SmsPlatformMetaInput }
 ): Promise<EnablePileOnResult> {
   if (opts?.smsPlatform && !VALID_SMS_PLATFORMS.includes(opts.smsPlatform)) {
     return { ok: false, error: `smsPlatform must be one of: ${VALID_SMS_PLATFORMS.join(", ")}.` };
@@ -76,7 +88,10 @@ export async function enablePileOnForEngagement(
   // Configure re-opening this same function: someone deliberately turning
   // SMS follow-ups back off by selecting "none" needs that write to
   // actually happen, not get silently dropped.
-  if (opts?.smsPlatform !== undefined || opts?.adDataPlatform !== undefined) {
+  const metaPatch = Object.fromEntries(
+    Object.entries(opts?.smsPlatformMeta ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => [k, (v as string).trim()])
+  );
+  if (opts?.smsPlatform !== undefined || opts?.adDataPlatform !== undefined || Object.keys(metaPatch).length > 0) {
     await db
       .update(engagements)
       .set({
@@ -84,10 +99,27 @@ export async function enablePileOnForEngagement(
           ...currentStack,
           ...(opts?.smsPlatform !== undefined ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
           ...(opts?.adDataPlatform !== undefined ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
+          ...(Object.keys(metaPatch).length > 0 ? { sms_platform_meta: { ...(currentStack.sms_platform_meta ?? {}), ...metaPatch } } : {}),
         },
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, engagementId));
+  }
+
+  // The "has a credential" marker the completeness check reads is only set
+  // when a key is saved while its platform is already selected. Choosing
+  // the platform after the key was saved (Connections page, Reuse saved)
+  // left the worker blocked on "no connected credential" forever — sync it
+  // here for any platform just chosen whose key already exists.
+  await syncMarkersForChosenPlatforms(engagementId, [opts?.smsPlatform, opts?.adDataPlatform]);
+
+  // Twilio's A2P status can only be read once the Messaging Service SID is
+  // known — re-run that harvest now that it may have just arrived.
+  const smsNow = opts?.smsPlatform ?? currentStack.sms_platform;
+  if (smsNow === "twilio" && (metaPatch.twilio_messaging_service_sid || metaPatch.twilio_account_sid) && (await hasCredential(engagementId, "twilio"))) {
+    resolveCredential(engagementId, "twilio")
+      .then((token) => harvestTwilioA2PStatus(engagementId, token))
+      .catch((err) => console.warn(`[enable-pile-on] Twilio A2P check failed for ${engagementId}:`, err));
   }
 
   await setSkillEnabledForEngagement(engagementId, "pile-on", true);

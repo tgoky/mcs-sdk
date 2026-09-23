@@ -26,12 +26,14 @@ export function fakeDb(rows: unknown[] = []) {
     where: vi.fn(() => chain),
     orderBy: vi.fn(() => chain),
     limit: vi.fn(() => chain),
+    offset: vi.fn(() => chain),
     insert: vi.fn(() => chain),
     values: vi.fn(() => chain),
     update: vi.fn(() => chain),
     set: vi.fn(() => chain),
     returning: vi.fn(() => chain),
     onConflictDoUpdate: vi.fn(() => chain),
+    onConflictDoNothing: vi.fn(() => chain),
     then: (resolve: (v: unknown) => void) => resolve(rows),
   };
   return chain;
@@ -53,6 +55,7 @@ export function fakeDbSequence(resultsInCallOrder: unknown[][]) {
       where: vi.fn(() => chain),
       orderBy: vi.fn(() => chain),
       limit: vi.fn(() => chain),
+      offset: vi.fn(() => chain),
       then: (resolve: (v: unknown) => void) => resolve(rows),
     };
     return chain;

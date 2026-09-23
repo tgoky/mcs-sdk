@@ -442,7 +442,8 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
           // worse than no buttons at all.
           stack.brief_landing_destination === "slack" && stack.slack_signing_secret
             ? { engagementId: tenant.engagementId, bookingId: call.id, prospectEmail: call.email }
-            : undefined
+            : undefined,
+          tenant.engagementId
         );
       });
     } catch (deliveryErr: unknown) {

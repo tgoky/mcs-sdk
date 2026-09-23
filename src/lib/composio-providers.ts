@@ -19,6 +19,10 @@ export const PROVIDER_TOOLKIT_MAP: Record<string, string> = {
   // reuse the Location ID set under Booking above" comment in
   // edit-stack-settings.tsx. One Composio connection covers both.
   ghl_calendar: "highlevel",
+  // Sign in with Slack, as an alternative to a per-client incoming webhook
+  // (src/lib/slack-delivery.ts). Toolkit slug from Composio's public Slack
+  // toolkit listing; not yet confirmed against a live connection here.
+  slack: "slack",
 };
 
 export function isComposioManagedProvider(provider: string): boolean {

@@ -401,6 +401,10 @@ export type EngagementStack = {
   // Brief delivery
   brief_landing_destination?: "slack" | "crm_note" | "calendar_event";
   slack_webhook_url?: string;       // per-engagement, never global
+  // Alternative to the webhook: the channel to post to through the
+  // client's "slack" Composio connection (src/lib/slack-delivery.ts).
+  slack_channel_id?: string;
+  slack_channel_name?: string;
   brief_lead_time_hours?: number;   // default 12, range 1-48
   person_match_confidence_threshold?: number; // default 70
   // ── Pre-Call Read recovery gap 1: dynamic trigger ──────────────────────
@@ -3266,7 +3270,7 @@ export const clientFacts = pgTable(
     // Callers reading a string-shaped fact should expect a JSON string
     // value, not raw text, to keep this column's typing uniform.
     value: jsonb("value").notNull(),
-    // "website" | "account" | "jev" | "user" | "default" — where the value
+    // "website" | "llm" | "account" | "jev" | "user" | "default" — where the value
     // came from. Not a DB enum: new sources (a CSV upload, a paste) are
     // expected to be added over time, same convention resourceType/
     // eventType above use for the same reason.

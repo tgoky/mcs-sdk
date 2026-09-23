@@ -15,15 +15,13 @@ import {
   ChevronUp,
   Link as LinkIcon,
   Percent,
-  Clock,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { AnySkillBadge } from "@/components/any-skill-badge";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerStatusGrid } from "@/components/worker-status-grid";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
-import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
 export interface WhopConnectFormProps {
   engagementId: string;
@@ -67,11 +65,6 @@ const PROBE_LABELS: Record<string, { label: string; locksWhat: string }> = {
   memberships_v2: { label: "Attribution source (v2 API)", locksWhat: "Attribution & Affiliate Report" },
 };
 
-const WHOP_AUTOMATION_SKILLS = WHOP_AGENT_SKILL_IDS.map((id) => ({
-  id,
-  cadence: id === "whop-connect" ? "Anchor Bridge" : "Automated Worker",
-}));
-
 export function WhopConnectConfigForm({
   engagementId,
   onCancel,
@@ -84,15 +77,28 @@ export function WhopConnectConfigForm({
 
   const [state, setState] = useState<ConnectState | null>(null);
   const [loading, setLoading] = useState(true);
+  // Bumped after a save so the worker status grid re-reads what's missing.
+  const [statusRefresh, setStatusRefresh] = useState(0);
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Scenario Tuning Parameters
-  const [saveOfferDiscount, setSaveOfferDiscount] = useState("20");
-  const [saveOfferDuration, setSaveOfferDuration] = useState("3");
-  const [saveOfferMessage, setSaveOfferMessage] = useState("Special discount to stay with us!");
+  // Scenario Tuning Parameters. The save offer goes to real members who are
+  // cancelling, so it starts empty and is only ever what the operator saved
+  // or typed — never a guessed discount. Loaded from, and saved through, the
+  // same routes the dedicated save-offer and bridge pages use.
+  const [saveOfferDiscount, setSaveOfferDiscount] = useState("");
+  const [saveOfferDuration, setSaveOfferDuration] = useState("");
+  const [saveOfferMessage, setSaveOfferMessage] = useState("");
+  // Not edited here, but the save-offer route rewrites them on every save,
+  // so they're carried through unchanged.
+  const [saveOfferMinTenureDays, setSaveOfferMinTenureDays] = useState<number | null>(null);
+  const [saveOfferCooldownDays, setSaveOfferCooldownDays] = useState<number | null>(null);
+  const [savedOffer, setSavedOffer] = useState({ discount: "", duration: "", message: "" });
   const [bridgeDestinationUrl, setBridgeDestinationUrl] = useState("");
+  const [savedBridgeUrl, setSavedBridgeUrl] = useState("");
+  // Same reason as tenure/cooldown: the bridge route rewrites the mapping.
+  const [bridgeFieldMapping, setBridgeFieldMapping] = useState<Record<string, unknown> | undefined>(undefined);
 
   const [showCustomizer, setShowCustomizer] = useState(false);
 
@@ -104,24 +110,40 @@ export function WhopConnectConfigForm({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to load Whop connection");
         if (cancelled) return;
-
         setState(data);
-        if (data.stack) {
-          if (data.stack.whop_save_offer_discount_percentage) {
-            setSaveOfferDiscount(String(data.stack.whop_save_offer_discount_percentage));
-          }
-          if (data.stack.whop_save_offer_duration_months) {
-            setSaveOfferDuration(String(data.stack.whop_save_offer_duration_months));
-          }
-          if (data.stack.whop_save_offer_message) {
-            setSaveOfferMessage(data.stack.whop_save_offer_message);
-          }
-          if (data.stack.whop_bridge_destination_url) {
-            setBridgeDestinationUrl(data.stack.whop_bridge_destination_url);
-          }
-        }
       } catch {
         if (!cancelled) setState({ connected: false });
+      }
+
+      try {
+        const [offerRes, bridgeRes] = await Promise.all([
+          fetch(`/api/engagements/${engagementId}/whop-agent/save-offer-config`),
+          fetch(`/api/engagements/${engagementId}/whop-agent/bridge-config`),
+        ]);
+        if (cancelled) return;
+        if (offerRes.ok) {
+          const offer = await offerRes.json();
+          const loaded = {
+            discount: offer.discountPercentage != null ? String(offer.discountPercentage) : "",
+            duration: offer.durationMonths != null ? String(offer.durationMonths) : "",
+            message: offer.message ?? "",
+          };
+          setSaveOfferDiscount(loaded.discount);
+          setSaveOfferDuration(loaded.duration);
+          setSaveOfferMessage(loaded.message);
+          setSavedOffer(loaded);
+          setSaveOfferMinTenureDays(offer.minTenureDays ?? null);
+          setSaveOfferCooldownDays(offer.cooldownDays ?? null);
+        }
+        if (bridgeRes.ok) {
+          const bridge = await bridgeRes.json();
+          setBridgeDestinationUrl(bridge.destinationUrl ?? "");
+          setSavedBridgeUrl(bridge.destinationUrl ?? "");
+          setBridgeFieldMapping(bridge.fieldMapping && Object.keys(bridge.fieldMapping).length ? bridge.fieldMapping : undefined);
+        }
+      } catch {
+        // Leave the fields empty — an unset offer blocks the skill rather
+        // than sending anything, which is the safe failure.
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -143,47 +165,108 @@ export function WhopConnectConfigForm({
 
   async function submit() {
     if (!apiKey.trim() && !state?.connected) return;
+
+    // The save offer is all-or-nothing: a partial offer would either be
+    // rejected by the route or, worse, invite a guessed default. Blank
+    // everywhere means "not set yet" and the skill stays blocked.
+    const offerFields = [saveOfferDiscount.trim(), saveOfferDuration.trim(), saveOfferMessage.trim()];
+    const offerTouched =
+      saveOfferDiscount.trim() !== savedOffer.discount ||
+      saveOfferDuration.trim() !== savedOffer.duration ||
+      saveOfferMessage.trim() !== savedOffer.message;
+    if (offerTouched && offerFields.some(Boolean) && !offerFields.every(Boolean)) {
+      setError("Fill in the discount, duration and message for the save offer, or leave all three empty.");
+      setShowCustomizer(true);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/bridges/whop-connect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: apiKey.trim() || undefined,
-          saveOfferDiscountPercentage: Number(saveOfferDiscount) || 20,
-          saveOfferDurationMonths: Number(saveOfferDuration) || 3,
-          saveOfferMessage: saveOfferMessage.trim(),
-          bridgeDestinationUrl: bridgeDestinationUrl.trim(),
-        }),
-      });
+      let runId: string | undefined;
 
-      const body = await res.json();
-      if (!res.ok) {
-        setError(body.error ?? "Could not connect this Whop key.");
-        if (body.probe) {
-          setState((prev) => ({ ...(prev ?? { connected: false }), scopeProbeResults: body.probe.results }));
+      // Only (re)connect when a key was actually typed — the connect route
+      // requires one, so an already-connected dossier saving its settings
+      // must not call it.
+      if (apiKey.trim()) {
+        const res = await fetch(`/api/engagements/${engagementId}/bridges/whop-connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiKey: apiKey.trim() }),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          setError(body.error ?? "Could not connect this Whop key.");
+          if (body.probe) {
+            setState((prev) => ({ ...(prev ?? { connected: false }), scopeProbeResults: body.probe.results }));
+          }
+          return;
         }
-        setSubmitting(false);
-        return;
+        runId = body.runId;
+        setApiKey("");
+        setState({
+          connected: true,
+          credentialType: body.credentialType,
+          whopAccountId: body.probe?.whopAccountId,
+          scopeProbeResults: body.probe?.results,
+          pinnedVersionDate: body.pinnedVersionDate,
+          circuitBreakerState: "closed",
+        });
       }
 
-      setApiKey("");
-      setState({
-        connected: true,
-        credentialType: body.credentialType,
-        whopAccountId: body.probe?.whopAccountId,
-        scopeProbeResults: body.probe?.results,
-        pinnedVersionDate: body.pinnedVersionDate,
-        circuitBreakerState: "closed",
-      });
+      const saved: string[] = [];
 
-      toast.success("Whop Agent Engine armed across all 15 skills.");
-      startTour("whop-agent");
-      if (onSaved) onSaved({ runId: body.runId });
+      if (offerTouched && offerFields.every(Boolean)) {
+        const res = await fetch(`/api/engagements/${engagementId}/whop-agent/save-offer-config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            discountPercentage: Number(saveOfferDiscount),
+            durationMonths: Number(saveOfferDuration),
+            message: saveOfferMessage.trim(),
+            minTenureDays: saveOfferMinTenureDays ?? undefined,
+            cooldownDays: saveOfferCooldownDays ?? undefined,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error ?? "Couldn't save the save offer.");
+          setShowCustomizer(true);
+          return;
+        }
+        setSavedOffer({ discount: saveOfferDiscount.trim(), duration: saveOfferDuration.trim(), message: saveOfferMessage.trim() });
+        saved.push("save offer");
+      }
+
+      if (bridgeDestinationUrl.trim() && bridgeDestinationUrl.trim() !== savedBridgeUrl) {
+        const res = await fetch(`/api/engagements/${engagementId}/whop-agent/bridge-config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ destinationUrl: bridgeDestinationUrl.trim(), fieldMapping: bridgeFieldMapping }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error ?? "Couldn't save the bridge destination.");
+          setShowCustomizer(true);
+          return;
+        }
+        setSavedBridgeUrl(bridgeDestinationUrl.trim());
+        saved.push("bridge destination");
+      }
+
+      if (runId) {
+        toast.success("Whop account connected.");
+        startTour("whop-agent");
+      } else if (saved.length > 0) {
+        toast.success(`Saved ${saved.join(" and ")}.`);
+      } else {
+        toast.success("Nothing changed.");
+      }
+      setStatusRefresh((n) => n + 1);
+      if (onSaved) onSaved({ runId });
     } catch {
-      setError("Network error while connecting to Whop.");
+      setError("Network error while saving Whop settings.");
     } finally {
       setSubmitting(false);
     }
@@ -356,35 +439,7 @@ export function WhopConnectConfigForm({
         </div>
       )}
 
-      {/* 15-Skill Automation Grid */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-            <Zap className="h-3.5 w-3.5 text-purple-400" /> Whop Agent Fleet Armed Upon Save
-          </span>
-          <span className="text-xs text-zinc-400 font-mono">15/15 Active</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {WHOP_AUTOMATION_SKILLS.map((skill) => (
-            <div
-              key={skill.id}
-              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
-            >
-              <div className="flex items-center gap-2.5 truncate">
-                <AnySkillBadge skill={skill.id} size={22} />
-                <span className="font-medium text-zinc-200 truncate">
-                  {anySkillDisplayName(skill.id)}
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 shrink-0">
-                <Clock className="h-2.5 w-2.5" />
-                {skill.cadence}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <WorkerStatusGrid engagementId={engagementId} productId="whop-agent" refreshKey={statusRefresh} title="Whop Agent workers for this client" />
 
       <WorkerCapabilityMatrix workerId="whop-connect" engagementId={engagementId} />
 
@@ -427,7 +482,7 @@ export function WhopConnectConfigForm({
                     type="number"
                     value={saveOfferDiscount}
                     onChange={(e) => setSaveOfferDiscount(e.target.value)}
-                    placeholder="20"
+                    placeholder="Not set"
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
@@ -440,7 +495,7 @@ export function WhopConnectConfigForm({
                     type="number"
                     value={saveOfferDuration}
                     onChange={(e) => setSaveOfferDuration(e.target.value)}
-                    placeholder="3"
+                    placeholder="Not set"
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
@@ -454,7 +509,7 @@ export function WhopConnectConfigForm({
                   type="text"
                   value={saveOfferMessage}
                   onChange={(e) => setSaveOfferMessage(e.target.value)}
-                  placeholder="Special discount to stay with us!"
+                  placeholder="Not set — no offer is sent until you write one"
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>

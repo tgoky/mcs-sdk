@@ -6,6 +6,7 @@ import { Dropdown, type DropdownItem } from "@/components/ui/dropdown";
 import { InferredFieldBadge } from "@/components/inferred-field-badge";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { Loader2, Plus, Trash2, RefreshCw } from "lucide-react";
+import { VERTICALS, isListedVertical, normalizeVertical, verticalLabel } from "@/lib/verticals";
 
 interface Testimonial {
   name: string;
@@ -43,6 +44,7 @@ export interface ClientDetailsDrawerData {
    * InferredFieldBadge's own header. Undefined when nothing's been
    * suggested (or the suggestion was rejected) for that field. */
   suggestedOfferName?: string;
+  suggestedOfferPrice?: string;
   suggestedOfferVertical?: string;
   suggestedOfferIcp?: string;
   suggestedTrafficTemperature?: string;
@@ -67,6 +69,14 @@ const TRAFFIC_TEMPERATURE_ITEMS: DropdownItem<"cold" | "warm" | "hot">[] = [
   { key: "warm", label: "Warm — aware, comparing options" },
   { key: "hot", label: "Hot — ready to buy, comparing vendors" },
 ];
+
+// The fixed vertical list, plus an unlisted legacy value (typed before the
+// list existed) so it still shows as the current selection.
+function verticalItems(current: string): DropdownItem<string>[] {
+  const items: DropdownItem<string>[] = VERTICALS.map((v) => ({ key: v.id, label: v.label }));
+  if (current && !isListedVertical(current)) items.push({ key: current, label: `${current} (not on the list)` });
+  return items;
+}
 
 const CASTING_CHOICE_ITEMS: DropdownItem<string>[] = [
   { key: "founder_on_camera", label: "Founder on camera" },
@@ -127,8 +137,9 @@ export function ClientDetailsDrawer({
   const [offerPrice, setOfferPrice] = useState(data.offerDetails?.price ?? "");
   const [offerIcp, setOfferIcp] = useState(data.offerDetails?.icp ?? "");
   const [offerVertical, setOfferVertical] = useState(data.offerDetails?.vertical ?? "");
-  const [trafficTemperature, setTrafficTemperature] = useState<"cold" | "warm" | "hot">(
-    data.offerDetails?.traffic_temperature ?? "warm"
+  // Unset stays unset — it's a required answer, not something to default.
+  const [trafficTemperature, setTrafficTemperature] = useState<"cold" | "warm" | "hot" | undefined>(
+    data.offerDetails?.traffic_temperature
   );
   const [hybridMode, setHybridMode] = useState(data.offerDetails?.hybrid_mode_enabled ?? false);
 
@@ -183,7 +194,7 @@ export function ClientDetailsDrawer({
             price: offerPrice,
             icp: offerIcp,
             vertical: offerVertical || undefined,
-            traffic_temperature: trafficTemperature,
+            ...(trafficTemperature ? { traffic_temperature: trafficTemperature } : {}),
             hybrid_mode_enabled: hybridMode,
           },
           topCallQuestions: topCallQuestions.split("\n").map((q) => q.trim()).filter(Boolean),
@@ -274,17 +285,28 @@ export function ClientDetailsDrawer({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Price</Label>
+                <InferredFieldBadge
+                  detectedValue={data.suggestedOfferPrice}
+                  currentValue={offerPrice}
+                  detectedFromLabel="the client's website or a connected account"
+                  onUse={setOfferPrice}
+                />
                 <input className={inputClass} value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} placeholder="e.g. $2,500" />
               </div>
               <div>
-                <Label>Vertical (optional)</Label>
+                <Label>Vertical</Label>
                 <InferredFieldBadge
-                  detectedValue={data.suggestedOfferVertical}
-                  currentValue={offerVertical}
-                  detectedFromLabel="the connected Mailchimp account"
-                  onUse={setOfferVertical}
+                  detectedValue={data.suggestedOfferVertical ? verticalLabel(data.suggestedOfferVertical) : undefined}
+                  currentValue={verticalLabel(offerVertical)}
+                  detectedFromLabel="the client's website or a connected account"
+                  onUse={(label) => setOfferVertical(normalizeVertical(label) ?? label)}
                 />
-                <input className={inputClass} value={offerVertical} onChange={(e) => setOfferVertical(e.target.value)} placeholder="e.g. coaching" />
+                <Dropdown
+                  items={verticalItems(offerVertical)}
+                  selectedKey={offerVertical}
+                  onSelect={(key) => setOfferVertical(key)}
+                  placeholder="Not set"
+                />
               </div>
             </div>
             <div>
@@ -301,7 +323,7 @@ export function ClientDetailsDrawer({
               <Label>Traffic temperature</Label>
               <InferredFieldBadge
                 detectedValue={data.suggestedTrafficTemperature}
-                currentValue={trafficTemperature}
+                currentValue={trafficTemperature ?? ""}
                 detectedFromLabel="the client's own voice corpus"
                 onUse={(value) => setTrafficTemperature(value as "cold" | "warm" | "hot")}
               />
@@ -309,6 +331,7 @@ export function ClientDetailsDrawer({
                 items={TRAFFIC_TEMPERATURE_ITEMS}
                 selectedKey={trafficTemperature}
                 onSelect={(key) => setTrafficTemperature(key)}
+                placeholder="Not set"
               />
             </div>
             <div className="flex items-center gap-2 pt-1">

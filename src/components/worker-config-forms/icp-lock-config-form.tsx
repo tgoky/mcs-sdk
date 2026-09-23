@@ -5,29 +5,24 @@ import { useRouter } from "next/navigation";
 import {
   Rocket,
   Globe,
-  Users,
   Target,
   AlertTriangle,
-  Check,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
   Plus,
-  X,
-  ExternalLink,
-  Search,
   Link,
   Loader2,
-  Clock,
-  Zap,
   Mail,
   Volume2,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { AnySkillBadge } from "@/components/any-skill-badge";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerStatusGrid } from "@/components/worker-status-grid";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
+import { FactSuggestionChip, FactSuggestionList, type FactSuggestionDTO } from "@/components/fact-suggestion";
+import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
 import type { ColdOpenIcp, ColdOpenSizingBound } from "@/models/schema";
 
 export interface IcpLockFormProps {
@@ -50,15 +45,8 @@ function emptyIcpRow(): IcpRow {
   return { slug: "", label: "", weight: "", teamSizeMin: "", teamSizeMax: "", disqualifyIf: "" };
 }
 
-const COLD_OPEN_AUTOMATION_SKILLS = [
-  { id: "icp-lock", cadence: "Setup Spine" },
-  { id: "voice-capture", cadence: "Tone & Style" },
-  { id: "source-connect", cadence: "Lead Stream" },
-  { id: "send-connect", cadence: "Platform Link" },
-  { id: "daily-send", cadence: "24h Batch" },
-  { id: "reply-sort", cadence: "Real-Time" },
-  { id: "send-report", cadence: "Weekly Digest" },
-];
+const FIELD_CLASS =
+  "w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500";
 
 export function IcpLockConfigForm({
   engagementId,
@@ -71,6 +59,8 @@ export function IcpLockConfigForm({
   const { start: startTour } = useTour();
 
   const [loading, setLoading] = useState(true);
+  // Bumped after a save so the worker status grid re-reads what's missing.
+  const [statusRefresh, setStatusRefresh] = useState(0);
   const [saving, setSaving] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,15 +80,20 @@ export function IcpLockConfigForm({
   const [icpRows, setIcpRows] = useState<IcpRow[]>([emptyIcpRow()]);
   const [reviewRequiredIcps, setReviewRequiredIcps] = useState("");
 
-  // Voice Profile State
-  const [greeting, setGreeting] = useState("Hi {first_name},");
-  const [signOff, setSignOff] = useState("Best,");
-  const [tone, setTone] = useState("Professional");
+  // Voice Profile State — empty until saved, trusted, or picked from a
+  // suggestion; never a made-up "Professional" tone.
+  const [greeting, setGreeting] = useState("");
+  const [signOff, setSignOff] = useState("");
+  const [tone, setTone] = useState("");
 
-  // Sending Platform & Daily Settings
+  // Sending Platform & Daily Settings (the real Daily Send fields)
   const [sendPlatform, setSendPlatform] = useState<string | null>(null);
-  const [dailyLimit, setDailyLimit] = useState<number>(50);
-  const [sendWindowHours, setSendWindowHours] = useState("09:00-17:00");
+  const [dailyVolume, setDailyVolume] = useState("");
+  const [dailyLocalHour, setDailyLocalHour] = useState(9);
+  const [dailyTimezone, setDailyTimezone] = useState("UTC");
+  const [copyMode, setCopyMode] = useState<"generate" | "upload">("generate");
+
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
 
   // Scenario Tuning Collapsible
   const [showCustomizer, setShowCustomizer] = useState(false);
@@ -116,8 +111,9 @@ export function IcpLockConfigForm({
         setPrimaryDomain(data.primaryDomain ?? "");
         setInputDomain(data.primaryDomain ?? "");
 
+        setSuggestions(data.suggestions ?? {});
         if (data.config) {
-          setProductName(data.config.productName ?? data.buyer ?? "");
+          setProductName(data.config.productName ?? "");
           setProductUrl(data.config.productUrl ?? "");
           setProductPrice(data.config.productPrice ?? "");
           setProductValueProp(data.config.productValueProp ?? "");
@@ -150,16 +146,16 @@ export function IcpLockConfigForm({
             setSendPlatform(data.config.sendPlatform.platform);
           }
 
-          if (data.config.dailySendSettings) {
-            if (typeof data.config.dailySendSettings.dailyLimit === "number") {
-              setDailyLimit(data.config.dailySendSettings.dailyLimit);
-            }
-            if (data.config.dailySendSettings.sendWindowHours) {
-              setSendWindowHours(data.config.dailySendSettings.sendWindowHours);
-            }
+          const daily = data.config.dailySendSettings;
+          if (daily) {
+            setDailyVolume(String(daily.volume ?? ""));
+            setDailyLocalHour(typeof daily.localHour === "number" ? daily.localHour : 9);
+            setDailyTimezone(daily.timezone || data.config.clientTimezone || "UTC");
+            setCopyMode(daily.copyMode === "upload" ? "upload" : "generate");
+          } else {
+            setDailyTimezone(data.config.clientTimezone || "UTC");
+            setCopyMode(data.config.defaultCopyMode === "upload" ? "upload" : "generate");
           }
-        } else if (data.buyer) {
-          setProductName(data.buyer);
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -199,12 +195,15 @@ export function IcpLockConfigForm({
           setPrimaryDomain(refreshData.primaryDomain);
           setInputDomain(refreshData.primaryDomain);
         }
-        setProductName(refreshData.config.productName ?? productName);
-        setProductUrl(refreshData.config.productUrl ?? productUrl);
-        setProductPrice(refreshData.config.productPrice ?? productPrice);
-        setProductValueProp(refreshData.config.productValueProp ?? productValueProp);
+        // Only fill fields that are still empty — never overwrite what the
+        // user typed before crawling.
+        if (!productName.trim()) setProductName(refreshData.config.productName ?? "");
+        if (!productUrl.trim()) setProductUrl(refreshData.config.productUrl ?? "");
+        if (!productPrice.trim()) setProductPrice(refreshData.config.productPrice ?? "");
+        if (!productValueProp.trim()) setProductValueProp(refreshData.config.productValueProp ?? "");
+        setSuggestions(refreshData.suggestions ?? {});
 
-        if (Array.isArray(refreshData.config.icps) && refreshData.config.icps.length > 0) {
+        if (cleanRows.length === 0 && Array.isArray(refreshData.config.icps) && refreshData.config.icps.length > 0) {
           const bounds = refreshData.config.sizingBounds ?? {};
           setIcpRows(
             refreshData.config.icps.map((icp: ColdOpenIcp) => ({
@@ -218,10 +217,10 @@ export function IcpLockConfigForm({
           );
         }
 
-        if (refreshData.config.voiceProfile) {
-          if (refreshData.config.voiceProfile.greeting) setGreeting(refreshData.config.voiceProfile.greeting);
-          if (refreshData.config.voiceProfile.signOff) setSignOff(refreshData.config.voiceProfile.signOff);
-          if (refreshData.config.voiceProfile.tone) setTone(refreshData.config.voiceProfile.tone);
+        if (refreshData.config.voiceProfile && !tone && !greeting && !signOff) {
+          setGreeting(refreshData.config.voiceProfile.greeting ?? "");
+          setSignOff(refreshData.config.voiceProfile.signOff ?? "");
+          setTone(refreshData.config.voiceProfile.tone ?? "");
         }
       }
     } catch (err: unknown) {
@@ -232,9 +231,12 @@ export function IcpLockConfigForm({
     }
   };
 
-  const handleConnectIntegration = () => {
-    window.location.href = `/dashboard/settings/apps`;
-  };
+  // Connect the sending tool in place — Settings → Apps saved the key to
+  // the shared store only, not to this client, so the dossier kept saying
+  // "None Linked". The key is saved right away (and harvested); the chosen
+  // platform is saved with the dossier.
+  const [connectOpen, setConnectOpen] = useState(false);
+  const handleConnectIntegration = () => setConnectOpen((open) => !open);
 
   function updateRow(i: number, patch: Partial<IcpRow>) {
     setIcpRows((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -270,24 +272,23 @@ export function IcpLockConfigForm({
         };
       }
 
+      const voiceComplete = Boolean(greeting.trim() && signOff.trim() && tone.trim());
       const payload = {
-        productName: productName.trim() || buyer,
+        productName: productName.trim(),
         productUrl: productUrl.trim() || primaryDomain,
         productPrice: productPrice.trim(),
         productValueProp: productValueProp.trim(),
-        productAllocation: { [(productName.trim() || buyer)]: 1.0 },
+        productAllocation: productName.trim() ? { [productName.trim()]: 1.0 } : {},
         icps,
         sizingBounds,
         reviewRequiredIcps: reviewRequiredIcps.split(",").map((s) => s.trim()).filter(Boolean),
-        voiceProfile: {
-          greeting: greeting.trim(),
-          signOff: signOff.trim(),
-          tone: tone.trim(),
-        },
-        dailySendSettings: {
-          dailyLimit: Number(dailyLimit) || 50,
-          sendWindowHours: sendWindowHours.trim(),
-        },
+        // Only sent when complete — the server saves them through the same
+        // services the Voice Capture and Daily Send pages use.
+        ...(voiceComplete ? { voiceProfile: { greeting: greeting.trim(), signOff: signOff.trim(), tone: tone.trim() } } : {}),
+        ...(sendPlatform ? { sendPlatform } : {}),
+        ...(dailyVolume.trim()
+          ? { dailySendSettings: { volume: Number(dailyVolume), localHour: dailyLocalHour, timezone: dailyTimezone.trim(), copyMode } }
+          : {}),
       };
 
       const res = await fetch(`/api/engagements/${engagementId}/bridges/icp-lock`, {
@@ -299,7 +300,8 @@ export function IcpLockConfigForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to arm Cold Open pipeline");
 
-      toast.success(`Cold Open Dossier armed for ${productName || buyer}.`);
+      toast.success(`Saved Cold Open setup for ${productName || buyer}. Check each worker's status below.`);
+      setStatusRefresh((n) => n + 1);
       router.refresh();
       startTour("cold-open");
 
@@ -427,6 +429,28 @@ export function IcpLockConfigForm({
             </button>
           </div>
         </div>
+        {connectOpen && (
+          <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">
+            <label className="block text-[11px] font-medium text-zinc-300">Sending tool</label>
+            <select value={sendPlatform ?? ""} onChange={(e) => setSendPlatform(e.target.value || null)} className={FIELD_CLASS}>
+              <option value="">Choose…</option>
+              <option value="instantly">Instantly</option>
+              <option value="smartlead">Smartlead</option>
+              <option value="lemlist">Lemlist</option>
+              <option value="reply_io">Reply.io</option>
+            </select>
+            {sendPlatform && (
+              <CredentialRow
+                engagementId={engagementId}
+                provider={`cold_open_${sendPlatform}`}
+                label={`${sendPlatform.replace("_", ".")} key`}
+                embedded
+                onSaved={() => setConnectOpen(false)}
+                onRequestClose={() => setConnectOpen(false)}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Auto-Discovered Outreach Profile (Settings/Apps styling) */}
@@ -441,30 +465,42 @@ export function IcpLockConfigForm({
             <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center gap-1.5">
               <Globe className="h-3.5 w-3.5 text-blue-400" /> Product Identity & Offer
             </div>
-            <div>
-              <div className="text-sm font-semibold text-zinc-100">{productName || buyer}</div>
-              {productValueProp && (
-                <p className="text-xs text-zinc-300 mt-0.5 line-clamp-2">{productValueProp}</p>
-              )}
-              {productPrice && (
-                <span className="inline-block mt-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  {productPrice}
-                </span>
-              )}
-              {primaryDomain || productUrl ? (
-                <a
-                  href={`https://${(productUrl || primaryDomain).replace(/^https?:\/\//i, "")}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:underline mt-1.5 block"
-                >
-                  {productUrl || primaryDomain} <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : (
-                <span className="text-xs text-amber-400 block mt-1">
-                  ⚠️ No product domain crawled yet
-                </span>
-              )}
+            <div className="space-y-2">
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="productIdentity"
+                suggestion={suggestions.productIdentity}
+                currentValue={productName}
+                display={(v) => {
+                  const p = v as { name?: string; price?: string };
+                  return [p?.name, p?.price].filter(Boolean).join(" · ");
+                }}
+                onUse={(v) => {
+                  const p = v as { name?: string; url?: string; price?: string; valueProp?: string };
+                  setProductName(p.name ?? "");
+                  if (p.url) setProductUrl(p.url);
+                  setProductPrice(p.price ?? "");
+                  setProductValueProp(p.valueProp ?? "");
+                }}
+              />
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">Product name</label>
+                <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="What you're selling" className={FIELD_CLASS} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">Value proposition</label>
+                <textarea value={productValueProp} onChange={(e) => setProductValueProp(e.target.value)} rows={2} placeholder="One sentence on the outcome you deliver" className={FIELD_CLASS} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Price (optional)</label>
+                  <input value={productPrice} onChange={(e) => setProductPrice(e.target.value)} placeholder="e.g. $499/mo" className={FIELD_CLASS} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Product URL</label>
+                  <input value={productUrl} onChange={(e) => setProductUrl(e.target.value)} placeholder={primaryDomain || "https://"} className={FIELD_CLASS} />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -476,16 +512,32 @@ export function IcpLockConfigForm({
             <div className="space-y-1 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Tone:</span>
-                <span className="font-medium text-emerald-400">{tone}</span>
+                <span className={`font-medium ${tone ? "text-emerald-400" : "text-zinc-500"}`}>{tone || "Not set"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Greeting:</span>
-                <span className="font-mono text-zinc-200">{greeting}</span>
+                <span className="font-mono text-zinc-200">{greeting || "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Sign-Off:</span>
-                <span className="font-mono text-zinc-200">{signOff}</span>
+                <span className="font-mono text-zinc-200">{signOff || "—"}</span>
               </div>
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="voiceProfile"
+                suggestion={suggestions.voiceProfile}
+                currentValue={tone && greeting && signOff ? `${tone} · ${greeting} … ${signOff}` : ""}
+                display={(v) => {
+                  const vp = v as { tone?: string; greeting?: string; signOff?: string };
+                  return `${vp?.tone ?? ""} · ${vp?.greeting ?? ""} … ${vp?.signOff ?? ""}`;
+                }}
+                onUse={(v) => {
+                  const vp = v as { tone?: string; greeting?: string; signOff?: string };
+                  setTone(vp.tone ?? "");
+                  setGreeting(vp.greeting ?? "");
+                  setSignOff(vp.signOff ?? "");
+                }}
+              />
             </div>
           </div>
 
@@ -511,6 +563,63 @@ export function IcpLockConfigForm({
                 ⚠️ 0 ICPs Defined — Add ICPs below in Scenario Tuning
               </p>
             )}
+            <FactSuggestionList
+              engagementId={engagementId}
+              factKey="icps"
+              suggestion={suggestions.icps}
+              currentItems={cleanRows.map((r) => r.label)}
+              onAdd={(item) => {
+                const icp = item as ColdOpenIcp;
+                setIcpRows((rows) => [
+                  ...rows.filter((r) => r.slug.trim() || r.label.trim()),
+                  { ...emptyIcpRow(), slug: icp.slug, label: icp.label, weight: String(icp.weight ?? "") },
+                ]);
+              }}
+            />
+            <FactSuggestionChip
+              engagementId={engagementId}
+              factKey="sizingBounds"
+              suggestion={
+                // Only once an ICP it describes is in the list, and while
+                // none of those rows has size limits yet.
+                cleanRows.some((r) => (suggestions.sizingBounds?.value as Record<string, unknown> | undefined)?.[r.slug]) &&
+                !cleanRows.some((r) => r.teamSizeMin || r.teamSizeMax || r.disqualifyIf.trim())
+                  ? suggestions.sizingBounds
+                  : undefined
+              }
+              currentValue=""
+              display={(v) => {
+                const b = v as Record<string, ColdOpenSizingBound>;
+                return cleanRows
+                  .filter((r) => b[r.slug])
+                  .map((r) => {
+                    const x = b[r.slug];
+                    const size =
+                      x.teamSizeMin !== undefined && x.teamSizeMax !== undefined
+                        ? `${x.teamSizeMin}-${x.teamSizeMax}`
+                        : x.teamSizeMin !== undefined
+                        ? `${x.teamSizeMin}+`
+                        : "any size";
+                    return `${r.label}: ${size}${x.disqualifyIf.length ? `, not ${x.disqualifyIf.join(", ")}` : ""}`;
+                  })
+                  .join("; ");
+              }}
+              onUse={(v) => {
+                const b = v as Record<string, ColdOpenSizingBound>;
+                setIcpRows((rows) =>
+                  rows.map((r) =>
+                    b[r.slug]
+                      ? {
+                          ...r,
+                          teamSizeMin: b[r.slug].teamSizeMin !== undefined ? String(b[r.slug].teamSizeMin) : r.teamSizeMin,
+                          teamSizeMax: b[r.slug].teamSizeMax !== undefined ? String(b[r.slug].teamSizeMax) : r.teamSizeMax,
+                          disqualifyIf: b[r.slug].disqualifyIf.length ? b[r.slug].disqualifyIf.join(", ") : r.disqualifyIf,
+                        }
+                      : r
+                  )
+                );
+              }}
+            />
           </div>
 
           {/* Sending Engine & Daily Limit */}
@@ -526,46 +635,24 @@ export function IcpLockConfigForm({
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Daily Send Limit:</span>
-                <span className="font-mono text-zinc-200">{dailyLimit} emails/day</span>
+                <span className="text-zinc-400">Daily Volume:</span>
+                <span className={`font-mono ${dailyVolume ? "text-zinc-200" : "text-zinc-500"}`}>{dailyVolume ? `${dailyVolume} leads/day` : "Not set"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Sending Hours:</span>
-                <span className="font-mono text-zinc-200">{sendWindowHours}</span>
+                <span className="text-zinc-400">Sends At:</span>
+                <span className="font-mono text-zinc-200">
+                  {String(dailyLocalHour).padStart(2, "0")}:00 {dailyTimezone}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Copy:</span>
+                <span className="font-mono text-zinc-200">{copyMode === "generate" ? "Written per lead" : "Your templates"}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Cold Open Sub-Skill Automations Grid (Uses AnySkillBadge) */}
-        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-emerald-400" /> Sub-Skill Automations Armed Upon Save
-            </span>
-            <span className="text-[10px] text-zinc-400 font-mono">7/7 Active</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-            {COLD_OPEN_AUTOMATION_SKILLS.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <AnySkillBadge skill={skill.id} size={22} />
-                  <span className="font-medium text-zinc-200 truncate">
-                    {anySkillDisplayName(skill.id)}
-                  </span>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 shrink-0">
-                  <Clock className="h-2.5 w-2.5" />
-                  {skill.cadence}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <WorkerStatusGrid engagementId={engagementId} productId="cold-open" refreshKey={statusRefresh} title="Cold Open workers for this client" />
       </div>
 
       {/* Scenario-Based Tuning Collapsible */}
@@ -613,7 +700,7 @@ export function IcpLockConfigForm({
 
               {icpRows.map((row, i) => (
                 <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 space-y-2">
-                  <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+                  <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
                     <div>
                       <label className="block text-[10px] text-zinc-400 mb-0.5">Slug</label>
                       <input
@@ -641,6 +728,16 @@ export function IcpLockConfigForm({
                         value={row.weight}
                         onChange={(e) => updateRow(i, { weight: e.target.value })}
                         placeholder="0.5"
+                        className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-400 mb-0.5">Min Team Size</label>
+                      <input
+                        type="text"
+                        value={row.teamSizeMin}
+                        onChange={(e) => updateRow(i, { teamSizeMin: e.target.value })}
+                        placeholder="1"
                         className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                       />
                     </div>
@@ -697,6 +794,7 @@ export function IcpLockConfigForm({
                     onChange={(e) => setTone(e.target.value)}
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   >
+                    <option value="">Not set</option>
                     <option value="Professional">Professional</option>
                     <option value="Direct">Direct & Pitch-forward</option>
                     <option value="Casual">Casual & Conversational</option>
@@ -739,31 +837,42 @@ export function IcpLockConfigForm({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">
-                    Daily Outbound Send Limit
-                  </label>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Leads per day</label>
                   <input
                     type="number"
-                    value={dailyLimit}
-                    onChange={(e) => setDailyLimit(Number(e.target.value))}
-                    placeholder="50"
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    min={1}
+                    max={500}
+                    value={dailyVolume}
+                    onChange={(e) => setDailyVolume(e.target.value)}
+                    placeholder="Not set — keep within your inboxes' warm-up limits"
+                    className={FIELD_CLASS}
                   />
                 </div>
-
                 <div>
-                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">
-                    Sending Window (Local Time)
-                  </label>
-                  <input
-                    type="text"
-                    value={sendWindowHours}
-                    onChange={(e) => setSendWindowHours(e.target.value)}
-                    placeholder="09:00-17:00"
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Send at (hour)</label>
+                  <select value={dailyLocalHour} onChange={(e) => setDailyLocalHour(Number(e.target.value))} className={FIELD_CLASS}>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>
+                        {String(h).padStart(2, "0")}:00
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Timezone</label>
+                  <input value={dailyTimezone} onChange={(e) => setDailyTimezone(e.target.value)} placeholder="America/New_York" className={FIELD_CLASS} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Copy</label>
+                  <select value={copyMode} onChange={(e) => setCopyMode(e.target.value as "generate" | "upload")} className={FIELD_CLASS}>
+                    <option value="generate">Write fresh copy per lead (in your voice)</option>
+                    <option value="upload">Rotate my own templates</option>
+                  </select>
                 </div>
               </div>
+              <p className="text-[11px] text-zinc-500">
+                Sending stays a dry run until live sending is switched on in {anySkillDisplayName("daily-send")}.
+              </p>
             </div>
           </div>
         )}

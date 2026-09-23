@@ -7,11 +7,32 @@ import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspa
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
-import { getClientFacts } from "@/lib/client-facts";
+import { getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
+import { splitFacts } from "@/lib/fact-suggestions";
+import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
+import { normalizeVertical } from "@/lib/verticals";
+import { syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
+
+const PIN_DOWN_FACT_KEYS = [
+  "offerName",
+  "offerPrice",
+  "offerVertical",
+  "offerIcp",
+  "trafficTemperature",
+  "castingChoice",
+  "bookingPlatform",
+  "hostingPlatform",
+  "emailPlatform",
+  "heroVideoUrl",
+] as const;
+
+const TRAFFIC_TEMPERATURES = ["cold", "warm", "hot"] as const;
+const DELIVERABLE_BRIEF_DESTINATIONS = ["slack", "crm_note"] as const;
+type TrafficTemperature = (typeof TRAFFIC_TEMPERATURES)[number];
 
 /**
  * pin-down bridge route — Showtime Single Dossier API handler.
@@ -25,6 +46,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
   const { id } = await params;
   const activeWorkspace = await getActiveWorkspace(session.whopUserId);
+  const ownedByThisTenant = and(
+    eq(engagements.engagementId, id),
+    eq(engagements.whopUserId, session.whopUserId),
+    eq(engagements.workspaceId, activeWorkspace.workspaceId)
+  );
+
+  // Ownership first: applyResolvableFacts writes config, so it must never
+  // run for an engagement id this tenant doesn't own.
+  const [owned] = await db.select({ id: engagements.id }).from(engagements).where(ownedByThisTenant).limit(1);
+  if (!owned) {
+    return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+  }
 
   // Promote trusted client_facts before loading row configuration
   await applyResolvableFacts(id).catch((err) =>
@@ -41,13 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       rawVoiceCorpus: engagements.rawVoiceCorpus,
     })
     .from(engagements)
-    .where(
-      and(
-        eq(engagements.engagementId, id),
-        eq(engagements.whopUserId, session.whopUserId),
-        eq(engagements.workspaceId, activeWorkspace.workspaceId)
-      )
-    )
+    .where(ownedByThisTenant)
     .limit(1);
 
   if (!engagementRow) {
@@ -58,16 +85,49 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const enabled = await isSkillEnabledForEngagement(id, "pin-down");
   const primaryDomain = await getPrimaryDomainForEngagement(id);
 
-  const factList = Array.isArray(facts) ? facts : Object.values(facts);
-  const factMap = Object.fromEntries(factList.map((f) => [f.key, f.value]));
-
   const stack = (engagementRow.stack as Partial<EngagementStack> | null) ?? {};
   const offer = (engagementRow.offerDetails as Partial<OfferDetails> | null) ?? {};
 
-  const buyerDomain =
-    primaryDomain ||
-    stack.buyer_domain ||
-    (typeof factMap.buyerDomain === "string" ? factMap.buyerDomain : "");
+  // A saved value wins; otherwise only a trusted fact pre-fills a field.
+  // Anything else goes back as a suggestion, shown beside the field with
+  // its source and score — never pre-filled as if it were the answer.
+  const { trusted, suggestions } = splitFacts(facts, PIN_DOWN_FACT_KEYS);
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const savedOr = (saved: string | null | undefined, key: string) => saved || str(trusted[key]);
+  // Once a field is saved, a suggestion for it is noise — drop it.
+  const dropIfSaved = (saved: unknown, key: string) => {
+    if (saved) delete suggestions[key];
+  };
+  dropIfSaved(offer.name, "offerName");
+  dropIfSaved(offer.price, "offerPrice");
+  dropIfSaved(offer.vertical, "offerVertical");
+  dropIfSaved(offer.icp, "offerIcp");
+  dropIfSaved(offer.traffic_temperature, "trafficTemperature");
+  dropIfSaved(engagementRow.castingChoice, "castingChoice");
+  dropIfSaved(stack.booking_platform, "bookingPlatform");
+  dropIfSaved(stack.hosting_platform, "hostingPlatform");
+  dropIfSaved(stack.email_platform, "emailPlatform");
+  dropIfSaved(stack.hero_video_id, "heroVideoUrl");
+
+  // Several Whop plans: offer them as a pick for the price rather than
+  // filling one in (the app can't know which plan this offer is).
+  const planOptions = facts.whopPlanOptions;
+  if (!offer.price && planOptions && planOptions.status !== "rejected" && Array.isArray(planOptions.value)) {
+    suggestions.whopPlanOptions = {
+      value: planOptions.value,
+      source: planOptions.source,
+      sourceDetail: "whop",
+      confidence: null,
+      evidence: planOptions.evidence,
+      derived: true,
+    };
+  }
+
+  // Rule-based suggestions from what's connected (SMS, ad data, brief
+  // destination) for fields that are still unset.
+  Object.assign(suggestions, await showtimeConnectionSuggestions(id, stack));
+
+  const buyerDomain = primaryDomain || stack.buyer_domain || "";
 
   return NextResponse.json({
     buyer: engagementRow.buyer,
@@ -77,21 +137,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     confirmationPageUrl: engagementRow.confirmationPageUrl ?? null,
     config: {
       buyerDomain,
-      bookingPlatform: stack.booking_platform ?? factMap.bookingPlatform ?? null,
-      hostingPlatform: stack.hosting_platform ?? factMap.hostingPlatform ?? null,
-      emailPlatform: stack.email_platform ?? factMap.emailPlatform ?? null,
-      smsPlatform: stack.sms_platform ?? "none",
-      adDataPlatform: stack.ad_data_platform ?? "none",
-      offerName: offer.name || factMap.offerName || engagementRow.buyer || "",
-      offerPrice: offer.price || factMap.offerPrice || "",
-      offerVertical: offer.vertical || factMap.offerVertical || "",
-      offerIcp: offer.icp || factMap.offerIcp || "",
-      trafficTemperature: offer.traffic_temperature || factMap.trafficTemperature || "warm",
-      castingChoice: engagementRow.castingChoice || factMap.castingChoice || "founder_on_camera",
-      heroVideoUrl: stack.hero_video_id ?? (typeof factMap.heroVideoUrl === "string" ? factMap.heroVideoUrl : ""),
-      briefLandingDestination: stack.brief_landing_destination ?? "slack",
+      bookingPlatform: stack.booking_platform ?? (str(trusted.bookingPlatform) || null),
+      hostingPlatform: stack.hosting_platform ?? (str(trusted.hostingPlatform) || null),
+      emailPlatform: stack.email_platform ?? (str(trusted.emailPlatform) || null),
+      // Unset stays unset (null) — "none" is a real choice the user makes.
+      smsPlatform: stack.sms_platform ?? null,
+      adDataPlatform: stack.ad_data_platform ?? null,
+      offerName: savedOr(offer.name, "offerName"),
+      offerPrice: savedOr(offer.price, "offerPrice"),
+      offerVertical: savedOr(offer.vertical, "offerVertical"),
+      offerIcp: savedOr(offer.icp, "offerIcp"),
+      trafficTemperature: savedOr(offer.traffic_temperature, "trafficTemperature"),
+      // visible-default in the registry: a safe default the user can see.
+      castingChoice: engagementRow.castingChoice || str(trusted.castingChoice) || "founder_on_camera",
+      heroVideoUrl: stack.hero_video_id ?? str(trusted.heroVideoUrl),
+      briefLandingDestination: stack.brief_landing_destination ?? null,
       slackWebhookUrl: stack.slack_webhook_url ?? "",
     },
+    suggestions,
   });
 }
 
@@ -108,7 +171,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const [engagementRow] = await db
-      .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, stack: engagements.stack, offerDetails: engagements.offerDetails })
+      .select({
+        engagementId: engagements.engagementId,
+        buyer: engagements.buyer,
+        stack: engagements.stack,
+        offerDetails: engagements.offerDetails,
+        castingChoice: engagements.castingChoice,
+      })
       .from(engagements)
       .where(
         and(
@@ -131,29 +200,64 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const currentStack = (engagementRow.stack as Partial<EngagementStack> | null) ?? {};
     const currentOffer = (engagementRow.offerDetails as Partial<OfferDetails> | null) ?? {};
 
+    // A non-empty string replaces the saved value; anything else keeps it.
+    // Nothing is filled with a default the user didn't choose — SMS, ad
+    // data and brief delivery stay unset until picked ("none" is a real
+    // choice, not a default), and the offer name no longer falls back to
+    // the client's name.
+    const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+    // Pin-Down crawls the client's site for brand voice and pre-fill; it
+    // can't run without one. (This check existed before the dossier rewrite
+    // and was dropped with it.)
+    if (!text(body.buyerDomain) && !currentStack.buyer_domain) {
+      return NextResponse.json({ error: "Enter the client's website before saving." }, { status: 400 });
+    }
+
+    const trafficTemperature: TrafficTemperature | undefined = TRAFFIC_TEMPERATURES.includes(body.trafficTemperature)
+      ? body.trafficTemperature
+      : currentOffer.traffic_temperature;
+    if (!trafficTemperature) {
+      return NextResponse.json({ error: "Pick how leads usually arrive (cold, warm or hot) before saving." }, { status: 400 });
+    }
+
+    // Only destinations deliverBrief can actually deliver to. "email" was
+    // offered by the dossier but isn't a destination at all, and briefs
+    // sent there silently went nowhere.
+    const brief = text(body.briefLandingDestination);
+    if (brief && !DELIVERABLE_BRIEF_DESTINATIONS.includes(brief as (typeof DELIVERABLE_BRIEF_DESTINATIONS)[number])) {
+      return NextResponse.json({ error: `Briefs can't be delivered to "${brief}". Pick Slack or a CRM note.` }, { status: 400 });
+    }
+
     const updatedStack: Partial<EngagementStack> = {
       ...currentStack,
-      buyer_domain: typeof body.buyerDomain === "string" ? body.buyerDomain.trim() : currentStack.buyer_domain,
-      booking_platform: typeof body.bookingPlatform === "string" ? body.bookingPlatform : currentStack.booking_platform,
-      hosting_platform: typeof body.hostingPlatform === "string" ? body.hostingPlatform : currentStack.hosting_platform,
-      email_platform: typeof body.emailPlatform === "string" ? body.emailPlatform : currentStack.email_platform,
-      sms_platform: typeof body.smsPlatform === "string" ? body.smsPlatform : currentStack.sms_platform ?? "none",
-      ad_data_platform: typeof body.adDataPlatform === "string" ? body.adDataPlatform : currentStack.ad_data_platform ?? "none",
+      buyer_domain: text(body.buyerDomain) ?? currentStack.buyer_domain,
+      booking_platform: (text(body.bookingPlatform) as EngagementStack["booking_platform"] | undefined) ?? currentStack.booking_platform,
+      hosting_platform: (text(body.hostingPlatform) as EngagementStack["hosting_platform"] | undefined) ?? currentStack.hosting_platform,
+      email_platform: (text(body.emailPlatform) as EngagementStack["email_platform"] | undefined) ?? currentStack.email_platform,
+      sms_platform: (text(body.smsPlatform) as EngagementStack["sms_platform"] | undefined) ?? currentStack.sms_platform,
+      ad_data_platform: (text(body.adDataPlatform) as EngagementStack["ad_data_platform"] | undefined) ?? currentStack.ad_data_platform,
       hero_video_id: typeof body.heroVideoUrl === "string" ? body.heroVideoUrl.trim() : currentStack.hero_video_id,
-      brief_landing_destination: typeof body.briefLandingDestination === "string" ? body.briefLandingDestination : currentStack.brief_landing_destination ?? "slack",
+      brief_landing_destination:
+        (text(body.briefLandingDestination) as EngagementStack["brief_landing_destination"] | undefined) ?? currentStack.brief_landing_destination,
       slack_webhook_url: typeof body.slackWebhookUrl === "string" ? body.slackWebhookUrl.trim() : currentStack.slack_webhook_url,
     };
 
+    const typedVertical = text(body.offerVertical);
     const offerDetails: OfferDetails = {
-      name: typeof body.offerName === "string" ? body.offerName.trim() : currentOffer.name || engagementRow.buyer,
-      price: typeof body.offerPrice === "string" ? body.offerPrice.trim() : currentOffer.price || "",
-      vertical: typeof body.offerVertical === "string" ? body.offerVertical.trim() : currentOffer.vertical || "",
-      icp: typeof body.offerIcp === "string" ? body.offerIcp.trim() : currentOffer.icp || "",
-      traffic_temperature: (typeof body.trafficTemperature === "string" ? body.trafficTemperature : currentOffer.traffic_temperature || "warm") as "cold" | "warm" | "hot",
+      name: text(body.offerName) ?? currentOffer.name ?? "",
+      price: text(body.offerPrice) ?? currentOffer.price ?? "",
+      // Stored as the fixed list's id so benchmarks group correctly; an
+      // unlisted legacy value is kept as typed.
+      vertical: typedVertical ? normalizeVertical(typedVertical) ?? typedVertical : currentOffer.vertical ?? "",
+      icp: text(body.offerIcp) ?? currentOffer.icp ?? "",
+      traffic_temperature: trafficTemperature,
       hybrid_mode_enabled: currentOffer.hybrid_mode_enabled ?? false,
     };
 
-    const castingChoice = typeof body.castingChoice === "string" ? body.castingChoice : "founder_on_camera";
+    // visible-default in the registry, so a missing value keeps the saved
+    // one or the documented default.
+    const castingChoice = text(body.castingChoice) ?? engagementRow.castingChoice ?? "founder_on_camera";
 
     await db
       .update(engagements)
@@ -165,14 +269,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       })
       .where(eq(engagements.engagementId, id));
 
-    // Enable all 5 Showtime sub-workers simultaneously upon arming
-    await Promise.all([
-      setSkillEnabledForEngagement(id, "pin-down", true),
-      setSkillEnabledForEngagement(id, "pile-on", true),
-      setSkillEnabledForEngagement(id, "pre-call-read", true),
-      setSkillEnabledForEngagement(id, "win-back", true),
-      setSkillEnabledForEngagement(id, "leak-map", true),
+    // Keys saved before their platform was picked (e.g. pasted into this
+    // dossier's connect panel) are marked connected now that it is.
+    await syncMarkersForChosenPlatforms(id, [
+      updatedStack.booking_platform,
+      updatedStack.email_platform,
+      updatedStack.hosting_platform,
+      updatedStack.sms_platform,
+      updatedStack.ad_data_platform,
     ]);
+
+    // Record what the user did with each suggestion (kept -> confirmed,
+    // changed -> edited) so it isn't suggested again.
+    await recordDossierDecisions(id, {
+      offerName: offerDetails.name,
+      offerPrice: offerDetails.price,
+      offerVertical: offerDetails.vertical,
+      offerIcp: offerDetails.icp,
+      trafficTemperature: offerDetails.traffic_temperature,
+      castingChoice,
+      bookingPlatform: updatedStack.booking_platform,
+      hostingPlatform: updatedStack.hosting_platform,
+      emailPlatform: updatedStack.email_platform,
+      heroVideoUrl: updatedStack.hero_video_id,
+    }).catch((err) => console.error(`[bridges/pin-down] recording suggestion decisions failed for ${id}:`, err));
+
+    // Only Pin-Down itself is switched on here. The other Showtime workers
+    // are on by default (isSkillEnabledForEngagement), so re-enabling them
+    // on every save did nothing for a new client and silently undid it
+    // when a user had switched one off. Their real state (ready / needs
+    // setup / off) is shown in the dossier's worker status grid.
+    await setSkillEnabledForEngagement(id, "pin-down", true);
 
     if (body.buyerDomain) {
       seedPrimaryDomainFromUrl(id, body.buyerDomain).catch((err) =>

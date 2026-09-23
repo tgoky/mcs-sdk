@@ -12,6 +12,7 @@
 import { fetchWithTimeout } from "@/lib/http";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { postToClientSlack } from "@/lib/slack-delivery";
 
 // ── Platform response shapes ────────────────────────────────────────────
 // Same rationale as the equivalent block in booking.ts: these cover only
@@ -2077,18 +2078,16 @@ export async function deliverBrief(
   // just enough for the interaction handler
   // (src/app/api/webhooks/slack/interactions/route.ts) to log the
   // outcome without a round trip back to this function.
-  slackButtonContext?: { engagementId: string; bookingId: string; prospectEmail: string }
+  slackButtonContext?: { engagementId: string; bookingId: string; prospectEmail: string },
+  // The client whose Slack connection (if set up) should deliver instead
+  // of the webhook — see src/lib/slack-delivery.ts.
+  engagementId?: string
 ): Promise<void> {
   switch (destination) {
-    case "slack":
-      if (!slackWebhookUrl) {
-        throw new Error("Slack delivery requires slack_webhook_url on engagement stack");
-      }
-      await fetchWithTimeout(slackWebhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          blocks: [
+    case "slack": {
+      const delivered = await postToClientSlack(engagementId, slackWebhookUrl, {
+        text: briefText,
+        blocks: [
             {
               type: "section",
               text: { type: "mrkdwn", text: briefText },
@@ -2108,10 +2107,13 @@ export async function deliverBrief(
                   },
                 ]
               : []),
-          ],
-        }),
+        ],
       });
+      if (delivered === "none") {
+        throw new Error("Slack delivery needs a Slack webhook URL or a connected Slack channel");
+      }
       break;
+    }
 
     case "crm_note":
       if (!crmApiKey || !crmMeta?.platform) {
@@ -2134,13 +2136,12 @@ export async function deliverBrief(
       break;
 
     default:
-      // calendar_event delivery not universally supported — fall back to Slack if configured
-      if (slackWebhookUrl) {
-        await fetchWithTimeout(slackWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: briefText }),
-        });
+      // calendar_event (and anything unrecognised) has no delivery of its
+      // own — fall back to Slack when configured. With no fallback, throw
+      // so the run records a delivery failure instead of reporting a brief
+      // as sent when it went nowhere.
+      if ((await postToClientSlack(engagementId, slackWebhookUrl, { text: briefText })) === "none") {
+        throw new Error(`Brief delivery to "${destination}" isn't supported and no Slack is set up to fall back to`);
       }
   }
 }

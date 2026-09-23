@@ -15,6 +15,7 @@ import { useToast } from "@/components/toast/toast-provider";
 import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
 import { VoiceCaptureLivePreview } from "./voice-capture-live-preview";
+import { FactSuggestionChip, type FactSuggestionDTO } from "@/components/fact-suggestion";
 
 type Touchset = { subject: string; body1: string; body2: string; body3: string };
 function emptyTouchset(): Touchset {
@@ -31,6 +32,7 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
   const [greeting, setGreeting] = useState("Hi");
   const [signOff, setSignOff] = useState("Best");
   const [tone, setTone] = useState("");
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
   const [subjectVariants, setSubjectVariants] = useState("");
   const [touchsets, setTouchsets] = useState<Touchset[]>([emptyTouchset(), emptyTouchset()]);
 
@@ -48,6 +50,7 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
         if (!res.ok) throw new Error(data.error ?? "Failed to load");
         if (cancelled) return;
         setBuyer(data.buyer ?? "");
+        setSuggestions(data.suggestions ?? {});
         if (data.voiceProfile) {
           setGreeting(data.voiceProfile.greeting ?? "Hi");
           setSignOff(data.voiceProfile.signOff ?? "Best");
@@ -117,6 +120,22 @@ export function VoiceCaptureConfigForm({ engagementId, onCancel, cancelLabel = "
           <InputField label="Greeting" value={greeting} onChange={setGreeting} placeholder="Hi" required />
           <InputField label="Sign-off" value={signOff} onChange={setSignOff} placeholder="Best" required />
           <InputField label="Tone" value={tone} onChange={setTone} placeholder="direct, plain-spoken" required />
+          <FactSuggestionChip
+            engagementId={engagementId}
+            factKey="voiceProfile"
+            suggestion={tone ? undefined : suggestions.voiceProfile}
+            currentValue=""
+            display={(v) => {
+              const vp = v as { tone?: string; greeting?: string; signOff?: string };
+              return `${vp?.tone ?? ""} · ${vp?.greeting ?? ""} … ${vp?.signOff ?? ""}`;
+            }}
+            onUse={(v) => {
+              const vp = v as { tone?: string; greeting?: string; signOff?: string };
+              if (vp.tone) setTone(vp.tone);
+              if (vp.greeting) setGreeting(vp.greeting);
+              if (vp.signOff) setSignOff(vp.signOff);
+            }}
+          />
         </div>
       ),
     },

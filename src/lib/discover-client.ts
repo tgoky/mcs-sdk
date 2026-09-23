@@ -16,7 +16,12 @@
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
 import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { runDiscoveryPrefill } from "@/features/pin-down/server/discovery-prefill";
-import { resolveWebsiteDerivedChoices, verifyReputationExtractions } from "@/lib/field-resolvers";
+import {
+  resolveColdOpenDerivedFields,
+  resolveWebsiteDerivedChoices,
+  verifyReputationExtractions,
+  verifyWebsiteReadings,
+} from "@/lib/field-resolvers";
 
 export interface DiscoverClientResult {
   ran: boolean;
@@ -103,14 +108,29 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
     await write(key, value, evidence);
   }
 
-  // Core website crawl facts
-  await write("operatorName", prefill.suggestedBuyerName, "Crawled from the homepage's own branding/title.");
-  await write("offerName", prefill.suggestedOfferName, "Crawled from the homepage/offer page.");
-  await write("offerIcp", prefill.suggestedIcp, "Inferred from the site's own marketing copy.");
+  // Claude's readings of the copy. Written as "llm" (never auto-applied)
+  // until verifyWebsiteReadings below scores them against the same copy.
+  // Human-touched facts are skipped, same as writeSuggestion.
+  async function writeReading(key: string, value: unknown, evidence: string) {
+    if (value === undefined || value === null || value === "") return;
+    const existing = await getClientFact(engagementId, key);
+    if (existing && existing.status !== "suggested") return;
+    await upsertClientFact(engagementId, key, value, { source: "llm", sourceDetail: siteDomain, evidence });
+    factsWritten.push(key);
+  }
+
+  await writeReading("operatorName", prefill.suggestedBuyerName, "Read from the homepage's branding/title by Claude.");
+  await writeReading("offerName", prefill.suggestedOfferName, "Read from the homepage/offer page by Claude.");
+  await writeReading("offerIcp", prefill.suggestedIcp, "Inferred from the site's marketing copy by Claude.");
+  await writeReading("offerPrice", prefill.suggestedOfferPrice, "Read from the site's pricing copy by Claude.");
+  await writeReading("offerVertical", prefill.suggestedOfferVertical, "Inferred from the site's marketing copy by Claude.");
+
+  // Scraped directly from the page (signatures, embeds, raw text).
   await write("bookingPlatform", prefill.detectedBookingPlatform, "Detected from a booking-platform script/iframe signature on the homepage.");
   await write("hostingPlatform", prefill.detectedHostingPlatform, "Detected from a hosting-platform fingerprint (generator meta tag / asset path) on the homepage.");
   await write("rawVoiceCorpus", prefill.scrapedCorpus);
   await write("existingConfirmationPageUrl", prefill.existingConfirmationPageUrl);
+  await write("heroVideoUrl", prefill.suggestedHeroVideoUrl, "Video embed found on the homepage.");
   if (prefill.designSignal) {
     await write("designSignal", prefill.designSignal);
   }
@@ -148,14 +168,38 @@ export async function discoverClient(engagementId: string): Promise<DiscoverClie
 
   // Chains straight into the Jev resolvers — rawVoiceCorpus and candidate lists
   // were just written above.
+  // Each resolver runs on its own: one failing (a Jev or Claude error) must
+  // not stop the others — previously a Showtime resolver error silently
+  // skipped Reputation Manager's verification too.
   if (factsWritten.includes("rawVoiceCorpus")) {
-    try {
-      await resolveWebsiteDerivedChoices(engagementId);
-      await verifyReputationExtractions(engagementId);
-    } catch (err) {
-      console.warn(`[discover-client] website-derived Jev resolution skipped for ${engagementId}:`, err instanceof Error ? err.message : err);
+    const resolvers: Array<[string, (id: string) => Promise<unknown>]> = [
+      ["website choices", resolveWebsiteDerivedChoices],
+      ["reputation extractions", verifyReputationExtractions],
+      ["website readings", verifyWebsiteReadings],
+      ["cold open fields", resolveColdOpenDerivedFields],
+    ];
+    for (const [label, resolve] of resolvers) {
+      try {
+        await resolve(engagementId);
+      } catch (err) {
+        console.warn(`[discover-client] ${label} resolution skipped for ${engagementId}:`, err instanceof Error ? err.message : err);
+      }
     }
   }
 
   return { ran: true, domain, factsWritten, notes: prefill.notes };
+}
+/**
+ * Runs the website crawl after a connected account has been harvested, but
+ * only when it can do something and hasn't already been done: a domain is
+ * on file now (a harvest may have just seeded it from Klaviyo/GHL) and no
+ * voice corpus exists yet. Without the second check every reconnect of any
+ * account would re-crawl the site and repeat the Claude and Jev calls.
+ */
+export async function discoverClientIfNotYetCrawled(engagementId: string): Promise<DiscoverClientResult | null> {
+  const domain = await getPrimaryDomainForEngagement(engagementId);
+  if (!domain) return null;
+  const corpus = await getClientFact(engagementId, "rawVoiceCorpus");
+  if (corpus) return null;
+  return discoverClient(engagementId);
 }

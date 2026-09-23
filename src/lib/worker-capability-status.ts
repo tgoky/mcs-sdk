@@ -77,7 +77,15 @@ async function filledKeysForPreCallRead(engagementId: string): Promise<Set<strin
   if (!stack) return new Set();
   const filled = new Set<string>();
   if (truthy(stack.brief_landing_destination)) filled.add("briefLandingDestination");
-  if (truthy(stack.slack_webhook_url)) filled.add("slackWebhookUrl");
+  // Satisfied by a webhook, a connected Slack channel, or not needed at all
+  // when briefs land as CRM notes.
+  if (
+    stack.brief_landing_destination === "crm_note" ||
+    truthy(stack.slack_webhook_url) ||
+    (truthy(stack.slack_channel_id) && (await hasCredential(engagementId, "slack")))
+  ) {
+    filled.add("slackWebhookUrl");
+  }
   if (truthy(stack.video_engagement_platform) && stack.video_engagement_platform !== "none") filled.add("videoEngagementPlatform");
   if (truthy(stack.video_engagement_credentials_ref)) filled.add("videoEngagementCredential");
   if (truthy(stack.prospect_research_sources_used)) filled.add("prospectResearchSourcesUsed");

@@ -17,6 +17,7 @@ import { WorkerCapabilityMatrix } from "@/components/worker-capability-matrix";
 import { ChoiceCardGroup } from "@/components/choice-card-group";
 import { ProgressiveFlow, type ProgressiveFlowStep } from "@/components/progressive-flow";
 import { LeakMapLivePreview } from "./leak-map-live-preview";
+import { FactSuggestionChip, type FactSuggestionDTO } from "@/components/fact-suggestion";
 
 const DAY_OPTIONS = [
   { value: "0", label: "Sunday" },
@@ -50,6 +51,7 @@ export function LeakMapConfigForm({
   const [leakMapTimezone, setLeakMapTimezone] = useState("UTC");
   const [auditOutputFormat, setAuditOutputFormat] = useState<"email" | "slack" | "dashboard_only">("dashboard_only");
   const [leakMapReportEmail, setLeakMapReportEmail] = useState("");
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function LeakMapConfigForm({
         setLeakMapTimezone(data.leakMapTimezone ?? "UTC");
         setAuditOutputFormat(data.auditOutputFormat ?? "dashboard_only");
         setLeakMapReportEmail(data.leakMapReportEmail ?? "");
+        setSuggestions(data.suggestions ?? {});
       } catch (e: unknown) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -188,6 +191,15 @@ export function LeakMapConfigForm({
               onChange={setLeakMapReportEmail}
               placeholder="ops@client.com"
               required
+            />
+          )}
+          {auditOutputFormat === "email" && (
+            <FactSuggestionChip
+              engagementId={engagementId}
+              factKey="leakMapReportEmail"
+              suggestion={suggestions.leakMapReportEmail}
+              currentValue={leakMapReportEmail}
+              onUse={(v) => setLeakMapReportEmail(String(v))}
             />
           )}
           {auditOutputFormat === "slack" && !slackWebhookUrl && (

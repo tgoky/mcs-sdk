@@ -13,17 +13,48 @@ import {
   ExternalLink,
   Link,
   Loader2,
-  Clock,
-  Zap,
   MessageSquare,
   Sparkles,
   Film,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { AnySkillBadge } from "@/components/any-skill-badge";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerStatusGrid } from "@/components/worker-status-grid";
 import { useTour } from "@/components/tours/tour-provider";
 import { useToast } from "@/components/toast/toast-provider";
+import { FactSuggestionChip, FactSuggestionList, type FactSuggestionDTO } from "@/components/fact-suggestion";
+import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
+import { VERTICALS, isListedVertical, verticalLabel } from "@/lib/verticals";
+
+// Allowed values from EngagementStack (schema.ts).
+const PLATFORM_OPTIONS: Record<"booking" | "email" | "hosting", { value: string; label: string }[]> = {
+  booking: [
+    { value: "calendly", label: "Calendly" },
+    { value: "cal_com", label: "Cal.com" },
+    { value: "ghl_calendar", label: "GoHighLevel" },
+    { value: "oncehub", label: "OnceHub" },
+  ],
+  email: [
+    { value: "hubspot", label: "HubSpot" },
+    { value: "klaviyo", label: "Klaviyo" },
+    { value: "mailchimp", label: "Mailchimp" },
+    { value: "activecampaign", label: "ActiveCampaign" },
+    { value: "convertkit", label: "ConvertKit" },
+    { value: "ghl", label: "GoHighLevel" },
+    { value: "smtp", label: "SMTP" },
+  ],
+  hosting: [
+    { value: "webflow", label: "Webflow" },
+    { value: "wordpress", label: "WordPress" },
+    { value: "ghl", label: "GoHighLevel" },
+    { value: "lovable", label: "Lovable" },
+    { value: "nextjs_vercel", label: "Next.js on Vercel" },
+    { value: "plain_html", label: "Plain HTML (no key needed)" },
+  ],
+};
+
+const FIELD_CLASS =
+  "w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500";
 
 export interface PinDownFormProps {
   engagementId: string;
@@ -31,14 +62,6 @@ export interface PinDownFormProps {
   onSaved?: (result: { runId?: string }) => void;
   cancelLabel?: string;
 }
-
-const SHOWTIME_AUTOMATION_SKILLS = [
-  { id: "pin-down", cadence: "Setup Anchor" },
-  { id: "pile-on", cadence: "Post-Booking SMS" },
-  { id: "pre-call-read", cadence: "Real-Time Briefs" },
-  { id: "win-back", cadence: "No-Show Recovery" },
-  { id: "leak-map", cadence: "Weekly Audit" },
-];
 
 export function PinDownConfigForm({
   engagementId,
@@ -51,6 +74,8 @@ export function PinDownConfigForm({
   const { start: startTour } = useTour();
 
   const [loading, setLoading] = useState(true);
+  // Bumped after a save so the worker status grid re-reads what's missing.
+  const [statusRefresh, setStatusRefresh] = useState(0);
   const [saving, setSaving] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +90,8 @@ export function PinDownConfigForm({
   const [offerPrice, setOfferPrice] = useState("");
   const [offerVertical, setOfferVertical] = useState("");
   const [offerIcp, setOfferIcp] = useState("");
-  const [trafficTemperature, setTrafficTemperature] = useState<"cold" | "warm" | "hot">("warm");
+  // Required answer: starts unset rather than defaulting to "warm".
+  const [trafficTemperature, setTrafficTemperature] = useState<"" | "cold" | "warm" | "hot">("");
   const [castingChoice, setCastingChoice] = useState("founder_on_camera");
 
   // Stack Platforms
@@ -75,9 +101,13 @@ export function PinDownConfigForm({
 
   // Customizations
   const [heroVideoUrl, setHeroVideoUrl] = useState("");
-  const [briefLandingDestination, setBriefLandingDestination] = useState("slack");
+  const [briefLandingDestination, setBriefLandingDestination] = useState("");
   const [slackWebhookUrl, setSlackWebhookUrl] = useState("");
   const [confirmationPageUrl, setConfirmationPageUrl] = useState<string | null>(null);
+
+  // Values the app found but isn't confident enough to fill in — shown
+  // beside their fields (see src/lib/fact-suggestions.ts).
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
 
   // Scenario Tuning Collapsible Drawer
   const [showCustomizer, setShowCustomizer] = useState(false);
@@ -97,11 +127,11 @@ export function PinDownConfigForm({
         setConfirmationPageUrl(data.confirmationPageUrl ?? null);
 
         if (data.config) {
-          setOfferName(data.config.offerName || data.buyer || "");
+          setOfferName(data.config.offerName || "");
           setOfferPrice(data.config.offerPrice || "");
           setOfferVertical(data.config.offerVertical || "");
           setOfferIcp(data.config.offerIcp || "");
-          if (data.config.trafficTemperature) setTrafficTemperature(data.config.trafficTemperature);
+          setTrafficTemperature(data.config.trafficTemperature || "");
           if (data.config.castingChoice) setCastingChoice(data.config.castingChoice);
 
           setBookingPlatform(data.config.bookingPlatform ?? null);
@@ -109,11 +139,10 @@ export function PinDownConfigForm({
           setEmailPlatform(data.config.emailPlatform ?? null);
 
           setHeroVideoUrl(data.config.heroVideoUrl ?? "");
-          setBriefLandingDestination(data.config.briefLandingDestination ?? "slack");
+          setBriefLandingDestination(data.config.briefLandingDestination ?? "");
           setSlackWebhookUrl(data.config.slackWebhookUrl ?? "");
-        } else if (data.buyer) {
-          setOfferName(data.buyer);
         }
+        setSuggestions(data.suggestions ?? {});
       } catch (err: unknown) {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : "Failed to load Showtime config";
@@ -152,14 +181,18 @@ export function PinDownConfigForm({
           setPrimaryDomain(refreshData.primaryDomain);
           setInputDomain(refreshData.primaryDomain);
         }
-        setOfferName(refreshData.config.offerName || offerName);
-        setOfferPrice(refreshData.config.offerPrice || offerPrice);
-        setOfferVertical(refreshData.config.offerVertical || offerVertical);
-        setOfferIcp(refreshData.config.offerIcp || offerIcp);
-        if (refreshData.config.trafficTemperature) setTrafficTemperature(refreshData.config.trafficTemperature);
-        if (refreshData.config.castingChoice) setCastingChoice(refreshData.config.castingChoice);
-        if (refreshData.config.bookingPlatform) setBookingPlatform(refreshData.config.bookingPlatform);
-        if (refreshData.config.hostingPlatform) setHostingPlatform(refreshData.config.hostingPlatform);
+        // Only fill fields that are still empty — never overwrite what the
+        // user typed before crawling.
+        if (!offerName.trim()) setOfferName(refreshData.config.offerName || "");
+        if (!offerPrice.trim()) setOfferPrice(refreshData.config.offerPrice || "");
+        if (!offerVertical.trim()) setOfferVertical(refreshData.config.offerVertical || "");
+        if (!offerIcp.trim()) setOfferIcp(refreshData.config.offerIcp || "");
+        if (!trafficTemperature && refreshData.config.trafficTemperature) setTrafficTemperature(refreshData.config.trafficTemperature);
+        if (!bookingPlatform && refreshData.config.bookingPlatform) setBookingPlatform(refreshData.config.bookingPlatform);
+        if (!hostingPlatform && refreshData.config.hostingPlatform) setHostingPlatform(refreshData.config.hostingPlatform);
+        if (!emailPlatform && refreshData.config.emailPlatform) setEmailPlatform(refreshData.config.emailPlatform);
+        if (!heroVideoUrl.trim() && refreshData.config.heroVideoUrl) setHeroVideoUrl(refreshData.config.heroVideoUrl);
+        setSuggestions(refreshData.suggestions ?? {});
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to crawl domain";
@@ -169,9 +202,13 @@ export function PinDownConfigForm({
     }
   };
 
-  const handleConnectIntegration = () => {
-    window.location.href = `/dashboard/settings/apps`;
-  };
+  // Connect in place instead of leaving for Settings → Apps: that page
+  // saves to the workspace's shared store without attaching the key to
+  // this client or running its harvest. CredentialRow covers pasting a
+  // key, reusing a saved one, and OAuth sign-in (which returns here with
+  // this client attached), all of which harvest.
+  const [connectOpen, setConnectOpen] = useState<null | "booking" | "email" | "hosting">(null);
+  const handleConnectIntegration = () => setConnectOpen((open) => (open === "booking" ? null : "booking"));
 
   const handleArmAndSave = async () => {
     setSaving(true);
@@ -180,7 +217,7 @@ export function PinDownConfigForm({
     try {
       const payload = {
         buyerDomain: primaryDomain || inputDomain,
-        offerName: offerName.trim() || buyer,
+        offerName: offerName.trim(),
         offerPrice: offerPrice.trim(),
         offerVertical: offerVertical.trim(),
         offerIcp: offerIcp.trim(),
@@ -190,7 +227,7 @@ export function PinDownConfigForm({
         hostingPlatform,
         emailPlatform,
         heroVideoUrl: heroVideoUrl.trim(),
-        briefLandingDestination,
+        briefLandingDestination: briefLandingDestination || undefined,
         slackWebhookUrl: slackWebhookUrl.trim(),
       };
 
@@ -203,7 +240,8 @@ export function PinDownConfigForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to arm Showtime engine");
 
-      toast.success(`Showtime Engine armed for ${offerName || buyer}.`);
+      toast.success(`Saved Showtime setup for ${offerName || buyer}. Check each worker's status below.`);
+      setStatusRefresh((n) => n + 1);
       router.refresh();
       startTour("showtime");
 
@@ -346,20 +384,82 @@ export function PinDownConfigForm({
             <div className="text-[11px] font-semibold uppercase text-zinc-400 flex items-center gap-1.5">
               <Globe className="h-3.5 w-3.5 text-amber-400" /> Offer & Market Positioning
             </div>
-            <div>
-              <div className="text-sm font-semibold text-zinc-100">{offerName || buyer}</div>
-              {offerIcp && <p className="text-xs text-zinc-300 mt-0.5 line-clamp-2">{offerIcp}</p>}
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {offerPrice && (
-                  <span className="text-[11px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                    {offerPrice}
-                  </span>
-                )}
-                {offerVertical && (
-                  <span className="text-[11px] text-zinc-300 bg-zinc-800 px-2 py-0.5 rounded">
-                    {offerVertical}
-                  </span>
-                )}
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">What they sell</label>
+                <input
+                  value={offerName}
+                  onChange={(e) => setOfferName(e.target.value)}
+                  placeholder="Offer name"
+                  className={FIELD_CLASS}
+                />
+                <FactSuggestionChip engagementId={engagementId} factKey="offerName" suggestion={suggestions.offerName} currentValue={offerName} onUse={(v) => setOfferName(String(v))} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Price</label>
+                  <input value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} placeholder="e.g. $2,500" className={FIELD_CLASS} />
+                  <FactSuggestionChip engagementId={engagementId} factKey="offerPrice" suggestion={suggestions.offerPrice} currentValue={offerPrice} onUse={(v) => setOfferPrice(String(v))} />
+                  {!offerPrice.trim() && (
+                    <FactSuggestionList
+                      engagementId={engagementId}
+                      factKey="whopPlanOptions"
+                      suggestion={suggestions.whopPlanOptions}
+                      currentItems={[]}
+                      prompt="which plan is this offer?"
+                      itemLabel={(p) => {
+                        const plan = p as { name?: string; price?: string };
+                        return plan.name ? `${plan.name}: ${plan.price}` : String(plan.price ?? "");
+                      }}
+                      onAdd={(p) => setOfferPrice(String((p as { price?: string }).price ?? ""))}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">Vertical</label>
+                  <select value={offerVertical} onChange={(e) => setOfferVertical(e.target.value)} className={FIELD_CLASS}>
+                    <option value="">Not set</option>
+                    {VERTICALS.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.label}
+                      </option>
+                    ))}
+                    {offerVertical && !isListedVertical(offerVertical) && <option value={offerVertical}>{offerVertical} (not on the list)</option>}
+                  </select>
+                  <FactSuggestionChip
+                    engagementId={engagementId}
+                    factKey="offerVertical"
+                    suggestion={suggestions.offerVertical}
+                    currentValue={verticalLabel(offerVertical)}
+                    display={(v) => verticalLabel(String(v))}
+                    onUse={(v) => setOfferVertical(String(v))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">Ideal customer</label>
+                <textarea value={offerIcp} onChange={(e) => setOfferIcp(e.target.value)} rows={2} placeholder="Who this offer is for" className={FIELD_CLASS} />
+                <FactSuggestionChip engagementId={engagementId} factKey="offerIcp" suggestion={suggestions.offerIcp} currentValue={offerIcp} onUse={(v) => setOfferIcp(String(v))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-300 mb-1">How leads usually arrive</label>
+                <select
+                  value={trafficTemperature}
+                  onChange={(e) => setTrafficTemperature(e.target.value as "" | "cold" | "warm" | "hot")}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">Not set</option>
+                  <option value="cold">Cold (Unfamiliar leads — heavy problem education)</option>
+                  <option value="warm">Warm (List/Retargeted leads — familiar with brand)</option>
+                  <option value="hot">Hot (High-intent leads — direct comparison/pricing)</option>
+                </select>
+                <FactSuggestionChip
+                  engagementId={engagementId}
+                  factKey="trafficTemperature"
+                  suggestion={suggestions.trafficTemperature}
+                  currentValue={trafficTemperature}
+                  onUse={(v) => setTrafficTemperature(v as "cold" | "warm" | "hot")}
+                />
               </div>
             </div>
           </div>
@@ -376,10 +476,58 @@ export function PinDownConfigForm({
                   {bookingPlatform ? bookingPlatform.toUpperCase() : "⚠️ None Detected"}
                 </span>
               </div>
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="bookingPlatform"
+                suggestion={suggestions.bookingPlatform}
+                currentValue={bookingPlatform ?? ""}
+                onUse={(v) => setBookingPlatform(String(v))}
+              />
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Hosting Target:</span>
-                <span className="font-mono text-zinc-200">{hostingPlatform || "Custom Page"}</span>
+                <span className="font-mono text-zinc-200">{hostingPlatform || "Not set"}</span>
               </div>
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="hostingPlatform"
+                suggestion={suggestions.hostingPlatform}
+                currentValue={hostingPlatform ?? ""}
+                onUse={(v) => setHostingPlatform(String(v))}
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Email / CRM:</span>
+                <span className="font-mono text-zinc-200">{emailPlatform || "Not set"}</span>
+              </div>
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="emailPlatform"
+                suggestion={suggestions.emailPlatform}
+                currentValue={emailPlatform ?? ""}
+                onUse={(v) => setEmailPlatform(String(v))}
+              />
+              <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
+                {(["booking", "email", "hosting"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setConnectOpen((open) => (open === kind ? null : kind))}
+                    className="text-[11px] font-semibold text-amber-400 hover:underline cursor-pointer"
+                  >
+                    {connectOpen === kind ? "Close" : `Connect ${kind} account`}
+                  </button>
+                ))}
+              </div>
+              {connectOpen && (
+                <ConnectPanel
+                  engagementId={engagementId}
+                  kind={connectOpen}
+                  platform={connectOpen === "booking" ? bookingPlatform : connectOpen === "email" ? emailPlatform : hostingPlatform}
+                  onPickPlatform={(value) =>
+                    connectOpen === "booking" ? setBookingPlatform(value) : connectOpen === "email" ? setEmailPlatform(value) : setHostingPlatform(value)
+                  }
+                  onDone={() => setConnectOpen(null)}
+                />
+              )}
               {confirmationPageUrl && (
                 <div className="pt-1">
                   <a
@@ -403,7 +551,7 @@ export function PinDownConfigForm({
             <div className="space-y-1 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Traffic Temperature:</span>
-                <span className="font-medium text-amber-400 uppercase">{trafficTemperature}</span>
+                <span className={`font-medium uppercase ${trafficTemperature ? "text-amber-400" : "text-zinc-500"}`}>{trafficTemperature || "Not set"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Casting Choice:</span>
@@ -420,7 +568,9 @@ export function PinDownConfigForm({
             <div className="space-y-1 text-xs text-zinc-300">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Channel:</span>
-                <span className="font-medium text-emerald-400 uppercase">{briefLandingDestination}</span>
+                <span className={`font-medium uppercase ${briefLandingDestination ? "text-emerald-400" : "text-zinc-500"}`}>
+                  {briefLandingDestination === "crm_note" ? "CRM note" : briefLandingDestination || "Not set"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Hero Video:</span>
@@ -432,35 +582,7 @@ export function PinDownConfigForm({
           </div>
         </div>
 
-        {/* Showtime Sub-Skill Automations Grid */}
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-amber-400" /> Showtime Workers Armed Upon Save
-            </span>
-            <span className="text-[10px] text-zinc-400 font-mono">5/5 Active</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-            {SHOWTIME_AUTOMATION_SKILLS.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <AnySkillBadge skill={skill.id} size={22} />
-                  <span className="font-medium text-zinc-200 truncate">
-                    {anySkillDisplayName(skill.id)}
-                  </span>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 shrink-0">
-                  <Clock className="h-2.5 w-2.5" />
-                  {skill.cadence}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <WorkerStatusGrid engagementId={engagementId} productId="showtime" refreshKey={statusRefresh} title="Showtime workers for this client" />
       </div>
 
       {/* Scenario Tuning Collapsible */}
@@ -475,7 +597,7 @@ export function PinDownConfigForm({
             <div>
               <div className="text-xs font-semibold text-zinc-200">Customize Setup / Scenario Tuning</div>
               <div className="text-[11px] text-zinc-400">
-                Tweak traffic temperature, hero video URLs, pre-call brief webhooks, and SMS vendors.
+                Tweak on-camera casting, hero video URLs, and where pre-call briefs are delivered.
               </div>
             </div>
           </div>
@@ -493,26 +615,11 @@ export function PinDownConfigForm({
               <div className="flex items-center gap-2">
                 <Flame className="h-4 w-4 text-amber-400" />
                 <h3 className="text-xs font-semibold text-zinc-200">
-                  1. Lead Temperature & On-Camera Casting
+                  1. On-Camera Casting
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-zinc-300 mb-1">
-                    Traffic Temperature
-                  </label>
-                  <select
-                    value={trafficTemperature}
-                    onChange={(e) => setTrafficTemperature(e.target.value as "cold" | "warm" | "hot")}
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  >
-                    <option value="cold">Cold (Unfamiliar leads — heavy problem education)</option>
-                    <option value="warm">Warm (List/Retargeted leads — familiar with brand)</option>
-                    <option value="hot">Hot (High-intent leads — direct comparison/pricing)</option>
-                  </select>
-                </div>
-
                 <div>
                   <label className="block text-[11px] font-medium text-zinc-300 mb-1">
                     On-Camera Casting Choice
@@ -527,6 +634,14 @@ export function PinDownConfigForm({
                     <option value="animation">Product video / Brand motion graphics</option>
                     <option value="other">Other / Team voice</option>
                   </select>
+                  <FactSuggestionChip
+                    engagementId={engagementId}
+                    factKey="castingChoice"
+                    suggestion={suggestions.castingChoice}
+                    currentValue={castingChoice}
+                    display={(v) => String(v).replace(/_/g, " ")}
+                    onUse={(v) => setCastingChoice(String(v))}
+                  />
                 </div>
               </div>
             </div>
@@ -551,6 +666,13 @@ export function PinDownConfigForm({
                   placeholder="https://player.vimeo.com/video/12345678"
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
+                <FactSuggestionChip
+                  engagementId={engagementId}
+                  factKey="heroVideoUrl"
+                  suggestion={suggestions.heroVideoUrl}
+                  currentValue={heroVideoUrl}
+                  onUse={(v) => setHeroVideoUrl(String(v))}
+                />
               </div>
             </div>
 
@@ -573,9 +695,18 @@ export function PinDownConfigForm({
                     onChange={(e) => setBriefLandingDestination(e.target.value)}
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   >
+                    <option value="">Not set</option>
                     <option value="slack">Slack Webhook Channel</option>
-                    <option value="email">Email Notification</option>
+                    <option value="crm_note">CRM note (HubSpot, Klaviyo or GoHighLevel)</option>
                   </select>
+                  <FactSuggestionChip
+                    engagementId={engagementId}
+                    factKey="briefLandingDestination"
+                    suggestion={suggestions.briefLandingDestination}
+                    currentValue={briefLandingDestination}
+                    display={(v) => (v === "crm_note" ? "CRM note" : String(v))}
+                    onUse={(v) => setBriefLandingDestination(String(v))}
+                  />
                 </div>
 
                 {briefLandingDestination === "slack" && (
@@ -617,6 +748,41 @@ export function PinDownConfigForm({
           {saving ? "Arming Engine..." : "ARM SHOWRATE ENGINE"}
         </button>
       </div>
+    </div>
+  );
+}
+function ConnectPanel({
+  engagementId,
+  kind,
+  platform,
+  onPickPlatform,
+  onDone,
+}: {
+  engagementId: string;
+  kind: "booking" | "email" | "hosting";
+  platform: string | null;
+  onPickPlatform: (value: string) => void;
+  onDone: () => void;
+}) {
+  const options = PLATFORM_OPTIONS[kind];
+  const label = options.find((o) => o.value === platform)?.label ?? platform ?? "";
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">
+      <label className="block text-[11px] font-medium text-zinc-300">
+        {kind === "booking" ? "Booking calendar" : kind === "email" ? "Email / CRM" : "Where the confirmation page is hosted"}
+      </label>
+      <select value={platform ?? ""} onChange={(e) => onPickPlatform(e.target.value)} className={FIELD_CLASS}>
+        <option value="">Choose…</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {platform && platform !== "plain_html" && (
+        <CredentialRow engagementId={engagementId} provider={platform} label={`${label} key`} embedded onSaved={onDone} onRequestClose={onDone} />
+      )}
+      <p className="text-[10.5px] text-zinc-500">The platform choice is saved when you save this dossier; the key is saved right away.</p>
     </div>
   );
 }

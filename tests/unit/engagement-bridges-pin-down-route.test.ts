@@ -2,16 +2,38 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/workspace", () => ({
+  getActiveWorkspace: vi.fn(),
+  isPackageInstalledInWorkspace: vi.fn(),
+}));
 vi.mock("@/lib/engagement-skills", () => ({
   isSkillEnabledForEngagement: vi.fn(),
   setSkillEnabledForEngagement: vi.fn(),
 }));
 vi.mock("@/lib/skill-dispatch", () => ({ dispatchSkillRun: vi.fn() }));
+vi.mock("@/lib/client-profile", () => ({
+  getPrimaryDomainForEngagement: vi.fn(),
+  seedPrimaryDomainFromUrl: vi.fn(),
+}));
+vi.mock("@/lib/client-facts", () => ({ getClientFacts: vi.fn(), recordDossierDecisions: vi.fn() }));
+// Connection-based suggestions have their own test (derived-suggestions.test.ts).
+vi.mock("@/lib/derived-suggestions", () => ({ showtimeConnectionSuggestions: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/lib/credentials", () => ({ syncMarkersForChosenPlatforms: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/field-writeback", async () => {
+  // Keep the real trust rule (it decides pre-fill vs suggestion); only the
+  // DB-writing writeback is stubbed.
+  const actual = await vi.importActual<typeof import("@/lib/field-writeback")>("@/lib/field-writeback");
+  return { isFactTrusted: actual.isFactTrusted, applyResolvableFacts: vi.fn() };
+});
 
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspace";
 import { isSkillEnabledForEngagement, setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
+import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
+import { getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 import { fakeDb } from "../helpers/fake-db";
 
 async function importRoute() {
@@ -30,11 +52,27 @@ function postBody(body: unknown) {
   });
 }
 
+function resetCommonMocks() {
+  vi.clearAllMocks();
+  vi.mocked(getSession).mockResolvedValue({ whopUserId: "user-1" } as any);
+  vi.mocked(getActiveWorkspace).mockResolvedValue({ workspaceId: "ws-1" } as any);
+  vi.mocked(isPackageInstalledInWorkspace).mockResolvedValue(true);
+  vi.mocked(applyResolvableFacts).mockResolvedValue([]);
+  vi.mocked(getClientFacts).mockResolvedValue({});
+  vi.mocked(getPrimaryDomainForEngagement).mockResolvedValue(null);
+  vi.mocked(seedPrimaryDomainFromUrl).mockResolvedValue(undefined);
+  vi.mocked(isSkillEnabledForEngagement).mockResolvedValue(false);
+  vi.mocked(setSkillEnabledForEngagement).mockResolvedValue(undefined);
+  vi.mocked(dispatchSkillRun).mockResolvedValue("run-456");
+  vi.mocked(recordDossierDecisions).mockResolvedValue(undefined);
+}
+
+function fact(key: string, value: unknown, source: string, extra: Record<string, unknown> = {}) {
+  return { key, value, source, status: "suggested", confidence: null, sourceDetail: null, evidence: null, updatedAt: new Date(), ...extra };
+}
+
 describe("GET /api/engagements/[id]/bridges/pin-down", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(getSession).mockResolvedValue({ whopUserId: "user-1" } as any);
-  });
+  beforeEach(resetCommonMocks);
 
   it("returns 401 with no session", async () => {
     vi.mocked(getSession).mockResolvedValue({} as any);
@@ -50,16 +88,24 @@ describe("GET /api/engagements/[id]/bridges/pin-down", () => {
     expect(res.status).toBe(404);
   });
 
-  it("pre-fills from stack + top-level columns, defaulting the template", async () => {
+  it("never promotes facts into an engagement this tenant doesn't own", async () => {
+    Object.assign(db, fakeDb([]));
+    const { GET } = await importRoute();
+    await GET(new Request("http://x"), makeParams("someone-elses-engagement"));
+    expect(applyResolvableFacts).not.toHaveBeenCalled();
+  });
+
+  it("pre-fills from the saved stack and offer details", async () => {
     Object.assign(
       db,
       fakeDb([
         {
           buyer: "Acme",
-          stack: { buyer_domain: "acme.com", existing_confirmation_page_url: "https://acme.com/thanks", booking_platform: "calendly" },
-          rawVoiceCorpus: "some pasted sample text",
-          confirmationPageTemplate: "aurora",
-          offerDetails: { name: "Growth Plan" },
+          stack: { buyer_domain: "acme.com", booking_platform: "calendly", email_platform: "hubspot" },
+          offerDetails: { name: "Growth Plan", price: "$997", vertical: "coaching", icp: "founders", traffic_temperature: "cold" },
+          castingChoice: "founder_on_camera",
+          confirmationPageUrl: null,
+          rawVoiceCorpus: "some sample text",
         },
       ])
     );
@@ -69,72 +115,91 @@ describe("GET /api/engagements/[id]/bridges/pin-down", () => {
     const res = await GET(new Request("http://x"), makeParams("e1"));
     const data = await res.json();
 
+    expect(res.status).toBe(200);
+    expect(applyResolvableFacts).toHaveBeenCalledWith("e1");
     expect(data.buyer).toBe("Acme");
     expect(data.enabled).toBe(true);
-    expect(data.marketingDomain).toBe("acme.com");
-    expect(data.existingConfirmationPageUrl).toBe("https://acme.com/thanks");
-    expect(data.rawVoiceCorpus).toBe("some pasted sample text");
-    expect(data.confirmationPageTemplate).toBe("aurora");
+    expect(data.hasVoiceCorpus).toBe(true);
+    expect(data.config.buyerDomain).toBe("acme.com");
+    expect(data.config.bookingPlatform).toBe("calendly");
+    expect(data.config.offerName).toBe("Growth Plan");
+    expect(data.config.offerPrice).toBe("$997");
+    expect(data.config.trafficTemperature).toBe("cold");
   });
+});
 
-  it("defaults confirmationPageTemplate to signal when never configured", async () => {
-    Object.assign(db, fakeDb([{ buyer: "Acme", stack: {}, rawVoiceCorpus: null, confirmationPageTemplate: null, offerDetails: null }]));
-    vi.mocked(isSkillEnabledForEngagement).mockResolvedValue(false);
+describe("GET pin-down suggestions", () => {
+  beforeEach(resetCommonMocks);
+
+  it("pre-fills only trusted facts; unscored or low-scored guesses come back as suggestions", async () => {
+    Object.assign(db, fakeDb([{ buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null, confirmationPageUrl: null, rawVoiceCorpus: null }]));
+    vi.mocked(getClientFacts).mockResolvedValue({
+      offerName: fact("offerName", "Growth Program", "jev", { confidence: 90 }),
+      offerPrice: fact("offerPrice", "$2,000", "llm"),
+      trafficTemperature: fact("trafficTemperature", "hot", "jev", { confidence: 40 }),
+      bookingPlatform: fact("bookingPlatform", "calendly", "website"),
+      offerIcp: fact("offerIcp", "Founders", "llm", { status: "rejected" }),
+    } as any);
 
     const { GET } = await importRoute();
-    const res = await GET(new Request("http://x"), makeParams("e1"));
-    const data = await res.json();
+    const data = await (await GET(new Request("http://x"), makeParams("e1"))).json();
 
-    expect(data.confirmationPageTemplate).toBe("signal");
-    expect(data.marketingDomain).toBe("");
+    expect(data.config.offerName).toBe("Growth Program");
+    expect(data.config.bookingPlatform).toBe("calendly");
+    expect(data.config.offerPrice).toBe("");
+    expect(data.config.trafficTemperature).toBe("");
+    expect(data.config.offerIcp).toBe("");
+    expect(Object.keys(data.suggestions).sort()).toEqual(["offerPrice", "trafficTemperature"]);
+    expect(data.suggestions.trafficTemperature.confidence).toBe(40);
+  });
+
+  it("never pre-fills the offer name with the client's name, or SMS/briefs with a default", async () => {
+    Object.assign(db, fakeDb([{ buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null, confirmationPageUrl: null, rawVoiceCorpus: null }]));
+    const { GET } = await importRoute();
+    const data = await (await GET(new Request("http://x"), makeParams("e1"))).json();
+
+    expect(data.config.offerName).toBe("");
+    expect(data.config.smsPlatform).toBeNull();
+    expect(data.config.adDataPlatform).toBeNull();
+    expect(data.config.briefLandingDestination).toBeNull();
   });
 });
 
 describe("POST /api/engagements/[id]/bridges/pin-down", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(getSession).mockResolvedValue({ whopUserId: "user-1" } as any);
-    vi.mocked(setSkillEnabledForEngagement).mockResolvedValue(undefined);
-    vi.mocked(dispatchSkillRun).mockResolvedValue("run-456");
-  });
+  beforeEach(resetCommonMocks);
 
   it("returns 401 with no session", async () => {
     vi.mocked(getSession).mockResolvedValue({} as any);
     const { POST } = await importRoute();
-    const res = await POST(postBody({ voiceSource: "scrape", marketingDomain: "acme.com" }), makeParams("e1"));
+    const res = await POST(postBody({ buyerDomain: "acme.com" }), makeParams("e1"));
     expect(res.status).toBe(401);
   });
 
-  it("rejects scrape mode with no marketing domain", async () => {
+  it("returns 403 when Showtime isn't installed in the workspace", async () => {
+    vi.mocked(isPackageInstalledInWorkspace).mockResolvedValue(false);
     const { POST } = await importRoute();
-    const res = await POST(postBody({ voiceSource: "scrape", marketingDomain: "" }), makeParams("e1"));
-    expect(res.status).toBe(400);
-    expect(dispatchSkillRun).not.toHaveBeenCalled();
-  });
-
-  it("rejects manual mode with fewer than 50 words", async () => {
-    const { POST } = await importRoute();
-    const res = await POST(postBody({ voiceSource: "manual", rawVoiceCorpus: "too short" }), makeParams("e1"));
-    expect(res.status).toBe(400);
+    const res = await POST(postBody({ buyerDomain: "acme.com" }), makeParams("e1"));
+    expect(res.status).toBe(403);
     expect(dispatchSkillRun).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the engagement isn't found or isn't owned by this tenant", async () => {
     Object.assign(db, fakeDb([]));
     const { POST } = await importRoute();
-    const res = await POST(postBody({ voiceSource: "scrape", marketingDomain: "acme.com" }), makeParams("e1"));
+    const res = await POST(postBody({ buyerDomain: "acme.com" }), makeParams("e1"));
     expect(res.status).toBe(404);
+    expect(dispatchSkillRun).not.toHaveBeenCalled();
   });
 
-  it("merges into the existing stack instead of overwriting it, then enables and dispatches", async () => {
+  it("merges into the existing stack instead of overwriting it, then dispatches", async () => {
     const fake = fakeDb([
-      { engagementId: "e1", buyer: "Acme", stack: { booking_platform: "calendly", email_platform: "resend" } },
+      { engagementId: "e1", buyer: "Acme", stack: { booking_platform: "calendly", email_platform: "resend" }, offerDetails: null },
     ]);
     Object.assign(db, fake);
 
     const { POST } = await importRoute();
     const res = await POST(
-      postBody({ voiceSource: "scrape", marketingDomain: "acme.com", confirmationPageTemplate: "aurora" }),
+      postBody({ buyerDomain: "acme.com", offerName: "Growth Plan", offerPrice: "$997", trafficTemperature: "cold" }),
       makeParams("e1")
     );
     const data = await res.json();
@@ -147,21 +212,56 @@ describe("POST /api/engagements/[id]/bridges/pin-down", () => {
           email_platform: "resend",
           buyer_domain: "acme.com",
         }),
-        confirmationPageTemplate: "aurora",
+        offerDetails: expect.objectContaining({ name: "Growth Plan", price: "$997", traffic_temperature: "cold" }),
       })
     );
     expect(setSkillEnabledForEngagement).toHaveBeenCalledWith("e1", "pin-down", true);
+    expect(seedPrimaryDomainFromUrl).toHaveBeenCalledWith("e1", "acme.com");
     expect(dispatchSkillRun).toHaveBeenCalledWith("e1", "pin-down", "Acme");
     expect(data.runId).toBe("run-456");
   });
 
-  it("defaults confirmationPageTemplate to signal when not provided", async () => {
-    const fake = fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {} }]);
-    Object.assign(db, fake);
-
+  it("refuses to save without a traffic temperature instead of assuming warm", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
     const { POST } = await importRoute();
-    await POST(postBody({ voiceSource: "scrape", marketingDomain: "acme.com" }), makeParams("e1"));
+    const res = await POST(postBody({ buyerDomain: "acme.com", offerName: "Growth" }), makeParams("e1"));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/cold, warm or hot/);
+    expect(dispatchSkillRun).not.toHaveBeenCalled();
+  });
 
-    expect(fake.set).toHaveBeenCalledWith(expect.objectContaining({ confirmationPageTemplate: "signal" }));
+  it("rejects a brief destination that can't be delivered", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
+    const { POST } = await importRoute();
+    const res = await POST(postBody({ buyerDomain: "acme.com", trafficTemperature: "warm", briefLandingDestination: "email" }), makeParams("e1"));
+    expect(res.status).toBe(400);
+  });
+
+  it("leaves SMS and ad data unset, stores a listed vertical id, and records suggestion decisions", async () => {
+    const fake = fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]);
+    Object.assign(db, fake);
+    const { POST } = await importRoute();
+    await POST(postBody({ buyerDomain: "acme.com", trafficTemperature: "warm", offerName: "Growth", offerVertical: "coaching" }), makeParams("e1"));
+
+    const saved = fake.set.mock.calls[0][0];
+    expect(saved.stack.sms_platform).toBeUndefined();
+    expect(saved.stack.ad_data_platform).toBeUndefined();
+    expect(saved.offerDetails.vertical).toBe("coaching_consulting");
+    expect(recordDossierDecisions).toHaveBeenCalledWith("e1", expect.objectContaining({ offerName: "Growth", trafficTemperature: "warm" }));
+  });
+
+  it("refuses to save without a website", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
+    const { POST } = await importRoute();
+    const res = await POST(postBody({ trafficTemperature: "warm" }), makeParams("e1"));
+    expect(res.status).toBe(400);
+    expect(dispatchSkillRun).not.toHaveBeenCalled();
+  });
+
+  it("switches on only Pin-Down, leaving the other Showtime workers as the user set them", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
+    const { POST } = await importRoute();
+    await POST(postBody({ buyerDomain: "acme.com", trafficTemperature: "warm" }), makeParams("e1"));
+    expect(vi.mocked(setSkillEnabledForEngagement).mock.calls).toEqual([["e1", "pin-down", true]]);
   });
 });

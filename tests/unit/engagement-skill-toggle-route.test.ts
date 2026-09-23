@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn() } }));
 vi.mock("@/lib/engagement-skills", () => ({ setSkillEnabledForEngagement: vi.fn() }));
+vi.mock("@/lib/workspace", () => ({
+  getActiveWorkspace: vi.fn().mockResolvedValue({ workspaceId: "ws-1" }),
+}));
+vi.mock("@/lib/product-onboarding", () => ({ isProductOnboarded: vi.fn().mockResolvedValue(true) }));
 
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
@@ -46,15 +50,15 @@ describe("POST /api/engagements/[id]/skills/[skillId]", () => {
     expect(res.status).toBe(400);
   });
 
-  // runOnSetup check happens before the ownership lookup — no need for a
-  // real engagement row to reject this.
+  // Ownership is checked first, so this needs an owned engagement row.
   it("rejects enabling pin-down here — it has its own config screen", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1" }]));
     const POST = await importRoute();
     const res = await POST(postBody(true), makeParams("e1", "pin-down"));
     const data = await res.json();
 
     expect(res.status).toBe(422);
-    expect(data.configureAt).toBe("/api/engagements/e1/bridges/pin-down");
+    expect(data.bridgeHref).toBe("/dashboard/engagements/e1/bridges/pin-down");
     expect(setSkillEnabledForEngagement).not.toHaveBeenCalled();
   });
 

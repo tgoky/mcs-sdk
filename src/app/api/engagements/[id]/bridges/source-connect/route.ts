@@ -5,7 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
-import { saveSourceConnect } from "@/features/cold-open/server/source-connect";
+import { saveSourceConnect, coldOpenCredentialProvider } from "@/features/cold-open/server/source-connect";
+import { hasCredential } from "@/lib/credentials";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -29,7 +30,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const config = await getColdOpenConfig(id);
-  return NextResponse.json({ buyer: row.buyer, leadSources: config?.leadSources ?? [], icps: config?.icps ?? [] });
+  // Where new lead sources should start: Apify when its key is already
+  // connected for this client, otherwise a CSV upload.
+  const defaultFetcherType = (await hasCredential(id, coldOpenCredentialProvider("apify"))) ? "apify" : "csv";
+  return NextResponse.json({ buyer: row.buyer, leadSources: config?.leadSources ?? [], icps: config?.icps ?? [], defaultFetcherType });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

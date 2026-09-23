@@ -4,7 +4,9 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { storeCredential } from "@/lib/credentials";
+import { hasCredential, storeCredential } from "@/lib/credentials";
+import { getClientFact } from "@/lib/client-facts";
+import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -45,6 +47,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     videoEngagementWistiaVideoId: row.stack?.video_engagement_meta?.wistia_video_id ?? "",
     videoEngagementYoutubeChannelId: row.stack?.video_engagement_meta?.youtube_channel_id ?? "",
     prospectResearchSourcesUsed: row.stack?.prospect_research_sources_used ?? [],
+    // Required for briefs to go anywhere — previously only settable from
+    // the Pin-Down dossier or Edit Stack Settings, not this page.
+    briefLandingDestination: row.stack?.brief_landing_destination ?? null,
+    slackWebhookUrl: row.stack?.slack_webhook_url ?? "",
+    // Sign-in-with-Slack alternative to the webhook (slack-delivery.ts).
+    slackConnected: await hasCredential(id, "slack"),
+    slackChannelId: row.stack?.slack_channel_id ?? "",
+    slackChannels: ((await getClientFact(id, "slackChannels"))?.value as Array<{ id: string; name: string }> | undefined) ?? [],
+    // e.g. the hero video's host as the video-engagement platform, while
+    // that field is still unset.
+    suggestions: await showtimeConnectionSuggestions(id, row.stack ?? {}),
   });
 }
 
@@ -76,6 +89,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const apolloApiKey: string = typeof body.apolloApiKey === "string" ? body.apolloApiKey.trim() : "";
     const pdlApiKey: string = typeof body.pdlApiKey === "string" ? body.pdlApiKey.trim() : "";
 
+    // Only destinations deliverBrief can actually deliver to.
+    const briefLandingDestination =
+      typeof body.briefLandingDestination === "string" && body.briefLandingDestination.trim() ? body.briefLandingDestination.trim() : undefined;
+    if (briefLandingDestination && briefLandingDestination !== "slack" && briefLandingDestination !== "crm_note") {
+      return NextResponse.json({ error: `Briefs can't be delivered to "${briefLandingDestination}". Pick Slack or a CRM note.` }, { status: 400 });
+    }
+    const slackWebhookUrl = typeof body.slackWebhookUrl === "string" ? body.slackWebhookUrl.trim() : undefined;
+    const slackChannelId = typeof body.slackChannelId === "string" ? body.slackChannelId.trim() : undefined;
+    if (slackWebhookUrl && !/^https:\/\//i.test(slackWebhookUrl)) {
+      return NextResponse.json({ error: "The Slack webhook URL must start with https://." }, { status: 400 });
+    }
+
     const [row] = await db
       .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
@@ -92,6 +117,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
     }
 
+    // Only a channel from the connected workspace's own list is accepted.
+    let slackChannelPatch: Partial<EngagementStack> = {};
+    if (slackChannelId !== undefined) {
+      if (!slackChannelId) {
+        slackChannelPatch = { slack_channel_id: undefined, slack_channel_name: undefined };
+      } else {
+        const channels = ((await getClientFact(id, "slackChannels"))?.value as Array<{ id: string; name: string }> | undefined) ?? [];
+        const channel = channels.find((c) => c.id === slackChannelId);
+        if (!channel) {
+          return NextResponse.json({ error: "That Slack channel isn't in the connected workspace." }, { status: 400 });
+        }
+        slackChannelPatch = { slack_channel_id: channel.id, slack_channel_name: channel.name };
+      }
+    }
+
     const mergedStack = {
       ...(row.stack ?? {}),
       brief_trigger_type: briefTriggerType,
@@ -105,6 +145,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             }
           : undefined,
       prospect_research_sources_used: prospectResearchSourcesUsed.length > 0 ? prospectResearchSourcesUsed : undefined,
+      // Only touched when sent, so older callers of this route keep working.
+      ...(briefLandingDestination ? { brief_landing_destination: briefLandingDestination } : {}),
+      ...(slackWebhookUrl !== undefined ? { slack_webhook_url: slackWebhookUrl || undefined } : {}),
+      ...(slackChannelId !== undefined ? slackChannelPatch : {}),
     } as EngagementStack;
 
     await db

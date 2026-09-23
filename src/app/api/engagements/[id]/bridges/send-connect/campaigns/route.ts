@@ -8,6 +8,8 @@ import { hasCredential } from "@/lib/credentials";
 import { createEspAdapter } from "@/features/cold-open/server/esp/factory";
 import { coldOpenCredentialProvider } from "@/features/cold-open/server/source-connect";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
+import { getColdOpenConfig } from "@/features/cold-open/server/config";
+import { suggestCampaignMap, CAMPAIGN_MATCH_APPLY_THRESHOLD } from "@/features/cold-open/server/campaign-matching";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -53,7 +55,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const adapter = createEspAdapter(id, platform, { baseUrl });
     const campaigns = await adapter.listCampaigns();
 
-    return NextResponse.json({ success: true, campaigns });
+    // Suggested ICP -> campaign matches. A Jev failure only means no
+    // suggestions — the live campaign list still comes back.
+    const config = await getColdOpenConfig(id);
+    const suggestedMap = await suggestCampaignMap(config?.icps ?? [], campaigns).catch((err) => {
+      console.warn(`[send-connect/campaigns] campaign matching skipped for ${id}:`, err instanceof Error ? err.message : err);
+      return {};
+    });
+
+    return NextResponse.json({ success: true, campaigns, suggestedMap, applyThreshold: CAMPAIGN_MATCH_APPLY_THRESHOLD });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[engagements/[id]/bridges/send-connect/campaigns]", message);

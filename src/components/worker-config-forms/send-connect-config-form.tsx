@@ -42,6 +42,8 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
   const [campaigns, setCampaigns] = useState<RemoteCampaign[]>([]);
   const [fetchingCampaigns, setFetchingCampaigns] = useState(false);
   const [campaignsError, setCampaignsError] = useState<string | null>(null);
+  // Jev's suggested campaign per ICP slug (see campaign-matching.ts).
+  const [suggestedMap, setSuggestedMap] = useState<Record<string, { campaignId: string; campaignName: string; confidence: number }>>({});
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -87,6 +89,23 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error ?? "Failed to fetch campaigns");
         setCampaigns(data.campaigns ?? []);
+        const matches: Record<string, { campaignId: string; campaignName: string; confidence: number }> = data.suggestedMap ?? {};
+        const threshold: number = data.applyThreshold ?? 75;
+        setSuggestedMap(matches);
+        // Pre-select confident matches for ICPs that have no campaign yet.
+        // Nothing is saved until the user saves; weaker matches are shown
+        // beside the row instead.
+        setMapRows((rows) => {
+          const filled = rows.filter((r) => r.icp.trim());
+          const known = new Set(filled.map((r) => r.icp.trim()));
+          const next = filled.map((r) =>
+            !r.campaignId.trim() && matches[r.icp]?.confidence >= threshold ? { ...r, campaignId: matches[r.icp].campaignId } : r
+          );
+          for (const [slug, m] of Object.entries(matches)) {
+            if (!known.has(slug)) next.push({ icp: slug, campaignId: m.confidence >= threshold ? m.campaignId : "" });
+          }
+          return next.length > 0 ? next : rows;
+        });
       } catch (e) {
         if (!cancelled) {
           setCampaigns([]);
@@ -199,6 +218,7 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
                     {campaignOptions.length > 0 ? (
+                      <>
                       <SelectField
                         label="Campaign"
                         value={row.campaignId}
@@ -206,6 +226,22 @@ export function SendConnectConfigForm({ engagementId, onCancel, cancelLabel = "C
                         disabled={fetchingCampaigns}
                         options={[{ value: "", label: fetchingCampaigns ? "-- Loading… --" : "-- Choose a live campaign --" }, ...campaignOptions]}
                       />
+                      {suggestedMap[row.icp] && row.campaignId !== suggestedMap[row.icp].campaignId && (
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
+                          <span>
+                            Suggested: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{suggestedMap[row.icp].campaignName}</span> (
+                            {suggestedMap[row.icp].confidence}% confident)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateRow(i, { campaignId: suggestedMap[row.icp].campaignId })}
+                            className="font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                          >
+                            Use
+                          </button>
+                        </div>
+                      )}
+                      </>
                     ) : (
                       <InputField
                         label="Campaign id"

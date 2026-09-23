@@ -17,7 +17,12 @@ import { db } from "@/lib/db";
 import { clientFacts } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 
-export type ClientFactSource = "website" | "account" | "jev" | "user" | "default";
+// "website" is a value scraped directly from the page (a script signature,
+// a footer link); "llm" is a model's reading of the page copy that hasn't
+// been scored yet. field-writeback trusts the first outright and never the
+// second — an llm fact only reaches config once Jev has scored it (and it
+// is rewritten with source "jev") or a human confirms it.
+export type ClientFactSource = "website" | "llm" | "account" | "jev" | "user" | "default";
 export type ClientFactStatus = "suggested" | "confirmed" | "edited" | "rejected";
 
 export interface ClientFact {
@@ -45,12 +50,16 @@ function toClientFact(row: typeof clientFacts.$inferSelect): ClientFact {
 }
 
 /**
- * Writes (or replaces) one fact for one engagement. Never overwrites a
- * `status: "confirmed"` row unless the caller explicitly asks to
- * (`allowOverwriteConfirmed`) — a human's confirmed answer shouldn't get
- * silently clobbered by a fresh crawl or a re-run harvest just because it
- * happened to run again. Callers that only ever write "suggested" facts
- * (discover-client.ts, an account harvest) should leave this false.
+ * Writes (or replaces) one fact for one engagement. A human's decision is
+ * never silently undone by a fresh crawl, a re-run harvest, or a resolver:
+ *   - a "confirmed" or "edited" row is left alone;
+ *   - a "rejected" row is left alone when the new value is the same one
+ *     the human rejected — a genuinely different value (they connected a
+ *     different platform, the site changed) is suggested again.
+ * Only a caller acting on a human's own input passes
+ * `allowOverwriteConfirmed` (editClientFact does). Callers that only ever
+ * write "suggested" facts (discover-client.ts, harvests, resolvers) leave
+ * it false.
  */
 export async function upsertClientFact(
   engagementId: string,
@@ -66,13 +75,14 @@ export async function upsertClientFact(
   }
 ): Promise<void> {
   const [existing] = await db
-    .select({ id: clientFacts.id, status: clientFacts.status })
+    .select({ id: clientFacts.id, status: clientFacts.status, value: clientFacts.value })
     .from(clientFacts)
     .where(and(eq(clientFacts.engagementId, engagementId), eq(clientFacts.key, key)))
     .limit(1);
 
-  if (existing && existing.status === "confirmed" && !opts.allowOverwriteConfirmed) {
-    return;
+  if (existing && !opts.allowOverwriteConfirmed) {
+    if (existing.status === "confirmed" || existing.status === "edited") return;
+    if (existing.status === "rejected" && sameFactValue(existing.value, value)) return;
   }
 
   const patch = {
@@ -123,4 +133,57 @@ export async function confirmClientFact(engagementId: string, key: string): Prom
 /** Records a human edit over a suggestion — the "override" half of a confirm chip. */
 export async function editClientFact(engagementId: string, key: string, value: unknown): Promise<void> {
   await upsertClientFact(engagementId, key, value, { source: "user", status: "edited", allowOverwriteConfirmed: true });
+}
+
+/** Records a human "that's not right" — kept (not deleted) so the same
+ * value isn't suggested again; see upsertClientFact. */
+export async function rejectClientFact(engagementId: string, key: string): Promise<void> {
+  await db
+    .update(clientFacts)
+    .set({ status: "rejected", updatedAt: new Date() })
+    .where(and(eq(clientFacts.engagementId, engagementId), eq(clientFacts.key, key)));
+}
+
+/** Order-insensitive for object keys, so {a,b} and {b,a} compare equal. */
+export function sameFactValue(a: unknown, b: unknown): boolean {
+  return stableStringify(a) === stableStringify(b);
+}
+
+function stableStringify(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value.trim());
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/**
+ * Called when a dossier saves: for every field that had a suggestion
+ * behind it, records what the human did with it, so the store can tell a
+ * human-approved value from a guess and stops re-suggesting what they
+ * changed. Kept the suggestion -> confirmed. Saved something different ->
+ * edited (with the saved value). Left it empty -> untouched (still a
+ * suggestion; not a rejection, they may just not have got to it).
+ */
+export async function recordDossierDecisions(engagementId: string, saved: Record<string, unknown>): Promise<void> {
+  const facts = await getClientFacts(engagementId);
+  for (const [key, savedValue] of Object.entries(saved)) {
+    const fact = facts[key];
+    if (!fact || fact.status !== "suggested") continue;
+    const empty =
+      savedValue === undefined ||
+      savedValue === null ||
+      (typeof savedValue === "string" && !savedValue.trim()) ||
+      (Array.isArray(savedValue) && savedValue.length === 0);
+    if (empty) continue;
+    if (sameFactValue(fact.value, savedValue)) {
+      await confirmClientFact(engagementId, key);
+    } else {
+      await editClientFact(engagementId, key, savedValue);
+    }
+  }
 }

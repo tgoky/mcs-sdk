@@ -155,9 +155,11 @@ export function DailySendConfigForm({ engagementId, onCancel, cancelLabel = "Clo
         if (data.dailySendSettings) {
           setVolume(String(data.dailySendSettings.volume ?? 20));
           setLocalHour(data.dailySendSettings.localHour ?? 9);
-          setTimezone(data.dailySendSettings.timezone ?? "UTC");
+          setTimezone(data.dailySendSettings.timezone ?? data.clientTimezone ?? "UTC");
           setCopyMode(data.dailySendSettings.copyMode ?? "upload");
           setLiveSendEnabled(Boolean(data.dailySendSettings.liveSendEnabled));
+        } else if (data.clientTimezone) {
+          setTimezone(data.clientTimezone);
         }
         setLastRunAt(data.lastRunAt ?? null);
       } catch (e) {

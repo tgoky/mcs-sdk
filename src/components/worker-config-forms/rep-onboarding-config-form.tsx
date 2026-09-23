@@ -18,12 +18,11 @@ import {
   Star,
   Link,
   Loader2,
-  Clock,
-  Zap,
 } from "lucide-react";
 import { anySkillDisplayName } from "@/lib/any-skill";
-import { AnySkillBadge } from "@/components/any-skill-badge";
 import { ConfigFormSkeleton } from "./config-form-skeleton";
+import { WorkerStatusGrid } from "@/components/worker-status-grid";
+import { FactSuggestionChip, FactSuggestionList, type FactSuggestionDTO } from "@/components/fact-suggestion";
 
 export interface RepOnboardingFormProps {
   engagementId: string;
@@ -45,7 +44,7 @@ interface RepGraphData {
   operatorHandles?: Record<string, string>;
   operatorDomains?: string[];
   operatorEmailContacts?: string[];
-  entities?: Array<{ name: string; type?: string }>;
+  entities?: Array<{ name: string; type?: string; aliases?: string[]; domainsOwned?: string[]; handles?: Record<string, string>; highPriority?: boolean }>;
   competitors?: Array<{ name: string; monitorFor?: string[]; highPriority?: boolean }>;
   collisions?: Array<{ name: string; domain?: string }>;
   seedPanelPrompts?: string[];
@@ -63,15 +62,6 @@ const ALL_ENGINES = [
   { id: "grok", label: "Grok", provider: "xAI", badge: "Grok 2" },
 ];
 
-const REP_AUTOMATION_SKILLS = [
-  { id: "rep-engine-panel", cadence: "Daily Scan" },
-  { id: "rep-trustpilot-watch", cadence: "Daily Scan" },
-  { id: "rep-reddit-watch", cadence: "Daily Scan" },
-  { id: "rep-twitter-watch", cadence: "Daily Scan" },
-  { id: "rep-crisis-response", cadence: "Real-Time" },
-  { id: "rep-digest", cadence: "24h Digest" },
-];
-
 export function RepOnboardingConfigForm({
   engagementId,
   onCancel,
@@ -79,6 +69,8 @@ export function RepOnboardingConfigForm({
   cancelLabel = "Back to workspace",
 }: RepOnboardingFormProps) {
   const [loading, setLoading] = useState(true);
+  // Bumped after a save so the worker status grid re-reads what's missing.
+  const [statusRefresh, setStatusRefresh] = useState(0);
   const [saving, setSaving] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +94,9 @@ export function RepOnboardingConfigForm({
   const [handlePlatform, setHandlePlatform] = useState("trustpilot");
   const [handleValue, setHandleValue] = useState("");
 
+  // Findings that weren't auto-filled (see src/lib/fact-suggestions.ts).
+  const [suggestions, setSuggestions] = useState<Record<string, FactSuggestionDTO>>({});
+
   // Scenario Tuning Collapsible
   const [showCustomizer, setShowCustomizer] = useState(false);
 
@@ -117,6 +112,7 @@ export function RepOnboardingConfigForm({
         setBuyer(data.buyer ?? "");
         setPrimaryDomain(data.primaryDomain ?? "");
         setInputDomain(data.primaryDomain ?? "");
+        setSuggestions(data.suggestions ?? {});
 
         if (data.graph) {
           setGraphData({
@@ -124,7 +120,9 @@ export function RepOnboardingConfigForm({
             reviewBaseline: data.reviewBaseline ?? data.graph.reviewBaseline,
           });
           setOperatorName(data.graph.operatorName || data.buyer || "");
-          setSoleAuthority(data.graph.soleAuthorityName || data.buyer || "Workspace Owner");
+          // Who approves crisis responses is a human decision — never
+          // filled in with the client's name or a placeholder.
+          setSoleAuthority(data.graph.soleAuthorityName || "");
 
           if (Array.isArray(data.graph.competitors)) {
             setCompetitorList(data.graph.competitors.map((c: { name: string }) => c.name));
@@ -137,7 +135,7 @@ export function RepOnboardingConfigForm({
           }
         } else {
           setOperatorName(data.buyer || "");
-          setSoleAuthority(data.buyer || "Workspace Owner");
+          setSoleAuthority("");
           if (data.reviewBaseline) {
             setGraphData((prev) => ({ ...prev, reviewBaseline: data.reviewBaseline }));
           }
@@ -238,15 +236,39 @@ export function RepOnboardingConfigForm({
   };
 
   const handleArmAndSave = async () => {
+    if (!soleAuthority.trim()) {
+      setError("Name the one person who approves crisis responses (Sole Response Authority, under Customize Setup).");
+      setShowCustomizer(true);
+      return;
+    }
     setSaving(true);
     setError(null);
 
     try {
+      // Merge rather than replace: the saved graph can hold more domains and
+      // richer competitor entries (monitorFor, highPriority) than this panel
+      // edits, and a save here must not strip them.
+      const savedDomains = graphData?.operatorDomains ?? [];
+      const typedDomain = (inputDomain || primaryDomain || "").trim();
+      const operatorDomains =
+        typedDomain && !savedDomains.some((d) => d.toLowerCase() === typedDomain.toLowerCase())
+          ? [typedDomain, ...savedDomains]
+          : savedDomains.length > 0
+          ? savedDomains
+          : typedDomain
+          ? [typedDomain]
+          : [];
+      const savedCompetitors = new Map((graphData?.competitors ?? []).map((c) => [c.name.toLowerCase(), c]));
+      const competitors = competitorList.map((name) => {
+        const existing = savedCompetitors.get(name.toLowerCase());
+        return { name, monitorFor: existing?.monitorFor ?? [], highPriority: existing?.highPriority ?? false };
+      });
+
       const payload = {
         operatorName: operatorName || buyer,
-        soleAuthorityName: soleAuthority || buyer || "Workspace Owner",
-        operatorDomains: inputDomain || primaryDomain ? [inputDomain || primaryDomain] : graphData?.operatorDomains ?? [],
-        competitors: competitorList.map((name) => ({ name, monitorFor: [], highPriority: false })),
+        soleAuthorityName: soleAuthority.trim(),
+        operatorDomains,
+        competitors,
         entities: graphData?.entities ?? [],
         seedPanelPrompts: graphData?.seedPanelPrompts ?? [],
         activeEngines: selectedEngines,
@@ -263,6 +285,7 @@ export function RepOnboardingConfigForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to arm Reputation Manager");
 
+      setStatusRefresh((n) => n + 1);
       if (onSaved) onSaved({ runId: data.runId });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to arm Reputation Manager";
@@ -411,7 +434,20 @@ export function RepOnboardingConfigForm({
               <Globe className="h-3.5 w-3.5 text-blue-400" /> Monitored Entity & Domain
             </div>
             <div>
-              <div className="text-sm font-semibold text-zinc-100">{operatorName || buyer}</div>
+              <label className="block text-[11px] font-medium text-zinc-300 mb-1">Business name as customers know it</label>
+              <input
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                placeholder={buyer || "Business name"}
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm font-semibold text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <FactSuggestionChip
+                engagementId={engagementId}
+                factKey="operatorName"
+                suggestion={suggestions.operatorName}
+                currentValue={operatorName}
+                onUse={(v) => setOperatorName(String(v))}
+              />
               {primaryDomain || inputDomain ? (
                 <a
                   href={`https://${(primaryDomain || inputDomain).replace(/^https?:\/\//i, "")}`}
@@ -520,6 +556,16 @@ export function RepOnboardingConfigForm({
                 ⚠️ 0 Rivals Extracted — Add rivals below in Scenario Tuning
               </p>
             )}
+            <FactSuggestionList
+              engagementId={engagementId}
+              factKey="competitors"
+              suggestion={suggestions.competitors}
+              currentItems={competitorList}
+              onAdd={(item) => {
+                const name = String(item).trim();
+                if (name && !competitorList.some((c) => c.toLowerCase() === name.toLowerCase())) setCompetitorList([...competitorList, name]);
+              }}
+            />
           </div>
 
           {/* Disambiguation & Entities */}
@@ -545,38 +591,39 @@ export function RepOnboardingConfigForm({
                 <span className="font-medium">{seedPromptsCount > 0 ? `${seedPromptsCount} Prompts Ready` : "5 Standard Prompts"}</span>
               </div>
             </div>
+            <FactSuggestionList
+              engagementId={engagementId}
+              factKey="entities"
+              suggestion={suggestions.entities}
+              currentItems={(graphData?.entities ?? []).map((e) => e.name)}
+              onAdd={(item) => {
+                const name = String(item).trim();
+                if (!name) return;
+                setGraphData((prev) => ({
+                  ...(prev ?? {}),
+                  entities: [
+                    ...(prev?.entities ?? []),
+                    // Same shape field-writeback's toRepEntities stores.
+                    { name, aliases: [], type: "company", domainsOwned: [], handles: {}, highPriority: false },
+                  ],
+                }));
+              }}
+            />
+            <FactSuggestionList
+              engagementId={engagementId}
+              factKey="seedPanelPrompts"
+              suggestion={suggestions.seedPanelPrompts}
+              currentItems={graphData?.seedPanelPrompts ?? []}
+              onAdd={(item) => {
+                const prompt = String(item).trim();
+                if (!prompt) return;
+                setGraphData((prev) => ({ ...(prev ?? {}), seedPanelPrompts: [...(prev?.seedPanelPrompts ?? []), prompt] }));
+              }}
+            />
           </div>
         </div>
 
-        {/* Reputation Sub-Skill Automations Grid (Uses AnySkillBadge) */}
-        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-emerald-400" /> Sub-Skill Automations Armed Upon Save
-            </span>
-            <span className="text-[10px] text-zinc-400 font-mono">6/6 Active</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-            {REP_AUTOMATION_SKILLS.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <AnySkillBadge skill={skill.id} size={22} />
-                  <span className="font-medium text-zinc-200 truncate">
-                    {anySkillDisplayName(skill.id)}
-                  </span>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 shrink-0">
-                  <Clock className="h-2.5 w-2.5" />
-                  {skill.cadence}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <WorkerStatusGrid engagementId={engagementId} productId="reputation-manager" refreshKey={statusRefresh} title="Reputation Manager workers for this client" />
       </div>
 
       {/* Scenario-Based Tuning Collapsible */}

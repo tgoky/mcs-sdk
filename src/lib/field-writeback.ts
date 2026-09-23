@@ -25,11 +25,13 @@ const JEV_APPLY_CONFIDENCE_THRESHOLD = 75;
 // Extract exact type from schema.ts definition to prevent drift or ts(2322) mismatches
 export type OfferDetails = NonNullable<typeof engagements.$inferSelect.offerDetails>;
 
-const DEFAULT_OFFER_DETAILS: OfferDetails = {
+// traffic_temperature is deliberately absent: filling one offer field must
+// not also invent a "warm" answer to a required question — that would mark
+// it filled and stop Jev's real answer from ever being applied.
+const DEFAULT_OFFER_DETAILS: Omit<OfferDetails, "traffic_temperature"> = {
   name: "",
   price: "",
   icp: "",
-  traffic_temperature: "warm",
   hybrid_mode_enabled: false,
 };
 
@@ -104,11 +106,11 @@ async function loadOfferDetails(engagementId: string): Promise<OfferDetails | nu
 
 async function mergeOfferDetails(engagementId: string, patch: Partial<OfferDetails>): Promise<void> {
   const existing = await loadOfferDetails(engagementId);
-  const fullOffer: OfferDetails = {
+  const fullOffer = {
     ...DEFAULT_OFFER_DETAILS,
     ...existing,
     ...patch,
-  };
+  } as OfferDetails;
   await db
     .update(engagements)
     .set({ offerDetails: fullOffer, updatedAt: new Date() })
@@ -250,7 +252,9 @@ const WRITEBACKS: Record<string, WritebackDef> = {
   operatorHandles: {
     isTrusted: isDirectlyTrusted,
     apply: async (engagementId, value) => {
-      if (typeof value !== "object" || value === null) return;
+      // A platform -> handle map only; an array would be stored as
+      // {"0": ..., "1": ...} and lose which platform each handle is on.
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return;
       const [row] = await db
         .select({ operatorHandles: repIdentityGraphs.operatorHandles })
         .from(repIdentityGraphs)
@@ -408,35 +412,34 @@ const WRITEBACKS: Record<string, WritebackDef> = {
     },
   },
 
-  // ── WHOP AGENT WRITEBACKS ─────────────────────────────────────────────
-  whopSaveOffer: {
-    isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),
-    apply: async (engagementId, value) => {
-      if (typeof value !== "object" || value === null) return;
-      const val = value as Record<string, any>;
-      const stack = await loadStack(engagementId);
-      if (stack?.whop_save_offer_discount_percentage) return;
-      await mergeStack(engagementId, {
-        whop_save_offer_discount_percentage: Number(val.discountPercentage ?? val.percentage ?? 20),
-        whop_save_offer_duration_months: Number(val.durationMonths ?? val.duration ?? 3),
-        whop_save_offer_message: String(val.message || "Special discount to stay with us!"),
-      });
-    },
-  },
-  whopBridgeDestinationUrl: {
-    isTrusted: isDirectlyTrusted,
-    apply: async (engagementId, value) => {
-      const stack = await loadStack(engagementId);
-      if (stack?.whop_bridge_destination_url) return;
-      await mergeStack(engagementId, { whop_bridge_destination_url: String(value) });
-    },
-  },
+  // Deliberately no Whop Agent writebacks. The cancellation save offer is
+  // sent to real members and the bridge destination receives their event
+  // data, so both are only ever set by a human through the validated
+  // whop-agent/save-offer-config and whop-agent/bridge-config routes —
+  // never promoted from a crawl, an account harvest, or a model guess.
 };
 
 /**
  * Promotes every trusted, applicable client_facts suggestion into its
  * real column for this engagement. Safe to run generically for any worker.
  */
+/**
+ * The single trust rule every caller uses — the writeback loop below and
+ * the dossiers deciding whether a fact pre-fills a field or is only shown
+ * as a suggestion — so the two can never disagree.
+ *
+ * A fact a human confirmed or edited is trusted whatever its source; a
+ * rejected one never is. Otherwise the key's own writeback rule decides,
+ * and a key with no writeback falls back to the default (scraped/account/
+ * user values, or a Jev score at or above the threshold).
+ */
+export function isFactTrusted(fact: ClientFact): boolean {
+  if (fact.status === "rejected") return false;
+  if (fact.status === "confirmed" || fact.status === "edited") return true;
+  const def = WRITEBACKS[fact.key];
+  return def ? def.isTrusted(fact) : isDirectlyTrusted(fact) || isTrustedJev(fact);
+}
+
 export async function applyResolvableFacts(engagementId: string): Promise<string[]> {
   const facts = await getClientFacts(engagementId);
   const factList = Array.isArray(facts) ? facts : Object.values(facts);
@@ -444,7 +447,7 @@ export async function applyResolvableFacts(engagementId: string): Promise<string
 
   for (const fact of factList) {
     const def = WRITEBACKS[fact.key];
-    if (!def || !def.isTrusted(fact)) continue;
+    if (!def || !isFactTrusted(fact)) continue;
     try {
       await def.apply(engagementId, fact.value);
       applied.push(fact.key);

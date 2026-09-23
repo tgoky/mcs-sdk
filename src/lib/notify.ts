@@ -81,6 +81,7 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { findOrCreateThreadForEvent, appendMessage } from "@/lib/chat-threads";
 import { sendOperatorPageSms } from "@/lib/platforms/sms";
+import { postToClientSlack } from "@/lib/slack-delivery";
 
 export type NotificationType =
   | "run_failed"
@@ -225,7 +226,11 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
   // handler returns. An un-awaited fetch here is a floating promise that
   // can be killed mid-flight, silently dropping the Slack alert. The
   // .catch still ensures a failed delivery never throws out of notifyUser.
-  if (opts.slackWebhookUrl) {
+  // A caller that includes slackWebhookUrl (even undefined — every
+  // per-client caller passes stack.slack_webhook_url) wants the client's
+  // Slack; postToClientSlack uses the Slack connection when one is set up,
+  // the webhook otherwise. Callers that leave it out stay in-app only.
+  if (opts.slackWebhookUrl || ("slackWebhookUrl" in opts && opts.engagementId)) {
     const body = opts.slackActions?.length
       ? {
           // Fallback text for notifications/screen readers; blocks below
@@ -250,12 +255,8 @@ export async function notifyUser(opts: NotifyOptions): Promise<void> {
         }
       : { text: `*[${opts.severity.toUpperCase()}] ${opts.title}*\n${opts.body}` };
 
-    await fetch(opts.slackWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).catch((e) => {
-      console.error("[notify] Slack delivery failed:", e.message);
+    await postToClientSlack(opts.engagementId, opts.slackWebhookUrl, body).catch((e) => {
+      console.error("[notify] Slack delivery failed:", e instanceof Error ? e.message : e);
     });
   }
 

@@ -11,7 +11,8 @@ import { REP_ENGINE_IDS } from "@/features/reputation-manager/engine-models";
 import type { RepEngineId } from "@/models/schema";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { applyResolvableFacts } from "@/lib/field-writeback";
-import { getClientFact } from "@/lib/client-facts";
+import { getClientFact, getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
+import { splitFacts } from "@/lib/fact-suggestions";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -69,6 +70,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Read harvested review baseline (Trustpilot rating & count) directly from client_facts
   const reviewFact = await getClientFact(id, "reviewBaseline");
 
+  // Findings that weren't auto-filled (Jev scored them below the
+  // threshold, or Jev couldn't score them) — previously invisible, so the
+  // user saw an empty competitors field instead of "we found these".
+  // Dropped once the graph already has a value for that field.
+  const { suggestions } = splitFacts(await getClientFacts(id), ["operatorName", "competitors", "entities", "seedPanelPrompts"]);
+  if (graph?.operatorName) delete suggestions.operatorName;
+  if (graph?.competitors?.length) delete suggestions.competitors;
+  if (graph?.entities?.length) delete suggestions.entities;
+  if (graph?.seedPanelPrompts?.length) delete suggestions.seedPanelPrompts;
+
   return NextResponse.json({
     buyer: engagementRow.buyer,
     enabled,
@@ -93,6 +104,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           operatorPagePhone: graph.operatorPagePhone,
         }
       : null,
+    suggestions,
   });
 }
 
@@ -144,31 +156,61 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       console.error(`[bridges/rep-onboarding] POST applyResolvableFacts failed for ${id}:`, err)
     );
 
+    // The save overwrites every column, but not every caller sends every
+    // field (the Single Dossier sends a subset; the full IdentityGraphForm
+    // sends all of them). A field missing from the body keeps its saved
+    // value instead of being reset — otherwise a dossier save silently
+    // wipes aliases, trusted sources, contacts, offerings, and buyer-entered
+    // collisions set on the full form.
+    const [saved] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, id)).limit(1);
+    const has = (key: string) => Object.prototype.hasOwnProperty.call(body, key);
+    const savedBuyerCollisions = (saved?.collisions ?? [])
+      .filter((c) => c.source === "buyer")
+      .map((c) => ({ name: c.name, whoTheyAre: c.whoTheyAre, disambiguationNote: c.disambiguationNote }));
+
     const input: RepIntakeInput = {
-      operatorName: typeof body.operatorName === "string" ? body.operatorName : "",
-      operatorAliases: Array.isArray(body.operatorAliases) ? body.operatorAliases : [],
-      operatorHandles: typeof body.operatorHandles === "object" && body.operatorHandles !== null ? body.operatorHandles : {},
-      operatorDomains: Array.isArray(body.operatorDomains) ? body.operatorDomains : [],
-      operatorEmailContacts: Array.isArray(body.operatorEmailContacts) ? body.operatorEmailContacts : [],
-      entities: Array.isArray(body.entities) ? body.entities : [],
-      offerings: Array.isArray(body.offerings) ? body.offerings : [],
-      competitors: Array.isArray(body.competitors) ? body.competitors : [],
-      collisions: Array.isArray(body.collisions) ? body.collisions : [],
-      trustedSources: Array.isArray(body.trustedSources) ? body.trustedSources : [],
-      seedPanelPrompts: Array.isArray(body.seedPanelPrompts) ? body.seedPanelPrompts : [],
-      soleAuthorityName: typeof body.soleAuthorityName === "string" ? body.soleAuthorityName : "",
-      crisisThresholdOverride:
-        typeof body.crisisThresholdOverride === "number" ? body.crisisThresholdOverride : null,
-      activeEngines: Array.isArray(body.activeEngines)
-        ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
-        : null,
-      operatorPagePhone: typeof body.operatorPagePhone === "string" ? body.operatorPagePhone : null,
+      operatorName: has("operatorName") ? (typeof body.operatorName === "string" ? body.operatorName : "") : saved?.operatorName ?? "",
+      operatorAliases: has("operatorAliases") ? (Array.isArray(body.operatorAliases) ? body.operatorAliases : []) : saved?.operatorAliases ?? [],
+      operatorHandles: has("operatorHandles")
+        ? (typeof body.operatorHandles === "object" && body.operatorHandles !== null ? body.operatorHandles : {})
+        : saved?.operatorHandles ?? {},
+      operatorDomains: has("operatorDomains") ? (Array.isArray(body.operatorDomains) ? body.operatorDomains : []) : saved?.operatorDomains ?? [],
+      operatorEmailContacts: has("operatorEmailContacts")
+        ? (Array.isArray(body.operatorEmailContacts) ? body.operatorEmailContacts : [])
+        : saved?.operatorEmailContacts ?? [],
+      entities: has("entities") ? (Array.isArray(body.entities) ? body.entities : []) : saved?.entities ?? [],
+      offerings: has("offerings") ? (Array.isArray(body.offerings) ? body.offerings : []) : saved?.offerings ?? [],
+      competitors: has("competitors") ? (Array.isArray(body.competitors) ? body.competitors : []) : saved?.competitors ?? [],
+      collisions: has("collisions") ? (Array.isArray(body.collisions) ? body.collisions : []) : savedBuyerCollisions,
+      trustedSources: has("trustedSources") ? (Array.isArray(body.trustedSources) ? body.trustedSources : []) : saved?.trustedSources ?? [],
+      seedPanelPrompts: has("seedPanelPrompts") ? (Array.isArray(body.seedPanelPrompts) ? body.seedPanelPrompts : []) : saved?.seedPanelPrompts ?? [],
+      soleAuthorityName: has("soleAuthorityName")
+        ? (typeof body.soleAuthorityName === "string" ? body.soleAuthorityName : "")
+        : saved?.soleAuthorityName ?? "",
+      crisisThresholdOverride: has("crisisThresholdOverride")
+        ? (typeof body.crisisThresholdOverride === "number" ? body.crisisThresholdOverride : null)
+        : saved?.crisisThresholdOverride ?? null,
+      activeEngines: has("activeEngines")
+        ? Array.isArray(body.activeEngines)
+          ? body.activeEngines.filter((v: unknown): v is RepEngineId => typeof v === "string" && REP_ENGINE_IDS.includes(v as RepEngineId))
+          : null
+        : saved?.activeEngines ?? null,
+      operatorPagePhone: has("operatorPagePhone")
+        ? (typeof body.operatorPagePhone === "string" ? body.operatorPagePhone : null)
+        : saved?.operatorPagePhone ?? null,
     };
 
     const result = await saveRepIdentityGraphIntake(id, input);
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+
+    await recordDossierDecisions(id, {
+      operatorName: input.operatorName,
+      competitors: input.competitors.map((c) => c.name),
+      entities: input.entities.map((e) => e.name),
+      seedPanelPrompts: input.seedPanelPrompts,
+    }).catch((err) => console.error(`[bridges/rep-onboarding] recording suggestion decisions failed for ${id}:`, err));
 
     await setSkillEnabledForEngagement(id, "rep-onboarding", true);
 

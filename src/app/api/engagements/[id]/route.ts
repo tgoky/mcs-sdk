@@ -6,6 +6,8 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { isValidTagColorId } from "@/lib/engagement-tag-colors";
 import { isValidTimezone } from "@/lib/timezones";
+import { hasCredential, resolveCredential, syncMarkersForChosenPlatforms } from "@/lib/credentials";
+import { harvestTwilioA2PStatus } from "@/lib/paste-key-harvest";
 import { ACTION_TYPE_LABELS } from "@/lib/copy";
 import type { PendingActionType } from "@/lib/approval-gate";
 
@@ -478,6 +480,27 @@ export async function PATCH(
       .update(engagements)
       .set({ stack: nextStack, updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
+
+    // A key saved before its platform was picked is marked connected now
+    // (see syncMarkersForChosenPlatforms).
+    await syncMarkersForChosenPlatforms(id, [
+      nextStack.booking_platform,
+      nextStack.email_platform,
+      nextStack.hosting_platform,
+      nextStack.sms_platform,
+      nextStack.ad_data_platform,
+      nextStack.conversation_intelligence_provider,
+      nextStack.video_engagement_platform,
+    ]);
+
+    // Twilio's A2P campaign status can only be read once the SIDs are known;
+    // re-check it when they're saved here.
+    const twilioMeta = incoming.sms_platform_meta as { twilio_account_sid?: unknown; twilio_messaging_service_sid?: unknown } | undefined;
+    if (nextStack.sms_platform === "twilio" && (twilioMeta?.twilio_account_sid || twilioMeta?.twilio_messaging_service_sid) && (await hasCredential(id, "twilio"))) {
+      resolveCredential(id, "twilio")
+        .then((token) => harvestTwilioA2PStatus(id, token))
+        .catch((err) => console.warn(`[engagements/[id] PATCH] Twilio A2P check failed for ${id}:`, err));
+    }
 
     return NextResponse.json({ ok: true, stack: nextStack });
   } catch (err) {

@@ -1,25 +1,23 @@
 // src/lib/account-harvest.ts
 //
-// Phase 1 & Phase 2: Complete Deep Operational Harvester for client_facts.
-// Runs when any credential or OAuth connection is saved under /dashboard/settings/apps.
-// Pulls account metadata, operational schemas, sending capacity, and pipeline stages
-// across Showtime, Reputation Manager, Cold Open, and Whop Agent.
+// Account-metadata harvest for providers connected through Composio OAuth
+// (composio-providers.ts's PROVIDER_TOOLKIT_MAP). Called from the Composio
+// callback when a connection is made for a specific client, and from the
+// credential link route when a saved connection is reused for one.
+// Paste-a-key providers (Cal.com, Twilio, the Cold Open ESPs) are harvested
+// by paste-key-harvest.ts instead; Whop by its own connect flow.
 
 import { fetchWithTimeout } from "@/lib/http";
 import { upsertClientFact } from "@/lib/client-facts";
-import { seedPrimaryDomainFromUrl, getPrimaryDomainForEngagement } from "@/lib/client-profile";
+import { seedPrimaryDomainFromUrl } from "@/lib/client-profile";
+import { normalizeVertical } from "@/lib/verticals";
 
 export type HarvestableProvider =
   | "calendly"
   | "hubspot"
   | "klaviyo"
   | "mailchimp"
-  | "instantly"
-  | "smartlead"
-  | "lemlist"
-  | "reply_io"
-  | "slack"
-  | "whop";
+  | "slack";
 
 export function isHarvestableProvider(provider: string): provider is HarvestableProvider {
   return [
@@ -27,12 +25,7 @@ export function isHarvestableProvider(provider: string): provider is Harvestable
     "hubspot",
     "klaviyo",
     "mailchimp",
-    "instantly",
-    "smartlead",
-    "lemlist",
-    "reply_io",
     "slack",
-    "whop",
   ].includes(provider);
 }
 
@@ -207,186 +200,55 @@ async function harvestMailchimp(engagementId: string, apiKey: string): Promise<s
   const written: (string | null)[] = [];
   written.push(await writeFact(engagementId, "emailPlatform", "mailchimp", "mailchimp", "Connected via Mailchimp."));
   written.push(await writeFact(engagementId, "timezone", data.account_timezone, "mailchimp", "Mailchimp account timezone."));
-  written.push(await writeFact(engagementId, "offerVertical", data.account_industry, "mailchimp", "Mailchimp account industry."));
+  // Mailchimp's industry is free text. Store the list id when it maps onto
+  // one; otherwise keep it as an unscored suggestion (never auto-applied)
+  // for the website classifier to replace with a listed vertical.
+  const industryId = normalizeVertical(data.account_industry);
+  if (industryId) {
+    written.push(await writeFact(engagementId, "offerVertical", industryId, "mailchimp", `Mailchimp account industry: ${data.account_industry}.`));
+  } else if (typeof data.account_industry === "string" && data.account_industry.trim()) {
+    await upsertClientFact(engagementId, "offerVertical", data.account_industry.trim(), {
+      source: "llm",
+      sourceDetail: "mailchimp",
+      evidence: `Mailchimp account industry "${data.account_industry.trim()}" doesn't match a listed vertical.`,
+    });
+    written.push("offerVertical");
+  }
   written.push(await writeFact(engagementId, "operatorName", data.account_name || data.contact?.company, "mailchimp", "Mailchimp account name."));
 
   return written.filter((k): k is string => k !== null);
 }
 
-// ── 5. COLD OPEN SENDING PLATFORM HARVESTERS ────────────────────────────
-async function harvestInstantly(engagementId: string, apiKey: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-  const res = await fetchWithTimeout("https://api.instantly.ai/api/v1/account/me", {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (res.ok) {
-    written.push(await writeFact(engagementId, "sendPlatform", { platform: "instantly" }, "instantly", "Connected Instantly API."));
-  }
-  return written.filter((k): k is string => k !== null);
-}
-
-async function harvestSmartlead(engagementId: string, apiKey: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-  const res = await fetchWithTimeout(`https://server.smartlead.ai/api/v1/email-accounts?api_key=${apiKey}`);
-  if (res.ok) {
-    written.push(await writeFact(engagementId, "sendPlatform", { platform: "smartlead" }, "smartlead", "Connected Smartlead API."));
-  }
-  return written.filter((k): k is string => k !== null);
-}
-
-async function harvestLemlist(engagementId: string, apiKey: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-  const res = await fetchWithTimeout("https://api.lemlist.com/api/team", {
-    headers: { Authorization: `Basic ${Buffer.from(`:${apiKey}`).toString("base64")}` },
-  });
-  if (res.ok) {
-    written.push(await writeFact(engagementId, "sendPlatform", { platform: "lemlist" }, "lemlist", "Connected Lemlist API."));
-  }
-  return written.filter((k): k is string => k !== null);
-}
-
-async function harvestReplyIo(engagementId: string, apiKey: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-  const res = await fetchWithTimeout("https://api.reply.io/v1/actions/v1/account", {
-    headers: { "X-Api-Key": apiKey },
-  });
-  if (res.ok) {
-    written.push(await writeFact(engagementId, "sendPlatform", { platform: "reply_io" }, "reply_io", "Connected Reply.io API."));
-  }
-  return written.filter((k): k is string => k !== null);
-}
-
-// ── 6. SLACK CHANNEL HARVESTER ──────────────────────────────────────────
+// ── 5. SLACK CHANNEL HARVESTER ──────────────────────────────────────────
 async function harvestSlack(engagementId: string, botToken: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-  const res = await fetchWithTimeout("https://slack.com/api/conversations.list?types=public_channel&limit=100", {
-    headers: { Authorization: `Bearer ${botToken}` },
-  });
-  if (res.ok) {
+  // Every public, non-archived channel, following Slack's cursor paging
+  // (response_metadata.next_cursor). Capped so a huge workspace can't make
+  // this loop forever. Private channels would need the groups:read scope,
+  // which isn't assumed here.
+  const channels: Array<{ id: string; name: string }> = [];
+  let cursor = "";
+  for (let page = 0; page < 10; page++) {
+    const url =
+      "https://slack.com/api/conversations.list?types=public_channel&exclude_archived=true&limit=200" +
+      (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "");
+    const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${botToken}` } });
+    if (!res.ok) break;
     const data = (await res.json()) as {
       ok?: boolean;
       channels?: Array<{ id?: string; name?: string }>;
+      response_metadata?: { next_cursor?: string };
     };
-    if (data.ok && Array.isArray(data.channels)) {
-      const channelList = data.channels.map((c) => ({ id: c.id, name: `#${c.name}` }));
-      written.push(
-        await writeFact(
-          engagementId,
-          "slackChannels",
-          channelList,
-          "slack",
-          "Harvested workspace public channels for Pre-Call Briefs."
-        )
-      );
-    }
+    if (!data.ok || !Array.isArray(data.channels)) break;
+    for (const c of data.channels) if (c.id && c.name) channels.push({ id: c.id, name: `#${c.name}` });
+    cursor = data.response_metadata?.next_cursor ?? "";
+    if (!cursor) break;
   }
-  return written.filter((k): k is string => k !== null);
+  if (channels.length === 0) return [];
+  const written = await writeFact(engagementId, "slackChannels", channels, "slack", "Public channels in the connected Slack workspace, for picking where briefs go.");
+  return written ? [written] : [];
 }
 
-// ── 7. WHOP AGENT DEEP HARVESTER ────────────────────────────────────────
-async function harvestWhop(engagementId: string, apiKey: string): Promise<string[]> {
-  const written: (string | null)[] = [];
-
-  // A. Primary Account & Company Identity
-  const meRes = await fetchWithTimeout("https://api.whop.com/api/v2/me", {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!meRes.ok) throw new Error(`Whop account verification failed [${meRes.status}]`);
-  
-  const meData = (await meRes.json()) as { id?: string; username?: string; email?: string; company_id?: string };
-  const whopAccount = {
-    id: meData.id,
-    username: meData.username,
-    email: meData.email,
-    companyId: meData.company_id,
-  };
-
-  written.push(
-    await writeFact(
-      engagementId,
-      "whopAccount",
-      whopAccount,
-      "whop",
-      "Verified Whop Account Identity & Company ID."
-    )
-  );
-
-  if (meData.username) {
-    written.push(
-      await writeFact(
-        engagementId,
-        "operatorName",
-        meData.username,
-        "whop",
-        "Whop company username."
-      )
-    );
-  }
-
-  // B. Product Catalog & Pricing Tiers Probe
-  try {
-    const productsRes = await fetchWithTimeout("https://api.whop.com/api/v2/products", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (productsRes.ok) {
-      const productsData = (await productsRes.json()) as {
-        data?: Array<{ id?: string; title?: string; visibility?: string }>;
-      };
-      if (Array.isArray(productsData.data) && productsData.data.length > 0) {
-        const productList = productsData.data.map((p) => ({
-          id: p.id,
-          title: p.title,
-          visibility: p.visibility,
-        }));
-        written.push(
-          await writeFact(
-            engagementId,
-            "whopProducts",
-            productList,
-            "whop",
-            `Harvested ${productList.length} Whop digital products.`
-          )
-        );
-      }
-    }
-  } catch {
-    // Non-critical probe failure
-  }
-
-  // C. Webhook Fleet Audit Probe
-  try {
-    const webhooksRes = await fetchWithTimeout("https://api.whop.com/api/v2/webhooks", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (webhooksRes.ok) {
-      const webhooksData = (await webhooksRes.json()) as {
-        data?: Array<{ id?: string; url?: string; status?: string }>;
-      };
-      if (Array.isArray(webhooksData.data)) {
-        const activeWebhooks = webhooksData.data.map((w) => ({
-          id: w.id,
-          url: w.url,
-          status: w.status,
-        }));
-        written.push(
-          await writeFact(
-            engagementId,
-            "whopWebhooks",
-            activeWebhooks,
-            "whop",
-            `Audited ${activeWebhooks.length} Whop webhook endpoints.`
-          )
-        );
-      }
-    }
-  } catch {
-    // Non-critical probe failure
-  }
-
-  return written.filter((k): k is string => k !== null);
-}
-
-// ── 8. GHL BESPOKE HARVESTER ────────────────────────────────────────────
+// ── 6. GHL BESPOKE HARVESTER ────────────────────────────────────────────
 export async function harvestGHLLocation(
   engagementId: string,
   apiKey: string,
@@ -419,20 +281,30 @@ export async function harvestGHLLocation(
     )
   );
 
-  const socialUrls = Object.entries(location.social ?? {})
-    .filter(([key, value]) => key !== "googlePlacesId" && typeof value === "string" && value.trim())
-    .map(([, value]) => value as string);
+  // operatorHandles is a platform -> handle map (repIdentityGraphs), not a
+  // list — the platform is derived from GHL's own field name ("facebookUrl"
+  // -> "facebook", "linkedIn" -> "linkedin") so it doesn't depend on
+  // knowing GHL's exact key spellings.
+  const socialHandles: Record<string, string> = {};
+  for (const [key, value] of Object.entries(location.social ?? {})) {
+    if (key === "googlePlacesId" || typeof value !== "string" || !value.trim()) continue;
+    const platform = key.toLowerCase().replace(/url$/, "");
+    if (platform) socialHandles[platform] = value.trim();
+  }
   written.push(
     await writeFact(
       engagementId,
       "operatorHandles",
-      socialUrls.length ? socialUrls : undefined,
+      Object.keys(socialHandles).length ? socialHandles : undefined,
       "ghl_calendar",
       "GHL social handles."
     )
   );
 
   await maybeSeedDomainFromAccount(engagementId, location.website || location.business?.website);
+  import("@/lib/discover-client")
+    .then(({ discoverClientIfNotYetCrawled }) => discoverClientIfNotYetCrawled(engagementId))
+    .catch((err) => console.warn(`[account-harvest] post-GHL crawl failed for ${engagementId}:`, err));
   return written.filter((k): k is string => k !== null);
 }
 
@@ -460,31 +332,16 @@ export async function harvestAccountMetadata(
       case "mailchimp":
         factsWritten = await harvestMailchimp(engagementId, credentialValue);
         break;
-      case "instantly":
-        factsWritten = await harvestInstantly(engagementId, credentialValue);
-        break;
-      case "smartlead":
-        factsWritten = await harvestSmartlead(engagementId, credentialValue);
-        break;
-      case "lemlist":
-        factsWritten = await harvestLemlist(engagementId, credentialValue);
-        break;
-      case "reply_io":
-        factsWritten = await harvestReplyIo(engagementId, credentialValue);
-        break;
       case "slack":
         factsWritten = await harvestSlack(engagementId, credentialValue);
         break;
-      case "whop":
-        factsWritten = await harvestWhop(engagementId, credentialValue);
-        break;
     }
 
-    if (!(await getPrimaryDomainForEngagement(engagementId))) {
-      import("@/lib/discover-client")
-        .then(({ discoverClient }) => discoverClient(engagementId))
-        .catch(() => {});
-    }
+    // A harvest may have just seeded the domain (Klaviyo, GHL) — crawl the
+    // site now if there's a domain and it hasn't been crawled yet.
+    import("@/lib/discover-client")
+      .then(({ discoverClientIfNotYetCrawled }) => discoverClientIfNotYetCrawled(engagementId))
+      .catch((err) => console.warn(`[account-harvest] post-harvest crawl failed for ${engagementId}:`, err));
 
     return { factsWritten };
   } catch (err: any) {

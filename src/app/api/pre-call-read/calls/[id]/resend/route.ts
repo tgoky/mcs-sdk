@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { deliverBrief } from "@/lib/platforms/email";
+import { hasSlackConnection } from "@/lib/slack-delivery";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         id: briefedCallsLog.id,
         briefText: briefedCallsLog.briefText,
         stack: engagements.stack,
+        engagementId: engagements.engagementId,
       })
       .from(briefedCallsLog)
       .innerJoin(engagements, eq(briefedCallsLog.engagementId, engagements.engagementId))
@@ -52,14 +54,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
 
     const stack = row.stack as EngagementStack | null;
-    if (!stack?.slack_webhook_url) {
+    if (!stack?.slack_webhook_url && !(await hasSlackConnection(row.engagementId, stack))) {
       return NextResponse.json(
-        { error: "This engagement doesn't have a Slack webhook configured." },
+        { error: "This engagement doesn't have Slack set up (a webhook, or a connected Slack channel)." },
         { status: 422 }
       );
     }
 
-    await deliverBrief("slack", row.briefText, "", stack.slack_webhook_url);
+    await deliverBrief("slack", row.briefText, "", stack?.slack_webhook_url, undefined, undefined, undefined, row.engagementId);
 
     const [updated] = await db
       .update(briefedCallsLog)

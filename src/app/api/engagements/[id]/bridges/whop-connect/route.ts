@@ -7,7 +7,6 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { connectWhopAccount, markWhopDisconnected } from "@/features/whop-agent/server/connect-service";
 import { applyResolvableFacts } from "@/lib/field-writeback";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
-import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -58,7 +57,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 }
 
-/** Runs the connect flow against a freshly-pasted key and auto-arms all 15 skills */
+/** Runs the connect flow against a freshly-pasted key. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -82,10 +81,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: result.error, runId: result.runId, probe: result.probe }, { status: 422 });
     }
 
-    // Auto-arm all 15 Whop Agent workers simultaneously upon connecting
-    await Promise.all(
-      WHOP_AGENT_SKILL_IDS.map((skillId) => setSkillEnabledForEngagement(id, skillId, true))
-    );
+    // Only the connect worker itself is switched on here — the other Whop
+    // Agent workers are on by default, and re-enabling all of them on every
+    // (re)connect silently undid any a user had switched off.
+    await setSkillEnabledForEngagement(id, "whop-connect", true);
 
     return NextResponse.json(result);
   } catch (error) {

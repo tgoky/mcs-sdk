@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { engagements, auditRunsLog, metricsBenchmark } from "@/models/schema";
 import { eq, sql } from "drizzle-orm";
+import { normalizeVertical, verticalLabel } from "@/lib/verticals";
 
 /**
  * Leak Map recovery gap 7 — cross-client anonymized benchmarks. Per the
@@ -58,14 +59,17 @@ export function computeBucketKey(offerDetails: { traffic_temperature?: string; p
   if (!offerDetails) return null;
   const priceBucket = priceToBucket(offerDetails.price);
   const temp = offerDetails.traffic_temperature;
-  const vertical = offerDetails.vertical?.trim().toLowerCase();
+  // Listed verticals group by their id, so "coaching" and "Coaching &
+  // consulting" share a bucket; an unlisted legacy value keeps its old
+  // lowercased key so existing benchmark groups don't move.
+  const vertical = normalizeVertical(offerDetails.vertical) ?? offerDetails.vertical?.trim().toLowerCase();
   if (!priceBucket || !temp || !vertical) return null; // Need all three dimensions for a meaningful bucket
   return `${temp}|${priceBucket}|${vertical}`;
 }
 
 function bucketToDisplay(bucket: string): string {
   const [temp, priceBucket, vertical] = bucket.split("|");
-  return `${temp}-traffic ${vertical} offers in the ${PRICE_BUCKET_DISPLAY[priceBucket] ?? priceBucket} bucket`;
+  return `${temp}-traffic ${verticalLabel(vertical)} offers in the ${PRICE_BUCKET_DISPLAY[priceBucket] ?? priceBucket} bucket`;
 }
 
 /**
