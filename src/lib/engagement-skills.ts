@@ -87,6 +87,16 @@ export async function getDisabledEngagementIdsForSkill(skillId: string): Promise
   return new Set(rows.map((r) => r.engagementId));
 }
 
+/** Same "no row = enabled" convention, for Whop Agent's workers. */
+export async function getWhopAgentEngagementSkillStates(engagementId: string): Promise<Record<string, boolean>> {
+  const rows = await db
+    .select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
+    .from(engagementSkills)
+    .where(eq(engagementSkills.engagementId, engagementId));
+  const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
+  return Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, !disabled.has(id)]));
+}
+
 /** Same "no row = enabled" query as getEngagementSkillStates, for Cold
  * Open's own Skills panel — same table, same convention, just
  * COLD_OPEN_SKILL_IDS instead of Showtime's SKILL_IDS. */

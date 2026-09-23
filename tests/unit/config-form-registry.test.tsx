@@ -5,8 +5,7 @@ import { WORKERS_WITH_CONFIG_FORM, hasWorkerConfigForm, renderWorkerConfigForm }
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { RepSetup } from "@/components/product-setup/rep-setup";
-import { WhopConnectConfigForm } from "@/components/worker-config-forms/whop-connect-config-form";
-import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
+import { WhopSetup } from "@/components/product-setup/whop-setup";
 import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
 
 type AnyProps = Record<string, unknown> & { onCancel?: () => void; onSaved?: (r?: unknown) => void; cancelLabel?: string };
@@ -52,20 +51,12 @@ describe("config form lookup", () => {
     expect(element("icp-lock", { engagementId: "e1", onClose: () => {}, onSaved }).type).toBe(ColdOpenSetup);
   });
 
-  it("adapts forms whose onSaved has a different shape, and leaves it off when the caller has none", () => {
+  it("opens Whop Agent's one setup from each of its configurable workers", () => {
     const onSaved = vi.fn();
-    const whopConnect = element("whop-connect", { engagementId: "e1", onClose: () => {}, onSaved });
-    expect(whopConnect.type).toBe(WhopConnectConfigForm);
-    whopConnect.props.onSaved?.(undefined);
-    expect(onSaved).toHaveBeenLastCalledWith({});
-    whopConnect.props.onSaved?.({ runId: "r1" });
-    expect(onSaved).toHaveBeenLastCalledWith({ runId: "r1" });
-
-    const bridge = element("whop-bridge-manager", { engagementId: "e1", onClose: () => {}, onSaved });
-    expect(bridge.type).toBe(WhopBridgeManagerConfigForm);
-    bridge.props.onSaved?.();
-    expect(onSaved).toHaveBeenLastCalledWith({});
-
-    expect(element("whop-bridge-manager", { engagementId: "e1", onClose: () => {} }).props.onSaved).toBeUndefined();
+    for (const id of ["whop-connect", "whop-cancellation-save-offer", "whop-bridge-manager"] as const) {
+      const el = element(id, { engagementId: "e1", onClose: () => {}, onSaved });
+      expect(el.type, id).toBe(WhopSetup);
+      expect(el.props.onSaved).toBe(onSaved);
+    }
   });
 });

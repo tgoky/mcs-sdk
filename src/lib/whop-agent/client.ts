@@ -28,7 +28,8 @@ import {
 } from "./errors";
 import { WHOP_SCOPE_MAP, type WhopEndpoint } from "./scope-map";
 
-export const WHOP_API_BASE = "https://api.whop.com";
+export { WHOP_API_BASE, whopApiUrl } from "./url";
+import { whopApiUrl } from "./url";
 
 /**
  * Section 6.1's open-loop token bucket. Process-local, not a shared/
@@ -185,7 +186,7 @@ export class WhopAgentClient {
       throw new WhopTransientError(429, { reason: "local rate-limit bucket exhausted" }, 1);
     }
 
-    const url = new URL(`${WHOP_API_BASE}${path}`);
+    const url = new URL(whopApiUrl(path));
     for (const [key, value] of Object.entries(opts.query ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }

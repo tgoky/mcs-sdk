@@ -21,6 +21,7 @@
 // a real spec. Adding one: one function, one switch case, no change to
 // callers — same shape account-harvest.ts grows by.
 
+import { whopApiUrl } from "@/lib/whop-agent/url";
 import { fetchWithTimeout } from "@/lib/http";
 import { upsertClientFact } from "@/lib/client-facts";
 import { db } from "@/lib/db";
@@ -82,18 +83,9 @@ const COLD_OPEN_SEND_PLATFORM_IDS: Record<string, string> = {
 // statsMetric (the same source the monitor uses), not from these list
 // endpoints — a separate, more careful piece than this harvest.
 export async function harvestWhopPlans(engagementId: string, apiKey: string, accountId: string): Promise<string[]> {
-  // One page of up to 50 plans. UNVERIFIED against Whop's docs: this app's
-  // probe only ever sends limit=1, so the page-size ceiling and Whop's
-  // pagination scheme haven't been confirmed — a creator with more than 50
-  // plans may not see them all here. Confirm both before relying on it.
-  const res = await fetchWithTimeout(`https://api.whop.com/v1/plans?account_id=${encodeURIComponent(accountId)}&limit=50`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!res.ok) throw new Error(`Whop plans fetch failed [${res.status}]`);
-  const data = await res.json();
-  // Envelope shape (data.data vs a bare array vs data.plans) wasn't
-  // pinned down in what was relayed — read defensively across the
-  // plausible shapes rather than assume one.
+  // Every plan, cursor-paged the way Whop's official SDK does it (@whop/sdk:
+  // GET /api/v1/plans?account_id&first&after, page_info.end_cursor /
+  // has_next_page, plans under `data`). Capped at 5 pages of 100.
   type RawPlan = {
     id?: string;
     title?: string;
@@ -103,7 +95,17 @@ export async function harvestWhopPlans(engagementId: string, apiKey: string, acc
     currency?: string;
     product?: { title?: string; name?: string };
   };
-  const list: RawPlan[] = Array.isArray(data) ? data : (data?.data ?? data?.plans ?? []);
+  const list: RawPlan[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    const query = new URLSearchParams({ account_id: accountId, first: "100", ...(after ? { after } : {}) });
+    const res = await fetchWithTimeout(whopApiUrl(`/v1/plans?${query}`), { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (!res.ok) throw new Error(`Whop plans fetch failed [${res.status}]`);
+    const data = await res.json();
+    list.push(...(Array.isArray(data?.data) ? data.data : []));
+    if (!data?.page_info?.has_next_page || !data.page_info.end_cursor) break;
+    after = data.page_info.end_cursor;
+  }
 
   const plans = list
     .map((plan) => {

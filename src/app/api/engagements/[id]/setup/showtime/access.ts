@@ -1,5 +1,5 @@
 // Shared access check for the product setup routes (Showtime, Reputation
-// Manager, Cold Open): signed in, the client is theirs and in their active workspace,
+// Manager, Cold Open, Whop Agent): signed in, the client is theirs and in their active workspace,
 // and the product is installed there.
 
 import { NextResponse } from "next/server";
@@ -13,7 +13,7 @@ export type SetupAccess =
   | { ok: true; workspaceId: string; whopUserId: string; buyer: string }
   | { ok: false; response: NextResponse };
 
-const PACKAGE_NAMES: Record<string, string> = { showtime: "Showtime", "reputation-manager": "Reputation Manager", "cold-open": "Cold Open" };
+const PACKAGE_NAMES: Record<string, string> = { showtime: "Showtime", "reputation-manager": "Reputation Manager", "cold-open": "Cold Open", "whop-agent": "Whop Agent" };
 
 export async function authorizeShowtimeSetup(engagementId: string, opts: { requireInstalled?: boolean } = {}): Promise<SetupAccess> {
   return authorizeProductSetup(engagementId, "showtime", opts);

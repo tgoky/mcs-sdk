@@ -7,7 +7,7 @@
 // existing connection row to resolve a pinned version date and account id
 // against, which is exactly what these functions are here to produce in the
 // first place.
-import { WHOP_API_BASE } from "./client";
+import { whopApiUrl } from "./url";
 
 export interface ProbeOutcome {
   ok: boolean;
@@ -21,7 +21,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 async function rawGet(apiKey: string, path: string, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown; headers: Headers }> {
-  const res = await fetch(`${WHOP_API_BASE}${path}`, {
+  const res = await fetch(whopApiUrl(path), {
     headers: { Authorization: `Bearer ${apiKey}`, ...headers },
   });
   const text = await res.text();
@@ -113,7 +113,7 @@ export const SCOPE_PROBE_TABLE: Array<{ label: string; run: (apiKey: string, acc
   { label: "products", run: (key, accountId) => rawGet(key, `/v1/products?account_id=${accountId ?? ""}&limit=1`) },
   { label: "plans", run: (key, accountId) => rawGet(key, `/v1/plans?account_id=${accountId ?? ""}&limit=1`) },
   { label: "memberships", run: (key) => rawGet(key, "/v1/memberships?limit=1") },
-  { label: "stats", run: (key) => rawGet(key, "/v1/stats/describe") },
+  { label: "stats", run: (key) => rawGet(key, "/v1/stats") }, // the metric catalog (@whop/sdk stats.list)
   { label: "webhooks", run: (key, accountId) => rawGet(key, `/v1/webhooks?account_id=${accountId ?? ""}`) },
   { label: "disputes", run: (key) => rawGet(key, "/v1/disputes?limit=1") },
   { label: "dispute_alerts", run: (key) => rawGet(key, "/v1/dispute_alerts?limit=1") },

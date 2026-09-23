@@ -16,19 +16,15 @@ import { isUniqueConstraintViolation } from "@/lib/db-errors";
 
 interface CreatedWebhookResponse {
   id: string;
-  // Whop's own field name for the one-time signing secret on creation
-  // isn't pinned down in the research this build is grounded in — the
-  // three names below are the plausible candidates given Standard
-  // Webhooks conventions (ws_... prefix per Section 7.1). Checked in
-  // order; whichever is present is used. Flagged here rather than
-  // guessed silently so a live-docs check can resolve this to one name
-  // and delete the fallback chain.
+  // Whop's SDK (@whop/sdk 1.1.5, Webhook.webhook_secret) names it
+  // webhook_secret: "Returned on the create response". The other two are
+  // kept as fallbacks.
   secret?: string;
   signing_secret?: string;
   webhook_secret?: string;
 }
 
-function webhookReceiverUrl(engagementId: string): string {
+export function webhookReceiverUrl(engagementId: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
   return `${appUrl}/api/webhooks/whop-agent/${engagementId}`;
 }
@@ -122,6 +118,46 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
   }
 
   return { whopWebhookId: created.id };
+}
+
+/**
+ * Keeps the agent's one subscription carrying exactly `events`: created
+ * the first time (pinned, as ensureAgentWebhookSubscription requires),
+ * then updated in place with PATCH /webhooks/{id} when the events change,
+ * so choosing different workers never leaves a second, overlapping
+ * subscription delivering the same events twice. An empty list leaves
+ * whatever exists alone.
+ */
+export async function syncAgentWebhookEvents(engagementId: string, events: string[]): Promise<{ whopWebhookId: string | null; action: "created" | "updated" | "unchanged" | "none" }> {
+  const wanted = [...new Set(events)].sort();
+  if (wanted.length === 0) return { whopWebhookId: null, action: "none" };
+
+  const rows = await db
+    .select({ id: whopWebhookRegistry.id, whopWebhookId: whopWebhookRegistry.whopWebhookId, url: whopWebhookRegistry.url, events: whopWebhookRegistry.events })
+    .from(whopWebhookRegistry)
+    .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.createdByAgent, true)));
+  const row = rows[0];
+  if (!row) {
+    const { whopWebhookId } = await ensureAgentWebhookSubscription(engagementId, wanted);
+    return { whopWebhookId, action: "created" };
+  }
+  const have = [...new Set(row.events)].sort();
+  if (have.length === wanted.length && have.every((e, i) => e === wanted[i])) return { whopWebhookId: row.whopWebhookId, action: "unchanged" };
+
+  const client = await WhopAgentClient.forEngagement(engagementId);
+  if (!client.pinnedVersionDate) {
+    throw new Error("No validated Api-Version-Date pin on file. Cannot change the webhook until pin selection succeeds.");
+  }
+  await client.request("webhooks.update", `/v1/webhooks/${row.whopWebhookId}`, {
+    method: "PATCH",
+    body: { events: wanted, api_version_date: client.pinnedVersionDate },
+    idempotencyKey: `whop-webhook-events:${row.whopWebhookId}:${wanted.join(",")}`,
+  });
+  await db
+    .update(whopWebhookRegistry)
+    .set({ events: wanted, duplicateGroupKey: duplicateGroupKey(row.url, wanted), apiVersionDate: client.pinnedVersionDate, updatedAt: new Date() })
+    .where(eq(whopWebhookRegistry.id, row.id));
+  return { whopWebhookId: row.whopWebhookId, action: "updated" };
 }
 
 /**

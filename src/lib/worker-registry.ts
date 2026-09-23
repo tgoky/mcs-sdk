@@ -997,7 +997,7 @@ const COLD_OPEN_CONFIG_FIELDS: Partial<Record<ColdOpenSkillId, WorkerConfigField
 };
 
 // Traced against connect-service.ts's real writes and the whop-connect
-// hinges panel (whop-connect-config-form.tsx). Every other Whop Agent
+// hinges panel (product-setup/whop-setup.tsx). Every other Whop Agent
 // skill reuses this one credential — see whop-agent-skill-manifest.ts's
 // requiredCredentials — so none of them repeat it as a separate entry,
 // same convention pin-down's shared booking/email credentials already
@@ -1019,7 +1019,7 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
       key: "whop_save_offer_min_tenure_days",
       label: "Minimum tenure before eligible (days)",
       kind: "ask",
-      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). Now collected by whop-cancellation-save-offer-config-form.tsx — shown with the real default pre-filled, doesn't block (Stripe Radar's exposed-but-tunable pattern, same as personMatchConfidenceThreshold).",
+      description: "Found missing entirely during the full 34-worker audit — real, already has a stack column with a documented default (30) and a real code-level fallback (config.minTenureDays ?? DEFAULT_MIN_TENURE_DAYS in cancellation-save-offer-service.ts). Now collected by Whop Agent's setup (product-setup/whop-setup.tsx) — shown with the real default pre-filled, doesn't block (Stripe Radar's exposed-but-tunable pattern, same as personMatchConfidenceThreshold).",
       tier: "visible-default",
     },
     {

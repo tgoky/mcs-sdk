@@ -21,6 +21,7 @@ import { PreCallReadConfigForm } from "./pre-call-read-config-form";
 import { LeakMapConfigForm } from "./leak-map-config-form";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
+import { WhopSetup } from "@/components/product-setup/whop-setup";
 import { RepEnginePanelConfigForm } from "./rep-engine-panel-config-form";
 import { RepTrustpilotWatchConfigForm } from "./rep-trustpilot-watch-config-form";
 import { RepRedditWatchConfigForm } from "./rep-reddit-watch-config-form";
@@ -29,9 +30,6 @@ import { VoiceCaptureConfigForm } from "./voice-capture-config-form";
 import { SourceConnectConfigForm } from "./source-connect-config-form";
 import { SendConnectConfigForm } from "./send-connect-config-form";
 import { DailySendConfigForm } from "./daily-send-config-form";
-import { WhopConnectConfigForm } from "./whop-connect-config-form";
-import { WhopCancellationSaveOfferConfigForm } from "./whop-cancellation-save-offer-config-form";
-import { WhopBridgeManagerConfigForm } from "./whop-bridge-manager-config-form";
 
 export interface ConfigFormSaveResult {
   /** The run a setup form started on save, when it started one. */
@@ -78,16 +76,11 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   "source-connect": simple(SourceConnectConfigForm),
   "send-connect": simple(SendConnectConfigForm),
   "daily-send": simple(DailySendConfigForm),
-  // Whop Agent
-  "whop-connect": (h) => (
-    <WhopConnectConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved ? (r) => h.onSaved?.(r ?? {}) : undefined} cancelLabel={h.cancelLabel} />
-  ),
-  "whop-cancellation-save-offer": (h) => (
-    <WhopCancellationSaveOfferConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved ? () => h.onSaved?.({}) : undefined} cancelLabel={h.cancelLabel} />
-  ),
-  "whop-bridge-manager": (h) => (
-    <WhopBridgeManagerConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved ? () => h.onSaved?.({}) : undefined} cancelLabel={h.cancelLabel} />
-  ),
+  // Whop Agent: one setup covers the connection, the save offer, alert
+  // levels, the bridge and the webhook the workers need.
+  "whop-connect": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  "whop-cancellation-save-offer": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  "whop-bridge-manager": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
 };
 
 /** Workers with a self-loading config form. (Pile-On's small form takes

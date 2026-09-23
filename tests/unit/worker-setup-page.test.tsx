@@ -47,9 +47,10 @@ describe("worker setup page", () => {
     expect(screen.getByTestId("form")).toHaveTextContent("leak-map");
   });
 
-  it("uses Whop Connect's own heading", async () => {
+  it("leaves the heading to Whop Agent's own setup screen", async () => {
     render(await WorkerSetupPage(params("whop-connect")));
-    expect(screen.getByRole("heading", { name: "Connect your Whop account" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Configure|Connect your Whop account/ })).toBeNull();
+    expect(screen.getByTestId("form")).toHaveTextContent("whop-connect");
   });
 
   it("goes back to ?from= on cancel, to the run a setup started, else back", async () => {

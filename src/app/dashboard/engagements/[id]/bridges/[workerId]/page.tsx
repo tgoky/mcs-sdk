@@ -15,13 +15,9 @@ import { SetupPageClient } from "./setup-page-client";
 export const revalidate = 0;
 
 /** Headings that don't read as "Configure <name>". */
-const SETUP_HEADINGS: Partial<Record<string, string>> = {
-  "whop-connect": "Connect your Whop account",
-};
-
 /** Setups that introduce themselves (their own heading and copy), so the
  * page only adds the way back. */
-const SELF_HEADED_SETUPS = new Set(["pin-down", "rep-onboarding", "icp-lock"]);
+const SELF_HEADED_SETUPS = new Set(["pin-down", "rep-onboarding", "icp-lock", "whop-connect", "whop-cancellation-save-offer", "whop-bridge-manager"]);
 
 export default async function WorkerSetupPage({ params }: { params: Promise<{ id: string; workerId: string }> }) {
   const { id, workerId } = await params;
@@ -39,7 +35,7 @@ export default async function WorkerSetupPage({ params }: { params: Promise<{ id
       <SetupPageClient
         engagementId={id}
         workerId={workerId}
-        heading={SELF_HEADED_SETUPS.has(workerId) ? null : SETUP_HEADINGS[workerId] ?? `Configure ${worker.name}`}
+        heading={SELF_HEADED_SETUPS.has(workerId) ? null : `Configure ${worker.name}`}
         description={SELF_HEADED_SETUPS.has(workerId) ? null : worker.description}
       />
     </>
