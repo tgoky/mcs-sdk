@@ -9,10 +9,13 @@
 // Only columns the app writes itself are touched. Text from outside
 // (reviews, mentions, prospect notes, what a user typed, scraped site
 // copy) is left exactly as written, and so is rep_audit_events, which is
-// an audit trail. Pasted-ready confirmation-page HTML isn't edited here:
-// rebuild the page instead to pick up the new template.
+// an audit trail. HTML (a confirmation page waiting for approval) only
+// has the dash character swapped, never re-cased or bracketed, so the page
+// stays valid.
 //
-// Dry-run by default, same convention as the other scripts here.
+// Dry-run by default, same convention as the other scripts here. The dry
+// run writes every change (before and after, with context) to
+// undash-preview.txt so it can be read in full before applying.
 //
 // Usage:
 //   npx tsx scripts/undash-stored-text.ts
@@ -23,6 +26,7 @@
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env" });
 
+import { writeFileSync } from "node:fs";
 import postgres from "postgres";
 import { undash, undashDeep } from "../src/lib/plain-punctuation";
 
@@ -81,8 +85,29 @@ const TARGETS: Target[] = [
 
 const sql = postgres(connectionString, { max: 1, prepare: false });
 
+const PREVIEW_FILE = "undash-preview.txt";
+
+/** Every string inside a value, paired with what undash makes of it. */
+function changedStrings(value: unknown, out: [string, string][] = []): [string, string][] {
+  if (typeof value === "string") {
+    const after = undash(value);
+    if (after !== value) {
+      // Show changed lines only, so a long brief doesn't flood the preview.
+      const b = value.split("\n");
+      const a = after.split("\n");
+      if (a.length === b.length) b.forEach((line, i) => line !== a[i] && out.push([line, a[i]]));
+      else out.push([value, after]);
+    }
+  } else if (Array.isArray(value)) value.forEach((v) => changedStrings(v, out));
+  else if (value && typeof value === "object") Object.values(value).forEach((v) => changedStrings(v, out));
+  return out;
+}
+
+const clip = (s: string) => (s.length > 300 ? `${s.slice(0, 300)}…` : s);
+
 async function main() {
   let total = 0;
+  const preview: string[] = [];
   try {
     for (const t of TARGETS) {
       const col = sql(t.column);
@@ -92,12 +117,14 @@ async function main() {
       const rows = await sql<{ id: string; value: unknown }[]>`SELECT id, ${col} AS value FROM ${table} WHERE ${hasDash} ${extra}`;
       if (rows.length === 0) continue;
       total += rows.length;
-      const sample = rows[0];
-      const before = t.kind === "jsonb" ? JSON.stringify(sample.value) : String(sample.value);
-      const after = t.kind === "jsonb" ? JSON.stringify(undashDeep(sample.value)) : undash(String(sample.value));
       console.log(`${t.table}.${t.column}: ${rows.length} row(s)`);
-      console.log(`  e.g. ${before.slice(0, 140)}`);
-      console.log(`    -> ${after.slice(0, 140)}`);
+      for (const [i, row] of rows.entries()) {
+        const lines = changedStrings(t.kind === "jsonb" ? row.value : String(row.value)).map(
+          ([before, after]) => `    ${clip(before)}\n    -> ${clip(after)}`
+        );
+        if (i === 0) console.log(lines.slice(0, 2).join("\n"));
+        preview.push(`${t.table}.${t.column} id=${row.id}`, ...lines, "");
+      }
       if (!CONFIRM) continue;
       for (const row of rows) {
         if (t.kind === "jsonb") {
@@ -107,8 +134,9 @@ async function main() {
         }
       }
     }
+    if (total > 0) writeFileSync(PREVIEW_FILE, preview.join("\n"));
     if (total === 0) console.log("No stored text with dashes found. Nothing to do.");
-    else if (!CONFIRM) console.log(`\nDry run: ${total} row(s) would change. Re-run with --yes to apply.`);
+    else if (!CONFIRM) console.log(`\nDry run: ${total} row(s) would change. Every change is listed in ${PREVIEW_FILE}. Re-run with --yes to apply.`);
     else console.log(`\nUpdated ${total} row(s).`);
   } finally {
     await sql.end();
