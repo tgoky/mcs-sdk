@@ -22,7 +22,8 @@
 
 import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, coldOpenConfig, whopAgentConnections, type EngagementStack } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { repIdentityIsComplete } from "@/lib/rep-engagements";
 import type { ProductId } from "@/lib/product-catalog";
 
 export async function isProductOnboarded(productId: ProductId, engagementId: string): Promise<boolean> {
@@ -35,7 +36,13 @@ export async function isProductOnboarded(productId: ProductId, engagementId: str
     return Boolean(row?.confirmationPageUrl);
   }
   if (productId === "reputation-manager") {
-    const [row] = await db.select({ id: repIdentityGraphs.id }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
+    // Not just row existence — the rep-onboarding bridge route inserts a
+    // blank placeholder row as soon as its form is opened.
+    const [row] = await db
+      .select({ id: repIdentityGraphs.id })
+      .from(repIdentityGraphs)
+      .where(and(eq(repIdentityGraphs.engagementId, engagementId), repIdentityIsComplete))
+      .limit(1);
     return Boolean(row);
   }
   if (productId === "cold-open") {
