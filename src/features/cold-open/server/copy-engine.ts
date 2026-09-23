@@ -19,7 +19,7 @@
 
 import { callClaude } from "@/lib/llm";
 import { resolvePool, pickBodyVariant, type BodyTouchset } from "./body-variants";
-import { subjectFor } from "./subject-variants";
+import { renderSubject, subjectFor } from "./subject-variants";
 import type { LeadRow } from "./fetchers/base";
 import type { ColdOpenConfigRow } from "./config";
 
@@ -48,7 +48,8 @@ function assembleUpload(config: CopyEngineConfig, lead: LeadRow): AssembledCopy 
   const pool = resolvePool(config.bodyVariantPools, lead.icp);
   if (pool.length === 0) return null;
   const touchset: BodyTouchset = pickBodyVariant(lead.email, pool);
-  const subject = subjectFor(config.subjectVariants, lead.email, lead.companyName) || touchset.subject;
+  // A touchset's own subject may carry {company_name} (imported sequences do).
+  const subject = subjectFor(config.subjectVariants, lead.email, lead.companyName) || renderSubject(touchset.subject, lead.companyName);
   const voice = config.voiceProfile;
   return {
     subject,

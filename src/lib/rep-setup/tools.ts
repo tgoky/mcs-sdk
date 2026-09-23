@@ -4,7 +4,7 @@
 // booking and email tools Showtime connects (one connection per client,
 // shared by every product), plus Whop for product names. Client-safe.
 
-import { SHOWTIME_TOOLS, type SetupTool } from "@/lib/showtime-setup/catalog";
+import { SHOWTIME_TOOLS, type SetupTool, type ToolGroupId } from "@/lib/showtime-setup/catalog";
 
 /** What connecting each one adds to the watch list, in a few words. */
 export const REP_TOOL_ADDS: Record<string, string> = {
@@ -20,7 +20,7 @@ export const REP_TOOL_ADDS: Record<string, string> = {
   convertkit: "your sender name",
 };
 
-export const REP_TOOLS: SetupTool[] = SHOWTIME_TOOLS.filter((t) => t.needsKey && REP_TOOL_ADDS[t.provider] && !(t.provider === "ghl" && SHOWTIME_TOOLS.some((x) => x.provider === "ghl_calendar")));
+export const REP_TOOLS: SetupTool<ToolGroupId>[] = SHOWTIME_TOOLS.filter((t) => t.needsKey && REP_TOOL_ADDS[t.provider] && !(t.provider === "ghl" && SHOWTIME_TOOLS.some((x) => x.provider === "ghl_calendar")));
 
 /** Whop connects through Whop Agent's own flow (it checks the key's
  * scopes and finds the company), not a pasted key on this screen. */

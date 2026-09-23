@@ -284,6 +284,7 @@ const TOOL_GROUP_BLURB: Record<SetupTool["group"], string> = {
   booking: "Brings in every booked call",
   email: "Sends follow-ups and recovery emails",
   hosting: "Hosts the confirmation page",
+  sending: "Sends your cold email",
 };
 
 function ConnectForm({

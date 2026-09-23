@@ -4,7 +4,7 @@
 // few constants both sides share. Client-safe.
 
 import type { TrustTier } from "@/lib/fact-trust";
-import type { ToolGroupId } from "./catalog";
+import type { SetupToolGroup, ToolGroupId } from "./catalog";
 
 export type { TrustTier };
 
@@ -30,7 +30,7 @@ export interface SavedConnection {
 
 export interface ToolState {
   provider: string;
-  group: ToolGroupId;
+  group: SetupToolGroup;
   /** Has a credential attached to this client right now. */
   linked: boolean;
   /** The crawl found this tool's embed or fingerprint on the website. */

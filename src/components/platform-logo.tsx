@@ -106,7 +106,14 @@ const LOGO_DOMAINS: Record<string, string> = {
 // vector mark, then domain-resolved logo, then the local PNG, then the
 // plain icon — never a 404 glyph or a fabricated logo.
 // Choices that are a brand's own channel, drawn with that brand's mark.
-const LOGO_ALIASES: Record<string, string> = { ghl_sms: "ghl", hubspot_sms: "hubspot" };
+const LOGO_ALIASES: Record<string, string> = {
+  ghl_sms: "ghl",
+  hubspot_sms: "hubspot",
+  cold_open_instantly: "instantly",
+  cold_open_smartlead: "smartlead",
+  cold_open_lemlist: "lemlist",
+  cold_open_reply_io: "reply_io",
+};
 
 export function PlatformLogo({
   provider: rawProvider,

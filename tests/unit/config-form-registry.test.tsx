@@ -7,7 +7,7 @@ import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { WhopConnectConfigForm } from "@/components/worker-config-forms/whop-connect-config-form";
 import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
-import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
+import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
 
 type AnyProps = Record<string, unknown> & { onCancel?: () => void; onSaved?: (r?: unknown) => void; cancelLabel?: string };
 const element = (id: Parameters<typeof renderWorkerConfigForm>[0], h: Parameters<typeof renderWorkerConfigForm>[1]) =>
@@ -49,7 +49,7 @@ describe("config form lookup", () => {
     const rep = element("rep-onboarding", { engagementId: "e1", onClose: () => {}, onSaved });
     expect(rep.type).toBe(RepSetup);
     expect(rep.props.onSaved).toBe(onSaved);
-    expect(element("icp-lock", { engagementId: "e1", onClose: () => {}, onSaved }).type).toBe(IcpLockConfigForm);
+    expect(element("icp-lock", { engagementId: "e1", onClose: () => {}, onSaved }).type).toBe(ColdOpenSetup);
   });
 
   it("adapts forms whose onSaved has a different shape, and leaves it off when the caller has none", () => {

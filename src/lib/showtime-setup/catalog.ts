@@ -10,11 +10,13 @@
 import { isComposioManagedProvider } from "@/lib/composio-providers";
 
 export type ToolGroupId = "booking" | "email" | "hosting";
+/** Showtime's groups, plus Cold Open's sending platforms. */
+export type SetupToolGroup = ToolGroupId | "sending";
 
-export interface SetupTool {
+export interface SetupTool<G extends SetupToolGroup = SetupToolGroup> {
   provider: string;
   label: string;
-  group: ToolGroupId;
+  group: G;
   /** Sign-in through Composio is offered (a pasted key still works). */
   composio: boolean;
   /** False for choices with nothing to connect (no publish API). */
@@ -27,13 +29,13 @@ export interface SetupTool {
   noKeyNote?: string;
 }
 
-const tool = (t: Omit<SetupTool, "composio" | "needsKey"> & { needsKey?: boolean }): SetupTool => ({
+const tool = <G extends SetupToolGroup>(t: Omit<SetupTool<G>, "composio" | "needsKey"> & { needsKey?: boolean }): SetupTool<G> => ({
   needsKey: true,
   ...t,
   composio: isComposioManagedProvider(t.provider),
 });
 
-export const SHOWTIME_TOOL_GROUPS: { id: ToolGroupId; label: string; hint: string; tools: SetupTool[] }[] = [
+export const SHOWTIME_TOOL_GROUPS: { id: ToolGroupId; label: string; hint: string; tools: SetupTool<ToolGroupId>[] }[] = [
   {
     id: "booking",
     label: "Booking",
@@ -80,9 +82,23 @@ export const SHOWTIME_TOOL_GROUPS: { id: ToolGroupId; label: string; hint: strin
   },
 ];
 
-export const SHOWTIME_TOOLS: SetupTool[] = SHOWTIME_TOOL_GROUPS.flatMap((g) => g.tools);
+export const SHOWTIME_TOOLS: SetupTool<ToolGroupId>[] = SHOWTIME_TOOL_GROUPS.flatMap((g) => g.tools);
 
-export function findShowtimeTool(provider: string, group?: ToolGroupId): SetupTool | undefined {
+/** Cold Open's sending platforms. Stored under cold_open_<platform> (the
+ * credential key Cold Open's adapters read), connected with a pasted key. */
+export const COLD_OPEN_SEND_TOOLS: SetupTool<"sending">[] = [
+  tool({ provider: "cold_open_instantly", label: "Instantly", group: "sending", keyPlaceholder: "API key (v2)", keyHowTo: "Instantly → Settings → Integrations → API keys" }),
+  tool({ provider: "cold_open_smartlead", label: "SmartLead", group: "sending", keyPlaceholder: "API key", keyHowTo: "SmartLead → Settings → API key" }),
+  tool({ provider: "cold_open_lemlist", label: "Lemlist", group: "sending", keyPlaceholder: "API key", keyHowTo: "Lemlist → Settings → Integrations → API" }),
+  tool({ provider: "cold_open_reply_io", label: "Reply.io", group: "sending", keyPlaceholder: "API key", keyHowTo: "Reply.io → Settings → API key" }),
+];
+
+/** Any tool a product's setup screen can connect (the shared connect route). */
+export function findSetupTool(provider: string): SetupTool | undefined {
+  return findShowtimeTool(provider) ?? COLD_OPEN_SEND_TOOLS.find((t) => t.provider === provider);
+}
+
+export function findShowtimeTool(provider: string, group?: ToolGroupId): SetupTool<ToolGroupId> | undefined {
   return SHOWTIME_TOOLS.find((t) => t.provider === provider && (!group || t.group === group));
 }
 

@@ -16,7 +16,8 @@ import { patchEngagementStack } from "@/lib/engagement-stack";
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
 import { MailchimpClient, ConvertKitClient, SMTPClient, parseSmtpCredential } from "@/lib/platforms/email";
-import { findShowtimeTool } from "@/lib/showtime-setup/catalog";
+import { findSetupTool } from "@/lib/showtime-setup/catalog";
+import { checkInstantlyCredential, checkLemlistCredential, checkReplyIoCredential, checkSmartleadCredential } from "@/features/cold-open/server/credential-check";
 import { checkAccountMatches } from "@/lib/showtime-setup/jev-setup";
 import { authorizeShowtimeSetup } from "../access";
 
@@ -35,6 +36,10 @@ const KEY_CHECKS: Record<string, (value: string) => Promise<void>> = {
   mailchimp: (v) => new MailchimpClient(v).checkCredentialHealth(),
   convertkit: (v) => new ConvertKitClient(v).checkCredentialHealth(),
   smtp: (v) => new SMTPClient(parseSmtpCredential(v)).checkCredentialHealth(),
+  cold_open_instantly: checkInstantlyCredential,
+  cold_open_smartlead: checkSmartleadCredential,
+  cold_open_lemlist: checkLemlistCredential,
+  cold_open_reply_io: checkReplyIoCredential,
 };
 
 const HARVEST_WAIT_MS = 15_000;
@@ -65,7 +70,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     activecampaignBaseUrl?: unknown;
   };
   const provider = typeof body.provider === "string" ? body.provider : "";
-  const tool = findShowtimeTool(provider);
+  const tool = findSetupTool(provider);
   if (!tool || !tool.needsKey) {
     return NextResponse.json({ error: "That tool can't be connected here." }, { status: 400 });
   }

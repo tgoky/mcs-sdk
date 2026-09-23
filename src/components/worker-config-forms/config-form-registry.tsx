@@ -20,11 +20,11 @@ import { WinBackConfigForm } from "./win-back-config-form";
 import { PreCallReadConfigForm } from "./pre-call-read-config-form";
 import { LeakMapConfigForm } from "./leak-map-config-form";
 import { RepSetup } from "@/components/product-setup/rep-setup";
+import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
 import { RepEnginePanelConfigForm } from "./rep-engine-panel-config-form";
 import { RepTrustpilotWatchConfigForm } from "./rep-trustpilot-watch-config-form";
 import { RepRedditWatchConfigForm } from "./rep-reddit-watch-config-form";
 import { RepTwitterWatchConfigForm } from "./rep-twitter-watch-config-form";
-import { IcpLockConfigForm } from "./icp-lock-config-form";
 import { VoiceCaptureConfigForm } from "./voice-capture-config-form";
 import { SourceConnectConfigForm } from "./source-connect-config-form";
 import { SendConnectConfigForm } from "./send-connect-config-form";
@@ -71,7 +71,9 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   "rep-reddit-watch": simple(RepRedditWatchConfigForm),
   "rep-twitter-watch": simple(RepTwitterWatchConfigForm),
   // Cold Open
-  "icp-lock": (h) => <IcpLockConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  // Cold Open's setup covers the product, buyers, voice, campaigns and
+  // daily sending from the website and the connected tools.
+  "icp-lock": (h) => <ColdOpenSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
   "voice-capture": simple(VoiceCaptureConfigForm),
   "source-connect": simple(SourceConnectConfigForm),
   "send-connect": simple(SendConnectConfigForm),

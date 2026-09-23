@@ -154,6 +154,9 @@ function sourceText(v: SetupValue | undefined, domain: string): string | null {
   }
 }
 
+/** Showtime's screen only ever shows Showtime's own tool groups. */
+const showtimeGroup = (tool: { group: string }) => tool.group as ToolGroupId;
+
 function bareHost(value: string): string {
   return value.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
 }
@@ -284,14 +287,14 @@ export function ShowtimeSetup({
     useSaved: async (tool, vaultId) => {
       const err = await post(`/api/engagements/${engagementId}/setup/showtime/connect`, { provider: tool.provider, vaultId });
       if (err) return err;
-      setPlatform(tool.group, tool.provider);
+      setPlatform(showtimeGroup(tool), tool.provider);
       await load().catch(() => undefined);
       return null;
     },
     connectKey: async (tool, value, extra) => {
       const err = await post(`/api/engagements/${engagementId}/setup/showtime/connect`, { provider: tool.provider, value, ...extra });
       if (err) return err;
-      setPlatform(tool.group, tool.provider);
+      setPlatform(showtimeGroup(tool), tool.provider);
       toast.success(`${tool.label} connected.`);
       await load().catch(() => undefined);
       return null;
@@ -315,11 +318,11 @@ export function ShowtimeSetup({
     disconnect: async (tool) => {
       const err = await post(`/api/engagements/${engagementId}/setup/showtime/connect`, { provider: tool.provider, disconnect: true });
       if (err) return err;
-      if (draft?.platforms[tool.group] === tool.provider) setPlatform(tool.group, null);
+      if (draft?.platforms[showtimeGroup(tool)] === tool.provider) setPlatform(showtimeGroup(tool), null);
       await load().catch(() => undefined);
       return null;
     },
-    choose: (tool) => setPlatform(tool.group, tool.provider),
+    choose: (tool) => setPlatform(showtimeGroup(tool), tool.provider),
   };
 
   // ── Activate ──

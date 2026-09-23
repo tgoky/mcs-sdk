@@ -6,7 +6,7 @@
 // driven entirely by worker-registry.ts's WORKER_CAPABILITIES data
 // (Phase 2) and worker-capability-status.ts's live field reads.
 // Deliberately read-only and additive: this renders next to an existing
-// config form (icp-lock-config-form.tsx today), never replaces one — the
+// config form, never replaces one — the
 // save/submit flow this app already relies on is untouched.
 //
 // Only renders anything for the 5 Phase 2 workers with real capability
