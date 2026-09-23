@@ -16,7 +16,14 @@ export const NO_DASHES_RULE =
 
 const DASH = /[—–]/;
 // A tail starting with one of these continues the sentence ("fast, not cheap").
-const CONTINUES = /^(not|and|but|or|nor|so|yet|which|while|rather|just|only|plus|then|including|especially|like|with|without|because|since|though|although|if|unless|as)\b/i;
+const CONTINUES = /^(not|and|but|or|nor|so|yet|which|while|rather|just|only|plus|then|including|especially|like|with|without|because|since|though|although|if|unless|as|such as|for example|for instance|e\uE000g\uE000|i\uE000e\uE000)(?=[\s,.:]|$)/i;
+// An aside that starts like this is an example list, not a pause: "A — e.g. x, y — B".
+const EXAMPLE_ASIDE = /^(e\uE000g\uE000|i\uE000e\uE000|such as|for example|for instance|like)(?=[\s,]|$)/i;
+
+// Abbreviations whose dot doesn't end a sentence. Their dots are swapped
+// for a private character while a line is worked on, then put back.
+const ABBREVIATIONS = /\b(e\.g|i\.e|etc|vs|approx|incl|min|max|Mr|Mrs|Ms|Dr|St|Inc|Ltd|Co|No)\./gi;
+const HIDDEN_DOT = "\uE000";
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -39,6 +46,8 @@ function joinAt(left: string, right: string): string {
   const { body, end } = splitEnd(right);
   const tailWords = words(body);
   if (CONTINUES.test(right.trim())) return `${left}, ${right}`;
+  // "If it comes up next month — the offer's open": a comma closes an opening condition.
+  if (/^\s*(if|when|whenever|once|after|before|until|although|though|because|since|while|unless)\b/i.test(left.replace(/^[\s\S]*[.!?]\s+/, ""))) return `${left}, ${right}`;
   // "Hi {{first_name}} — quick question" is a greeting, not a label.
   if (/^\s*(hi|hey|hello|thanks|thank you)\b/i.test(left)) return `${left}, ${right}`;
   if (leftWords > 0 && leftWords <= 2) return `${left}: ${right}`;
@@ -49,6 +58,10 @@ function joinAt(left: string, right: string): string {
 }
 
 function undashLine(line: string): string {
+  return undashAbbreviated(line.replace(ABBREVIATIONS, (m) => m.replace(/\./g, HIDDEN_DOT))).replace(/\uE000/g, ".");
+}
+
+function undashAbbreviated(line: string): string {
   const s = line
     // 3–5, 2024–2025, $10–$20
     .replace(/(\d)\s*[—–]\s*(?=[$€£]?\d)/g, "$1-")
@@ -73,6 +86,13 @@ function undashLine(line: string): string {
       if (parts.length === 3 && words(parts[1]) > 0) {
         // An aside: "A — b — C"
         const aside = parts[1].trim();
+        if (EXAMPLE_ASIDE.test(aside)) {
+          // "Include proof — e.g. x, y — avoid vague claims": the examples go in
+          // brackets and what follows the second dash is its own clause.
+          const rest = parts[2];
+          const { body } = splitEnd(rest);
+          return words(body) >= 3 ? `${parts[0]} (${aside}). ${capitalize(rest)}` : `${parts[0]} (${aside}) ${rest}`;
+        }
         return aside.includes(",") ? `${parts[0]} (${aside}) ${parts[2]}` : `${parts[0]}, ${aside}, ${parts[2]}`;
       }
       return parts.reduce((acc, next) => joinAt(acc, next));

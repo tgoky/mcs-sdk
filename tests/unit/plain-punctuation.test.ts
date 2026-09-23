@@ -20,6 +20,12 @@ describe("undash", () => {
     ["The copy is sharp — and short — throughout.", "The copy is sharp, and short, throughout."],
     ["Fast — not cheap.", "Fast, not cheap."],
     ["Hi {{contact.first_name}} — quick question about next week?", "Hi {{contact.first_name}}, quick question about next week?"],
+    // Abbreviations don't end a sentence; examples join with a comma or brackets.
+    ["Concerns specific to this ICP — e.g. 'Is the price fair?', 'Do I need to be technical?'", "Concerns specific to this ICP, e.g. 'Is the price fair?', 'Do I need to be technical?'"],
+    ["Include proof if available — e.g. stacks reviewed, margin caught, or a named case — avoid vague claims otherwise", "Include proof if available (e.g. stacks reviewed, margin caught, or a named case). Avoid vague claims otherwise"],
+    ["Lots of options — CRM, email, etc. — all supported.", "Lots of options (CRM, email, etc.) all supported."],
+    ["If it becomes relevant next month, whenever — the option's still open.", "If it becomes relevant next month, whenever, the option's still open."],
+    ["Hey, it's me — thanks for booking your call.", "Hey, it's me, thanks for booking your call."],
     // Ranges, bullets, punctuation already there, trailing dash.
     ["Send 3–5 emails in 2024—2025 for $10 – $20.", "Send 3-5 emails in 2024-2025 for $10-$20."],
     ["Wins:\n— Booked 3 calls\n  – Rebooked 1", "Wins:\n- Booked 3 calls\n  - Rebooked 1"],
