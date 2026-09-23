@@ -22,7 +22,7 @@ const TIMEFRAMES = [
 export function RepRedditWatchConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

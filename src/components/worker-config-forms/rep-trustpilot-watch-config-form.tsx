@@ -15,7 +15,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 export function RepTrustpilotWatchConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

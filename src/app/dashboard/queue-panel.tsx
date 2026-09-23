@@ -301,7 +301,7 @@ function buildQueueSections(
     nav.push({
       key: "open-engagement",
       icon: ArrowUpRight,
-      label: "Open client engagement",
+      label: "Open client",
       href: `/dashboard/engagements/${item.engagementId}`,
     });
   }
@@ -590,7 +590,7 @@ function QueueRow({
               // — the reader landed on the engagement page with no trace
               // of what the readout actually said. The panel below
               // already renders that full body via QueueItemPreview and
-              // already has a real "Open client engagement" link in its
+              // already has a real "Open client" link in its
               // "Go to" section (see buildQueueSections), so this just
               // opens that instead of skipping straight past it.
               <button
@@ -1272,7 +1272,7 @@ export function QueuePanel({
             <Link
               href={`/dashboard/engagements/${clients[0].engagementId}`}
               className="flex items-center gap-2 px-3 py-2 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              title="Open client engagement"
+              title="Open client"
             >
               <span className="truncate flex-1">{clients[0].buyer}</span>
               {clients[0].pausedAt && (

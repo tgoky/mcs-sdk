@@ -102,7 +102,7 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
 
   const links: NavLinkItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: DASHBOARD_ICON },
-    { href: "/dashboard/engagements", label: "Engagements", icon: ENGAGEMENTS_ICON, count: engagementRows.length },
+    { href: "/dashboard/engagements", label: "Clients", icon: ENGAGEMENTS_ICON, count: engagementRows.length },
     { href: "/dashboard/queue", label: "Queue", icon: QUEUE_ICON, count: queueCount },
     { href: "/dashboard/runs", label: "Executions", icon: EXECUTIONS_ICON, count: runningCount },
     { href: "/dashboard/analytics", label: "Analytics", icon: ANALYTICS_ICON },
@@ -116,7 +116,7 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
 export function SidebarNavSkeleton() {
   const links = [
     { label: "Dashboard", icon: DASHBOARD_ICON },
-    { label: "Engagements", icon: ENGAGEMENTS_ICON },
+    { label: "Clients", icon: ENGAGEMENTS_ICON },
     { label: "Queue", icon: QUEUE_ICON },
     { label: "Executions", icon: EXECUTIONS_ICON },
     { label: "Analytics", icon: ANALYTICS_ICON },

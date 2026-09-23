@@ -13,7 +13,7 @@ export function BridgeManagerConsole({ engagementId }: { engagementId: string })
       <WhopBridgeManagerConfigForm
         engagementId={engagementId}
         onCancel={() => router.push(`/dashboard/engagements/${engagementId}`)}
-        cancelLabel="Back to engagement"
+        cancelLabel="Back to client"
       />
 
       <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1">

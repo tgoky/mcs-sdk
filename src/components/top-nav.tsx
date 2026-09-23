@@ -68,7 +68,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
                     className="group flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <Building2 className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0" />
-                    <span className="truncate">New Client Engagement</span>
+                    <span className="truncate">New Client</span>
                   </Link>
 
                   {/* <Link

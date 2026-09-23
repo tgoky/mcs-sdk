@@ -32,7 +32,7 @@ export async function EngagementsSidebar({
     .limit(5);
 
   const allEngagementsLink: NavLinkItem[] = [
-    { href: "/dashboard/engagements", label: "All Engagements", icon: <Building2 className="w-4 h-4" /> },
+    { href: "/dashboard/engagements", label: "All Clients", icon: <Building2 className="w-4 h-4" /> },
   ];
 
   return (

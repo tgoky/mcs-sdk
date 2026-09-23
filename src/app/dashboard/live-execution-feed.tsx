@@ -200,7 +200,7 @@ function actionSummary(run: SkillRun): string {
     // engagement, or the skill toggled off for this client) — the run's
     // own step log already recorded the specific reason, surfaced via
     // subjectLabel (see latestStepLabel in lib/run-display.ts).
-    return run.subjectLabel ?? "Skipped — engagement paused, deleted, or this skill is off";
+    return run.subjectLabel ?? "Skipped — client paused or deleted, or this skill is off";
   }
 
   const summary = run.summary;
@@ -289,7 +289,7 @@ function buildRunSections(
     primary.push({
       key: "open-engagement",
       icon: ArrowUpRight,
-      label: "Open client engagement",
+      label: "Open client",
       href: `/dashboard/engagements/${run.engagementId}`,
     });
   }

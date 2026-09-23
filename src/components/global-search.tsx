@@ -69,7 +69,7 @@ const EMPTY_RESULTS: SearchResponse = {
 const QUICK_LINKS = [
   { label: "Go to Queue", href: "/dashboard/queue", icon: ListChecks },
   { label: "Go to Executions", href: "/dashboard/runs", icon: Play },
-  { label: "Go to Engagements", href: "/dashboard/engagements", icon: Building2 },
+  { label: "Go to Clients", href: "/dashboard/engagements", icon: Building2 },
   { label: "Go to Projects", href: "/dashboard/projects", icon: FolderKanban },
 ];
 

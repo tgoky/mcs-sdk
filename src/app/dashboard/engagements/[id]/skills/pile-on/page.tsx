@@ -49,7 +49,7 @@ export default async function PileOnSkillPage({
   // Dynamic back link destination and label
   const isFromModule = from && from.startsWith("/dashboard/modules");
   const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
-  const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+  const backLabel = isFromModule ? "Back to Module" : "Back to client";
 
   const displayName = skillName("pile-on");
   const stack = engagement.stack as EngagementStack | null;

@@ -65,7 +65,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
     fetch(`/api/engagements/${engagementId}`)
       .then(async (res) => {
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Could not load engagement.");
+        if (!res.ok) throw new Error(json.error ?? "Could not load this client.");
         return json.engagement as EngagementResult;
       })
       .then((engagement) => {
@@ -160,7 +160,7 @@ export function PinDownResultCard({ engagementId }: { engagementId: string }) {
       {/* Engagement ID + confirmation link */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg p-4 space-y-1 shadow-sm bg-card border border-border">
-          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Engagement ID</p>
+          <p className="text-[13px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Client ID</p>
           <p className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">{data.engagementId}</p>
         </div>
 

@@ -61,7 +61,7 @@ export function RecentEngagementsSection({ recent }: { recent: RecentEngagement[
       {recent.length > 0 ? (
         <SidebarNavLinks links={recentLinks} />
       ) : (
-        <p className="px-2.5 py-1 text-xs text-zinc-500 dark:text-zinc-400">No engagements yet.</p>
+        <p className="px-2.5 py-1 text-xs text-zinc-500 dark:text-zinc-400">No clients yet.</p>
       )}
     </>
   );

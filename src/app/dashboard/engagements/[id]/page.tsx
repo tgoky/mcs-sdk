@@ -293,9 +293,6 @@ export default async function EngagementDetailPage({
                   <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
                     {engagement.buyer}
                   </h1>
-                  <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">
-                    {engagement.engagementId}
-                  </p>
                 </div>
 
                 {/* Clean Meta Row */}

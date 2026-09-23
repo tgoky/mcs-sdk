@@ -565,7 +565,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   <EmptyState
                     icon={Megaphone}
                     title="No Ad Briefs Generated"
-                    description="Ad creative briefs haven't been generated for this engagement yet."
+                    description="Ad creative briefs haven't been generated for this client yet."
                   />
                 </div>
               )}
@@ -646,7 +646,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 <EmptyState
                   icon={Film}
                   title="No Scripts Generated"
-                  description="Video script pack has not been generated for this engagement yet."
+                  description="Video script pack has not been generated for this client yet."
                 />
               )}
             </div>
@@ -689,7 +689,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 <EmptyState
                   icon={Code2}
                   title="No HTML Code Recorded"
-                  description="No paste-ready HTML code has been generated for this engagement yet."
+                  description="No paste-ready HTML code has been generated for this client yet."
                 />
               )}
             </div>
@@ -758,7 +758,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 <EmptyState
                   icon={Palette}
                   title="Voice Profile Pending"
-                  description="Brand voice extraction hasn't run for this engagement yet."
+                  description="Brand voice extraction hasn't run for this client yet."
                 />
               )}
             </div>

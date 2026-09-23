@@ -36,7 +36,7 @@ const PLATFORMS: PlatformDef[] = [
     label: "Calendly",
     group: "Booking platforms",
     composioManaged: true,
-    description: "Pulls booked calls, invitee answers, and reschedules into every engagement automatically.",
+    description: "Pulls booked calls, invitee answers, and reschedules into every client automatically.",
   },
   {
     provider: "cal_com",

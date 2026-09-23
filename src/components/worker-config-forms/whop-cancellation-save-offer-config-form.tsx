@@ -16,7 +16,7 @@ export function WhopCancellationSaveOfferConfigForm({
   engagementId,
   onCancel,
   onSaved,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

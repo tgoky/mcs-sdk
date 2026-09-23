@@ -838,7 +838,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 <CalendarX2 size={22} />
                 <span className="text-xs">
                   {listScope === "all"
-                    ? "No bookings on file for this engagement yet."
+                    ? "No bookings on file for this client yet."
                     : `No bookings in this ${listScope === "week" ? "week" : "month"} — try "All" to see full history.`}
                 </span>
               </div>

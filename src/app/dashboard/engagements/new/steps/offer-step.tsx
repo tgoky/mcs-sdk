@@ -101,7 +101,7 @@ export function OfferStep({
         value={form.offerVertical}
         onChange={(v) => set("offerVertical", v)}
         placeholder="e.g. coaching, agency, SaaS, consulting"
-        helpText="Powers Leak Map's cross-client benchmarks — how this offer's metrics compare to similar offers, once enough engagements report the same bucket."
+        helpText="Powers Leak Map's cross-client benchmarks — how this offer's metrics compare to similar offers, once enough clients report the same bucket."
       />
       <SelectField
         label="Where are leads coming from?"

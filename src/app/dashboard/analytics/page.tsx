@@ -411,7 +411,7 @@ export default async function AnalyticsPage() {
             Automation health
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every engagement on this account.
+            Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every client on this account.
           </p>
         </div>
 

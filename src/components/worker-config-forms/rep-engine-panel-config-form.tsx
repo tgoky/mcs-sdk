@@ -15,7 +15,7 @@ import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-
 export function RepEnginePanelConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

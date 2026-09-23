@@ -694,7 +694,7 @@ export function UnifiedActivityPanel({
             href={`/dashboard/engagements/${clients[0].engagementId}`}
             onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1.5 shrink-0 hover:underline"
-            title="Open client engagement"
+            title="Open client"
           >
             <span className="truncate max-w-[140px]">{clients[0].buyer}</span>
             {clients[0].pausedAt && (

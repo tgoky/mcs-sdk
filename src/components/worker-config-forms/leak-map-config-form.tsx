@@ -34,7 +34,7 @@ const DAY_OF_MONTH_OPTIONS = Array.from({ length: 28 }, (_, d) => ({ value: Stri
 export function LeakMapConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

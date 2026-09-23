@@ -518,7 +518,7 @@ function CadenceTimeline({
 
       {touchpoints.length === 0 ? (
         <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
-          No recovery cadence content has been generated for this engagement yet.
+          No recovery cadence content has been generated for this client yet.
         </div>
       ) : (
         <div className="flex flex-col py-3">

@@ -43,7 +43,7 @@ export default async function LeakMapSkillPage({
   // Dynamic back link destination and label
   const isFromModule = from && from.startsWith("/dashboard/modules");
   const backHref = isFromModule ? from : `/dashboard/engagements/${id}`;
-  const backLabel = isFromModule ? "Back to Module" : "Back to engagement";
+  const backLabel = isFromModule ? "Back to Module" : "Back to client";
 
   return (
     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 transition-colors duration-200 overflow-hidden pb-10">

@@ -33,7 +33,7 @@ export default async function WhopPayoutHoldKitPage({ params }: { params: Promis
         <Link
           href={`/dashboard/engagements/${id}`}
           className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"
-          aria-label="Back to engagement"
+          aria-label="Back to client"
         >
           <ChevronLeft className="w-4 h-4" />
         </Link>

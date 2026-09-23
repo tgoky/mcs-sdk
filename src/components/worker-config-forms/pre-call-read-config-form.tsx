@@ -17,7 +17,7 @@ import { FactSuggestionChip, type FactSuggestionDTO } from "@/components/fact-su
 export function PreCallReadConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

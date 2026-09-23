@@ -35,7 +35,7 @@ const DELIVERY_WEBHOOK_SECRET_PROVIDER: Record<string, string> = {
 export function WinBackConfigForm({
   engagementId,
   onCancel,
-  cancelLabel = "Back to engagement",
+  cancelLabel = "Back to client",
 }: {
   engagementId: string;
   onCancel: () => void;

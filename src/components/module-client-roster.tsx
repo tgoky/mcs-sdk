@@ -128,7 +128,7 @@ function buildClientSections(
     {
       key: "copy",
       icon: Copy,
-      label: "Copy engagement ID",
+      label: "Copy client ID",
       onSelect: () => dispatch("copy", () => copyToClipboard(client.engagementId)),
     },
   ];

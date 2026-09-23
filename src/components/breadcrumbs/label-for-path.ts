@@ -8,7 +8,7 @@ import { SKILL_MANIFEST, isSkillId } from "@/lib/skill-manifest";
  */
 export const ROUTE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
-  engagements: "Engagements",
+  engagements: "Clients",
   new: "New Client",
   queue: "Queue",
   analytics: "Analytics",

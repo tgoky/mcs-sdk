@@ -30,7 +30,7 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
             Portfolio — all clear
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Checked every one of {accounts.length} engagement{accounts.length !== 1 ? "s" : ""} for stalled steps, missed
+            Checked every one of {accounts.length} client{accounts.length !== 1 ? "s" : ""} for stalled steps, missed
             follow-ups, and blockers waiting on you — none found this week.
           </p>
         </div>
@@ -47,7 +47,7 @@ export function PortfolioOutcomesSection({ accounts }: { accounts: PortfolioAcco
             Portfolio — accounts to check first
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {flagged.length} of {accounts.length} engagements have something real to look at this week.
+            {flagged.length} of {accounts.length} clients have something real to look at this week.
           </p>
         </div>
       </div>
