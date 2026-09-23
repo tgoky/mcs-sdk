@@ -15,8 +15,9 @@ export function SetupPageClient({
 }: {
   engagementId: string;
   workerId: WorkerId;
-  heading: string;
-  description: string;
+  /** Null for setups that carry their own heading. */
+  heading: string | null;
+  description: string | null;
 }) {
   const router = useRouter();
   // Back goes wherever the user came from (?from=, validated), else the client page.
@@ -33,10 +34,12 @@ export function SetupPageClient({
         >
           <ChevronLeft className="w-4 h-4" />
         </Link>
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">{heading}</h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-2xl">{description}</p>
-        </div>
+        {heading && (
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">{heading}</h1>
+            {description && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-2xl">{description}</p>}
+          </div>
+        )}
       </div>
 
       {renderWorkerConfigForm(workerId, {

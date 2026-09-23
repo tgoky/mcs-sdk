@@ -8,12 +8,13 @@ import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspa
 import { setSkillEnabledForEngagement, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
-import { getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
+import { confirmClientFact, editClientFact, getClientFact, getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
 import { splitFacts } from "@/lib/fact-suggestions";
 import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
 import { normalizeVertical } from "@/lib/verticals";
 import { syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
+import { PICK_FACT_PREFIX, PICK_SLOT_META, type PickSlot } from "@/lib/showtime-setup/types";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -255,6 +256,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       slack_webhook_url: typeof body.slackWebhookUrl === "string" ? body.slackWebhookUrl.trim() : currentStack.slack_webhook_url,
     };
 
+    // Account-specific ids the setup screen had Jev pick (or the person
+    // changed): which list/workflow Pile-On and Win-Back use, which site or
+    // project Pin-Down publishes to. Only ids this screen offers are read.
+    const autoPicks = readAutoPicks(body.autoPicks);
+    if (autoPicks.target_list_id) updatedStack.target_list_id = autoPicks.target_list_id.id;
+    if (autoPicks.recovery_list_id) updatedStack.recovery_list_id = autoPicks.recovery_list_id.id;
+    if (autoPicks.recovery_workflow_id) updatedStack.recovery_workflow_id = autoPicks.recovery_workflow_id.id;
+    if (autoPicks.webflow_site_id || autoPicks.vercel_project_name) {
+      updatedStack.hosting_platform_meta = {
+        ...(currentStack.hosting_platform_meta ?? {}),
+        ...(autoPicks.webflow_site_id ? { webflow_site_id: autoPicks.webflow_site_id.id } : {}),
+        ...(autoPicks.vercel_project_name ? { vercel_project_name: autoPicks.vercel_project_name.id } : {}),
+      };
+    }
+
     const typedVertical = text(body.offerVertical);
     const offerDetails: OfferDetails = {
       name: text(body.offerName) ?? currentOffer.name ?? "",
@@ -306,6 +322,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       heroVideoUrl: updatedStack.hero_video_id,
     }).catch((err) => console.error(`[bridges/pin-down] recording suggestion decisions failed for ${id}:`, err));
 
+    await recordPickDecisions(id, autoPicks).catch((err) =>
+      console.error(`[bridges/pin-down] recording pick decisions failed for ${id}:`, err)
+    );
+
     // Only Pin-Down itself is switched on here. The other Showtime workers
     // are on by default (isSkillEnabledForEngagement), so re-enabling them
     // on every save did nothing for a new client and silently undid it
@@ -326,5 +346,34 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[engagements/[id]/bridges/pin-down]", message);
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+type AutoPick = { id: string; name: string };
+
+function readAutoPicks(raw: unknown): Partial<Record<PickSlot, AutoPick>> {
+  const out: Partial<Record<PickSlot, AutoPick>> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const slot of Object.keys(PICK_SLOT_META) as PickSlot[]) {
+    const v = (raw as Record<string, unknown>)[slot];
+    if (v && typeof v === "object") {
+      const { id, name } = v as { id?: unknown; name?: unknown };
+      if (typeof id === "string" && id.trim()) out[slot] = { id: id.trim(), name: typeof name === "string" && name.trim() ? name.trim() : id.trim() };
+    }
+  }
+  return out;
+}
+
+/** Kept Jev's pick -> confirmed; chose another -> edited, so a later
+ * re-run never swaps it back. */
+async function recordPickDecisions(engagementId: string, picks: Partial<Record<PickSlot, AutoPick>>): Promise<void> {
+  for (const [slot, pick] of Object.entries(picks) as [PickSlot, AutoPick][]) {
+    const key = `${PICK_FACT_PREFIX}${slot}`;
+    const fact = await getClientFact(engagementId, key);
+    const factValue = fact?.value as { id?: string | null; resource?: string } | undefined;
+    if (fact && fact.status === "suggested" && factValue?.id === pick.id) {
+      await confirmClientFact(engagementId, key);
+    } else {
+      await editClientFact(engagementId, key, { id: pick.id, name: pick.name, resource: factValue?.resource });
+    }
   }
 }

@@ -19,6 +19,10 @@ const SETUP_HEADINGS: Partial<Record<string, string>> = {
   "whop-connect": "Connect your Whop account",
 };
 
+/** Setups that introduce themselves (their own heading and copy), so the
+ * page only adds the way back. */
+const SELF_HEADED_SETUPS = new Set(["pin-down"]);
+
 export default async function WorkerSetupPage({ params }: { params: Promise<{ id: string; workerId: string }> }) {
   const { id, workerId } = await params;
   // hasHingesPanel is the registry's "has a config form" flag, kept equal to
@@ -35,8 +39,8 @@ export default async function WorkerSetupPage({ params }: { params: Promise<{ id
       <SetupPageClient
         engagementId={id}
         workerId={workerId}
-        heading={SETUP_HEADINGS[workerId] ?? `Configure ${worker.name}`}
-        description={worker.description}
+        heading={SELF_HEADED_SETUPS.has(workerId) ? null : SETUP_HEADINGS[workerId] ?? `Configure ${worker.name}`}
+        description={SELF_HEADED_SETUPS.has(workerId) ? null : worker.description}
       />
     </>
   );

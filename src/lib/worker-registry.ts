@@ -1367,6 +1367,16 @@ export const COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [...COLD_OPEN_SKI
  * the same `?skill=` param its filter chips already use.
  */
 export function workerPrimaryHref(workerId: WorkerId, engagementId: string): string {
+  return workerOwnPageHref(workerId, engagementId) ?? `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
+}
+
+/**
+ * The worker's own single-client page, or null when it has none and
+ * workerPrimaryHref would fall back to the client page's Run History.
+ * Settings entry points use this so a gear icon never lands on the bare
+ * client page for a worker with nothing of its own to configure there.
+ */
+export function workerOwnPageHref(workerId: WorkerId, engagementId: string): string | null {
   if (SKILLS_WITH_OWN_PAGE.includes(workerId)) {
     return `/dashboard/engagements/${engagementId}/skills/${workerId}`;
   }
@@ -1380,7 +1390,7 @@ export function workerPrimaryHref(workerId: WorkerId, engagementId: string): str
   if (COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE.includes(workerId)) {
     return `/dashboard/engagements/${engagementId}/skills/cold-open`;
   }
-  return `/dashboard/engagements/${engagementId}?skill=${workerId}#run-history`;
+  return null;
 }
 
 /**

@@ -7,7 +7,7 @@ describe("tour definitions", () => {
   });
 
   it("keeps each product tour a setup form starts after saving, hidden from the picker", () => {
-    // pin-down-config-form -> "showtime", icp-lock -> "cold-open", whop-connect -> "whop-agent"
+    // showtime-setup -> "showtime", icp-lock -> "cold-open", whop-connect -> "whop-agent"
     for (const id of ["showtime", "cold-open", "whop-agent", "reputation-manager"]) {
       const tour = TOURS.find((t) => t.id === id);
       expect(tour, id).toBeDefined();

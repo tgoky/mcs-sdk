@@ -47,30 +47,30 @@ export function AccountAdvisorPanel({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Account review</h2>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Account review</h2>
         <button
           type="button"
           onClick={generate}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3 py-1.5 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-sm font-semibold text-white dark:text-zinc-900 transition-colors cursor-pointer"
         >
           {loading ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
           {loading ? "Reviewing…" : "Generate account review"}
         </button>
       </div>
 
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
 
       {reviews.length === 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           No reviews yet. Generate one to get a real read across everything enabled for this client.
         </p>
       ) : (
         <div className="space-y-4 divide-y divide-zinc-200 dark:divide-zinc-800/80">
           {reviews.map((review) => (
             <div key={review.id} className="pt-4 first:pt-0 space-y-1">
-              <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed">{review.reviewText}</p>
-              <VerboseTime isoString={review.generatedAt} className="text-[11px] text-zinc-400 dark:text-zinc-600" />
+              <p className="text-[15px] text-zinc-800 dark:text-zinc-200 leading-relaxed">{review.reviewText}</p>
+              <VerboseTime isoString={review.generatedAt} className="text-xs text-zinc-400 dark:text-zinc-500" />
             </div>
           ))}
         </div>

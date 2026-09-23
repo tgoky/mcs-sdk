@@ -15,7 +15,13 @@ vi.mock("@/lib/client-profile", () => ({
   getPrimaryDomainForEngagement: vi.fn(),
   seedPrimaryDomainFromUrl: vi.fn(),
 }));
-vi.mock("@/lib/client-facts", () => ({ getClientFacts: vi.fn(), recordDossierDecisions: vi.fn() }));
+vi.mock("@/lib/client-facts", () => ({
+  getClientFacts: vi.fn(),
+  recordDossierDecisions: vi.fn(),
+  getClientFact: vi.fn(),
+  confirmClientFact: vi.fn(),
+  editClientFact: vi.fn(),
+}));
 // Connection-based suggestions have their own test (derived-suggestions.test.ts).
 vi.mock("@/lib/derived-suggestions", () => ({ showtimeConnectionSuggestions: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/credentials", () => ({ syncMarkersForChosenPlatforms: vi.fn().mockResolvedValue(undefined) }));
@@ -32,7 +38,7 @@ import { getActiveWorkspace, isPackageInstalledInWorkspace } from "@/lib/workspa
 import { isSkillEnabledForEngagement, setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
-import { getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
+import { confirmClientFact, editClientFact, getClientFact, getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
 import { applyResolvableFacts } from "@/lib/field-writeback";
 import { fakeDb } from "../helpers/fake-db";
 
@@ -248,6 +254,40 @@ describe("POST /api/engagements/[id]/bridges/pin-down", () => {
     expect(saved.stack.ad_data_platform).toBeUndefined();
     expect(saved.offerDetails.vertical).toBe("coaching_consulting");
     expect(recordDossierDecisions).toHaveBeenCalledWith("e1", expect.objectContaining({ offerName: "Growth", trafficTemperature: "warm" }));
+  });
+
+  it("saves the ids the setup screen picked and records whether Jev's pick was kept", async () => {
+    const fake = fakeDb([{ engagementId: "e1", buyer: "Acme", stack: { hosting_platform_meta: { webflow_collection_id: "col-1" } }, offerDetails: null, castingChoice: null }]);
+    Object.assign(db, fake);
+    vi.mocked(getClientFact).mockImplementation(async (_id, key) =>
+      key === "pick:target_list_id"
+        ? (fact(key, { id: "L1", name: "New leads", resource: "klaviyo-lists" }, "jev") as any)
+        : key === "pick:recovery_list_id"
+          ? (fact(key, { id: "L9", name: "Old", resource: "klaviyo-lists" }, "jev") as any)
+          : null
+    );
+    const { POST } = await importRoute();
+    await POST(
+      postBody({
+        buyerDomain: "acme.com",
+        trafficTemperature: "warm",
+        autoPicks: {
+          target_list_id: { id: "L1", name: "New leads" },
+          recovery_list_id: { id: "L2", name: "No-shows" },
+          webflow_site_id: { id: "site-1", name: "Acme" },
+          not_a_slot: { id: "x" },
+        },
+      }),
+      makeParams("e1")
+    );
+
+    const saved = fake.set.mock.calls[0][0];
+    expect(saved.stack.target_list_id).toBe("L1");
+    expect(saved.stack.recovery_list_id).toBe("L2");
+    expect(saved.stack.hosting_platform_meta).toEqual({ webflow_collection_id: "col-1", webflow_site_id: "site-1" });
+    expect(saved.stack).not.toHaveProperty("not_a_slot");
+    expect(confirmClientFact).toHaveBeenCalledWith("e1", "pick:target_list_id");
+    expect(editClientFact).toHaveBeenCalledWith("e1", "pick:recovery_list_id", { id: "L2", name: "No-shows", resource: "klaviyo-lists" });
   });
 
   it("refuses to save without a website", async () => {

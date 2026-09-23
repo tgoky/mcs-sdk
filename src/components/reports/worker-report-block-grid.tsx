@@ -24,7 +24,7 @@ const TONE_MAP: Record<NonNullable<ReportBlockWithTrend["tone"]>, "neutral" | "s
 export function WorkerReportBlockGrid({ blocks }: { blocks: ReportBlockWithTrend[] }) {
   if (blocks.length === 0) {
     return (
-      <p className="text-xs text-zinc-500 dark:text-zinc-400 py-4">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 py-4">
         No metrics yet for this client&apos;s enabled skills. Check back once they&apos;ve run.
       </p>
     );
@@ -33,12 +33,12 @@ export function WorkerReportBlockGrid({ blocks }: { blocks: ReportBlockWithTrend
   return (
     <div className="relative py-2">
       <div className="pointer-events-none absolute inset-0 z-0 bg-dot-grid" aria-hidden="true" />
-      <div className="relative z-10 flex flex-wrap gap-x-10 gap-y-5">
+      <div className="relative z-10 flex flex-wrap gap-x-12 gap-y-7">
         {blocks.map((block, i) => (
-          <div key={`${block.workerId}-${block.label}-${i}`} className="min-w-[96px]">
-            <StatChip label={block.label} value={block.displayValue} tone={TONE_MAP[block.tone ?? "neutral"]} />
+          <div key={`${block.workerId}-${block.label}-${i}`} className="min-w-[132px]">
+            <StatChip size="lg" label={block.label} value={block.displayValue} tone={TONE_MAP[block.tone ?? "neutral"]} />
             {block.trendLabel && (
-              <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 mt-1">{block.trendLabel}</p>
+              <p className="text-xs font-mono text-zinc-400 dark:text-zinc-500 mt-1.5">{block.trendLabel}</p>
             )}
           </div>
         ))}

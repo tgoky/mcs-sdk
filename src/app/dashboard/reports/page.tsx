@@ -86,10 +86,10 @@ export default async function ReportsPage() {
   const initialReviews = recentReviews.map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Reports</h1>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Reports</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
           How this client is doing, across whatever&apos;s enabled: Showtime, Reputation Manager, or both. Comparing
           across skills? See Analytics.
         </p>
@@ -102,7 +102,7 @@ export default async function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{engagement.buyer}</p>
+          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{engagement.buyer}</p>
 
           {!hasAnyWorkers ? (
             <div className="text-center py-8">

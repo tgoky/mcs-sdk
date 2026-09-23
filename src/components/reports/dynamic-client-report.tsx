@@ -75,18 +75,18 @@ export function DynamicClientReport({
           {offerName && (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                   Offer
                 </span>
                 {trafficTemp && (
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono text-[10px] capitalize">
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono text-xs capitalize">
                     {trafficTemp} traffic
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-3 flex-wrap">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{offerName}</h2>
-                {offerPrice && <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-mono">${offerPrice}</span>}
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{offerName}</h2>
+                {offerPrice && <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono">${offerPrice}</span>}
               </div>
             </>
           )}
@@ -98,7 +98,7 @@ export function DynamicClientReport({
               key={tab.key}
               type="button"
               onClick={() => setPeriod(tab.key)}
-              className={`px-2.5 py-1 text-xs font-mono rounded-md transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 text-sm font-mono rounded-md transition-colors cursor-pointer ${
                 period === tab.key
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -111,7 +111,7 @@ export function DynamicClientReport({
       </div>
 
       {offerIcp && (
-        <div className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
+        <div className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
           <span className="font-semibold text-zinc-900 dark:text-zinc-200">Targeting: </span>
           {offerIcp}
         </div>
@@ -120,7 +120,7 @@ export function DynamicClientReport({
       {correlationFlags.length > 0 && (
         <div className="space-y-1.5">
           {correlationFlags.map((flag, i) => (
-            <p key={i} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 leading-relaxed max-w-2xl">
+            <p key={i} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 leading-relaxed max-w-2xl">
               <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{flag.message}</span>
             </p>
@@ -136,7 +136,7 @@ export function DynamicClientReport({
             <Link
               key={id}
               href={workerPrimaryHref(id, engagementId)}
-              className="text-xs text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
+              className="text-sm text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
             >
               {WORKER_REGISTRY[id].name} has no trend to show. See its full report
             </Link>

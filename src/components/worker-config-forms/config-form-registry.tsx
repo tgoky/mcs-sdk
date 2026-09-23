@@ -15,7 +15,7 @@
 
 import type { ReactNode } from "react";
 import type { WorkerId } from "@/lib/worker-registry";
-import { PinDownConfigForm } from "./pin-down-config-form";
+import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { WinBackConfigForm } from "./win-back-config-form";
 import { PreCallReadConfigForm } from "./pre-call-read-config-form";
 import { LeakMapConfigForm } from "./leak-map-config-form";
@@ -58,7 +58,9 @@ const simple =
 
 const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // Showtime
-  "pin-down": (h) => <PinDownConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  // Showtime's setup covers every Showtime skill from the website and the
+  // connected tools; Pin-Down is the worker it lives under.
+  "pin-down": (h) => <ShowtimeSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
   "win-back": simple(WinBackConfigForm),
   "pre-call-read": simple(PreCallReadConfigForm),
   "leak-map": simple(LeakMapConfigForm),

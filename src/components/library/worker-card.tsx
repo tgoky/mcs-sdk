@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Settings, X, AlertTriangle, ArrowRight } from "lucide-react";
 import type { WorkerDefinition, WorkerId } from "@/lib/worker-registry";
-import { workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { workerOwnPageHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -142,15 +142,15 @@ export function WorkerCard({
   // a form" pattern WorkersPanel's own Configure button already uses.
   const canConfigureInline = worker.hasHingesPanel && Boolean(engagementId) && Boolean(onToggleConfigure);
   const isIncomplete = Boolean(completeness && completeness.activeCount < completeness.totalCount);
-  // A worker with no dedicated hinges panel has nothing to expand inline
-  // — this used to land on the bare engagement page (`/dashboard/
-  // engagements/${engagementId}`), which has no obvious way back to this
-  // specific worker's own settings (e.g. Pile-On has no Configure entry
-  // point on its own dedicated page either — that's a separate, real gap,
-  // not something this href can paper over). Route to the worker's own
-  // primary page instead, same as every other "go manage this skill"
-  // link in the app already does.
-  const plainConfigureHref = !worker.hasHingesPanel && engagementId ? workerPrimaryHref(worker.id, engagementId) : null;
+  // A worker with no config form of its own opens its own page (its
+  // schedule, console or findings). The ones with no page at all (Rep
+  // Digest, Whop's reports and monitors) run entirely off their product's
+  // setup, so the gear goes there. It used to fall through to the bare
+  // client page, which said nothing about the skill that was clicked.
+  const plainConfigureHref =
+    !worker.hasHingesPanel && engagementId ? workerOwnPageHref(worker.id, engagementId) ?? onboardingBridgeHref : null;
+  const plainConfigureTitle =
+    !worker.hasHingesPanel && engagementId && !workerOwnPageHref(worker.id, engagementId) ? `Settings live in ${onboardingWorkerName}` : "Configure";
   async function enable() {
     if (!engagementId) return;
     setPending(true);
@@ -219,7 +219,7 @@ export function WorkerCard({
         </button>
       ) : (
         plainConfigureHref && (
-          <Link href={plainConfigureHref} title="Configure" className={configureAnalyticsClass}>
+          <Link href={plainConfigureHref} title={plainConfigureTitle} aria-label={plainConfigureTitle} className={configureAnalyticsClass}>
             <Settings className={iconSize} />
           </Link>
         )
