@@ -128,16 +128,18 @@ export async function setSkillEnabledForEngagement(
 /**
  * Showtime evidence: pin-down actually finished (confirmationPageUrl —
  * isProductOnboarded("showtime")'s own signal), or a legacy client with a
- * real booking platform on its stack. NOT just "stack is non-null":
- * creating a client from Reputation Manager writes { timezone }, and
- * saving a credential or a Whop bridge secret writes into stack too, none
- * of which means Showtime is in use.
+ * connected booking credential. NOT just "stack is non-null": creating a
+ * client from Reputation Manager writes { timezone }, and saving a Whop
+ * bridge secret writes into stack too. And NOT stack.booking_platform
+ * either — field-writeback.ts auto-fills that from a detected fact
+ * whenever a setup page is merely opened; the credential ref is only ever
+ * written by a real connect.
  */
 function hasShowtimeSetup(row: { stack: unknown; confirmationPageUrl: string | null } | undefined): boolean {
   if (!row) return false;
   if (row.confirmationPageUrl) return true;
   const stack = row.stack as Partial<EngagementStack> | null;
-  return Boolean(stack?.booking_platform);
+  return Boolean(stack?.booking_platform_credentials_ref);
 }
 
 /** Cold Open evidence: ICP Lock actually completed — not just a

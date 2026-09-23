@@ -5,6 +5,7 @@ import { startRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
+import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -47,7 +48,11 @@ export async function GET(request: Request) {
 
   // Only engagements that have completed Pin-Down (booking platform wired
   // up) have anything to brief tonight.
+  // Ghost-run fix, same as nightlyBriefsCron: drop explicit disables
+  // before startRun, so a switched-off Call Brief never shows up as a run.
+  const disabled = await getDisabledEngagementIdsForSkill("pre-call-read");
   const eligible = targets.filter((t) => {
+    if (disabled.has(t.engagementId)) return false;
     const stack = t.stack as any;
     return stack?.booking_platform && stack?.booking_platform_credentials_ref;
   });

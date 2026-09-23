@@ -49,10 +49,15 @@ describe("Showtime evidence", () => {
     expect(ids).not.toContain("leak-map");
   });
 
-  it("counts a client that finished pin-down or has a booking platform", async () => {
+  it("ignores an auto-filled booking platform with no connected credential", async () => {
+    Object.assign(db, fakeDbSequence([[], [{ stack: { booking_platform: "calendly" }, confirmationPageUrl: null }], [], [], []]));
+    expect(await getEnabledWorkerIdsForEngagement("autofilled")).not.toContain("leak-map");
+  });
+
+  it("counts a client that finished pin-down or connected a booking credential", async () => {
     Object.assign(db, fakeDbSequence([[], [{ stack: null, confirmationPageUrl: "https://x.test/confirm" }], [], [], []]));
     expect(await getEnabledWorkerIdsForEngagement("onboarded")).toContain("leak-map");
-    Object.assign(db, fakeDbSequence([[], [{ stack: { booking_platform: "calendly" }, confirmationPageUrl: null }], [], [], []]));
+    Object.assign(db, fakeDbSequence([[], [{ stack: { booking_platform: "calendly", booking_platform_credentials_ref: "secrets://x/calendly_pat" }, confirmationPageUrl: null }], [], [], []]));
     expect(await getEnabledWorkerIdsForEngagement("legacy")).toContain("leak-map");
   });
 });

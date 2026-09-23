@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { and, eq, isNull } from "drizzle-orm"; // <--- Added isNull
+import { and, eq, isNotNull, isNull } from "drizzle-orm"; // <--- Added isNull
+import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { startRun } from "@/lib/run-log";
 import { inngest, skillRunExecute } from "@/lib/inngest";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
@@ -30,11 +31,19 @@ export async function GET(request: Request) {
       .from(engagements)
       .where(and(eq(engagements.engagementId, urlEngagementId), ...baseFilters)); // <--- APPLIED
   } else {
+    // Sweep only clients that finished Showtime onboarding — same rule as
+    // leakMapScheduleCron (inngest/crons.ts); an unfinished or
+    // non-Showtime client must never get an audit run.
     targets = await db
       .select()
       .from(engagements)
-      .where(and(...baseFilters)); // <--- APPLIED
+      .where(and(...baseFilters, isNotNull(engagements.confirmationPageUrl))); // <--- APPLIED
   }
+
+  // Ghost-run fix, same as every scheduled cron: drop explicit disables
+  // before startRun, so a switched-off Leak Map never shows up as a run.
+  const disabled = await getDisabledEngagementIdsForSkill("leak-map");
+  targets = targets.filter((t) => !disabled.has(t.engagementId));
 
   const dispatched: string[] = [];
   const errors: string[] = [];
