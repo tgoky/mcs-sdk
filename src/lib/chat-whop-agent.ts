@@ -41,6 +41,8 @@
 // for any of those three would be inventing a capability the app itself
 // doesn't have yet, not wiring chat to an existing one.
 
+import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
+import { patchEngagementStack } from "@/lib/engagement-stack";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -337,15 +339,13 @@ export async function configureWhopBridgeForEngagement(session: Session, engagem
   if (denied) return { ok: false, error: denied };
   let parsed: URL;
   try {
-    parsed = new URL(destinationUrl);
-    if (parsed.protocol !== "https:") throw new Error("must be https");
-  } catch {
-    return { ok: false, error: "destinationUrl must be a valid https:// URL." };
+    parsed = await assertPublicUrl(destinationUrl, { httpsOnly: true });
+  } catch (err) {
+    return { ok: false, error: `destinationUrl must be a public https:// URL. ${err instanceof UnsafeUrlError ? err.message : "Not a valid URL."}` };
   }
-  const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const [row] = await db.select({ id: engagements.id }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!row) return { ok: false, error: "Client not found." };
-  const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
-  await db.update(engagements).set({ stack: { ...stack, whop_bridge_destination_url: parsed.toString() }, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
+  await patchEngagementStack(engagementId, { whop_bridge_destination_url: parsed.toString() });
   return { ok: true, message: `Bridge destination set to ${parsed.toString()}. Field mapping (if this destination needs one) still has to be set on the client's own Bridge Manager page.` };
 }
 

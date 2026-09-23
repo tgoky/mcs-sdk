@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { hasCredential } from "@/lib/credentials";
+import { espBaseUrlProblem } from "@/features/cold-open/server/esp/base";
 import { createEspAdapter } from "@/features/cold-open/server/esp/factory";
 import { coldOpenCredentialProvider } from "@/features/cold-open/server/source-connect";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
@@ -47,6 +48,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: `platform must be one of: ${PLATFORMS.join(", ")}` }, { status: 400 });
     }
     const baseUrl = typeof body?.baseUrl === "string" ? body.baseUrl : undefined;
+    const baseUrlProblem = espBaseUrlProblem(platform, baseUrl);
+    if (baseUrlProblem) {
+      return NextResponse.json({ error: baseUrlProblem }, { status: 400 });
+    }
 
     if (!(await hasCredential(id, coldOpenCredentialProvider(platform)))) {
       return NextResponse.json({ error: `No ${platform} credential saved for this engagement yet — connect it first.` }, { status: 400 });

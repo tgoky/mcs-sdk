@@ -8,10 +8,9 @@
 // OAuth-based); v1 remains documented at apidocs.reply.io and is the
 // key-based path a buyer can wire without an OAuth app.
 
-import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign } from "./base";
+import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
-const DEFAULT_BASE = "https://api.reply.io/v1";
 
 export class ReplyIoAdapter extends ESPAdapter {
   espType = "reply_io";
@@ -23,7 +22,7 @@ export class ReplyIoAdapter extends ESPAdapter {
   }
 
   private baseUrl(): string {
-    return (this.cfg.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
+    return espApiBase("reply_io", this.cfg.baseUrl);
   }
 
   private async headers(): Promise<Record<string, string>> {

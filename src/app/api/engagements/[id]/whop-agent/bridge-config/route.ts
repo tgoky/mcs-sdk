@@ -4,6 +4,9 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
+import { patchEngagementStack } from "@/lib/engagement-stack";
+import { getOrCreateBridgeSigningSecret } from "@/features/whop-agent/server/bridge-manager-service";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -32,6 +35,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     destinationUrl: stack.whop_bridge_destination_url ?? "",
     fieldMapping: stack.whop_bridge_field_mapping ?? {},
+    // Shown so the destination can verify X-Whop-Agent-Signature; only
+    // once a destination exists, so a visit alone doesn't create one.
+    signingSecret: stack.whop_bridge_destination_url ? await getOrCreateBridgeSigningSecret(id) : null,
   });
 }
 
@@ -52,10 +58,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(body.destinationUrl);
-    if (parsedUrl.protocol !== "https:") throw new Error("must be https");
-  } catch {
-    return NextResponse.json({ error: "destinationUrl must be a valid https:// URL." }, { status: 400 });
+    // Public https hosts only — events are POSTed here from this server.
+    parsedUrl = await assertPublicUrl(body.destinationUrl, { httpsOnly: true });
+  } catch (err) {
+    const reason = err instanceof UnsafeUrlError ? err.message : "Not a valid URL.";
+    return NextResponse.json({ error: `destinationUrl must be a public https:// URL. ${reason}` }, { status: 400 });
   }
 
   const [row] = await db
@@ -67,13 +74,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
-  const fieldMapping = body.fieldMapping && typeof body.fieldMapping === "object" ? body.fieldMapping : undefined;
+  const fieldMapping = body.fieldMapping && typeof body.fieldMapping === "object" && !Array.isArray(body.fieldMapping) ? body.fieldMapping : undefined;
 
-  await db
-    .update(engagements)
-    .set({ stack: { ...stack, whop_bridge_destination_url: parsedUrl.toString(), whop_bridge_field_mapping: fieldMapping }, updatedAt: new Date() })
-    .where(eq(engagements.engagementId, id));
+  await patchEngagementStack(id, { whop_bridge_destination_url: parsedUrl.toString(), whop_bridge_field_mapping: fieldMapping });
 
   return NextResponse.json({ ok: true });
 }

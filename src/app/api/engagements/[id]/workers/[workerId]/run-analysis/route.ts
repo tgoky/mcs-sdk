@@ -11,6 +11,7 @@ import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { llmActionLimitReached, LLM_ACTIONS_PER_HOUR } from "@/lib/llm-request-limit";
 import { generateSkillRunAnalysis } from "@/features/reports/server/skill-run-analysis";
 import { isWorkerId } from "@/lib/worker-registry";
 
@@ -43,6 +44,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .limit(1);
     if (!row) {
       return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
+    }
+
+    if (await llmActionLimitReached(id, "analysis")) {
+      return NextResponse.json(
+        { error: `That's ${LLM_ACTIONS_PER_HOUR} in the last hour for this client — try again later.` },
+        { status: 429, headers: { "Retry-After": "600" } }
+      );
     }
 
     const analysis = await generateSkillRunAnalysis(id, workerId);

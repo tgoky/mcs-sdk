@@ -6,10 +6,10 @@
 // again client-side as a backstop across the field names Instantly has
 // used for the reply-type flag across doc revisions.
 
+import { espApiBase } from "../esp/base";
 import { ReplyFetcher, stripHtml, type ColdOpenReply } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
-const DEFAULT_BASE = "https://api.instantly.ai/api/v2";
 
 export class InstantlyReplyFetcher extends ReplyFetcher {
   sourceType = "instantly";
@@ -19,7 +19,7 @@ export class InstantlyReplyFetcher extends ReplyFetcher {
   }
 
   private baseUrl(): string {
-    return (this.cfg.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
+    return espApiBase("instantly", this.cfg.baseUrl);
   }
 
   protected async fetchRaw(limit: number): Promise<Record<string, unknown>[]> {

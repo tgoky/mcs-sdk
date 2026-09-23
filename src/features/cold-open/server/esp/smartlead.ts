@@ -5,10 +5,9 @@
 // /campaigns/{id}/leads with {"lead_list": [...]}, max 400/request (this
 // adapter sends 1). Docs: api.smartlead.ai/api-reference/leads/add-to-campaign
 
-import { ESPAdapter, ESPError, extractArray, type EspLead, type EspMergeFields, type EspCampaign } from "./base";
+import { ESPAdapter, ESPError, extractArray, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
-const DEFAULT_BASE = "https://server.smartlead.ai/api/v1";
 
 export class SmartleadAdapter extends ESPAdapter {
   espType = "smartlead";
@@ -17,7 +16,7 @@ export class SmartleadAdapter extends ESPAdapter {
   }
 
   private baseUrl(): string {
-    return (this.cfg.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
+    return espApiBase("smartlead", this.cfg.baseUrl);
   }
 
   async listCampaigns(): Promise<EspCampaign[]> {

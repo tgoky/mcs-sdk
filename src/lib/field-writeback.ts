@@ -7,6 +7,7 @@
 //   - Cold Open (coldOpenConfig.*)
 //   - Whop Agent (engagements.stack.whop_*)
 
+import { patchEngagementStack } from "@/lib/engagement-stack";
 import { db } from "@/lib/db";
 import {
   engagements,
@@ -87,12 +88,10 @@ async function loadStack(engagementId: string): Promise<EngagementStack | null> 
   return (row?.stack as EngagementStack | null) ?? null;
 }
 
+// Atomic (engagement-stack.ts): a write-back never restores a stale copy
+// of keys a form saved at the same moment.
 async function mergeStack(engagementId: string, patch: Partial<EngagementStack>): Promise<void> {
-  const stack = (await loadStack(engagementId)) ?? ({} as EngagementStack);
-  await db
-    .update(engagements)
-    .set({ stack: { ...stack, ...patch } as EngagementStack, updatedAt: new Date() })
-    .where(eq(engagements.engagementId, engagementId));
+  await patchEngagementStack(engagementId, patch);
 }
 
 async function loadOfferDetails(engagementId: string): Promise<OfferDetails | null> {

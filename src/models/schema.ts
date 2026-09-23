@@ -236,6 +236,9 @@ export type EngagementStack = {
   // bridge is configured to do nothing, not "route somewhere guessed."
   whop_bridge_destination_url?: string;
   whop_bridge_field_mapping?: Record<string, string>; // Whop field name -> destination field name, identity mapping when unset
+  // Encrypted (encryptSecret) HMAC key that signs forwarded bridge events —
+  // see getOrCreateBridgeSigningSecret in bridge-manager-service.ts.
+  whop_bridge_signing_secret?: { encryptedValue: string; iv: string; keyVersion: number };
   // Optional: list/workflow to auto-enroll a prospect into once they're
   // declared "lost" (recovery window elapsed with no rebook) — see
   // src/features/win-back/server/lost-deal-sweep.ts. If unset, the sweep

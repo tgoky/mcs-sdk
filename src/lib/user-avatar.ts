@@ -9,7 +9,7 @@
 
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { isAvatarStyleId, type AvatarStyleId } from "@/lib/avatar";
 
 export interface UserAvatarPrefs {
@@ -19,6 +19,9 @@ export interface UserAvatarPrefs {
   avatarImageUrl: string | null;
 }
 
+/** Raster types an upload may be — never SVG, which can carry script. */
+export const UPLOAD_IMAGE_PATTERN = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
 const NO_AVATAR: UserAvatarPrefs = { avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null };
 
 export async function getUserAvatar(whopUserId: string): Promise<UserAvatarPrefs> {
@@ -27,7 +30,10 @@ export async function getUserAvatar(whopUserId: string): Promise<UserAvatarPrefs
       avatarType: users.avatarType,
       avatarStyle: users.avatarStyle,
       avatarSeed: users.avatarSeed,
-      avatarImageUrl: users.avatarImageUrl,
+      // Only a hash of the stored image, never the image itself: every
+      // page gets a short cacheable URL (/api/user/avatar/image) instead of
+      // a data URI of up to ~500KB inlined into each render.
+      avatarImageHash: sql<string | null>`md5(${users.avatarImageUrl})`,
     })
     .from(users)
     .where(eq(users.whopUserId, whopUserId))
@@ -38,8 +44,18 @@ export async function getUserAvatar(whopUserId: string): Promise<UserAvatarPrefs
     avatarType: row.avatarType === "upload" || row.avatarType === "dicebear" ? row.avatarType : null,
     avatarStyle: isAvatarStyleId(row.avatarStyle) ? row.avatarStyle : null,
     avatarSeed: row.avatarSeed,
-    avatarImageUrl: row.avatarImageUrl,
+    avatarImageUrl: row.avatarImageHash ? `/api/user/avatar/image?v=${row.avatarImageHash}` : null,
   };
+}
+
+/** The uploaded picture's bytes, for /api/user/avatar/image. Null when
+ * there's no upload, or when what's stored isn't an allowed raster image
+ * (an SVG saved before uploads were restricted is never served). */
+export async function getUploadedAvatarImage(whopUserId: string): Promise<{ contentType: string; bytes: Buffer } | null> {
+  const [row] = await db.select({ avatarImageUrl: users.avatarImageUrl }).from(users).where(eq(users.whopUserId, whopUserId)).limit(1);
+  const match = row?.avatarImageUrl?.match(UPLOAD_IMAGE_PATTERN);
+  if (!match) return null;
+  return { contentType: match[1], bytes: Buffer.from(match[2], "base64") };
 }
 
 export async function setDicebearAvatar(whopUserId: string, style: AvatarStyleId, seed: string): Promise<void> {

@@ -3,10 +3,9 @@
 // Instantly v2 adapter. Port of the Cold Open skill pack's esp/instantly.py.
 // Auth: Bearer key. Push: POST /leads with campaign + custom_variables.
 
-import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign } from "./base";
+import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
-const DEFAULT_BASE = "https://api.instantly.ai/api/v2";
 
 export class InstantlyAdapter extends ESPAdapter {
   espType = "instantly";
@@ -15,7 +14,7 @@ export class InstantlyAdapter extends ESPAdapter {
   }
 
   private baseUrl(): string {
-    return (this.cfg.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
+    return espApiBase("instantly", this.cfg.baseUrl);
   }
 
   private async headers(): Promise<Record<string, string>> {

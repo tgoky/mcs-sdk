@@ -5,6 +5,7 @@
 // pack's send_connect.py — credential resolution goes through this app's
 // own vault (see esp/base.ts's header) instead of an env:// reference.
 
+import { espBaseUrlProblem } from "./esp/base";
 import { getColdOpenConfig, upsertColdOpenConfig, setColdOpenPhaseState } from "./config";
 import { createEspAdapter } from "./esp/factory";
 import { coldOpenCredentialProvider } from "./source-connect";
@@ -28,6 +29,8 @@ export async function saveSendConnect(engagementId: string, input: SendConnectIn
   const config = await getColdOpenConfig(engagementId);
   const icpSlugs = (config?.icps ?? []).map((i) => i.slug);
 
+  const baseUrlProblem = espBaseUrlProblem(input.platform, input.baseUrl);
+  if (baseUrlProblem) return { error: baseUrlProblem };
   if (Object.keys(input.campaignMap ?? {}).length === 0) {
     return { error: "campaign map is empty — map at least one ICP to a real campaign." };
   }

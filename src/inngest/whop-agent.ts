@@ -261,7 +261,7 @@ export const deliverToBridge = inngest.createFunction(
       if (attempt > 0) {
         await step.sleep(`wait-before-attempt-${attempt}`, BRIDGE_RETRY_DELAYS[attempt]);
       }
-      const result = await step.run(`deliver-attempt-${attempt}`, () => attemptBridgeDelivery(config, envelope, replay ?? false));
+      const result = await step.run(`deliver-attempt-${attempt}`, () => attemptBridgeDelivery(engagementId, config, envelope, replay ?? false));
       if (result.ok) {
         return { delivered: true, attempt };
       }

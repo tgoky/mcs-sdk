@@ -5,6 +5,7 @@ import { getAgentWebhookSecrets } from "@/features/whop-agent/server/webhook-sub
 import { verifyWhopWebhookSignature } from "@/lib/whop-agent/webhook-verify";
 import { inngest, whopWebhookProcess } from "@/lib/inngest";
 import { isUniqueConstraintViolation } from "@/lib/db-errors";
+import { eq } from "drizzle-orm";
 
 // Section 7.3: "2xx within 5 seconds. Timeouts, error statuses, and
 // redirects all count as failures." This route does signature
@@ -87,13 +88,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   }
 
   // Dedup on webhook-id — retries reuse the same id (Section 7.3).
+  let dedupRowId: string | null = null;
   try {
-    await db.insert(webhookEvents).values({
+    const [inserted] = await db.insert(webhookEvents).values({
       engagementId,
       eventSource: `whop:${verifiedWhopWebhookId}`,
       idempotencyKey: headers.webhookId!,
       eventKind: envelope.type,
-    });
+    }).returning({ id: webhookEvents.id });
+    dedupRowId = inserted?.id ?? null;
   } catch (dedupErr: unknown) {
     if (isUniqueConstraintViolation(dedupErr)) {
       return NextResponse.json({ success: true, deduplicated: true });
@@ -102,14 +105,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
     console.error("[whop-agent webhook] Idempotency check failed (non-fatal):", message);
   }
 
-  await inngest.send(
-    whopWebhookProcess.create({
-      engagementId,
-      whopWebhookId: verifiedWhopWebhookId,
-      envelope: { type: envelope.type, data: envelope.data, previous_attributes: envelope.previous_attributes },
-      occurredAtIso: new Date().toISOString(),
-    })
-  );
+  // The dedup row is only a promise that this event is being handled. If
+  // handing it to Inngest fails, remove the row and answer 500 so Whop's
+  // own retry delivers it again — otherwise the retry would hit the dedup
+  // row and the event would be dropped for good.
+  try {
+    await inngest.send(
+      whopWebhookProcess.create({
+        engagementId,
+        whopWebhookId: verifiedWhopWebhookId,
+        envelope: { type: envelope.type, data: envelope.data, previous_attributes: envelope.previous_attributes },
+        occurredAtIso: new Date().toISOString(),
+      })
+    );
+  } catch (sendErr: unknown) {
+    console.error("[whop-agent webhook] Couldn't queue the event; releasing its dedup row so Whop's retry is processed:", sendErr);
+    if (dedupRowId) {
+      await db.delete(webhookEvents).where(eq(webhookEvents.id, dedupRowId)).catch((e) => console.error("[whop-agent webhook] dedup row cleanup failed:", e));
+    }
+    return NextResponse.json({ error: "Couldn't queue the event. Retry." }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }

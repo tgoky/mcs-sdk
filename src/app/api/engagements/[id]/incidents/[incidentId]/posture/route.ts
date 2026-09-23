@@ -4,8 +4,8 @@ import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
 import { db } from "@/lib/db";
-import { engagements, repIncidents } from "@/models/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { engagements, pendingActions, repIncidents } from "@/models/schema";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { RESPONSE_POSTURES, type ResponsePostureId } from "@/features/reputation-manager/rep-thresholds";
 import { draftForChosenPosture } from "@/features/reputation-manager/server/response-routing";
 
@@ -39,15 +39,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const posture = body.posture as ResponsePostureId;
 
-  const [incident] = await db
-    .select({ id: repIncidents.id, engagementId: repIncidents.engagementId, selectedPosture: repIncidents.selectedPosture })
-    .from(repIncidents)
-    .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.engagementId, engagementId)))
-    .limit(1);
-  if (!incident) {
-    return NextResponse.json({ error: "Incident not found." }, { status: 404 });
-  }
-
   if (!(await isAuthorizedForEngagement(session, engagementId))) {
     return NextResponse.json({ error: "You don't have access to this engagement." }, { status: 403 });
   }
@@ -62,6 +53,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!inWorkspace) {
       return NextResponse.json({ error: "Engagement not found in active workspace." }, { status: 404 });
     }
+  }
+
+  // Looked up only after access is confirmed, so a 404 here can't be used
+  // to probe which incident ids exist in someone else's engagement.
+  const [incident] = await db
+    .select({ id: repIncidents.id, engagementId: repIncidents.engagementId, selectedPosture: repIncidents.selectedPosture })
+    .from(repIncidents)
+    .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.engagementId, engagementId)))
+    .limit(1);
+  if (!incident) {
+    return NextResponse.json({ error: "Incident not found." }, { status: 404 });
   }
 
   // Atomic claim, not check-then-act: the plain SELECT above followed by
@@ -89,6 +91,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .from(repIncidents)
       .where(eq(repIncidents.id, incidentId))
       .limit(1);
+    // A retry of the same drafting posture whose draft never got queued
+    // (the request timed out, or drafting failed and the release below
+    // didn't run): let it draft again instead of blocking it for good.
+    // Still one draft at most — it proceeds only while no response
+    // approval for this incident exists.
+    if (current?.selectedPosture === posture && posture !== "escalate_externally" && !(await hasResponseDraft(engagementId, incidentId))) {
+      return draftAndRespond(engagementId, incidentId, posture);
+    }
     return NextResponse.json(
       { error: `A posture (${current?.selectedPosture ?? "unknown"}) has already been chosen for this incident.` },
       { status: 409 }
@@ -135,13 +145,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, escalated: true });
   }
 
+  return draftAndRespond(engagementId, incidentId, posture);
+}
+
+async function hasResponseDraft(engagementId: string, incidentId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: pendingActions.id })
+    .from(pendingActions)
+    .where(
+      and(
+        eq(pendingActions.engagementId, engagementId),
+        eq(pendingActions.actionType, "rep_response_approval"),
+        sql`${pendingActions.payload} ->> 'incidentId' = ${incidentId}`
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+async function draftAndRespond(engagementId: string, incidentId: string, posture: ResponsePostureId) {
   const runId = crypto.randomUUID();
   try {
     await draftForChosenPosture({ engagementId, incidentId, posture, runId });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: `Posture saved but drafting failed: ${message}` }, { status: 500 });
+    // Release the choice so the operator can try again (the same posture
+    // or another) instead of hitting "already chosen" with no draft.
+    await db
+      .update(repIncidents)
+      .set({ selectedPosture: null })
+      .where(and(eq(repIncidents.id, incidentId), eq(repIncidents.selectedPosture, posture)))
+      .catch(() => {});
+    return NextResponse.json({ error: `Drafting failed, nothing was saved — try again. (${message})` }, { status: 500 });
   }
-
   return NextResponse.json({ ok: true, drafted: true });
 }

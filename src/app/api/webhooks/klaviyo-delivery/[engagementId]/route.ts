@@ -109,19 +109,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
     .returning({ id: webhookEvents.id });
   if (!claimed) return NextResponse.json({ success: true, duplicate: true });
+  // A failure here answers 500 so the platform retries; the claim row
+  // is released first, or the retry would be swallowed as a duplicate.
+  try {
 
-  const topic = (findFirstStringField(payload, ["topic", "type", "event", "event_name"]) ?? "").toLowerCase();
-  const email = findFirstStringField(payload, ["email", "recipient", "to"]);
+    const topic = (findFirstStringField(payload, ["topic", "type", "event", "event_name"]) ?? "").toLowerCase();
+    const email = findFirstStringField(payload, ["email", "recipient", "to"]);
 
-  if (topic.includes("bounce")) {
-    await recordDeliveryEvent(engagementId, "klaviyo", "bounced", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else if (topic.includes("spam") || topic.includes("complain")) {
-    await recordDeliveryEvent(engagementId, "klaviyo", "complained", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else {
-    console.warn(`[klaviyo-delivery] Unrecognized topic "${topic || "(none found)"}" for engagement ${engagementId} — raw payload:`, JSON.stringify(payload).slice(0, 500));
+    if (topic.includes("bounce")) {
+      await recordDeliveryEvent(engagementId, "klaviyo", "bounced", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else if (topic.includes("spam") || topic.includes("complain")) {
+      await recordDeliveryEvent(engagementId, "klaviyo", "complained", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else {
+      console.warn(`[klaviyo-delivery] Unrecognized topic "${topic || "(none found)"}" for engagement ${engagementId} — raw payload:`, JSON.stringify(payload).slice(0, 500));
+    }
+
+  } catch (err: unknown) {
+    console.error("[klaviyo-delivery] processing failed; releasing the claim so the retry is handled:", err);
+    await db.delete(webhookEvents).where(eq(webhookEvents.id, claimed.id)).catch(() => {});
+    return NextResponse.json({ error: "Processing failed. Retry." }, { status: 500 });
   }
-
   return NextResponse.json({ success: true });
 }

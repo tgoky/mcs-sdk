@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { isAvatarStyleId } from "@/lib/avatar";
-import { getUserAvatar, setDicebearAvatar, setUploadedAvatar, clearUserAvatar } from "@/lib/user-avatar";
+import { getUserAvatar, setDicebearAvatar, setUploadedAvatar, clearUserAvatar, UPLOAD_IMAGE_PATTERN } from "@/lib/user-avatar";
 
 export const runtime = "nodejs";
 
@@ -54,8 +54,8 @@ export async function POST(request: Request) {
     }
 
     if (body.type === "upload") {
-      if (typeof body.dataUri !== "string" || !body.dataUri.startsWith("data:image/")) {
-        return NextResponse.json({ error: "Invalid image." }, { status: 400 });
+      if (typeof body.dataUri !== "string" || !UPLOAD_IMAGE_PATTERN.test(body.dataUri)) {
+        return NextResponse.json({ error: "Upload a JPEG, PNG or WebP image." }, { status: 400 });
       }
       if (body.dataUri.length > MAX_DATA_URI_LENGTH) {
         return NextResponse.json({ error: "Image is too large — try a smaller photo." }, { status: 400 });

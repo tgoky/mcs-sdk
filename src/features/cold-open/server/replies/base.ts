@@ -13,6 +13,7 @@
 // source-connect.ts's Apify/Sales-Nav handling).
 
 import { resolveCredential } from "@/lib/credentials";
+import { upstreamErrorReason } from "../esp/base";
 
 const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -72,7 +73,7 @@ export abstract class ReplyFetcher {
       } catch {
         data = { raw: raw.slice(0, 500) };
       }
-      if (!res.ok) throw new ReplyFetchError(`${this.sourceType} API ${res.status}: ${raw.slice(0, 300)}`);
+      if (!res.ok) throw new ReplyFetchError(`${this.sourceType} API ${res.status}${upstreamErrorReason(raw)}`);
       return { status: res.status, data };
     } catch (err) {
       if (err instanceof ReplyFetchError) throw err;

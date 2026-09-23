@@ -30,6 +30,7 @@ export function WhopBridgeManagerConfigForm({
 
   const [destinationUrl, setDestinationUrl] = useState("");
   const [fieldMappingJson, setFieldMappingJson] = useState("{}");
+  const [signingSecret, setSigningSecret] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function WhopBridgeManagerConfigForm({
         if (cancelled) return;
 
         setDestinationUrl(data.destinationUrl ?? "");
+        setSigningSecret(data.signingSecret ?? null);
         setFieldMappingJson(data.fieldMapping && Object.keys(data.fieldMapping).length ? JSON.stringify(data.fieldMapping, null, 2) : "{}");
       } catch (e: unknown) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
@@ -83,6 +85,11 @@ export function WhopBridgeManagerConfigForm({
       }
       setSaving(false);
       setSaved(true);
+      // The signing secret exists once a destination is saved.
+      fetch(`/api/engagements/${engagementId}/whop-agent/bridge-config`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setSigningSecret(d.signingSecret ?? null))
+        .catch(() => {});
       onSaved?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
@@ -112,14 +119,27 @@ export function WhopBridgeManagerConfigForm({
       label: "Destination",
       isComplete: destinationUrl.trim() !== "",
       content: (
-        <InputField
-          label="Destination URL"
-          value={destinationUrl}
-          onChange={setDestinationUrl}
-          placeholder="https://your-crm.example.com/webhooks/whop"
-          helpText="https only — this receives every verified Whop event this client's connection sees, in the agent's own envelope shape."
-          required
-        />
+        <div className="space-y-3">
+          <InputField
+            label="Destination URL"
+            value={destinationUrl}
+            onChange={setDestinationUrl}
+            placeholder="https://your-crm.example.com/webhooks/whop"
+            helpText="A public https address. It receives every verified Whop event this client's connection sees, in the agent's own envelope shape."
+            required
+          />
+          {signingSecret && (
+            <div className="space-y-1 text-[11px] text-zinc-400">
+              <div className="font-semibold text-zinc-300">Signing secret</div>
+              <code className="block break-all rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 font-mono text-zinc-200">{signingSecret}</code>
+              <p>
+                Every forwarded event carries <code>X-Whop-Agent-Timestamp</code> and <code>X-Whop-Agent-Signature</code>. To check one, compute HMAC-SHA256 of
+                {" "}<code>timestamp + &quot;.&quot; + raw body</code> with this secret; the signature is <code>v1=</code> followed by that hex digest. Reject
+                requests whose timestamp is more than 5 minutes old.
+              </p>
+            </div>
+          )}
+        </div>
       ),
     },
     {

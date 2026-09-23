@@ -44,48 +44,52 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Subject can't be empty for an email touchpoint." }, { status: 400 });
     }
 
-    const [tenant] = await db
-      .select({ engagementId: engagements.engagementId, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
-      .from(engagements)
-      .where(
-        and(
-          eq(engagements.engagementId, engagementId),
-          eq(engagements.whopUserId, session.whopUserId),
-          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+    // Read and write under a row lock: two edits at once (or an edit
+    // landing while the cadence regenerates) used to each write back their
+    // own stale copy of the whole cadence, silently undoing the other.
+    const outcome = await db.transaction(async (tx) => {
+      const [tenant] = await tx
+        .select({ engagementId: engagements.engagementId, winBackSequenceAssetMap: engagements.winBackSequenceAssetMap })
+        .from(engagements)
+        .where(
+          and(
+            eq(engagements.engagementId, engagementId),
+            eq(engagements.whopUserId, session.whopUserId),
+            eq(engagements.workspaceId, activeWorkspace.workspaceId)
+          )
         )
-      )
-      .limit(1);
+        .for("update")
+        .limit(1);
 
-    if (!tenant) {
-      return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
+      if (!tenant) return { status: 404, error: "Engagement not found or access denied." } as const;
+
+      const assetMap = tenant.winBackSequenceAssetMap;
+      if (!assetMap) return { status: 404, error: "No win-back cadence has been generated for this engagement yet." } as const;
+
+      const list = type === "email" ? assetMap.emails ?? [] : assetMap.sms ?? [];
+      const idx = list.findIndex((m) => m.id === messageId);
+      if (idx === -1) {
+        return { status: 404, error: "That touchpoint isn't part of the current cadence anymore — it may have been regenerated." } as const;
+      }
+
+      const nextAssetMap =
+        type === "email"
+          ? {
+              ...assetMap,
+              emails: assetMap.emails.map((e, i) => (i === idx ? { ...e, subject: newSubject, body: newBody } : e)),
+            }
+          : {
+              ...assetMap,
+              sms: assetMap.sms.map((s, i) => (i === idx ? { ...s, body: newBody } : s)),
+            };
+
+      await tx.update(engagements).set({ winBackSequenceAssetMap: nextAssetMap }).where(eq(engagements.engagementId, engagementId));
+      return null;
+    });
+
+    if (outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: outcome.status });
     }
-
-    const assetMap = tenant.winBackSequenceAssetMap;
-    if (!assetMap) {
-      return NextResponse.json({ error: "No win-back cadence has been generated for this engagement yet." }, { status: 404 });
-    }
-
-    const list = type === "email" ? assetMap.emails ?? [] : assetMap.sms ?? [];
-    const idx = list.findIndex((m) => m.id === messageId);
-    if (idx === -1) {
-      return NextResponse.json(
-        { error: "That touchpoint isn't part of the current cadence anymore — it may have been regenerated." },
-        { status: 404 }
-      );
-    }
-
-    const nextAssetMap =
-      type === "email"
-        ? {
-            ...assetMap,
-            emails: assetMap.emails.map((e, i) => (i === idx ? { ...e, subject: newSubject, body: newBody } : e)),
-          }
-        : {
-            ...assetMap,
-            sms: assetMap.sms.map((s, i) => (i === idx ? { ...s, body: newBody } : s)),
-          };
-
-    await db.update(engagements).set({ winBackSequenceAssetMap: nextAssetMap }).where(eq(engagements.engagementId, engagementId));
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

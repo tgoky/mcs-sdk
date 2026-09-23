@@ -30,11 +30,15 @@ export function fakeDb(rows: unknown[] = []) {
     insert: vi.fn(() => chain),
     values: vi.fn(() => chain),
     update: vi.fn(() => chain),
+    delete: vi.fn(() => chain),
     set: vi.fn(() => chain),
     returning: vi.fn(() => chain),
     onConflictDoUpdate: vi.fn(() => chain),
     onConflictDoNothing: vi.fn(() => chain),
     then: (resolve: (v: unknown) => void) => resolve(rows),
+    // Drizzle's query builders are real promises (QueryPromise), so code
+    // under test may call .catch on them.
+    catch: () => Promise.resolve(rows),
   };
   return chain;
 }

@@ -9,10 +9,16 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
+import { TOURS } from "@/lib/tours/tour-definitions";
+import { setEngagementStackEntry } from "@/lib/engagement-stack";
+
+// The real tours, plus the reserved id the first-visit nudge saves its
+// dismissal under (tour-provider.tsx's dismissWelcome).
+const KNOWN_TOUR_IDS = new Set<string>([...TOURS.map((t) => t.id), "welcome-nudge"]);
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -30,11 +36,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (typeof tourId !== "string" || typeof currentStepId !== "string" || (status !== "in_progress" && status !== "completed")) {
       return NextResponse.json({ error: "tourId, status, and currentStepId are required." }, { status: 400 });
     }
+    if (!KNOWN_TOUR_IDS.has(tourId)) {
+      return NextResponse.json({ error: "Unknown tour." }, { status: 400 });
+    }
+    if (currentStepId.length > 100) {
+      return NextResponse.json({ error: "currentStepId is too long." }, { status: 400 });
+    }
 
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [row] = await db
-      .select({ engagementId: engagements.engagementId, stack: engagements.stack })
+      .select({ engagementId: engagements.engagementId })
       .from(engagements)
       .where(
         and(
@@ -49,21 +61,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
     }
 
-    const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
-    const nextStack: EngagementStack = {
-      ...stack,
-      tour_state: {
-        ...stack.tour_state,
-        [tourId]: {
-          status,
-          currentStepId,
-          completedStepIds: Array.isArray(completedStepIds) ? completedStepIds : [],
-          updatedAt: typeof updatedAt === "string" ? updatedAt : new Date().toISOString(),
-        },
-      },
-    };
-
-    await db.update(engagements).set({ stack: nextStack, updatedAt: new Date() }).where(eq(engagements.engagementId, id));
+    // Only this tour's entry is written, in one UPDATE — a whole-stack
+    // write here used to be able to undo a config save that landed while a
+    // tour step was saving.
+    await setEngagementStackEntry(id, "tour_state", tourId, {
+      status,
+      currentStepId,
+      completedStepIds: Array.isArray(completedStepIds)
+        ? completedStepIds.filter((v: unknown): v is string => typeof v === "string" && v.length <= 100).slice(0, 100)
+        : [],
+      updatedAt: typeof updatedAt === "string" && !Number.isNaN(Date.parse(updatedAt)) ? updatedAt : new Date().toISOString(),
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

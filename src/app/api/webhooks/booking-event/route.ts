@@ -155,6 +155,17 @@ function verifyGhlOrOnceHubSignature(
 
 export async function POST(request: Request) {
   const runId = crypto.randomUUID();
+  // This event's own dedup row, once inserted. Every non-2xx answer below
+  // asks the platform to retry, and a retry must not be swallowed as a
+  // duplicate of an event that was never processed, so the row is removed
+  // before any such answer (releaseDedupRow).
+  let dedupRowId: string | null = null;
+  const releaseDedupRow = async () => {
+    if (!dedupRowId) return;
+    const id = dedupRowId;
+    dedupRowId = null;
+    await db.delete(webhookEvents).where(eq(webhookEvents.id, id)).catch((e: unknown) => console.error("[webhook] dedup row cleanup failed:", e));
+  };
 
   try {
     // ── 1. Read raw body FIRST (needed for signature verification) ──
@@ -283,12 +294,16 @@ export async function POST(request: Request) {
     const idempotencyKey = deriveWebhookIdempotencyKey(platform, payload);
     if (idempotencyKey) {
       try {
-        await db.insert(webhookEvents).values({
-          engagementId: tenant.engagementId,
-          eventSource: platform,
-          idempotencyKey,
-          eventKind,
-        });
+        const [inserted] = await db
+          .insert(webhookEvents)
+          .values({
+            engagementId: tenant.engagementId,
+            eventSource: platform,
+            idempotencyKey,
+            eventKind,
+          })
+          .returning({ id: webhookEvents.id });
+        dedupRowId = inserted?.id ?? null;
       } catch (dedupErr: unknown) {
         // Unique constraint violation on (event_source, idempotency_key)
         // means we've already accepted this exact event — this is a
@@ -330,6 +345,7 @@ export async function POST(request: Request) {
       console.warn(
         `[webhook] Rate limit exceeded for engagement ${engagementId}: ${recentCount} events in the last ${RATE_LIMIT_WINDOW_MINUTES}m (limit ${RATE_LIMIT_MAX_EVENTS_PER_WINDOW}).`
       );
+      await releaseDedupRow();
       return new Response(
         "Rate limit exceeded for this engagement — too many booking events in a short window. This event will be retried automatically by the sending platform.",
         { status: 429, headers: { "Retry-After": "120" } }
@@ -404,6 +420,7 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[webhook] booking-event failure:", message);
+    await releaseDedupRow();
     await failRun(runId, error, {
       summary: {
         whatWasAttempted: ["Process inbound booking webhook event."],

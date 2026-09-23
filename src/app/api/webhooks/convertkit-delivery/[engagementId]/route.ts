@@ -63,20 +63,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
     .returning({ id: webhookEvents.id });
   if (!claimed) return NextResponse.json({ success: true, duplicate: true });
+  // A failure here answers 500 so the platform retries; the claim row
+  // is released first, or the retry would be swallowed as a duplicate.
+  try {
 
-  const flat = JSON.stringify(payload).toLowerCase();
-  const email = extractEmail(payload);
+    const flat = JSON.stringify(payload).toLowerCase();
+    const email = extractEmail(payload);
 
-  if (flat.includes("bounce")) {
-    await recordDeliveryEvent(engagementId, "convertkit", "bounced", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else if (flat.includes("complain") || flat.includes("spam")) {
-    await recordDeliveryEvent(engagementId, "convertkit", "complained", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else {
-    console.warn(`[convertkit-delivery] Unrecognized event for engagement ${engagementId} — raw payload:`, rawBody.slice(0, 500));
+    if (flat.includes("bounce")) {
+      await recordDeliveryEvent(engagementId, "convertkit", "bounced", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else if (flat.includes("complain") || flat.includes("spam")) {
+      await recordDeliveryEvent(engagementId, "convertkit", "complained", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else {
+      console.warn(`[convertkit-delivery] Unrecognized event for engagement ${engagementId} — raw payload:`, rawBody.slice(0, 500));
+    }
+
+  } catch (err: unknown) {
+    console.error("[convertkit-delivery] processing failed; releasing the claim so the retry is handled:", err);
+    await db.delete(webhookEvents).where(eq(webhookEvents.id, claimed.id)).catch(() => {});
+    return NextResponse.json({ error: "Processing failed. Retry." }, { status: 500 });
   }
-
   return NextResponse.json({ success: true });
 }
 

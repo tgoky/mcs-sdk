@@ -11,10 +11,9 @@
 // case, so no instance-state stash is needed the way the source module's
 // _pending_email workaround required.
 
-import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign } from "./base";
+import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
-const DEFAULT_BASE = "https://api.lemlist.com/api";
 
 export class LemlistAdapter extends ESPAdapter {
   espType = "lemlist";
@@ -23,7 +22,7 @@ export class LemlistAdapter extends ESPAdapter {
   }
 
   private baseUrl(): string {
-    return (this.cfg.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
+    return espApiBase("lemlist", this.cfg.baseUrl);
   }
 
   private async headers(): Promise<Record<string, string>> {

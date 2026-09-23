@@ -89,15 +89,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
     .returning({ id: webhookEvents.id });
   if (!claimed) return NextResponse.json({ success: true, duplicate: true });
+  // A failure here answers 500 so the platform retries; the claim row
+  // is released first, or the retry would be swallowed as a duplicate.
+  try {
 
-  if (type.includes("bounce")) {
-    await recordDeliveryEvent(engagementId, "activecampaign", "bounced", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else if (type && type !== "unsubscribe") {
-    // unsubscribe deliberately not logged as noise — it's a real,
-    // expected, frequent event this route just isn't built to act on.
-    console.warn(`[activecampaign-delivery] Event type "${type}" received for engagement ${engagementId} but not handled. Raw fields:`, JSON.stringify(fields).slice(0, 500));
+    if (type.includes("bounce")) {
+      await recordDeliveryEvent(engagementId, "activecampaign", "bounced", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else if (type && type !== "unsubscribe") {
+      // unsubscribe deliberately not logged as noise — it's a real,
+      // expected, frequent event this route just isn't built to act on.
+      console.warn(`[activecampaign-delivery] Event type "${type}" received for engagement ${engagementId} but not handled. Raw fields:`, JSON.stringify(fields).slice(0, 500));
+    }
+
+  } catch (err: unknown) {
+    console.error("[activecampaign-delivery] processing failed; releasing the claim so the retry is handled:", err);
+    await db.delete(webhookEvents).where(eq(webhookEvents.id, claimed.id)).catch(() => {});
+    return NextResponse.json({ error: "Processing failed. Retry." }, { status: 500 });
   }
-
   return NextResponse.json({ success: true });
 }

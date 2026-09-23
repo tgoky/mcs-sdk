@@ -18,6 +18,7 @@
 //     plumbing, throttling, and the merge-field completeness check.
 
 import { resolveCredential } from "@/lib/credentials";
+import type { ColdOpenSendPlatformId } from "@/models/schema";
 
 export const MERGE_FIELDS = ["subject", "body1", "body2", "body3"] as const;
 
@@ -27,6 +28,58 @@ export const MERGE_FIELDS = ["subject", "body1", "body2", "body3"] as const;
 const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 export class ESPError extends Error {}
+
+/**
+ * The only API base each adapter will call with the client's stored key.
+ * A configured baseUrl may only restate one of these (same https origin),
+ * never point the key somewhere else — sendPlatform.baseUrl is saved from
+ * a request body, so an arbitrary value would send the credential (and,
+ * through error messages, the response) wherever it pointed.
+ */
+export const ESP_API_BASES = {
+  instantly: "https://api.instantly.ai/api/v2",
+  smartlead: "https://server.smartlead.ai/api/v1",
+  lemlist: "https://api.lemlist.com/api",
+  reply_io: "https://api.reply.io/v1",
+} as const satisfies Record<ColdOpenSendPlatformId, string>;
+
+/** Null when `configured` is empty or on the platform's own API origin;
+ * otherwise the reason it's refused. */
+export function espBaseUrlProblem(platform: ColdOpenSendPlatformId, configured: string | undefined | null): string | null {
+  if (!configured) return null;
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    return "baseUrl isn't a valid URL.";
+  }
+  const allowed = new URL(ESP_API_BASES[platform]);
+  if (url.protocol !== "https:" || url.host !== allowed.host || url.username || url.password) {
+    return `baseUrl must be on ${allowed.origin} for ${platform}.`;
+  }
+  return null;
+}
+
+export function espApiBase(platform: ColdOpenSendPlatformId, configured: string | undefined): string {
+  const problem = espBaseUrlProblem(platform, configured);
+  if (problem) throw new ESPError(problem);
+  return (configured || ESP_API_BASES[platform]).replace(/\/$/, "");
+}
+
+/** A short, safe reason from an upstream error body: the provider's own
+ * message/error field if it has one, never the raw body. */
+export function upstreamErrorReason(raw: string): string {
+  try {
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    for (const key of ["message", "error", "error_message", "detail"]) {
+      const v = data?.[key];
+      if (typeof v === "string" && v.trim()) return `: ${v.trim().slice(0, 200)}`;
+    }
+  } catch {
+    // not JSON
+  }
+  return "";
+}
 
 /** Honest shape for an ESP's raw JSON response: this app never assumes
  * the full documented shape of a third-party API is stable, only that a
@@ -155,7 +208,7 @@ export abstract class ESPAdapter {
         data = { raw: raw.slice(0, 500) };
       }
       if (!res.ok) {
-        throw new ESPError(`${this.espType} API ${res.status}: ${raw.slice(0, 300)}`);
+        throw new ESPError(`${this.espType} API ${res.status}${upstreamErrorReason(raw)}`);
       }
       return { status: res.status, data };
     } catch (err) {

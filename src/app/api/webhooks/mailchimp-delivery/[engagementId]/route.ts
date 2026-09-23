@@ -93,19 +93,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
     .returning({ id: webhookEvents.id });
   if (!claimed) return NextResponse.json({ success: true, duplicate: true });
+  // A failure here answers 500 so the platform retries; the claim row
+  // is released first, or the retry would be swallowed as a duplicate.
+  try {
 
-  if (type === "cleaned" && reason === "hard") {
-    await recordDeliveryEvent(engagementId, "mailchimp", "bounced", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else if (type === "cleaned" && reason === "abuse") {
-    await recordDeliveryEvent(engagementId, "mailchimp", "complained", email, new Date());
-    await checkAndApplyAutoPause(engagementId);
-  } else if (type === "cleaned") {
-    console.warn(`[mailchimp-delivery] "cleaned" event with unrecognized reason "${reason}" for engagement ${engagementId} — not counted toward either rate. Raw fields:`, JSON.stringify(fields).slice(0, 500));
+    if (type === "cleaned" && reason === "hard") {
+      await recordDeliveryEvent(engagementId, "mailchimp", "bounced", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else if (type === "cleaned" && reason === "abuse") {
+      await recordDeliveryEvent(engagementId, "mailchimp", "complained", email, new Date());
+      await checkAndApplyAutoPause(engagementId);
+    } else if (type === "cleaned") {
+      console.warn(`[mailchimp-delivery] "cleaned" event with unrecognized reason "${reason}" for engagement ${engagementId} — not counted toward either rate. Raw fields:`, JSON.stringify(fields).slice(0, 500));
+    }
+    // Other types (subscribe/unsubscribe/profile/upemail/campaign) are
+    // real Mailchimp events, just not ones this route needs.
+
+  } catch (err: unknown) {
+    console.error("[mailchimp-delivery] processing failed; releasing the claim so the retry is handled:", err);
+    await db.delete(webhookEvents).where(eq(webhookEvents.id, claimed.id)).catch(() => {});
+    return NextResponse.json({ error: "Processing failed. Retry." }, { status: 500 });
   }
-  // Other types (subscribe/unsubscribe/profile/upemail/campaign) are
-  // real Mailchimp events, just not ones this route needs.
-
   return NextResponse.json({ success: true });
 }
 
