@@ -518,7 +518,7 @@ export function exitReasonLabel(raw: string | null | undefined): string {
 
 /** Friendly description of which send path delivered a message, with a safe fallback. */
 export function sentViaLabel(raw: string | null | undefined): string {
-  if (!raw) return "—";
+  if (!raw) return "Unknown";
   return SENT_VIA_LABELS[raw] ?? raw;
 }
 

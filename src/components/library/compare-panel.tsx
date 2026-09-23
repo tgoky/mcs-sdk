@@ -131,7 +131,7 @@ export function ComparePanel({
                 <YAxis tick={{ fontSize: 10, fontFamily: "var(--font-sans)" }} tickLine={false} axisLine={false} width={28} />
                 <Tooltip
                   contentStyle={{ fontFamily: "var(--font-sans)", fontSize: 11, borderRadius: 8 }}
-                  formatter={(value, key) => [key === "success" ? `${value}%` : String(value ?? "—"), key === "success" ? "Success rate" : "Runs/30d"]}
+                  formatter={(value, key) => [key === "success" ? `${value}%` : String(value ?? "No data"), key === "success" ? "Success rate" : "Runs/30d"]}
                 />
                 <Bar dataKey="runs" radius={[4, 4, 0, 0]}>
                   {chartData.map((_, i) => (
@@ -156,7 +156,7 @@ export function ComparePanel({
                 <div className="flex items-center justify-between text-[10px] font-mono">
                   <span className="text-zinc-500 dark:text-zinc-400">{s.runsInWindow} runs</span>
                   <span className={s.successRate !== null && s.successRate < 50 ? "text-rose-600 dark:text-rose-400" : "text-zinc-500 dark:text-zinc-400"}>
-                    {s.successRate !== null ? `${s.successRate}%` : "—"}
+                    {s.successRate !== null ? `${s.successRate}%` : "No data"}
                   </span>
                 </div>
                 {s.outcomeLabel && (

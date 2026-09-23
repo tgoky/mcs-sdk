@@ -140,7 +140,7 @@ export function RunAnalysisPanel({
                     : "text-zinc-800 dark:text-zinc-200"
                 }`}
               >
-                {stats.successRate !== null ? `${stats.successRate}%` : "—"}
+                {stats.successRate !== null ? `${stats.successRate}%` : "No data"}
               </span>
               {stats.needsAttention && (
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400">

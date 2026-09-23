@@ -350,7 +350,7 @@ export function ClientRosterTable({
                 ))}
                 <td className="px-4 py-2.5 text-right whitespace-nowrap">
                   <span className="text-xs font-mono text-zinc-500 tabular-nums">
-                    {row.lastActivity ? new Date(row.lastActivity).toLocaleDateString() : "—"}
+                    {row.lastActivity ? new Date(row.lastActivity).toLocaleDateString() : "Never"}
                   </span>
                 </td>
                 <td className="pr-3 text-right">

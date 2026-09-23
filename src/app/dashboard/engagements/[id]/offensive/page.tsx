@@ -32,7 +32,7 @@ const MOVES = [
 ];
 
 function progressLabel(items: ChecklistItem[] | undefined): string {
-  if (!items) return "—";
+  if (!items) return "Not started";
   const done = items.filter((i) => i.completed).length;
   return `${done}/${items.length}`;
 }

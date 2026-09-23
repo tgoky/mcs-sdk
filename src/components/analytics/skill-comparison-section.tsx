@@ -188,11 +188,11 @@ function SkillStatBlock({ stat, maxTotal }: { stat: SkillStat; maxTotal: number 
 
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500 dark:text-zinc-500">Avg cost</span>
-        <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.total > 0 ? fmtCents(stat.avgCostCents) : "—"}</span>
+        <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.total > 0 ? fmtCents(stat.avgCostCents) : "No runs"}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500 dark:text-zinc-500">Avg duration</span>
-        <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.avgDurationMs !== null ? fmtDuration(stat.avgDurationMs) : "—"}</span>
+        <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.avgDurationMs !== null ? fmtDuration(stat.avgDurationMs) : "No runs"}</span>
       </div>
     </div>
   );

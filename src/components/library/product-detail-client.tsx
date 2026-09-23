@@ -181,7 +181,7 @@ export function ProductDetailClient({
           <StatChip label="Runs (7d)" value={String(runsInWindow)} />
           <StatChip
             label="Success rate"
-            value={successRate !== null ? `${successRate}%` : "—"}
+            value={successRate !== null ? `${successRate}%` : "No data"}
             tone={successRate === null ? "neutral" : successRate >= 80 ? "success" : "warning"}
           />
         </div>

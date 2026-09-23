@@ -102,7 +102,7 @@ export function ConfirmStep({
           {[
             { label: "Client Name", value: form.buyerName },
             { label: "Selling Asset", value: form.offerName },
-            { label: "Price Baseline", value: form.offerPrice || "—" },
+            { label: "Price Baseline", value: form.offerPrice || "Not set" },
             { label: "Booking Calendar", value: BOOKING_PLATFORM_LABELS[form.bookingPlatform] ?? form.bookingPlatform, provider: form.bookingPlatform },
             { label: "Email Platform", value: EMAIL_PLATFORM_LABELS[form.emailPlatform] ?? form.emailPlatform, provider: form.emailPlatform },
             { label: "Hosting Node", value: HOSTING_PLATFORM_LABELS[form.hostingPlatform] ?? form.hostingPlatform, provider: form.hostingPlatform },

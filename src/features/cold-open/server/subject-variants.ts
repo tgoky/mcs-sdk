@@ -27,8 +27,8 @@ const COMPANY_TOKEN = "{company_name}";
 // single- and double-brace conventions are rejected.
 const FIRST_NAME_TOKENS = ["{first_name}", "{{first_name}}"];
 const FAKE_THREAD_PREFIXES = ["re:", "fwd:", "fw:"];
-const EM_DASH = "—";
-const EN_DASH = "–";
+const EM_DASH = "\u2014";
+const EN_DASH = "\u2013";
 // All merge tokens stripped before the casing/emoji checks so a
 // legitimately capitalized {company_name} token never trips the
 // lowercase warning.

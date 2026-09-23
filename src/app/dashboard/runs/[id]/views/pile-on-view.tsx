@@ -90,7 +90,7 @@ export function PileOnView({
 
   const rawBookingId = send?.bookingId;
   const bookingId =
-    rawBookingId && rawBookingId !== "null" && rawBookingId !== "—"
+    rawBookingId && rawBookingId !== "null" && rawBookingId !== "\u2014"
       ? rawBookingId
       : null;
 

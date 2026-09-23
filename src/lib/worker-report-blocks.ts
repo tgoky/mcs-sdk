@@ -38,7 +38,7 @@ export interface WorkerReportBlock {
   label: string;
   /** Raw number for trend math (client_metric_snapshots comparisons) —
    * null when there's no baseline yet this period, so the UI can show
-   * "—" instead of a misleading 0%. */
+   * "No data" instead of a misleading 0%. */
   value: number | null;
   displayValue: string;
   tone?: "positive" | "warning" | "negative" | "neutral";
@@ -96,7 +96,7 @@ const preCallReadBlocks: ReportBlockResolver = async (engagementId, { start }) =
       workerId: "pre-call-read",
       label: "Show rate",
       value: rate,
-      displayValue: rate !== null ? pct(rate) : "—",
+      displayValue: rate !== null ? pct(rate) : "No data",
       tone: rateTone(rate),
     },
   ];
@@ -116,7 +116,7 @@ const winBackBlocks: ReportBlockResolver = async (engagementId, { start }) => {
       workerId: "win-back",
       label: "Win-Back recovery",
       value: rate,
-      displayValue: rate !== null ? pct(rate) : "—",
+      displayValue: rate !== null ? pct(rate) : "No data",
       tone: rateTone(rate),
     },
   ];

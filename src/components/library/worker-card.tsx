@@ -353,7 +353,7 @@ export function WorkerCard({
                         : "text-orange-600 dark:text-orange-400"
                   }
                 >
-                  {stats.successRate !== null ? `${stats.successRate}%` : "—"}
+                  {stats.successRate !== null ? `${stats.successRate}%` : "No data"}
                 </span>
                 {stats.needsAttention > 0 && (
                   <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold">

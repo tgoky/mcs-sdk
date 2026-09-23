@@ -171,7 +171,7 @@ export function CompareView({ engagementId }: { engagementId: string }) {
                       </div>
                       <Sparkline points={s.points} />
                       <span className="text-xs font-mono shrink-0" style={{ color: "var(--text-primary)" }}>
-                        {latest?.displayValue ?? "—"}
+                        {latest?.displayValue ?? "No data"}
                       </span>
                     </div>
                   );

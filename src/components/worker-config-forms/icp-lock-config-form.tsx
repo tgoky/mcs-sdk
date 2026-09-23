@@ -516,11 +516,11 @@ export function IcpLockConfigForm({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Greeting:</span>
-                <span className="font-mono text-zinc-200">{greeting || "—"}</span>
+                <span className="font-mono text-zinc-200">{greeting || "Not set"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Sign-Off:</span>
-                <span className="font-mono text-zinc-200">{signOff || "—"}</span>
+                <span className="font-mono text-zinc-200">{signOff || "Not set"}</span>
               </div>
               <FactSuggestionChip
                 engagementId={engagementId}

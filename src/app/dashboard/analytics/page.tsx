@@ -461,14 +461,14 @@ export default async function AnalyticsPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
                     <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                      {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "—"}
+                      {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "No data"}
                       {actionP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(actionP90Ms)} p90`}</span>}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500 dark:text-zinc-500">Human blockers</span>
                     <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                      {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "—"}
+                      {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "No data"}
                       {blockerP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(blockerP90Ms)} p90`}</span>}
                     </span>
                   </div>

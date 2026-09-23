@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from "react";
 export function formatVerboseDate(iso: string | Date) {
   const date = typeof iso === "string" ? new Date(iso) : iso;
   if (!date || isNaN(date.getTime())) {
-    return { relative: "—", absolute: "—", full: "—" };
+    return { relative: "Unknown", absolute: "Unknown", full: "Unknown" };
   }
 
   const diffMs = Date.now() - date.getTime();

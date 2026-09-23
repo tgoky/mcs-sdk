@@ -174,7 +174,7 @@ export default async function WorkerAnalyticsPage({ params }: { params: Promise<
         <MiniStat label={`Runs / ${detail.windowDays}d`} value={String(detail.runsInWindow)} />
         <MiniStat
           label="Success rate"
-          value={detail.successRate !== null ? `${detail.successRate}%` : "—"}
+          value={detail.successRate !== null ? `${detail.successRate}%` : "No data"}
           tone={detail.successRate !== null && detail.successRate < 50 ? "text-rose-600 dark:text-rose-400" : undefined}
         />
         <MiniStat label="Active clients" value={String(detail.activeClients)} />

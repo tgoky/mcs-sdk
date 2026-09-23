@@ -64,7 +64,7 @@ interface RunDetail {
 // Fix: this was a near-identical copy of step-timeline.tsx's own
 // formatDuration (same three branches, same "0ms" reading like a debug
 // log). Both now defer to the one shared formatter.
-const formatDuration = (ms: number | null) => formatReadableDuration(ms) ?? "—";
+const formatDuration = (ms: number | null) => formatReadableDuration(ms) ?? "Not recorded";
 
 function RunStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();

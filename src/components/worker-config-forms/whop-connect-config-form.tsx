@@ -391,7 +391,7 @@ export function WhopConnectConfigForm({
             <div className="min-w-0 space-y-1 text-xs">
               <p className="font-bold text-emerald-300">Whop Agent Engine Armed</p>
               <p className="text-zinc-300">
-                <span className="text-zinc-500">Account:</span> <span className="font-mono">{state.whopAccountId ?? "—"}</span>
+                <span className="text-zinc-500">Account:</span> <span className="font-mono">{state.whopAccountId ?? "Unknown"}</span>
                 {" · "}
                 <span className="text-zinc-500">Credential Type:</span> <span className="font-mono">{state.credentialType ?? "bot"}</span>
                 {" · "}

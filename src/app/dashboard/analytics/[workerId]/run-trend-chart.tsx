@@ -67,7 +67,7 @@ export function RunTrendChart({ data }: { data: TrendPoint[] }) {
           <Tooltip
             contentStyle={{ fontFamily: "var(--font-sans)", fontSize: 11, borderRadius: 8 }}
             formatter={(value, key) => [
-              key === "successRate" ? (value == null ? "—" : `${value}%`) : String(value ?? "—"),
+              key === "successRate" ? (value == null ? "No data" : `${value}%`) : String(value ?? "No data"),
               key === "successRate" ? "Success rate" : "Runs",
             ]}
           />
