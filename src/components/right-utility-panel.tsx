@@ -7,19 +7,17 @@ import {
   CalendarRange,
   MessageSquareQuote,
   Bell,
-  Workflow,
   ClockArrowUp,
   NotebookText,
   type LucideIcon,
 } from "lucide-react";
 import { NotificationList } from "@/app/dashboard/notification-bell";
 import type { NotificationRow } from "@/app/dashboard/use-notifications";
-import { AutopilotPanelContent } from "@/app/dashboard/autopilot/autopilot-panel-content";
 import { CalendarPanelContent } from "@/app/dashboard/calendar/calendar-panel-content";
 import { UpcomingPanelContent } from "@/app/dashboard/upcoming/upcoming-panel-content";
 import { TeammatesPanelContent } from "@/app/dashboard/teammates/teammates-panel-content";
 
-export type RightPanelKey = "notifications" | "calendar" | "teammates" | "autopilot" | "upcoming" | "plan";
+export type RightPanelKey = "notifications" | "calendar" | "teammates" | "upcoming" | "plan";
 
 export const RIGHT_PANEL_META: Record<
   RightPanelKey,
@@ -28,7 +26,6 @@ export const RIGHT_PANEL_META: Record<
   notifications: { label: "Notifications", icon: Bell, expandHref: "/dashboard/inbox" },
   calendar: { label: "Calendar", icon: CalendarRange, expandHref: "/dashboard/calendar" },
   teammates: { label: "Teammates", icon: MessageSquareQuote, expandHref: "/dashboard/teammates" },
-  autopilot: { label: "Autopilot", icon: Workflow, expandHref: "/dashboard/autopilot" },
   upcoming: { label: "Upcoming", icon: ClockArrowUp, expandHref: "/dashboard/upcoming" },
   plan: { label: "Plan", icon: NotebookText, expandHref: "/dashboard/plan" },
 };
@@ -36,7 +33,7 @@ export const RIGHT_PANEL_META: Record<
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 720;
 
-type StillComingKey = Exclude<RightPanelKey, "notifications" | "autopilot" | "calendar" | "upcoming" | "teammates">;
+type StillComingKey = Exclude<RightPanelKey, "notifications" | "calendar" | "upcoming" | "teammates">;
 
 function ComingSoonPanel({ panelKey }: { panelKey: StillComingKey }) {
   const meta = RIGHT_PANEL_META[panelKey];
@@ -203,8 +200,6 @@ export function RightUtilityPanel({
                 markAllRead={notifications.markAllRead}
                 markRead={notifications.markRead}
               />
-            ) : displayedPanel === "autopilot" ? (
-              <AutopilotPanelContent />
             ) : displayedPanel === "calendar" ? (
               <CalendarPanelContent />
             ) : displayedPanel === "upcoming" ? (

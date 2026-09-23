@@ -46,7 +46,7 @@ function toggleEndpoint(engagementId: string, workerId: WorkerId): string {
  * icon grid whose only action was "click to navigate to
  * /dashboard/modules/[skill]" (a roster page that's now itself a
  * redirect — see that file's own header). Rebuilt as real, interactive
- * rows matching the toggle-first pattern AutopilotTable already
+ * rows in the toggle-first pattern already
  * established elsewhere in this app: a working on/off switch (the same
  * enable/disable endpoint WorkersPanel's own toggle calls) and a name
  * link into the skill's own page.

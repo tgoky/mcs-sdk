@@ -5,7 +5,6 @@ import {
   CalendarRange,
   MessageSquareQuote,
   Bell,
-  Workflow,
   ClockArrowUp,
   NotebookText,
   type LucideIcon,
@@ -38,12 +37,6 @@ const ICONS: UtilityIconConfig[] = [
     icon: Bell,
     label: "Notifications",
     fillStyle: "fill-[#d0b8cc] dark:fill-[#65496d] text-zinc-700 dark:text-zinc-200",
-  },
-  {
-    key: "autopilot",
-    icon: Workflow,
-    label: "Autopilot",
-    fillStyle: "fill-[#c8b2c4] dark:fill-[#614666] text-zinc-700 dark:text-zinc-200",
   },
   {
     key: "upcoming",

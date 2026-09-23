@@ -96,7 +96,11 @@ export function EngagementActionsMenu({
         {(close) => (
           <>
             <ActionMenuSection label="Automation mode">
-              <ApprovalModeToggle engagementId={engagementId} initialRequireApproval={initialRequireApproval} />
+              <ApprovalModeToggle
+                engagementId={engagementId}
+                initialRequireApproval={initialRequireApproval}
+                initialActionTypes={initialStack?.require_approval_action_types ?? []}
+              />
             </ActionMenuSection>
 
             <ActionMenuDivider />

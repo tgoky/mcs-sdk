@@ -72,8 +72,8 @@ const DASHBOARD_BASICS: TourStep[] = [
     id: "utility-rail",
     route: "/dashboard",
     target: '[data-tour="top-nav-utility-rail"]',
-    title: "Calendar, Teammates, notifications, Autopilot",
-    body: "The 6 icons on the right cover everything that isn't a specific client or skill — including Autopilot, where approval requirements live.",
+    title: "Calendar, Teammates, notifications",
+    body: "The icons on the right cover everything that isn't a specific client or skill. Whether a client's actions wait for your approval is set on that client's page, under Modify → Automation mode.",
     placement: "bottom-end",
   },
 ];

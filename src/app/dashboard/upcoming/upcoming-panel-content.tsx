@@ -4,7 +4,7 @@
 //
 // The right-utility-panel's compact Upcoming tab — all 3 sections the full
 // page has (appointments, Win-Back touches, Leak Map), fetched lazily only
-// once this tab is opened. Same pattern as autopilot/calendar panel content.
+// once this tab is opened. Same pattern as calendar panel content.
 
 import { useEffect, useState } from "react";
 import { Loader2, PhoneCall, RotateCcw, Radar } from "lucide-react";

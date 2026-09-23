@@ -248,8 +248,8 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
             <span
               title={
                 requiresApproval
-                  ? "New enrollments wait in the Queue for a human to approve before they push to the CRM/ESP. Change this on the Autopilot page."
-                  : "New enrollments push to the CRM/ESP automatically, no approval step. Change this on the Autopilot page."
+                  ? "New enrollments wait in the Queue for a human to approve before they push to the CRM/ESP. Change this under Modify → Automation mode on the client page."
+                  : "New enrollments push to the CRM/ESP automatically, no approval step. Change this under Modify → Automation mode on the client page."
               }
               className={cn(
                 "shrink-0 text-[10.5px] font-mono font-semibold px-1.5 py-0.5 rounded-md border",

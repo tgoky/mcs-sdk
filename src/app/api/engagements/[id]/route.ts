@@ -8,13 +8,11 @@ import { isValidTagColorId } from "@/lib/engagement-tag-colors";
 import { isValidTimezone } from "@/lib/timezones";
 import { hasCredential, resolveCredential, syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { harvestTwilioA2PStatus } from "@/lib/paste-key-harvest";
-import { ACTION_TYPE_LABELS } from "@/lib/copy";
-import type { PendingActionType } from "@/lib/approval-gate";
+import { OPT_IN_GATED_ACTION_TYPES, type PendingActionType } from "@/lib/approval-gate";
 
-// The 4 gateable action types, read off ACTION_TYPE_LABELS' own keys rather
-// than re-listing them a second time — same "single source of truth"
-// convention as SKILL_MANIFEST/SKILL_INFO elsewhere in this file's siblings.
-const VALID_APPROVAL_ACTION_TYPES = Object.keys(ACTION_TYPE_LABELS) as PendingActionType[];
+// Only the actions an operator can opt into reviewing; the rest are always
+// reviewed (see OPT_IN_GATED_ACTIONS).
+const VALID_APPROVAL_ACTION_TYPES = OPT_IN_GATED_ACTION_TYPES as readonly PendingActionType[];
 
 export const revalidate = 0;
 
@@ -410,7 +408,7 @@ export async function PATCH(
     // Co-Pilot vs. Autopilot — previously set once at onboarding
     // (submit-payload.ts) and only ever read back (engagements/[id]/page.tsx),
     // never editable afterward. This is the first write path for it, added
-    // for the account-wide Autopilot rail panel.
+    // for automation-mode changes (the client page's Modify → Automation mode).
     if (
       incoming.require_approval_for_side_effects !== undefined &&
       typeof incoming.require_approval_for_side_effects !== "boolean"

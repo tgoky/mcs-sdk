@@ -35,7 +35,7 @@ export function ShellLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Right-utility-panel state (Calendar / Teammates / Notifications /
-  // Autopilot / Upcoming / Plan) lives here since it has to affect both
+  // Upcoming / Plan) lives here since it has to affect both
   // TopNav (which icon looks active) and the main column (which shrinks
   // to make room) — those are siblings, not parent/child, so this is the
   // lowest common ancestor.

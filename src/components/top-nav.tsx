@@ -142,7 +142,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
       </div>
 
       {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /
-          Autopilot / Upcoming / Plan) — each opens right-utility-panel.tsx */}
+          Upcoming / Plan) — each opens right-utility-panel.tsx */}
       <div className="flex items-center gap-2 ml-auto shrink-0" data-tour="top-nav-utility-rail">
         <RightUtilityRail activePanel={activePanel} onSelect={onSelectPanel} unreadCount={unreadNotifications} />
       </div>

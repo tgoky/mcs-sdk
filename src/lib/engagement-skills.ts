@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
 import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig, whopAgentConnections } from "@/models/schema";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { COLD_OPEN_SKILL_IDS, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
-import { WHOP_AGENT_SKILL_IDS, type WhopAgentSkillId } from "@/lib/whop-agent-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
 
 /**
@@ -98,141 +98,6 @@ export async function getColdOpenEngagementSkillStates(engagementId: string): Pr
   const disabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
 
   return Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<ColdOpenSkillId, boolean>;
-}
-
-/**
- * Same "no row = enabled" state getEngagementSkillStates resolves, but for
- * every engagement in one query — for the account-wide Autopilot rail
- * panel, which needs every client's 5 skill states at once and would
- * otherwise be N round trips (one per client) on top of the N a per-skill
- * getEngagementSkillStates loop would already be.
- */
-export async function getSkillStatesForEngagements(
-  engagementIds: string[]
-): Promise<Record<string, Record<SkillId, boolean>>> {
-  const allEnabled = Object.fromEntries(SKILL_IDS.map((id) => [id, true])) as Record<SkillId, boolean>;
-  if (engagementIds.length === 0) return {};
-
-  const rows = await db
-    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
-    .from(engagementSkills)
-    .where(inArray(engagementSkills.engagementId, engagementIds));
-
-  const disabledByEngagement = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.enabled) continue;
-    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
-    set.add(row.skillId);
-    disabledByEngagement.set(row.engagementId, set);
-  }
-
-  return Object.fromEntries(
-    engagementIds.map((engagementId) => {
-      const disabled = disabledByEngagement.get(engagementId);
-      if (!disabled) return [engagementId, allEnabled];
-      return [engagementId, Object.fromEntries(SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<SkillId, boolean>];
-    })
-  );
-}
-
-/** Same bulk shape as getSkillStatesForEngagements, for Reputation Manager's
- * 6 skills — the Autopilot rail panel used to only ever fetch Showtime's
- * skill states here, so an RM client showed there with 5 Showtime skill
- * chips that never applied to them (and no way to see or toggle any of
- * their actual 6). Callers still need to gate display on whether a given
- * engagement is actually RM-enrolled (getRepEnrolledEngagementIds) — this
- * returns "all enabled" defaults for a non-enrolled id same as
- * getSkillStatesForEngagements does for Showtime, which is meaningless on
- * its own but harmless since it's never rendered without that gate. */
-export async function getRepSkillStatesForEngagements(
-  engagementIds: string[]
-): Promise<Record<string, Record<RepSkillId, boolean>>> {
-  const allEnabled = Object.fromEntries(REP_SKILL_IDS.map((id) => [id, true])) as Record<RepSkillId, boolean>;
-  if (engagementIds.length === 0) return {};
-
-  const rows = await db
-    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
-    .from(engagementSkills)
-    .where(inArray(engagementSkills.engagementId, engagementIds));
-
-  const disabledByEngagement = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.enabled) continue;
-    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
-    set.add(row.skillId);
-    disabledByEngagement.set(row.engagementId, set);
-  }
-
-  return Object.fromEntries(
-    engagementIds.map((engagementId) => {
-      const disabled = disabledByEngagement.get(engagementId);
-      if (!disabled) return [engagementId, allEnabled];
-      return [engagementId, Object.fromEntries(REP_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<RepSkillId, boolean>];
-    })
-  );
-}
-
-/** Same bulk shape as getSkillStatesForEngagements/getRepSkillStatesForEngagements, for Cold Open's 7 skills. */
-export async function getColdOpenSkillStatesForEngagements(
-  engagementIds: string[]
-): Promise<Record<string, Record<ColdOpenSkillId, boolean>>> {
-  const allEnabled = Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, true])) as Record<ColdOpenSkillId, boolean>;
-  if (engagementIds.length === 0) return {};
-
-  const rows = await db
-    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
-    .from(engagementSkills)
-    .where(inArray(engagementSkills.engagementId, engagementIds));
-
-  const disabledByEngagement = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.enabled) continue;
-    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
-    set.add(row.skillId);
-    disabledByEngagement.set(row.engagementId, set);
-  }
-
-  return Object.fromEntries(
-    engagementIds.map((engagementId) => {
-      const disabled = disabledByEngagement.get(engagementId);
-      if (!disabled) return [engagementId, allEnabled];
-      return [engagementId, Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<ColdOpenSkillId, boolean>];
-    })
-  );
-}
-
-/** Same bulk shape as getColdOpenSkillStatesForEngagements, for Whop
- * Agent's 15 skills — added alongside autopilot-clients.ts/
- * autopilot-table.tsx picking up Whop Agent for the first time (the
- * account-wide Autopilot rail panel previously only ever queried
- * Showtime and Reputation Manager, so a Cold Open- or Whop-Agent-only
- * client showed nothing to control there at all). */
-export async function getWhopAgentSkillStatesForEngagements(
-  engagementIds: string[]
-): Promise<Record<string, Record<WhopAgentSkillId, boolean>>> {
-  const allEnabled = Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, true])) as Record<WhopAgentSkillId, boolean>;
-  if (engagementIds.length === 0) return {};
-
-  const rows = await db
-    .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled })
-    .from(engagementSkills)
-    .where(inArray(engagementSkills.engagementId, engagementIds));
-
-  const disabledByEngagement = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.enabled) continue;
-    const set = disabledByEngagement.get(row.engagementId) ?? new Set<string>();
-    set.add(row.skillId);
-    disabledByEngagement.set(row.engagementId, set);
-  }
-
-  return Object.fromEntries(
-    engagementIds.map((engagementId) => {
-      const disabled = disabledByEngagement.get(engagementId);
-      if (!disabled) return [engagementId, allEnabled];
-      return [engagementId, Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, !disabled.has(id)])) as Record<WhopAgentSkillId, boolean>];
-    })
-  );
 }
 
 /** Upserts the enabled flag for one (engagementId, skillId) pair — see the Skills panel on the engagement detail page.

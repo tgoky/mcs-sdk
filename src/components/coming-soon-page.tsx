@@ -1,7 +1,7 @@
 // src/components/coming-soon-page.tsx
 //
 // Shared full-page shell for the 4 right-utility-rail destinations that
-// aren't wired to real data yet (Calendar, Teammates, Autopilot, Upcoming,
+// aren't wired to real data yet (Calendar, Teammates, Upcoming,
 // Plan — "Expand" in right-utility-panel.tsx routes here). Real content is
 // separate follow-up work per panel; this just gives each one a real,
 // navigable page today instead of a dead link.

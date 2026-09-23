@@ -35,6 +35,7 @@ import { eq } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { REP_THRESHOLD_DEFAULTS } from "@/features/reputation-manager/rep-thresholds";
+import { OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
 
 export type PendingActionType =
   | "webhook_enrollment"
@@ -68,6 +69,8 @@ export type PendingActionType =
   | "whop_dispute_evidence_submit"
   | "whop_ads_flip_to_active";
 
+export { OPT_IN_GATED_ACTIONS, OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
+
 export function isApprovalRequired(
   stack: EngagementStack | null | undefined,
   actionType: PendingActionType
@@ -76,13 +79,13 @@ export function isApprovalRequired(
   const scoped = stack.require_approval_action_types;
   // Gate is on with no scoping list => gate every gateable action type.
   // Gate is on with a list => gate only the listed types.
-  if (!scoped || scoped.length === 0) return true;
-  // scoped's element type is the narrower, older set of gateable-by-opt-in
-  // action types (EngagementStack.require_approval_action_types) —
-  // rep_response_approval deliberately isn't in it (see PendingActionType's
-  // own comment: it's always gated, never opt-in), so it can never appear
-  // in scoped and this check is safely widened to a plain string compare.
-  return (scoped as readonly string[]).includes(actionType);
+  // Only opt-in types count: older saves (the removed Autopilot page) could
+  // store always-reviewed Whop/RM types here, and a list holding only those
+  // made Co-Pilot review nothing at all. With no opt-in type listed, the
+  // gate reviews every opt-in action, same as an empty list.
+  const optIn = (scoped ?? []).filter((t) => OPT_IN_GATED_ACTION_TYPES.includes(t));
+  if (optIn.length === 0) return true;
+  return (optIn as readonly string[]).includes(actionType);
 }
 
 /** Exported so response-routing.ts can queue a rep_response_approval row
