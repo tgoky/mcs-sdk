@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig, whopAgentConnections } from "@/models/schema";
+import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig, whopAgentConnections, type EngagementStack } from "@/models/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
@@ -126,6 +126,25 @@ export async function setSkillEnabledForEngagement(
 }
 
 /**
+ * Showtime evidence: pin-down actually finished (confirmationPageUrl —
+ * isProductOnboarded("showtime")'s own signal), or a legacy client with a
+ * real booking platform on its stack. NOT just "stack is non-null":
+ * creating a client from Reputation Manager writes { timezone }, and
+ * saving a credential or a Whop bridge secret writes into stack too, none
+ * of which means Showtime is in use.
+ */
+function hasShowtimeSetup(row: { stack: unknown; confirmationPageUrl: string | null } | undefined): boolean {
+  if (!row) return false;
+  if (row.confirmationPageUrl) return true;
+  const stack = row.stack as Partial<EngagementStack> | null;
+  return Boolean(stack?.booking_platform);
+}
+
+/** Cold Open evidence: ICP Lock actually completed — not just a
+ * coldOpenConfig row, which saving only the sending tool also creates. */
+export const coldOpenIcpLockComplete = sql`${coldOpenConfig.phaseState}->>'icp_lock' = 'complete'`;
+
+/**
  * Which workers actually count as "enabled" for the Library's enabled-
  * first sort and per-worker Analytics — reconciling two eras of data
  * without touching either:
@@ -152,16 +171,16 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
     db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
       .from(engagementSkills)
       .where(eq(engagementSkills.engagementId, engagementId)),
-    db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
+    db.select({ stack: engagements.stack, confirmationPageUrl: engagements.confirmationPageUrl }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
     db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(and(eq(repIdentityGraphs.engagementId, engagementId), repIdentityIsComplete)).limit(1),
-    db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1),
+    db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(and(eq(coldOpenConfig.engagementId, engagementId), coldOpenIcpLockComplete)).limit(1),
     db.select({ engagementId: whopAgentConnections.engagementId }).from(whopAgentConnections).where(and(eq(whopAgentConnections.engagementId, engagementId), isNull(whopAgentConnections.disconnectedAt))).limit(1),
   ]);
 
   const explicitlyEnabled = new Set(rows.filter((r) => r.enabled && r.enabledAt).map((r) => r.skillId));
   const explicitlyDisabled = new Set(rows.filter((r) => !r.enabled).map((r) => r.skillId));
 
-  const hasShowtimeEvidence = Boolean(engagement?.stack);
+  const hasShowtimeEvidence = hasShowtimeSetup(engagement);
   const hasRepEvidence = repGraph.length > 0;
   const hasColdOpenEvidence = coldOpenRow.length > 0;
   const hasWhopAgentEvidence = whopConnectionRow.length > 0;
@@ -189,15 +208,15 @@ export async function getEnabledWorkerIdsForEngagements(engagementIds: string[])
       .select({ engagementId: engagementSkills.engagementId, skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
       .from(engagementSkills)
       .where(inArray(engagementSkills.engagementId, engagementIds)),
-    db.select({ engagementId: engagements.engagementId, stack: engagements.stack }).from(engagements).where(inArray(engagements.engagementId, engagementIds)),
+    db.select({ engagementId: engagements.engagementId, stack: engagements.stack, confirmationPageUrl: engagements.confirmationPageUrl }).from(engagements).where(inArray(engagements.engagementId, engagementIds)),
     db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(and(inArray(repIdentityGraphs.engagementId, engagementIds), repIdentityIsComplete)),
-    db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(inArray(coldOpenConfig.engagementId, engagementIds)),
+    db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(and(inArray(coldOpenConfig.engagementId, engagementIds), coldOpenIcpLockComplete)),
     db
       .select({ engagementId: whopAgentConnections.engagementId })
       .from(whopAgentConnections)
       .where(and(inArray(whopAgentConnections.engagementId, engagementIds), isNull(whopAgentConnections.disconnectedAt))),
   ]);
-  const withStack = new Set(engagementRows.filter((r) => Boolean(r.stack)).map((r) => r.engagementId));
+  const withStack = new Set(engagementRows.filter((r) => hasShowtimeSetup(r)).map((r) => r.engagementId));
   const rep = new Set(repRows.map((r) => r.engagementId));
   const coldOpen = new Set(coldOpenRows.map((r) => r.engagementId));
   const whop = new Set(whopRows.map((r) => r.engagementId));

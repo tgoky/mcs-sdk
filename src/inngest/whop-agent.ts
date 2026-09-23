@@ -16,7 +16,7 @@ import { assembleDisputeResponse, type WhopDisputeAlert } from "@/features/whop-
 import { getBridgeConfig, attemptBridgeDelivery, notifyBridgeDeadLetter } from "@/features/whop-agent/server/bridge-manager-service";
 import { runWhopAdsDraft } from "@/features/whop-agent/server/whop-ads-service";
 import { runBatchLive } from "@/features/whop-agent/server/bulk-promo-codes-service";
-import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { getDisabledEngagementIdsForSkill, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -143,9 +143,17 @@ export const whopWeeklyOpsReportCron = inngest.createFunction(
   async ({ step }) => {
     const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
 
+    // Ghost-run fix: filter out explicit disables BEFORE startRun, same as
+    // every other cron (see getDisabledEngagementIdsForSkill's comment) —
+    // a switched-off report should never appear in live executions.
+    const [opsDisabled, attributionDisabled] = await step.run("load-disabled", async () => [
+      [...(await getDisabledEngagementIdsForSkill("whop-weekly-ops-report"))],
+      [...(await getDisabledEngagementIdsForSkill("whop-attribution-report"))],
+    ]);
+
     const opsReportRuns = await step.run("start-ops-report-runs", () =>
       Promise.all(
-        engagementIds.map(async (engagementId) => {
+        engagementIds.filter((id) => !opsDisabled.includes(id)).map(async (engagementId) => {
           const runId = crypto.randomUUID();
           await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report" });
           return { runId, engagementId };
@@ -155,7 +163,7 @@ export const whopWeeklyOpsReportCron = inngest.createFunction(
 
     const attributionRuns = await step.run("start-attribution-report-runs", () =>
       Promise.all(
-        engagementIds.map(async (engagementId) => {
+        engagementIds.filter((id) => !attributionDisabled.includes(id)).map(async (engagementId) => {
           const runId = crypto.randomUUID();
           await startRun({ id: runId, engagementId, skillName: "whop-attribution-report", phase: "v2_memberships_paginate", label: "Attribution & Affiliate Report" });
           return { runId, engagementId };
@@ -205,9 +213,10 @@ export const whopPortfolioRollupCron = inngest.createFunction(
   { id: "whop-agent-portfolio-rollup-cron", triggers: [{ cron: "TZ=UTC 0 14 * * 3" }], retries: 1 },
   async ({ step }) => {
     const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
+    const disabled = await step.run("load-disabled", async () => [...(await getDisabledEngagementIdsForSkill("whop-portfolio-rollup"))]);
     const runIds = await step.run("start-runs", () =>
       Promise.all(
-        engagementIds.map(async (engagementId) => {
+        engagementIds.filter((id) => !disabled.includes(id)).map(async (engagementId) => {
           const runId = crypto.randomUUID();
           await startRun({ id: runId, engagementId, skillName: "whop-portfolio-rollup", phase: "fan_out", label: "Portfolio Rollup Report" });
           return { runId, engagementId };

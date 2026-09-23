@@ -24,6 +24,7 @@ import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, coldOpenConfig, whopAgentConnections, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { repIdentityIsComplete } from "@/lib/rep-engagements";
+import { coldOpenIcpLockComplete } from "@/lib/engagement-skills";
 import type { ProductId } from "@/lib/product-catalog";
 
 export async function isProductOnboarded(productId: ProductId, engagementId: string): Promise<boolean> {
@@ -46,7 +47,13 @@ export async function isProductOnboarded(productId: ProductId, engagementId: str
     return Boolean(row);
   }
   if (productId === "cold-open") {
-    const [row] = await db.select({ id: coldOpenConfig.id }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1);
+    // ICP Lock actually completed — not just a config row, which saving
+    // only the sending tool in the Cold Open panel also creates.
+    const [row] = await db
+      .select({ id: coldOpenConfig.id })
+      .from(coldOpenConfig)
+      .where(and(eq(coldOpenConfig.engagementId, engagementId), coldOpenIcpLockComplete))
+      .limit(1);
     return Boolean(row);
   }
   // whop-agent

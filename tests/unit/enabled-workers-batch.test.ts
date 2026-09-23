@@ -37,3 +37,22 @@ describe("getEnabledWorkerIdsForEngagements", () => {
     expect(singleB).toContain("icp-lock");
   });
 });
+
+// Creating a client from Reputation Manager writes stack = { timezone },
+// and saving a credential writes into stack too — neither means Showtime
+// is in use, so neither may light up the Showtime workers.
+describe("Showtime evidence", () => {
+  it("ignores a stack that only carries a timezone", async () => {
+    Object.assign(db, fakeDbSequence([[], [{ stack: { timezone: "UTC" }, confirmationPageUrl: null }], [], [], []]));
+    const ids = await getEnabledWorkerIdsForEngagement("rep-only");
+    expect(ids).not.toContain("pin-down");
+    expect(ids).not.toContain("leak-map");
+  });
+
+  it("counts a client that finished pin-down or has a booking platform", async () => {
+    Object.assign(db, fakeDbSequence([[], [{ stack: null, confirmationPageUrl: "https://x.test/confirm" }], [], [], []]));
+    expect(await getEnabledWorkerIdsForEngagement("onboarded")).toContain("leak-map");
+    Object.assign(db, fakeDbSequence([[], [{ stack: { booking_platform: "calendly" }, confirmationPageUrl: null }], [], [], []]));
+    expect(await getEnabledWorkerIdsForEngagement("legacy")).toContain("leak-map");
+  });
+});

@@ -43,7 +43,7 @@ import { matchesWeeklySchedule, matchesMonthlySchedule, matchesDailyLocalHour } 
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { hasSlackConnection, postToClientSlack } from "@/lib/slack-delivery";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
-import { and, eq, lt, gte, isNull, notInArray } from "drizzle-orm";
+import { and, eq, lt, gte, isNull, isNotNull, notInArray } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement, getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
@@ -151,7 +151,15 @@ export const leakMapScheduleCron = inngest.createFunction(
     const prepared = await step.run("prepare-scheduled-audits", async () => {
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above;
       // isEngagementPaused() below only covers pausedAt.
-      const targets = await db.select().from(engagements).where(isNull(engagements.deletedAt));
+      // Only clients that actually finished Showtime onboarding (pin-down
+      // wrote confirmationPageUrl — isProductOnboarded("showtime")'s own
+      // signal). The weekly/monthly schedules have defaults, so without
+      // this every client — Reputation Manager-, Cold Open- or Whop-only
+      // included — got a Leak Map audit every Monday and 1st of the month.
+      const targets = await db
+        .select()
+        .from(engagements)
+        .where(and(isNull(engagements.deletedAt), isNotNull(engagements.confirmationPageUrl)));
       // Ghost-run fix — same as nightlyBriefsCron above: check enablement
       // before startRun, not after.
       const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map");
