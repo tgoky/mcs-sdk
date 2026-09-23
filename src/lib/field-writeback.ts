@@ -20,6 +20,7 @@ import {
 import { eq } from "drizzle-orm";
 import { getClientFacts, type ClientFact } from "@/lib/client-facts";
 import { upsertColdOpenConfig, getColdOpenConfig } from "@/features/cold-open/server/config";
+import { salesCallMetaPatch } from "@/lib/account-intel/decisions";
 
 const JEV_APPLY_CONFIDENCE_THRESHOLD = 75;
 
@@ -114,6 +115,11 @@ async function mergeOfferDetails(engagementId: string, patch: Partial<OfferDetai
     .update(engagements)
     .set({ offerDetails: fullOffer, updatedAt: new Date() })
     .where(eq(engagements.engagementId, engagementId));
+}
+
+/** GoHighLevel's CRM credential and its calendar are the same account. */
+function sameBookingTool(bookingPlatform: string, provider: string): boolean {
+  return bookingPlatform === provider || (bookingPlatform === "ghl_calendar" && provider === "ghl");
 }
 
 const WRITEBACKS: Record<string, WritebackDef> = {
@@ -275,6 +281,59 @@ const WRITEBACKS: Record<string, WritebackDef> = {
       const objections = (value as unknown[]).filter((o): o is string => typeof o === "string" && o.trim().length > 0).slice(0, 8);
       if (objections.length === 0) return;
       await db.update(engagements).set({ topObjections: objections, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
+    },
+  },
+
+  // ── SHOWTIME FROM THE CONNECTED ACCOUNTS (account-intel) ──────────────
+  // The sales-call event type: matched to the site's booking link or the
+  // only one (account), or Jev's pick. Fills the booking config's own id
+  // for it, and the standing link, only when they're empty.
+  salesCallEventType: {
+    isTrusted: (f) => isDirectlyTrusted(f) || isTrustedJev(f),
+    apply: async (engagementId, value) => {
+      const v = value as { provider?: string; id?: string | null; url?: string | null } | null;
+      if (!v?.id || !v.provider) return;
+      const stack = await loadStack(engagementId);
+      if (stack?.booking_platform && !sameBookingTool(stack.booking_platform, v.provider)) return;
+      const current = stack?.booking_platform_meta ?? {};
+      // Only fills an empty id; a person's choice is written by recordSalesCallChoice.
+      const fill = Object.fromEntries(Object.entries(salesCallMetaPatch(v.provider, v.id)).filter(([k]) => !current[k as keyof typeof current]));
+      const patch: Partial<EngagementStack> = { booking_platform_meta: { ...current, ...fill } };
+      if (!stack?.booking_standing_link && v.url) patch.booking_standing_link = v.url;
+      await mergeStack(engagementId, patch);
+    },
+  },
+  // Owner-level ids the booking adapters need (Calendly organization,
+  // Cal.com username, GHL location), straight from the account.
+  bookingAccountMeta: {
+    isTrusted: isDirectlyTrusted,
+    apply: async (engagementId, value) => {
+      const v = value as { provider?: string; organization_uri?: string; username?: string; location_id?: string } | null;
+      if (!v?.provider) return;
+      const stack = await loadStack(engagementId);
+      if (stack?.booking_platform && !sameBookingTool(stack.booking_platform, v.provider)) return;
+      const meta = { ...(stack?.booking_platform_meta ?? {}) };
+      let changed = false;
+      for (const key of ["organization_uri", "username", "location_id"] as const) {
+        if (v[key] && !meta[key]) {
+          meta[key] = v[key];
+          changed = true;
+        }
+      }
+      if (changed) await mergeStack(engagementId, { booking_platform_meta: meta });
+    },
+  },
+  // Worries prospects actually voiced (booking answers, cancel reasons,
+  // lost deals), read by Claude and scored by Jev. Fills objections only
+  // when nobody has written any.
+  prospectConcerns: {
+    isTrusted: isTrustedJev,
+    apply: async (engagementId, value) => {
+      if (!Array.isArray(value)) return;
+      const [row] = await db.select({ topObjections: engagements.topObjections }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+      if (row?.topObjections?.length) return;
+      const concerns = (value as unknown[]).filter((o): o is string => typeof o === "string" && o.trim().length > 0).slice(0, 8);
+      if (concerns.length) await db.update(engagements).set({ topObjections: concerns, updatedAt: new Date() }).where(eq(engagements.engagementId, engagementId));
     },
   },
 

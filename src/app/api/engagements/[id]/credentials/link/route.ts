@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { afterResponse } from "@/lib/after-response";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
 import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
+import { deepPullAfterConnect } from "@/lib/account-intel";
 import { and, eq } from "drizzle-orm";
 import {
   linkEngagementToVault,
@@ -13,6 +15,9 @@ import {
   syncStackCredentialMarkers,
   resolveVaultCredentialValue,
 } from "@/lib/credentials";
+
+// Leaves room for the deep account pull that runs after the response.
+export const maxDuration = 180;
 
 /**
  * The "reuse a saved credential" action from Edit stack settings /
@@ -100,6 +105,7 @@ export async function POST(
           : harvestPasteKeyMetadata(engagementId, provider, value)
       )
       .catch((err) => console.error(`[credentials/link] harvest after link failed for ${provider}:`, err));
+    afterResponse(() => deepPullAfterConnect(engagementId, provider));
 
     return NextResponse.json({ ok: true });
   } catch (err) {

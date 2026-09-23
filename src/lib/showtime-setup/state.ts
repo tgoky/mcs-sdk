@@ -22,7 +22,10 @@ import { factTier } from "@/lib/fact-trust";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { SHOWTIME_TOOLS, type ToolGroupId } from "./catalog";
 import { showtimePickTargets } from "./picks";
-import { PICK_FACT_PREFIX, type PickSlot, type PickState, type SetupValue, type ShowtimeSetupState, type ToolState } from "./types";
+import { INTEL_FACT_PREFIX, type AccountIntel } from "@/lib/account-intel/types";
+import type { Raw } from "@/lib/account-intel/reader";
+import { findShowtimeTool } from "./catalog";
+import { PICK_FACT_PREFIX, type AccountRead, type PickSlot, type PickState, type SetupValue, type ShowtimeSetupState, type ToolState } from "./types";
 
 type Stack = Partial<EngagementStack> & Record<string, unknown>;
 
@@ -246,6 +249,7 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
           : {},
       pagesRead: ((facts.siteCrawl?.value as { pages?: unknown[] } | undefined)?.pages ?? []).length,
     },
+    accountRead: accountReadFrom(facts),
     existingPage: {
       url:
         (typeof stack.existing_confirmation_page_url === "string" && stack.existing_confirmation_page_url) ||
@@ -259,5 +263,77 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       template: row.confirmationPageTemplate,
       confirmationPageUrl: row.confirmationPageUrl ?? null,
     },
+  };
+}
+
+function accountReadFrom(facts: Record<string, ClientFact>): AccountRead {
+  const v = <T,>(key: string): T | null => (facts[key] && facts[key].status !== "rejected" ? (facts[key].value as T) : null);
+  const toolName = (p: string | undefined) => (p ? (findShowtimeTool(p)?.label ?? p) : "");
+  const booking = v<Raw>("bookingHistory");
+  const deals = v<Raw>("dealHistory");
+  const email = v<Raw>("emailHistory");
+  const sender = v<Raw>("emailSender");
+  const brief = v<Raw>("businessBrief");
+  const sales = v<Raw>("salesCallEventType");
+  const types = v<{ types?: { id: string; name: string; durationMin?: number | null; active?: boolean }[] }>("bookingEventTypes");
+  const answers = v<{ question: string; responses: number; answers: string[] }[]>("bookingAnswers") ?? [];
+  const autos = v<{ automations?: { name: string; status?: string | null }[] }>("emailAutomations");
+  const team = v<{ name: string }[]>("salesTeam") ?? [];
+  const sources = v<{ source: string; count: number }[]>("leadSources") ?? [];
+  const blocked = Object.values(facts)
+    .filter((f) => f.key.startsWith(INTEL_FACT_PREFIX) && f.status !== "rejected")
+    .map((f) => ({ tool: toolName(f.key.slice(INTEL_FACT_PREFIX.length)), parts: ((f.value as AccountIntel).coverage?.blocked ?? []) as string[] }))
+    .filter((b) => b.parts.length > 0);
+  return {
+    booking: booking
+      ? {
+          tool: toolName(booking.provider),
+          total: booking.total ?? 0,
+          windowDays: booking.windowDays ?? 90,
+          perWeek: booking.perWeek ?? 0,
+          noShowRate: booking.noShowRate ?? null,
+          attendanceKnown: booking.attendanceKnown ?? 0,
+          cancelRate: booking.cancelRate ?? null,
+          medianLeadTimeDays: booking.medianLeadTimeDays ?? null,
+          busiestDays: booking.busiestDays ?? [],
+          busiestHours: booking.busiestHours ?? [],
+        }
+      : null,
+    deals: deals
+      ? {
+          tool: toolName(deals.provider),
+          total: deals.total ?? 0,
+          winRate: deals.winRate ?? null,
+          averageWon: deals.averageWon ?? null,
+          medianCycleDays: deals.medianCycleDays ?? null,
+          openValue: deals.openValue ?? 0,
+          currency: deals.currency ?? null,
+        }
+      : null,
+    email: email
+      ? { tool: toolName(email.provider), campaigns: email.campaigns ?? 0, averageOpenRate: email.averageOpenRate ?? null, perMonth: email.perMonth ?? null, bestSubjects: email.bestSubjects ?? [] }
+      : null,
+    sender: sender && (sender.fromName || sender.fromEmail) ? { fromName: sender.fromName ?? null, fromEmail: sender.fromEmail ?? null } : null,
+    prospectWords: answers.slice(0, 4).map((q) => ({ question: q.question, responses: q.responses, answers: q.answers.slice(0, 6) })),
+    brief:
+      brief && typeof brief.summary === "string"
+        ? {
+            summary: brief.summary,
+            prospectGoals: brief.prospectGoals ?? [],
+            prospectPains: brief.prospectPains ?? [],
+            prospectConcerns: brief.prospectConcerns ?? [],
+            watchOuts: brief.watchOuts ?? [],
+          }
+        : null,
+    briefTier: factTier(facts.businessBrief),
+    salesCall:
+      sales && sales.id
+        ? { id: String(sales.id), name: String(sales.name ?? "Event"), url: sales.url ?? null, tier: factTier(facts.salesCallEventType), evidence: facts.salesCallEventType?.evidence ?? null }
+        : null,
+    eventTypes: (types?.types ?? []).filter((t) => t.active !== false).map((t) => ({ id: t.id, name: t.name, durationMin: t.durationMin ?? null })),
+    automations: (autos?.automations ?? []).map((a) => a.name).slice(0, 40),
+    team: team.map((t) => t.name).slice(0, 20),
+    leadSources: sources.slice(0, 6),
+    blocked,
   };
 }

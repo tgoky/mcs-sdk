@@ -16,6 +16,7 @@ import { syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
 import { PICK_FACT_PREFIX, PICK_SLOT_META, type PickSlot } from "@/lib/showtime-setup/types";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
+import { recordSalesCallChoice } from "@/lib/account-intel/decisions";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -346,6 +347,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await recordPickDecisions(id, autoPicks).catch((err) =>
       console.error(`[bridges/pin-down] recording pick decisions failed for ${id}:`, err)
     );
+
+    // The event type the review says books the sales call.
+    if (typeof body.salesCallEventId === "string" && body.salesCallEventId) {
+      await recordSalesCallChoice(id, body.salesCallEventId).catch((err) =>
+        console.error(`[bridges/pin-down] recording the sales-call event failed for ${id}:`, err)
+      );
+    }
 
     // With a skill list, exactly those skills are on for this client and
     // the rest off (they're on by default, so "off" has to be written).

@@ -13,13 +13,16 @@ import { showtimePickTargets } from "@/lib/showtime-setup/picks";
 import { SHOWTIME_SKILLS, needsFor } from "@/lib/showtime-setup/skills";
 import { checkAccountMatches, checkSite, matchSavedConnection, pickShowtimeIds } from "@/lib/showtime-setup/jev-setup";
 import { PICK_SLOT_META, type ActivationStep, type PickSlot } from "@/lib/showtime-setup/types";
+import { INTEL_PROVIDERS, runAccountIntel, runAccountReadings } from "@/lib/account-intel";
+import { intelSteps } from "@/lib/showtime-setup/intel-steps";
 import { authorizeShowtimeSetup } from "../access";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 // A first read of a site (Firecrawl, then Claude and Jev over the copy)
-// takes a while; a reused read returns in a second or two.
-export const maxDuration = 120;
+// and of every connected account takes a while; reused reads return in a
+// second or two.
+export const maxDuration = 300;
 
 function countLabel(n: number, noun: string): string | null {
   return n > 0 ? `${n} ${noun}${n === 1 ? "" : "s"}` : null;
@@ -144,6 +147,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           } else {
             step({ id: `account-${t.provider}`, label: `${t.label} connected`, status: "done" });
           }
+        }
+
+        // ── 3b. What the accounts have done ──
+        // Bookings, attendance, what prospects wrote, deals, emails,
+        // automations: every connected tool read in parallel. GoHighLevel's
+        // booking and CRM sides are one account, read once.
+        const connected: (typeof INTEL_PROVIDERS)[number][] = [];
+        for (const p of INTEL_PROVIDERS) if (await hasCredential(id, p)) connected.push(p);
+        const toRead = connected.filter((p) => !(p === "ghl" && connected.includes("ghl_calendar")));
+        const runs = await Promise.all(toRead.map((p) => runAccountIntel(id, p)));
+        for (const run of runs) {
+          if (!run.intel) continue;
+          for (const s of intelSteps(run.intel, findShowtimeTool(run.provider)?.label ?? run.provider)) step(s);
+        }
+        if (runs.some((r) => r.intel)) {
+          await runAccountReadings(id);
+          const read = await getClientFact(id, "businessBrief");
+          if (read && read.status !== "rejected") step({ id: "account-read", label: "Read your business from your tools", status: "done" });
         }
 
         await applyResolvableFacts(id).catch((err) => console.error(`[setup/showtime/activate] applyResolvableFacts failed for ${id}:`, err));

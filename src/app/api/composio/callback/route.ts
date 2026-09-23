@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { afterResponse } from "@/lib/after-response";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import {
@@ -9,9 +10,13 @@ import {
 } from "@/lib/credentials";
 import { composioVaultRefKey, finalizeComposioConnection, isAllowedComposioReturnPath, consumeComposioConnectAttempt, getComposioCredentialValue } from "@/lib/composio";
 import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
+import { deepPullAfterConnect } from "@/lib/account-intel";
 import { db } from "@/lib/db";
 import { engagements, credentialVault } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
+
+// Leaves room for the deep account pull that runs after the response.
+export const maxDuration = 180;
 
 /**
  * Composio redirects the browser here after its hosted connect page
@@ -186,6 +191,8 @@ export async function GET(request: Request) {
             .then((value) => harvestAccountMetadata(engagementId, provider, value))
             .catch((err) => console.error(`[composio/callback] account harvest kickoff failed for ${provider}:`, err));
         }
+        // The deep read of the account's history, after the redirect is sent.
+        afterResponse(() => deepPullAfterConnect(engagementId, provider));
       }
       // Not owned (or no longer exists) — the credential is still saved to
       // the vault either way; it just isn't linked to a specific client.

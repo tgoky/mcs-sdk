@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { afterResponse } from "@/lib/after-response";
 import {
   linkEngagementToVault,
   storeVaultCredential,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/credentials";
 import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
 import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
+import { deepPullAfterConnect } from "@/lib/account-intel";
 import { patchEngagementStack } from "@/lib/engagement-stack";
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
 import { CalendlyClient, CalComClient } from "@/lib/platforms/booking";
@@ -20,7 +22,8 @@ import { authorizeShowtimeSetup } from "../access";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
-export const maxDuration = 60;
+// The deep account pull runs after the answer, inside this budget.
+export const maxDuration = 180;
 
 // Keys that can be checked with one cheap call before saving, so a typo
 // fails here instead of on the first real run. Same checks the "Test
@@ -125,6 +128,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       (err) => console.error(`[setup/showtime/connect] harvest failed for ${provider}:`, err)
     );
     await Promise.race([harvest, new Promise((resolve) => setTimeout(resolve, HARVEST_WAIT_MS))]);
+    // Then the deep read of what the account has done (bookings, deals,
+    // campaigns), after the answer is sent.
+    afterResponse(() => deepPullAfterConnect(id, provider, value));
 
     const domain = await getPrimaryDomainForEngagement(id);
     const accountCheck = await checkAccountMatches(id, domain, provider, label || null);

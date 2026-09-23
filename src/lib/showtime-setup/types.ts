@@ -104,6 +104,8 @@ export interface ShowtimeSetupState {
     socialProfiles: Record<string, string>;
     pagesRead: number;
   };
+  /** What the connected tools showed (account-intel), for the review. */
+  accountRead: AccountRead;
   preview: {
     designSignal: unknown;
     template: string;
@@ -128,3 +130,52 @@ export const PICK_SLOT_META: Record<PickSlot, { label: string; stackField: strin
 };
 
 export const PICK_FACT_PREFIX = "pick:";
+
+export interface AccountRead {
+  booking: {
+    tool: string;
+    total: number;
+    windowDays: number;
+    perWeek: number;
+    noShowRate: number | null;
+    attendanceKnown: number;
+    cancelRate: number | null;
+    medianLeadTimeDays: number | null;
+    busiestDays: string[];
+    busiestHours: string[];
+  } | null;
+  deals: {
+    tool: string;
+    total: number;
+    winRate: number | null;
+    averageWon: number | null;
+    medianCycleDays: number | null;
+    openValue: number;
+    currency: string | null;
+  } | null;
+  email: {
+    tool: string;
+    campaigns: number;
+    averageOpenRate: number | null;
+    perMonth: number | null;
+    bestSubjects: { subject: string; openRate: number }[];
+  } | null;
+  sender: { fromName: string | null; fromEmail: string | null } | null;
+  /** What prospects wrote on the booking form, a few per question. */
+  prospectWords: { question: string; responses: number; answers: string[] }[];
+  brief: {
+    summary: string;
+    prospectGoals: string[];
+    prospectPains: string[];
+    prospectConcerns: string[];
+    watchOuts: string[];
+  } | null;
+  briefTier: TrustTier;
+  salesCall: { id: string; name: string; url: string | null; tier: TrustTier; evidence: string | null } | null;
+  eventTypes: { id: string; name: string; durationMin: number | null }[];
+  automations: string[];
+  team: string[];
+  leadSources: { source: string; count: number }[];
+  /** Parts a connection wasn't allowed to read, per tool. */
+  blocked: { tool: string; parts: string[] }[];
+}

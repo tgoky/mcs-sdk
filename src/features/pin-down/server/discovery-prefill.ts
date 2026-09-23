@@ -318,7 +318,7 @@ export async function fetchTrustpilotBaseline(domain: string): Promise<Harvested
 /** Characters of crawled copy Claude reads: the whole deep crawl, not the
  * first homepage-sized slice (6,000 characters used to cut off the
  * pricing and proof pages the crawl had just paid for). */
-const READING_CHAR_BUDGET = 60_000;
+const READING_CHAR_BUDGET = 90_000;
 
 function normalizeForMatch(text: string): string {
   return text

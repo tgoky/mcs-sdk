@@ -302,7 +302,7 @@ const ICP_LEVELS = [
   "Fully right: every audience is clearly who the copy is written for, and no obvious one is missing",
 ];
 
-function scoreToConfidence(answer: JevAnswer | undefined, levels: number): number | undefined {
+export function scoreToConfidence(answer: JevAnswer | undefined, levels: number): number | undefined {
   if (!answer || answer.type !== "score") return undefined;
   const quality = answer.score / (levels - 1);
   return Math.round(quality * answer.confidence * 100);

@@ -478,10 +478,15 @@ async function pullBookingShowRate(
   if (stack.booking_platform !== "calendly") return null;
 
   const apiKey = await resolveCredential(engagementId, "calendly");
+  // /scheduled_events needs a user or organization to scope to; without one
+  // Calendly rejects every call and this metric silently reads as empty.
+  const me = await fetchWithTimeout("https://api.calendly.com/users/me", { headers: { Authorization: `Bearer ${apiKey}` } });
+  const userUri: string | undefined = me.ok ? ((await me.json()) as { resource?: { uri?: string } }).resource?.uri : undefined;
+  if (!userUri) return null;
 
   async function getShowRate(start: Date, end: Date): Promise<{ rate: number; n: number }> {
     const res = await fetchWithTimeout(
-      `https://api.calendly.com/scheduled_events?min_start_time=${start.toISOString()}&max_start_time=${end.toISOString()}&count=100`,
+      `https://api.calendly.com/scheduled_events?user=${encodeURIComponent(userUri!)}&min_start_time=${start.toISOString()}&max_start_time=${end.toISOString()}&count=100`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
     if (!res.ok) return { rate: 0, n: 0 };

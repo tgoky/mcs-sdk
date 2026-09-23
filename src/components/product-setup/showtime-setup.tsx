@@ -33,6 +33,7 @@ import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList, FactToken, TextEditor } from "./fact-token";
 import { ActivationProgress } from "./activation-steps";
 import { AnchoredCard } from "./anchored-card";
+import { AccountReadSection, hasAccountRead } from "./account-read";
 import { SkillSwitchRow } from "./skill-switch";
 import { SHOWTIME_SKILLS, needsFor, type CombinedNeeds } from "@/lib/showtime-setup/skills";
 import { ConfirmationPreview } from "./confirmation-preview";
@@ -53,6 +54,8 @@ interface Draft {
   picks: Partial<Record<PickSlot, Pick | null>>;
   /** Keep the client's own confirmation page instead of building one. */
   keepPage: boolean;
+  /** The booking event type that is the sales call. */
+  salesCallEventId: string | null;
 }
 
 const OFFER_KEYS: OfferKey[] = ["offerName", "offerPrice", "offerVertical", "offerIcp", "trafficTemperature", "castingChoice", "heroVideoUrl"];
@@ -82,6 +85,11 @@ function draftFrom(data: ShowtimeSetupState, prev: Draft | null, touched: Set<st
     slackWebhookUrl: keep("slack") ? prev!.slackWebhookUrl : data.choices.slackWebhookUrl,
     picks,
     keepPage: keep("keepPage") ? prev!.keepPage : data.existingPage.reuse,
+    salesCallEventId: keep("salesCall")
+      ? prev!.salesCallEventId
+      : data.accountRead.salesCall && data.accountRead.salesCall.tier !== "ask"
+        ? data.accountRead.salesCall.id
+        : null,
   };
 }
 
@@ -262,6 +270,7 @@ export function ShowtimeSetup({
     return { ...baseNeeds, groups, picks };
   }, [baseNeeds, draft?.keepPage, data?.existingPage.url]);
   const setKeepPage = (v: boolean) => update((d) => ({ ...d, keepPage: v }), "keepPage");
+  const setSalesCall = (id: string) => update((d) => ({ ...d, salesCallEventId: id }), "salesCall");
   const toggleSkill = (id: string, on: boolean) =>
     setSkills((cur) => (on ? SHOWTIME_SKILLS.map((sk) => sk.id).filter((x) => x === id || cur.includes(x)) : cur.filter((x) => x !== id)));
 
@@ -394,6 +403,7 @@ export function ShowtimeSetup({
       autoPicks,
       skills,
     };
+    if (draft.salesCallEventId) body.salesCallEventId = draft.salesCallEventId;
     if (data.existingPage.url) {
       body.existingConfirmationPageReuse = draft.keepPage;
       body.existingConfirmationPageUrl = data.existingPage.url;
@@ -532,6 +542,7 @@ export function ShowtimeSetup({
               needs={needs}
               onToggleSkill={toggleSkill}
               setKeepPage={setKeepPage}
+              setSalesCall={setSalesCall}
               toolRows={toolRows(true)}
               onReread={() => {
                 setPhase("welcome");
@@ -759,11 +770,13 @@ function Review({
   needs,
   onToggleSkill,
   setKeepPage,
+  setSalesCall,
 }: {
   skills: string[];
   needs: CombinedNeeds;
   onToggleSkill: (id: string, on: boolean) => void;
   setKeepPage: (v: boolean) => void;
+  setSalesCall: (id: string) => void;
   data: ShowtimeSetupState;
   draft: Draft;
   domain: string;
@@ -920,6 +933,20 @@ function Review({
             {" "}is on camera.
           </p>
         </section>
+        )}
+
+        {/* What the connected tools showed: counted, not typed */}
+        {hasAccountRead(data.accountRead) && (
+          <section className="space-y-4">
+            <SectionTitle hint="Counted from your connected tools. Nothing here was typed.">What your tools told us</SectionTitle>
+            <AccountReadSection
+              read={data.accountRead}
+              salesCallId={draft.salesCallEventId}
+              salesCallTier={tierOf("salesCall", data.accountRead.salesCall ? ({ tier: data.accountRead.salesCall.tier } as SetupValue) : undefined)}
+              onPickSalesCall={setSalesCall}
+              tokenProps={tokenProps}
+            />
+          </section>
         )}
 
         {/* Skills: switch each one on or off; what an on skill will do, editable */}

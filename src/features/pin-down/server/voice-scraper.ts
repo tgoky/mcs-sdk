@@ -62,10 +62,12 @@ const USER_AGENT =
 const HOMEPAGE_WAIT_MS = 2500;
 
 // A deep read, once per client: every product reuses it (discover-client.ts
-// only crawls again when the domain changes).
-const WORD_BUDGET_TARGET = 15000;
-const MAX_PAGES_PER_CRAWL = 10;
-const MAX_FIRECRAWL_SCRAPE_CALLS = 10;
+// only crawls again when the domain changes). Firecrawl bills 1 credit per
+// page for markdown + rawHtml + links (only LLM formats like "json" cost
+// more) plus 1 for the map, so a full read is about 15 credits.
+const WORD_BUDGET_TARGET = 22000;
+const MAX_PAGES_PER_CRAWL = 14;
+const MAX_FIRECRAWL_SCRAPE_CALLS = 14;
 const FETCH_BATCH_SIZE = 4;
 const CRAWL_BUDGET_MS = 45000;
 
@@ -201,6 +203,10 @@ async function fetchPageViaFirecrawl(url: string, budget: FirecrawlBudget, deadl
     );
     if (!res.ok) return null;
     const data = await res.json();
+    // Firecrawl returns (and bills) the page even when the site answered
+    // 404 or 403; an error page is not the business's copy.
+    const status = Number(data?.data?.metadata?.statusCode);
+    if (Number.isFinite(status) && status >= 400) return null;
     const markdown: string | undefined = data?.data?.markdown;
     const rawHtml: string | undefined = data?.data?.rawHtml;
     const links: unknown = data?.data?.links;

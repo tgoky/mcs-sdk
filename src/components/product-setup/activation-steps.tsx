@@ -8,6 +8,7 @@
 // small chips. Every chip is a step the server reported as finished
 // (activate/route.ts streams them), so nothing here is staged for show.
 
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, Check, Loader2, RotateCcw } from "lucide-react";
 import type { ActivationStep } from "@/lib/showtime-setup/types";
@@ -16,9 +17,11 @@ import { cn } from "@/lib/utils";
 const STAGES = [
   { key: "site", label: "Reading the site" },
   { key: "found", label: "Understanding the offer" },
-  { key: "account", label: "Checking your tools" },
+  { key: "account", label: "Reading your tools" },
   { key: "pick", label: "Choosing lists and pages" },
 ] as const;
+
+const CHIP_CAP = 12;
 
 function stageOf(step: ActivationStep): number {
   if (step.id.startsWith("found-")) return 1;
@@ -49,7 +52,12 @@ export function ActivationProgress({
       : steps.length === 0
         ? `Reading ${host || "your tools"}…`
         : `${STAGES[Math.min(stage, 3)].label}…`;
-  const chips = steps.filter((s) => s.id !== "site");
+  const [showAll, setShowAll] = useState(false);
+  const allChips = steps.filter((s) => s.id !== "site");
+  // Problems first so a cap never hides one; the rest in arrival order.
+  const ordered = [...allChips.filter((s) => s.status === "failed"), ...allChips.filter((s) => s.status !== "failed")];
+  const chips = showAll ? ordered : ordered.slice(0, CHIP_CAP);
+  const hidden = ordered.length - chips.length;
   const siteStep = steps.find((s) => s.id === "site");
 
   return (
@@ -130,6 +138,13 @@ export function ActivationProgress({
               </motion.li>
             ))}
           </AnimatePresence>
+          {hidden > 0 && (
+            <li>
+              <button type="button" onClick={() => setShowAll(true)} className="rounded-full px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
+                +{hidden} more
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>

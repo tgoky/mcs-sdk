@@ -15,6 +15,7 @@ vi.mock("@/lib/account-harvest", async () => {
   return { isHarvestableProvider: actual.isHarvestableProvider, harvestAccountMetadata: vi.fn() };
 });
 vi.mock("@/lib/paste-key-harvest", () => ({ harvestPasteKeyMetadata: vi.fn() }));
+vi.mock("@/lib/account-intel", () => ({ deepPullAfterConnect: vi.fn().mockResolvedValue(undefined) }));
 
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
@@ -22,6 +23,7 @@ import { db } from "@/lib/db";
 import { linkEngagementToVault, vaultCredentialBelongsToTenant, resolveVaultCredentialValue } from "@/lib/credentials";
 import { harvestAccountMetadata } from "@/lib/account-harvest";
 import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
+import { deepPullAfterConnect } from "@/lib/account-intel";
 import { fakeDb } from "../helpers/fake-db";
 
 async function importRoute() {
@@ -54,6 +56,8 @@ describe("POST /api/engagements/[id]/credentials/link", () => {
     expect(linkEngagementToVault).toHaveBeenCalledWith("e1", "hubspot", "v1");
     expect(harvestAccountMetadata).toHaveBeenCalledWith("e1", "hubspot", "secret-value");
     expect(harvestPasteKeyMetadata).not.toHaveBeenCalled();
+    // And the deep read of the account's history, after the response.
+    expect(deepPullAfterConnect).toHaveBeenCalledWith("e1", "hubspot");
   });
 
   it("uses the paste-a-key harvester for pasted keys", async () => {
