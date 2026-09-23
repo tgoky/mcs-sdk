@@ -285,14 +285,21 @@ const checkPinDown: Checker = async (engagementId) => {
 };
 
 const checkRepOnboarding: Checker = async (engagementId) => {
-  const [row] = await db.select({ id: repIdentityGraphs.id }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
-  // soleAuthorityName is DB-level NOT NULL (schema.ts:2149) and enforced
-  // at onboarding-service.ts's own validation before a row can exist at
-  // all — so "does a row exist" already implies it's set. Everything
-  // else in repIdentityGraphs defaults to an empty array/object, which is
-  // a legitimate "nothing captured yet" state, not a block.
+  const [row] = await db
+    .select({ operatorName: repIdentityGraphs.operatorName, soleAuthorityName: repIdentityGraphs.soleAuthorityName })
+    .from(repIdentityGraphs)
+    .where(eq(repIdentityGraphs.engagementId, engagementId))
+    .limit(1);
   if (!row) return [missing("repIdentityGraph", "Reputation Manager identity", "No identity graph on file for this client — rep-onboarding hasn't actually completed.")];
-  return [];
+  // A row existing does NOT mean setup finished: the rep-onboarding
+  // bridge route inserts a blank placeholder (operatorName "",
+  // soleAuthorityName "") as soon as the form is opened. Everything else
+  // in repIdentityGraphs defaults to an empty array/object, which is a
+  // legitimate "nothing captured yet" state, not a block.
+  const out: MissingField[] = [];
+  if (!row.operatorName?.trim()) out.push(missing("operatorName", "Operator / business name", "Every Reputation Manager watch searches by this name — nothing can run until it's set."));
+  if (!row.soleAuthorityName?.trim()) out.push(missing("soleAuthorityName", "Sole authority name", "Required before crisis escalation can run."));
+  return out;
 };
 
 const checkIcpLock: Checker = async (engagementId) => {
@@ -374,6 +381,15 @@ const CHECKERS: Partial<Record<WorkerId, Checker>> = {
   "leak-map": checkLeakMap,
   "pre-call-read": checkPreCallRead,
   "rep-onboarding": checkRepOnboarding,
+  // The downstream rep workers need nothing beyond rep-onboarding's own
+  // fields (worker-registry.ts) — but they DO need those, so they share
+  // its checker instead of failing safe to "complete".
+  "rep-engine-panel": checkRepOnboarding,
+  "rep-trustpilot-watch": checkRepOnboarding,
+  "rep-reddit-watch": checkRepOnboarding,
+  "rep-twitter-watch": checkRepOnboarding,
+  "rep-crisis-response": checkRepOnboarding,
+  "rep-digest": checkRepOnboarding,
   "icp-lock": checkIcpLock,
   "voice-capture": checkVoiceCapture,
   "source-connect": checkSourceConnect,

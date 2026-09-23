@@ -5,8 +5,9 @@ import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/s
 import { startRun } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
+import { repIdentityIsComplete } from "@/lib/rep-engagements";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 // Every rep-* cron below used to be a literal fixed-UTC Inngest trigger
 // (e.g. "TZ=UTC 0 7 * * *"), which meant an operator's per-engagement
@@ -58,7 +59,7 @@ export const repEnginePanelCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-engine-panel");
 
@@ -113,7 +114,7 @@ export const repTrustpilotWatchCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-trustpilot-watch");
 
@@ -166,7 +167,7 @@ export const repRedditWatchCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-reddit-watch");
 
@@ -219,7 +220,7 @@ export const repTwitterWatchCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-twitter-watch");
 
@@ -281,7 +282,7 @@ export const repCrisisResponseCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-crisis-response");
 
@@ -340,7 +341,7 @@ export const repDigestCron = inngest.createFunction(
         })
         .from(repIdentityGraphs)
         .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(isNull(engagements.deletedAt));
+        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
 
       const disabled = await getDisabledEngagementIdsForSkill("rep-digest");
 

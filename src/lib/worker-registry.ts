@@ -782,7 +782,7 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
       key: "soleAuthorityName",
       label: "Sole authority name",
       kind: "ask",
-      description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation, so this can never actually be blank once a row exists. Read directly by rep-crisis-response's escalation logic.",
+      description: "The one person who can declare a crisis, approve a public response, or stand down — recorded, never defaulted. DB-required (schema.ts's repIdentityGraphs.soleAuthorityName is NOT NULL) and enforced at onboarding-service.ts's own validation — but the rep-onboarding bridge route inserts a blank placeholder row when the form is opened, so worker-config-completeness.ts checks it explicitly. Read directly by rep-crisis-response's escalation logic.",
       tier: "blocking",
     },
     {

@@ -285,12 +285,23 @@ export async function runRepTwitterWatch(tenant: any, runId: string, step: StepT
       return;
     }
 
-    const handle = graph.operatorHandles?.x?.replace(/^@/, "");
+    const handle = graph.operatorHandles?.x?.trim().replace(/^@/, "");
+    // Blank terms dropped — twitterapis.com rejects an empty `query` with a
+    // 400 ("Missing required `query` parameter"), which is exactly what a
+    // placeholder identity graph (operatorName "") used to send.
     const searchTerms = [
       graph.operatorName,
       ...graph.entities.filter((e) => e.highPriority).map((e) => e.name),
       ...(handle ? [`@${handle}`] : []),
-    ];
+    ]
+      .map((t) => t?.trim())
+      .filter((t): t is string => Boolean(t));
+    if (searchTerms.length === 0) {
+      await logStep(runId, { phase: "twitter_watch", status: "skipped", detail: "No name or handle to search for yet." });
+      summary.openItems.push("Finish Reputation Manager's Identity Setup (operator name) to start watching X.");
+      await finishRun(runId, { summary, status: "skipped" });
+      return;
+    }
     await logStep(runId, {
       phase: "twitter_watch",
       status: "running",
@@ -385,8 +396,13 @@ export async function runRepTwitterDeepScan(
       throw new Error("TWITTERAPIS_API_KEY not configured.");
     }
 
-    const handle = graph.operatorHandles?.x?.replace(/^@/, "");
-    const baseTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name), ...(handle ? [`@${handle}`] : [])];
+    const handle = graph.operatorHandles?.x?.trim().replace(/^@/, "");
+    const baseTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name), ...(handle ? [`@${handle}`] : [])]
+      .map((t) => t?.trim())
+      .filter((t): t is string => Boolean(t));
+    if (baseTerms.length === 0) {
+      throw new Error("Reputation Manager's Identity Setup has no operator name yet — nothing to search for.");
+    }
     const searchTerms = baseTerms.map((term) => `${term} since:${sinceDate}`);
 
     await logStep(runId, { phase: "twitter_deep_scan", status: "running", detail: `Scanning X back to ${sinceDate} for: ${baseTerms.join(", ")}.` });

@@ -6,6 +6,7 @@ import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import { COLD_OPEN_SKILL_IDS, type ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { WORKER_IDS, type WorkerId } from "@/lib/worker-registry";
+import { repIdentityIsComplete } from "@/lib/rep-engagements";
 
 /**
  * No row for (engagementId, skillId) means enabled — this table only ever
@@ -152,7 +153,7 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
       .from(engagementSkills)
       .where(eq(engagementSkills.engagementId, engagementId)),
     db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1),
-    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1),
+    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(and(eq(repIdentityGraphs.engagementId, engagementId), repIdentityIsComplete)).limit(1),
     db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(eq(coldOpenConfig.engagementId, engagementId)).limit(1),
     db.select({ engagementId: whopAgentConnections.engagementId }).from(whopAgentConnections).where(and(eq(whopAgentConnections.engagementId, engagementId), isNull(whopAgentConnections.disconnectedAt))).limit(1),
   ]);
@@ -189,7 +190,7 @@ export async function getEnabledWorkerIdsForEngagements(engagementIds: string[])
       .from(engagementSkills)
       .where(inArray(engagementSkills.engagementId, engagementIds)),
     db.select({ engagementId: engagements.engagementId, stack: engagements.stack }).from(engagements).where(inArray(engagements.engagementId, engagementIds)),
-    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(inArray(repIdentityGraphs.engagementId, engagementIds)),
+    db.select({ engagementId: repIdentityGraphs.engagementId }).from(repIdentityGraphs).where(and(inArray(repIdentityGraphs.engagementId, engagementIds), repIdentityIsComplete)),
     db.select({ engagementId: coldOpenConfig.engagementId }).from(coldOpenConfig).where(inArray(coldOpenConfig.engagementId, engagementIds)),
     db
       .select({ engagementId: whopAgentConnections.engagementId })

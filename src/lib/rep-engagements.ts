@@ -1,6 +1,20 @@
 import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs } from "@/models/schema";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+
+/**
+ * "Identity Setup has actually been completed" — not just "a
+ * rep_identity_graphs row exists". The rep-onboarding bridge route inserts
+ * a placeholder row (operatorName "", soleAuthorityName "") the moment its
+ * form is merely opened, so row existence alone would arm every scheduled
+ * Reputation Manager watch against a blank name (e.g. rep-twitter-watch
+ * sending `query=` and failing with a 400). Every cron, the Library's
+ * enabled evidence, and the pre-run config gate use this instead.
+ */
+export const repIdentityIsComplete = and(
+  sql`trim(${repIdentityGraphs.operatorName}) <> ''`,
+  sql`trim(${repIdentityGraphs.soleAuthorityName}) <> ''`
+)!;
 
 /**
  * Engagement IDs in this workspace enrolled in Reputation Manager — same

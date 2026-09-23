@@ -322,7 +322,16 @@ export async function runRepRedditWatch(tenant: any, runId: string, step: StepTo
       return;
     }
 
-    const searchTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name)];
+    // Blank terms dropped — same placeholder-identity-graph guard as rep-twitter-watch.
+    const searchTerms = [graph.operatorName, ...graph.entities.filter((e) => e.highPriority).map((e) => e.name)]
+      .map((t) => t?.trim())
+      .filter((t): t is string => Boolean(t));
+    if (searchTerms.length === 0) {
+      await logStep(runId, { phase: "reddit_watch", status: "skipped", detail: "No name to search for yet." });
+      summary.openItems.push("Finish Reputation Manager's Identity Setup (operator name) to start watching Reddit.");
+      await finishRun(runId, { summary, status: "skipped" });
+      return;
+    }
     await logStep(runId, {
       phase: "reddit_watch",
       status: "running",
