@@ -422,7 +422,7 @@ export default async function EngagementDetailPage({
         {/* Brand voice, ad briefs, script pack, and confirmation-page audit
             (DeliverablesPanel) used to render here unconditionally for
             every engagement, pin-down enabled or not — moved to pin-down's
-            own dedicated page (skills/pin-down/page.tsx), same as every
+            own dedicated page (skills/pin-down, see skill-pages.tsx), same as every
             other skill in SKILLS_WITH_OWN_PAGE, instead of always showing
             on the main engagement page regardless of setup state. */}
 

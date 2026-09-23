@@ -1293,7 +1293,7 @@ export function allWorkers(): WorkerDefinition[] {
 /**
  * Showtime workers with their own dedicated single-client page (schedule/
  * report content, not a run-execution list — see e.g.
- * bridges/leak-map's sibling skills/leak-map/page.tsx). Previously
+ * the leak-map entry in engagements/[id]/skill-pages.tsx). Previously
  * duplicated as a local const inside workers-panel.tsx; centralized here
  * once skills-nav-list.tsx needed the identical list for Capabilities'
  * own links — two independently-maintained copies of "which workers have

@@ -9,7 +9,7 @@
 // booking refusal, a missing-credential error, or the win-back-exit note
 // reads identically here and in chat. Deliberately opened from the same
 // page an operator already visits to see this client's Pile-On pipeline
-// (skills/pile-on/page.tsx) rather than a new, separate screen — see that
+// (skills/pile-on — its entry in skill-pages.tsx) rather than a new, separate screen — see that
 // page's PileOnPipeline toolbar for the trigger button.
 //
 // Two-step flow, not a single "Enroll" button: preview is always shown
