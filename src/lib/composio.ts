@@ -212,8 +212,7 @@ const COMPOSIO_RETURN_ALLOWLIST = [
   "/dashboard/engagements/new",
   "/dashboard/teammates",
   "/dashboard/queue",
-  "/dashboard/reputation-manager",
-  "/dashboard/showtime",
+  "/dashboard",
 ];
 
 /**

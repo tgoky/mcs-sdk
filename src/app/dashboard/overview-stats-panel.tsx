@@ -339,7 +339,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => decide(item, "approved")}
-                              className={`${btnBase} bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400`}
+                              className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               title="Confirm no-show and start Win-Back recovery"
                             >
                               <UserX size={11} /> Confirm no-show
@@ -348,7 +348,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => resolveSweepNoShow(item, "showed")}
-                              className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}
+                              className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               title="Log that they actually showed — no Win-Back"
                             >
                               <UserCheck size={11} /> Showed
@@ -357,7 +357,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => resolveSweepNoShow(item, "rescheduled")}
-                              className={`${btnBase} bg-amber-500 text-zinc-950 hover:bg-amber-400`}
+                              className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               title="Log that they rescheduled — no Win-Back"
                             >
                               <CalendarClock size={11} /> Rescheduled
@@ -377,7 +377,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => decide(item, "approved")}
-                              className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}
+                              className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                             >
                               <Check size={11} /> {queueCopy.actions.approve}
                             </button>
@@ -390,7 +390,7 @@ export function OverviewStatsPanel({
                             {(repair?.kind === "link" ? repair.href : itemHref) && (
                               <Link
                                 href={repair?.kind === "link" ? repair.href : itemHref}
-                                className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}
+                                className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               >
                                 <ArrowUpRight size={11} /> {repair?.label ?? "Review"}
                               </Link>
@@ -406,7 +406,7 @@ export function OverviewStatsPanel({
                                 type="button"
                                 disabled={isBusy || isTriggering || triggeredIds.has(item.id)}
                                 onClick={() => runRepairTrigger(item, repair.engagementId, repair.skillName)}
-                                className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}
+                                className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               >
                                 {triggeredIds.has(item.id) ? <Check size={11} /> : <RotateCcw size={11} />}{" "}
                                 {triggeredIds.has(item.id) ? "Run started" : isTriggering ? "Starting…" : repair.label}
@@ -414,7 +414,7 @@ export function OverviewStatsPanel({
                             ) : (repair?.kind === "link" ? repair.href : itemHref) ? (
                               <Link
                                 href={repair?.kind === "link" ? repair.href : itemHref}
-                                className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}
+                                className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                               >
                                 <ArrowUpRight size={11} /> {repair?.label ?? "Fix now"}
                               </Link>
@@ -434,7 +434,7 @@ export function OverviewStatsPanel({
                             type="button"
                             disabled={isBusy}
                             onClick={() => decide(item, "resolved")}
-                            className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}
+                            className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                           >
                             <Check size={11} /> Mark handled
                           </button>
@@ -444,7 +444,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => decide(item, "resolved")}
-                              className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}
+                              className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}
                             >
                               <Check size={11} /> {queueCopy.actions.resolve}
                             </button>

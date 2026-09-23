@@ -226,7 +226,16 @@ export const TOURS: TourDefinition[] = [
   { id: "dashboard-basics", label: "Dashboard Basics", description: "Orient yourself — Queue, Live Executions, sidebar, and the Create button.", steps: DASHBOARD_BASICS },
   { id: "library", label: "The Library", description: "Install a worker, then enable and configure the skills inside it.", steps: LIBRARY_BASICS },
   { id: "engagement-detail", label: "Your Client's Page", description: "Pause, reports, and every skill running for this one client.", steps: ENGAGEMENT_DETAIL },
-  ...PRODUCT_TOUR_SPECS.map(buildProductTour),
+  // One entry for every worker, not one per worker: the menu stays the
+  // same size as workers are added (a new worker only adds a spec above).
+  // A step whose worker page isn't there for this workspace is skipped by
+  // the provider's target timeout.
+  {
+    id: "workers",
+    label: "Your Workers",
+    description: "How each worker starts: its setup skill runs first, then the rest enable from the same list.",
+    steps: PRODUCT_TOUR_SPECS.flatMap((spec) => buildProductTour(spec).steps.map((s) => ({ ...s, id: `${spec.id}__${s.id}` }))),
+  },
   {
     id: "full-walkthrough",
     label: "Full Walkthrough",

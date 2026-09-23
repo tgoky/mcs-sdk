@@ -45,8 +45,10 @@ export function SkillSequence({
   statsById: Map<string, WorkerOverviewStat>;
 }) {
   return (
-    <div className="overflow-x-auto pb-2 [scrollbar-width:thin]">
-      <div className="flex items-start min-w-max px-1">
+    // Wraps onto more rows instead of scrolling sideways: a 15-skill worker
+    // (Whop Agent) ran off the right edge with nothing showing more was there.
+    <div className="pb-2">
+      <div className="flex flex-wrap items-start gap-y-4 px-1">
         {workers.map((worker, i) => {
           const stat = statsById.get(worker.id);
           return (

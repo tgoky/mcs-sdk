@@ -420,7 +420,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onDecide("approved")}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400 transition-colors cursor-pointer shadow-elevation-1"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
                 title="Confirm no-show and start Win-Back recovery"
               >
                 <UserX size={12} /> Confirm no-show
@@ -428,7 +428,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("showed")}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
                 title="Log that they actually showed — no Win-Back"
               >
                 <UserCheck size={12} /> Showed
@@ -436,7 +436,7 @@ function QueueRow({
               <button
                 disabled={isBusy}
                 onClick={() => onResolveSweepNoShow("rescheduled")}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-colors cursor-pointer shadow-elevation-1"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
                 title="Log that they rescheduled — no Win-Back"
               >
                 <CalendarClock size={12} /> Rescheduled
@@ -460,7 +460,7 @@ function QueueRow({
                   setPendingDecision("approved");
                   onDecide("approved");
                 }}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
               >
                 {isBusy && pendingDecision === "approved" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                 {isBusy && pendingDecision === "approved" ? "Approving…" : copy.actions.approve}
@@ -486,7 +486,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Review"}
               </Link>
@@ -509,7 +509,7 @@ function QueueRow({
                 onClick={() =>
                   dispatch(repair.key, () => triggerSkillRun(repair.engagementId, repair.skillName), onActionComplete)
                 }
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors disabled:opacity-60 shadow-elevation-1"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors disabled:opacity-60 shadow-elevation-1"
               >
                 <RotateCcw size={12} /> {busyKey === repair.key ? "Running…" : repair.label}
               </button>
@@ -517,7 +517,7 @@ function QueueRow({
               <Link
                 href={repair?.kind === "link" ? repair.href : (href as string)}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {repair?.label ?? "Fix now"}
               </Link>
@@ -538,7 +538,7 @@ function QueueRow({
               <Link
                 href={href}
                 onClick={handleFixLinkClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors shadow-elevation-1"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> Open reply
               </Link>
@@ -546,7 +546,7 @@ function QueueRow({
             <button
               disabled={isBusy}
               onClick={() => onDecide("resolved")}
-              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
             >
               <Check size={12} /> Mark handled
             </button>
@@ -561,7 +561,7 @@ function QueueRow({
                 setPendingDecision("resolved");
                 onDecide("resolved");
               }}
-              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
+              className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1 disabled:opacity-60"
             >
               {isBusy && pendingDecision === "resolved" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               {isBusy && pendingDecision === "resolved" ? "Resolving…" : copy.actions.resolve}
@@ -595,7 +595,7 @@ function QueueRow({
               // opens that instead of skipping straight past it.
               <button
                 onClick={() => setPanelOpen(true)}
-                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 transition-colors cursor-pointer shadow-elevation-1"
+                className="hover-lift press-settle inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 transition-colors cursor-pointer shadow-elevation-1"
               >
                 <ArrowUpRight size={12} /> {copy.actions.open}
               </button>
@@ -784,6 +784,11 @@ export function QueuePanel({
   // Tags State
   const [tags, setTags] = useLocalViewState<CustomTag[]>("mcs:queue:tags", DEFAULT_TAGS);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  // Progressive disclosure: the extra view controls (time range, customize
+  // view) are one click away instead of always rendering around a short
+  // list, and open by themselves whenever one is in effect. The lists rail
+  // stays: it's this page's navigation (and its client scope).
+  const [showViewOptions, setShowViewOptions] = useState(false);
   const [isAddTagOpen, setIsAddTagOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState(TAG_SWATCHES[2].hex);
@@ -1584,8 +1589,16 @@ export function QueuePanel({
           <div className="flex items-center gap-2 flex-wrap">
             <SegmentedTabs options={tabOptions} value={tab} onChange={handleTabChange} />
             <TableSearchInput value={search} onChange={(s) => { setSearch(s); setPage(0); }} placeholder={toolbarCopy.searchPlaceholder} className="w-[180px]" />
-            <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />
+            {(showViewOptions || timeRange !== "all") && <TimeRangeMenu value={timeRange} onChange={(r) => { setTimeRange(r); setPage(0); }} />}
             <div className="ml-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowViewOptions((v) => !v)}
+                aria-pressed={showViewOptions}
+                className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                {showViewOptions ? "Fewer options" : "View options"}
+              </button>
               {tab !== "all" || search || timeRange !== "all" || activeChipIds.size > 0 || selectedTagId ? (
                 <button
                   type="button"
@@ -1595,6 +1608,7 @@ export function QueuePanel({
                   {sharedToolbarCopy.clearFiltersButton}
                 </button>
               ) : null}
+              {(showViewOptions || pinnedChipIds.size > 0) && (
               <ViewCustomizer
                 sections={customizerSections}
                 enabledIds={pinnedChipIds}
@@ -1608,6 +1622,7 @@ export function QueuePanel({
                 }}
                 menuTitle={sharedToolbarCopy.customizeMenuTitle}
               />
+              )}
             </div>
           </div>
 
@@ -1874,7 +1889,7 @@ export function QueuePanel({
                 type="button"
                 onClick={handleCreateTag}
                 disabled={!newTagName.trim()}
-                className="w-full py-2 text-xs font-semibold rounded-md bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                className="w-full py-2 text-xs font-semibold rounded-md bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
               >
                 Create Tag
               </button>

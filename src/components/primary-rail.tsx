@@ -10,9 +10,7 @@ import {
   Settings,
   Home,
   Check,
-  Sliders,
   Plus,
-  UserPlus,
   Loader2,
   Search,
   GripVertical,
@@ -474,176 +472,75 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           />
         </button>
 
-        {/* Profile Popover */}
+        {/* Profile Popover — the account only. Switching or creating a
+            client is the client switcher's job (top of this rail); this
+            used to repeat that list as "Workspaces" under a second name,
+            plus "Admin console" / "Invite" links that only opened Settings. */}
         {popoverOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-[640px] sm:w-[680px] bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
-              <div className="flex min-h-[360px] divide-x divide-zinc-200/80 dark:divide-zinc-800">
-                {/* LEFT PANE */}
-                <div className="w-72 sm:w-80 p-4 bg-[#f8f7fa] dark:bg-black flex flex-col justify-between shrink-0">
-                  <div className="space-y-3">
-                    <div className="px-1">
-                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        Workspaces
-                      </h3>
-                      <p className="text-[11px] text-zinc-500 truncate" title={userEmail || displayName}>
-                        {userEmail || displayName}
-                      </p>
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-72 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100 p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <UserAvatar
+                  avatar={avatar}
+                  identityFallback={userEmail}
+                  size={40}
+                  fallback={
+                    <div className="w-10 h-10 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
+                      {initials}
                     </div>
-
-                    <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                      {workspaces.map((workspace) => {
-                        const isActive = workspace.workspaceId === activeWorkspaceId;
-                        const isSwitching = switchingWorkspaceId === workspace.workspaceId;
-                        return (
-                          <form
-                            key={workspace.workspaceId}
-                            action={`/api/workspaces/${workspace.workspaceId}/switch`}
-                            method="POST"
-                            onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
-                          >
-                            <button
-                              type="submit"
-                              disabled={isActive || switchingWorkspaceId !== null}
-                              className={`w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl min-w-0 transition-colors disabled:cursor-not-allowed ${
-                                isActive
-                                  ? "bg-white dark:bg-zinc-900/80 shadow-xs cursor-default"
-                                  : switchingWorkspaceId !== null
-                                    ? "opacity-50"
-                                    : "cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
-                              }`}
-                            >
-                              <div className="w-6 h-6 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-[10px] flex items-center justify-center shrink-0 font-mono">
-                                {workspace.name.slice(0, 2).toUpperCase()}
-                              </div>
-                              <span
-                                className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate min-w-0"
-                                title={workspace.name}
-                              >
-                                {workspace.name}
-                              </span>
-                              {isSwitching ? (
-                                <Loader2 className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto animate-spin" />
-                              ) : (
-                                isActive && <Check className="w-3.5 h-3.5 text-[#2a233c] dark:text-[#e4dff2] shrink-0 ml-auto" />
-                              )}
-                            </button>
-                          </form>
-                        );
-                      })}
-                    </div>
-
-                    <Link
-                      href="/home/new"
-                      onClick={() => setPopoverOpen(false)}
-                      className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                    >
-                      <Plus className="w-4 h-4 shrink-0" />
-                      <span>New workspace</span>
-                    </Link>
-                  </div>
-
-                  <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
-                      <ThemeToggle />
-                    </div>
-
-                    <form action="/api/auth/logout" method="POST">
-                      <button
-                        type="submit"
-                        className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-none"
-                      >
-                        <LogOut className="w-4 h-4 shrink-0" />
-                        <span>Log out</span>
-                      </button>
-                    </form>
-                  </div>
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{displayName}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{userEmail}</p>
                 </div>
+              </div>
 
-                {/* RIGHT PANE */}
-                <div className="flex-1 p-4 flex flex-col justify-between bg-white dark:bg-zinc-900">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <UserAvatar
-                        avatar={avatar}
-                        identityFallback={userEmail}
-                        size={44}
-                        fallback={
-                          <div className="w-11 h-11 rounded-full bg-[#2a233c] dark:bg-[#e4dff2] text-white dark:text-[#1f1a2e] font-bold text-sm flex items-center justify-center shrink-0 font-mono shadow-xs">
-                            {initials}
-                          </div>
-                        }
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                          {displayName}
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                          {userEmail}
-                        </p>
-                      </div>
-                    </div>
+              <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
 
-                    {/* "Set out of office" and "Upgrade account" buttons lived here
-                        with no action behind them; removed until they do something. */}
-                    <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
+              <div className="space-y-1">
+                <Link
+                  href="/dashboard/settings/profile"
+                  onClick={() => setPopoverOpen(false)}
+                  className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
+                >
+                  <User className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                  <span>Profile</span>
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setPopoverOpen(false)}
+                  className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
+                >
+                  <Settings className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                  <span>Settings</span>
+                </Link>
+                <Link
+                  href="/api/auth/login"
+                  onClick={() => setPopoverOpen(false)}
+                  className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
+                >
+                  <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                  <span>Add another account</span>
+                </Link>
+              </div>
 
-                    <div className="space-y-1">
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <Sliders className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Admin console</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <UserPlus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Invite to Showtime</span>
-                      </Link>
-                    </div>
-
-                    <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2" />
-
-                    <div className="space-y-1">
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <User className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Profile</span>
-                      </Link>
-
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <Settings className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Settings</span>
-                      </Link>
-
-                      <Link
-                        href="/api/auth/login"
-                        onClick={() => setPopoverOpen(false)}
-                        className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors rounded-lg"
-                      >
-                        <Plus className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>Add another account</span>
-                      </Link>
-                    </div>
-                  </div>
+              <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Theme</span>
+                  <ThemeToggle />
                 </div>
-
+                <form action="/api/auth/logout" method="POST">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2.5 px-1 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-none"
+                  >
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span>Log out</span>
+                  </button>
+                </form>
               </div>
             </div>
           </>

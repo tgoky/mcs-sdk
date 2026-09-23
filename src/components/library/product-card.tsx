@@ -22,6 +22,8 @@ import { StatChip } from "@/components/library/stat-chip";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 
+const INSIDE_BADGE_LIMIT = 5;
+
 export function ProductCard({
   productId,
   name,
@@ -122,17 +124,20 @@ export function ProductCard({
         </div>
 
         <div className="flex items-center gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
-          <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 shrink-0">
-            Inside
-          </span>
+          {/* A few badges and a count, not every skill: a 15-badge row
+              ran off the card. The full list is on the worker's page and
+              in the tooltip. */}
           <div className="flex items-center -space-x-1.5 shrink-0">
-            {skillIds.map((id) => (
+            {skillIds.slice(0, INSIDE_BADGE_LIMIT).map((id) => (
               <div key={id} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
                 <AnySkillBadge skill={id} size={18} />
               </div>
             ))}
           </div>
-          <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 truncate">{skillNames}</span>
+          <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300 truncate" title={skillNames}>
+            {skillIds.length} skill{skillIds.length === 1 ? "" : "s"}
+            {skillIds.length > INSIDE_BADGE_LIMIT ? ` · ${skillIds.length - INSIDE_BADGE_LIMIT} more inside` : ""}
+          </span>
         </div>
       </Link>
 
@@ -142,10 +147,12 @@ export function ProductCard({
           onClick={toggleInstalled}
           disabled={pending}
           data-tour="product-card-install"
-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+          // Installed: Uninstall is the quiet action and "View skills"
+          // (below) the main one; before install, Install leads.
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:opacity-50 ${
             installed
-              ? "border border-border bg-zinc-50 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-700 dark:hover:text-rose-300 text-zinc-700 dark:text-zinc-200"
-              : "bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
+              ? "order-2 ml-auto px-2 py-1.5 font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-300"
+              : "px-3 py-1.5 font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
           }`}
         >
           {pending ? (
@@ -159,7 +166,11 @@ export function ProductCard({
         </button>
         <Link
           href={`/dashboard/library/${productId}`}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+          className={
+            installed
+              ? "order-1 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors"
+              : "inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+          }
         >
           View skills <ArrowUpRight size={12} />
         </Link>

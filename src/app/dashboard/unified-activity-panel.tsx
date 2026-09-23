@@ -1248,13 +1248,13 @@ function QueueItemQuickActions({
     <>
       {item.category === "approve" && item.sweepNoShowReview ? (
         <>
-          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-rose-600 dark:bg-rose-500 text-white hover:bg-rose-700 dark:hover:bg-rose-400`} title="Confirm no-show and start Win-Back recovery">
+          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Confirm no-show and start Win-Back recovery">
             <UserX size={11} /> Confirm no-show
           </button>
-          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "showed")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`} title="Log that they actually showed — no Win-Back">
+          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "showed")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they actually showed — no Win-Back">
             <UserCheck size={11} /> Showed
           </button>
-          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "rescheduled")} className={`${btnBase} bg-amber-500 text-zinc-950 hover:bg-amber-400`} title="Log that they rescheduled — no Win-Back">
+          <button type="button" disabled={isBusy} onClick={() => resolveSweepNoShow(item, "rescheduled")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`} title="Log that they rescheduled — no Win-Back">
             <CalendarClock size={11} /> Rescheduled
           </button>
           <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer disabled:opacity-60">
@@ -1263,7 +1263,7 @@ function QueueItemQuickActions({
         </>
       ) : item.category === "approve" ? (
         <>
-          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
+          <button type="button" disabled={isBusy} onClick={() => decide(item, "approved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
             <Check size={11} /> {queueCopy.actions.approve}
           </button>
           <button type="button" disabled={isBusy} onClick={() => decide(item, "rejected")} className={btnGhost}>
@@ -1273,7 +1273,7 @@ function QueueItemQuickActions({
       ) : item.category === "action_needed" && item.source === "sync_setup" ? (
         <>
           {(repair?.kind === "link" ? repair.href : itemHref) && (
-            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
+            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
               <ArrowUpRight size={11} /> {repair?.label ?? "Review"}
             </Link>
           )}
@@ -1284,11 +1284,11 @@ function QueueItemQuickActions({
       ) : item.category === "action_needed" && item.source === "run_failure" ? (
         <>
           {repair?.kind === "trigger" ? (
-            <button type="button" disabled={isBusy || isTriggering || triggered} onClick={() => onRunRepairTrigger(item, repair.engagementId, repair.skillName)} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
+            <button type="button" disabled={isBusy || isTriggering || triggered} onClick={() => onRunRepairTrigger(item, repair.engagementId, repair.skillName)} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
               {triggered ? <Check size={11} /> : <RotateCcw size={11} />} {triggered ? "Run started" : isTriggering ? "Starting…" : repair.label}
             </button>
           ) : (repair?.kind === "link" ? repair.href : itemHref) ? (
-            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-amber-400 text-white dark:text-zinc-950 hover:bg-amber-500`}>
+            <Link href={repair?.kind === "link" ? repair.href : itemHref} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
               <ArrowUpRight size={11} /> {repair?.label ?? "Fix now"}
             </Link>
           ) : null}
@@ -1302,12 +1302,12 @@ function QueueItemQuickActions({
       ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (
         // A reply has one terminal state (handled) — Resolve and Dismiss
         // both called the same endpoint, so only one action is offered.
-        <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
+        <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
           <Check size={11} /> Mark handled
         </button>
       ) : item.category === "action_needed" ? (
         <>
-          <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-emerald-600 dark:bg-emerald-500 text-white dark:text-zinc-950 hover:bg-emerald-700 dark:hover:bg-emerald-400`}>
+          <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>
             <Check size={11} /> {queueCopy.actions.resolve}
           </button>
           <button type="button" disabled={isBusy} onClick={() => decide(item, "abandoned")} className={btnGhost}>

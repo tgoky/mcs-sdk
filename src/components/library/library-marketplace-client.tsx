@@ -9,6 +9,9 @@ import { getWorkerDefinition, WORKER_CATEGORY_LIST, type WorkerId, type WorkerCa
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { ProductCard } from "@/components/library/product-card";
 
+/** Worker count at which the filter sidebar shows without asking. */
+const FILTERS_OPEN_BY_DEFAULT_AT = 8;
+
 type StatusFilter = "all" | "installed" | "not_installed" | "needs_configuration" | "fully_configured" | "needs_attention";
 
 /**
@@ -44,6 +47,11 @@ export function LibraryMarketplaceClient({
   const [statusSectionOpen, setStatusSectionOpen] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<Set<WorkerCategory>>(new Set());
   const [categorySectionOpen, setCategorySectionOpen] = useState(true);
+  // With a handful of workers the filter sidebar is more scaffolding than
+  // help, so it starts behind a "Filter" button; it shows by default once
+  // the catalog is big enough to need it, and stays open while a filter
+  // is applied.
+  const [filtersOpen, setFiltersOpen] = useState<boolean | null>(null);
 
   const enabledSet = useMemo(() => new Set(enabledWorkerIds), [enabledWorkerIds]);
   const installedSet = useMemo(() => new Set(installedProductIds), [installedProductIds]);
@@ -106,6 +114,10 @@ export function LibraryMarketplaceClient({
     fully_configured: products.filter((p) => p.fullyConfigured).length,
     needs_attention: products.filter((p) => p.needsAttention).length,
   } satisfies Record<StatusFilter, number>;
+
+  const filtersActive = statusFilter !== "all" || selectedCategories.size > 0;
+  // null = the user hasn't chosen; then the catalog size decides.
+  const showFilters = filtersActive || (filtersOpen ?? products.length >= FILTERS_OPEN_BY_DEFAULT_AT);
 
   function toggleCategory(category: WorkerCategory) {
     setSelectedCategories((prev) => {
@@ -171,6 +183,7 @@ export function LibraryMarketplaceClient({
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {showFilters && (
           <div className="lg:col-span-3 space-y-4 text-xs text-zinc-700 dark:text-zinc-400" data-tour="library-status-filter">
             <div className="space-y-2 pb-4 border-b border-zinc-200 dark:border-zinc-800">
               <button
@@ -192,7 +205,11 @@ export function LibraryMarketplaceClient({
                       { id: "fully_configured", label: "Fully configured" },
                       { id: "needs_attention", label: "Needs attention" },
                     ] as const
-                  ).map((opt) => (
+                  )
+                    // Options that match nothing aren't worth a row (the
+                    // one selected stays, so it can be switched back).
+                    .filter((opt) => opt.id === "all" || statusCounts[opt.id] > 0 || statusFilter === opt.id)
+                    .map((opt) => (
                     <label
                       key={opt.id}
                       className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
@@ -252,9 +269,21 @@ export function LibraryMarketplaceClient({
               )}
             </div>
           </div>
+          )}
 
-          <div className="lg:col-span-9 space-y-3">
-            <div className="relative w-full sm:w-72 sm:ml-auto">
+          <div className={`${showFilters ? "lg:col-span-9" : "lg:col-span-12"} space-y-3`}>
+            <div className="flex items-center gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(!showFilters)}
+              disabled={filtersActive && showFilters}
+              title={filtersActive ? "Clear the filters to hide them" : undefined}
+              aria-pressed={showFilters}
+              className="shrink-0 px-3 py-2 rounded-xl text-xs font-medium border border-border bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              {showFilters ? "Hide filters" : filtersActive ? "Filters (on)" : "Filter"}
+            </button>
+            <div className="relative w-full sm:w-72">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400" />
               <input
                 type="text"
@@ -263,6 +292,7 @@ export function LibraryMarketplaceClient({
                 placeholder="Search workers…"
                 className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-border focus:outline-none focus:border-amber-400 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 shadow-sm"
               />
+            </div>
             </div>
 
             {filtered.length === 0 ? (
