@@ -14,9 +14,10 @@ export function TourLauncher() {
   const { tours, progressByTour, activeTourId, start } = useTour();
   const [open, setOpen] = useState(false);
 
-  const namedTours = tours.filter((t) => t.id !== "full-walkthrough");
+  const namedTours = tours.filter((t) => t.id !== "full-walkthrough" && !t.hidden);
   const fullWalkthrough = tours.find((t) => t.id === "full-walkthrough");
-  const anyInProgress = tours.some((t) => progressByTour[t.id]?.status === "in_progress");
+  // Only tours the picker lists: a hidden one in progress can't be resumed from here.
+  const anyInProgress = tours.some((t) => !t.hidden && progressByTour[t.id]?.status === "in_progress");
 
   function pick(tourId: string) {
     const resume = progressByTour[tourId]?.status === "in_progress";

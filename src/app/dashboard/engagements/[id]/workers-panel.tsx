@@ -6,26 +6,11 @@ import Link from "next/link";
 import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X, CheckCircle2 } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
-import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
-import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
-import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
-import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
-import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
-import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
-import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
-import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
-import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
-import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
-import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
-import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
-import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
-import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
-import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
-import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
 import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
 import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
@@ -338,64 +323,14 @@ export function WorkersPanel({
             <X className="w-3.5 h-3.5" /> Close — back to all skills
           </button>
 
-          {expandedWorker === "leak-map" && (
-            <LeakMapConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "pre-call-read" && (
-            <PreCallReadConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "win-back" && (
-            <WinBackConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-onboarding" && (
-            <RepOnboardingConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} />
-          )}
-          {expandedWorker === "rep-engine-panel" && (
-            <RepEnginePanelConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-trustpilot-watch" && (
-            <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-reddit-watch" && (
-            <RepRedditWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "rep-twitter-watch" && (
-            <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "icp-lock" && (
-            <IcpLockConfigForm
-              engagementId={engagementId}
-              onCancel={() => setExpandedWorker(null)}
-              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
-              cancelLabel="Close"
-            />
-          )}
-          {expandedWorker === "voice-capture" && (
-            <VoiceCaptureConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "source-connect" && (
-            <SourceConnectConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "send-connect" && (
-            <SendConnectConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "daily-send" && (
-            <DailySendConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "pin-down" && (
-            <PinDownConfigForm
-              engagementId={engagementId}
-              onCancel={() => setExpandedWorker(null)}
-              onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null))}
-              cancelLabel="Close"
-            />
-          )}
-          {expandedWorker === "whop-cancellation-save-offer" && (
-            <WhopCancellationSaveOfferConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
-          {expandedWorker === "whop-bridge-manager" && (
-            <WhopBridgeManagerConfigForm engagementId={engagementId} onCancel={() => setExpandedWorker(null)} cancelLabel="Close" />
-          )}
+          {renderWorkerConfigForm(expandedWorker, {
+            engagementId,
+            onClose: () => setExpandedWorker(null),
+            // A setup form that started a run goes to that run; any other
+            // save just closes the form.
+            onSaved: (result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null)),
+            cancelLabel: "Close",
+          })}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">

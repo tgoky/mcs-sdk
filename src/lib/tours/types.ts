@@ -42,6 +42,9 @@ export interface TourDefinition {
   /** One line shown in the tour picker. */
   description: string;
   steps: TourStep[];
+  /** Started by code (e.g. right after a worker's setup is saved), not
+   * listed in the tour picker. */
+  hidden?: boolean;
 }
 
 export interface TourProgress {

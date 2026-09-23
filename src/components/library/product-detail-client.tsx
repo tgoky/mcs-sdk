@@ -23,22 +23,12 @@ import { ChevronLeft, Search, Download, Trash2, Loader2, X } from "lucide-react"
 import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
+import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { WorkerCard } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
 import { SkillSequence } from "@/components/library/skill-sequence";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
-import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
-import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
-import { RepOnboardingConfigForm } from "@/components/worker-config-forms/rep-onboarding-config-form";
-import { RepEnginePanelConfigForm } from "@/components/worker-config-forms/rep-engine-panel-config-form";
-import { RepTrustpilotWatchConfigForm } from "@/components/worker-config-forms/rep-trustpilot-watch-config-form";
-import { RepRedditWatchConfigForm } from "@/components/worker-config-forms/rep-reddit-watch-config-form";
-import { RepTwitterWatchConfigForm } from "@/components/worker-config-forms/rep-twitter-watch-config-form";
-import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
-import { WhopCancellationSaveOfferConfigForm } from "@/components/worker-config-forms/whop-cancellation-save-offer-config-form";
-import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
 import { useToast } from "@/components/toast/toast-provider";
 
 export function ProductDetailClient({
@@ -150,27 +140,12 @@ export function ProductDetailClient({
   function renderConfigForm(worker: WorkerDefinition) {
     if (!engagementId) return null;
     const close = () => setExpandedWorker(null);
-    if (worker.id === "leak-map") return <LeakMapConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "pre-call-read") return <PreCallReadConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "win-back") return <WinBackConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "rep-onboarding") return <RepOnboardingConfigForm engagementId={engagementId} onCancel={close} />;
-    if (worker.id === "rep-engine-panel") return <RepEnginePanelConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "rep-trustpilot-watch") return <RepTrustpilotWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "rep-reddit-watch") return <RepRedditWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "rep-twitter-watch") return <RepTwitterWatchConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "whop-cancellation-save-offer") return <WhopCancellationSaveOfferConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "whop-bridge-manager") return <WhopBridgeManagerConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />;
-    if (worker.id === "pin-down") {
-      return (
-        <PinDownConfigForm
-          engagementId={engagementId}
-          onCancel={close}
-          onSaved={(result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : close())}
-          cancelLabel="Close"
-        />
-      );
-    }
-    return null;
+    return renderWorkerConfigForm(worker.id, {
+      engagementId,
+      onClose: close,
+      onSaved: (result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : close()),
+      cancelLabel: "Close",
+    });
   }
 
   return (

@@ -15,22 +15,14 @@
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { FloatingPanel } from "@/components/floating-panel";
-import { PinDownConfigForm } from "@/components/worker-config-forms/pin-down-config-form";
-import { WinBackConfigForm } from "@/components/worker-config-forms/win-back-config-form";
-import { PreCallReadConfigForm } from "@/components/worker-config-forms/pre-call-read-config-form";
-import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
+import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
 
-export type ConfigurableSkillId = "pin-down" | "win-back" | "pre-call-read" | "leak-map" | "pile-on";
-
-const SKILL_LABELS: Record<ConfigurableSkillId, string> = {
-  "pin-down": "Pin-Down",
-  "win-back": "Win-Back",
-  "pre-call-read": "Pre-Call Read",
-  "leak-map": "Leak Map",
-  "pile-on": "Pile-On",
-};
+/** Any worker with a config form (config-form-registry.tsx), plus Pile-On,
+ * whose small form takes its current values from the page. */
+export type ConfigurableSkillId = WorkerId;
 
 export function SkillConfigureMenu({
   skillId,
@@ -42,7 +34,7 @@ export function SkillConfigureMenu({
   /** Only pile-on needs this — its two config fields live on the
    * engagement's stack, already fetched by whatever server page renders
    * this menu, rather than behind a GET this form would otherwise have to
-   * fetch itself the way the other four skills' forms do. */
+   * fetch itself the way the other skills' forms do. */
   pileOnInitial?: { smsPlatform: string; adDataPlatform: string };
 }) {
   const router = useRouter();
@@ -66,27 +58,30 @@ export function SkillConfigureMenu({
       )}
     >
       {(close) => {
+        // Close also refreshes: forms that save in place (and show their
+        // own "Saved") are closed with their Cancel/Close button, and the
+        // page behind should show what was saved. Only a reported save
+        // gets the "saved" toast — Cancel used to show it too.
         const closeAndRefresh = () => {
           close();
-          toast.success(`${SKILL_LABELS[skillId]} configuration saved.`);
           router.refresh();
+        };
+        const savedAndRefresh = () => {
+          closeAndRefresh();
+          toast.success(`${WORKER_REGISTRY[skillId].name} configuration saved.`);
         };
         return (
           <div className="p-2.5">
-            {skillId === "pin-down" && (
-              <PinDownConfigForm engagementId={engagementId} onCancel={close} onSaved={closeAndRefresh} />
-            )}
-            {skillId === "win-back" && <WinBackConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
-            {skillId === "pre-call-read" && <PreCallReadConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
-            {skillId === "leak-map" && <LeakMapConfigForm engagementId={engagementId} onCancel={closeAndRefresh} />}
-            {skillId === "pile-on" && (
+            {skillId === "pile-on" ? (
               <PileOnConfigForm
                 engagementId={engagementId}
                 initialSmsPlatform={pileOnInitial?.smsPlatform ?? "none"}
                 initialAdDataPlatform={pileOnInitial?.adDataPlatform ?? "none"}
                 onCancel={close}
-                onSaved={closeAndRefresh}
+                onSaved={savedAndRefresh}
               />
+            ) : (
+              renderWorkerConfigForm(skillId, { engagementId, onClose: closeAndRefresh, onSaved: savedAndRefresh })
             )}
           </div>
         );

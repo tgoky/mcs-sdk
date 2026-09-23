@@ -236,6 +236,11 @@ export const TOURS: TourDefinition[] = [
     description: "How each worker starts: its setup skill runs first, then the rest enable from the same list.",
     steps: PRODUCT_TOUR_SPECS.flatMap((spec) => buildProductTour(spec).steps.map((s) => ({ ...s, id: `${spec.id}__${s.id}` }))),
   },
+  // Each product's own three steps, kept as hidden tours: a setup form
+  // starts its product's tour right after saving (startTour("showtime"),
+  // "cold-open", "whop-agent"). Not listed in the picker, which only
+  // shows "Your Workers".
+  ...PRODUCT_TOUR_SPECS.map((spec) => ({ ...buildProductTour(spec), hidden: true })),
   {
     id: "full-walkthrough",
     label: "Full Walkthrough",

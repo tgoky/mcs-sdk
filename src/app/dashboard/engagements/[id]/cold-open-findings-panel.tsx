@@ -23,11 +23,7 @@ import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
 import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
-import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
-import { VoiceCaptureConfigForm } from "@/components/worker-config-forms/voice-capture-config-form";
-import { SourceConnectConfigForm } from "@/components/worker-config-forms/source-connect-config-form";
-import { SendConnectConfigForm } from "@/components/worker-config-forms/send-connect-config-form";
-import { DailySendConfigForm } from "@/components/worker-config-forms/daily-send-config-form";
+import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import type { ColdOpenLeadStatus, ColdOpenReplyDisposition, ColdOpenPhaseKey, ColdOpenPhaseState, ColdOpenRunSummary } from "@/models/schema";
 
 type ConfigurableColdOpenSkill = "icp-lock" | "voice-capture" | "source-connect" | "send-connect" | "daily-send";
@@ -306,11 +302,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
         >
           <X className="w-3.5 h-3.5" /> Close — back to Cold Open
         </button>
-        {configuringSkill === "icp-lock" && <IcpLockConfigForm engagementId={engagementId} onCancel={close} onSaved={close} cancelLabel="Close" />}
-        {configuringSkill === "voice-capture" && <VoiceCaptureConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
-        {configuringSkill === "source-connect" && <SourceConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
-        {configuringSkill === "send-connect" && <SendConnectConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
-        {configuringSkill === "daily-send" && <DailySendConfigForm engagementId={engagementId} onCancel={close} cancelLabel="Close" />}
+        {renderWorkerConfigForm(configuringSkill, { engagementId, onClose: close, onSaved: close, cancelLabel: "Close" })}
       </div>
     );
   }
