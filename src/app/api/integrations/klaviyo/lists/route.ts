@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 
 export const runtime = "nodejs";
 
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     while (url && pagesFetched < MAX_PAGES) {
       const res: Response = await fetch(url, {
         headers: {
-          Authorization: `Klaviyo-API-Key ${apiKey}`,
+          Authorization: klaviyoAuthorization(apiKey),
           Revision: "2025-04-15",
           Accept: "application/json",
         },

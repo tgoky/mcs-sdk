@@ -11,6 +11,7 @@ import { fetchWithTimeout } from "@/lib/http";
 import { upsertClientFact } from "@/lib/client-facts";
 import { seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { normalizeVertical } from "@/lib/verticals";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 
 export type HarvestableProvider =
   | "calendly"
@@ -161,7 +162,7 @@ async function harvestKlaviyo(engagementId: string, apiKey: string): Promise<str
   const written: (string | null)[] = [];
   const res = await fetchWithTimeout("https://a.klaviyo.com/api/accounts", {
     headers: {
-      Authorization: `Klaviyo-API-Key ${apiKey}`,
+      Authorization: klaviyoAuthorization(apiKey),
       Revision: "2024-10-15",
       Accept: "application/json",
     },

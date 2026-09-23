@@ -7,6 +7,8 @@
 // would pick from in Edit stack settings, instead of a second copy of
 // every vendor call.
 
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
+
 export type StackOption = { id: string; name: string };
 type Option = StackOption;
 
@@ -35,7 +37,7 @@ export async function fetchStackOptions(resource: string, credential: string, pa
       let url: string | null = "https://a.klaviyo.com/api/lists/?page[size]=10";
       for (let page = 0; url && page < 20; page++) {
         const res: Response = await fetch(url, {
-          headers: { Authorization: `Klaviyo-API-Key ${credential}`, Revision: "2025-04-15", Accept: "application/json" },
+          headers: { Authorization: klaviyoAuthorization(credential), Revision: "2025-04-15", Accept: "application/json" },
         });
         if (!res.ok) throw new Error(`Klaviyo rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
         const payload: { data?: Array<{ id: string; attributes?: { name?: string } }>; links?: { next?: string | null } } = await res.json();

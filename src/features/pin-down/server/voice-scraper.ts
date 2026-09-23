@@ -10,6 +10,7 @@
 // only four pages could use Firecrawl at all.
 import { fetchWithTimeout } from "@/lib/http";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 
 export type PageKind = "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "faq_page" | "booking_page" | "supporting_page";
 
@@ -454,7 +455,7 @@ async function scrapeKlaviyoBroadcasts(apiKey: string): Promise<{ text: string; 
     "https://a.klaviyo.com/api/campaigns/?filter=equals(messages.channel,'email')&sort=-created_at&page[size]=3",
     {
       headers: {
-        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        Authorization: klaviyoAuthorization(apiKey),
         revision: "2024-10-15",
         accept: "application/json",
       },
@@ -468,7 +469,7 @@ async function scrapeKlaviyoBroadcasts(apiKey: string): Promise<{ text: string; 
   for (const id of campaignIds) {
     const msgRes = await fetchWithTimeout(`https://a.klaviyo.com/api/campaigns/${id}/campaign-messages/`, {
       headers: {
-        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        Authorization: klaviyoAuthorization(apiKey),
         revision: "2024-10-15",
         accept: "application/json",
       },

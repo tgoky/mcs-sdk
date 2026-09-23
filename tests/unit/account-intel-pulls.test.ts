@@ -129,3 +129,30 @@ describe("mailchimpBase", () => {
     expect(await mailchimpBase("oauthtoken")).toEqual({ base: "https://us19.api.mailchimp.com/3.0", auth: "Bearer oauthtoken" });
   });
 });
+
+describe("pullHubSpot with a Composio (OAuth) token", () => {
+  it("skips parts the token wasn't granted instead of calling them, and keeps the portal's domain", async () => {
+    route([
+      ["/oauth/v1/access-tokens/", () => json({ scopes: ["oauth", "crm.objects.contacts.read", "crm.objects.deals.read"], hub_domain: "acme.com" })],
+      ["/account-info/v3/details", () => json({ timeZone: "UTC" })],
+      ["/crm/v3/pipelines/deals", () => json({ results: [] })],
+      ["/deals/search", () => json({ results: [] })],
+      ["/meetings/search", () => json({ results: [] })],
+      ["/contacts/search", () => json({ total: 10, results: [] })],
+    ]);
+    const intel = await pullHubSpot("oauth-token", now);
+    const calls = vi.mocked(fetchWithTimeout).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes("/marketing/v3/emails"))).toBe(false);
+    expect(calls.some((u) => u.includes("/automation/v4/flows"))).toBe(false);
+    expect(calls.some((u) => u.includes("/crm/v3/owners"))).toBe(false);
+    expect(intel.coverage.blocked.sort()).toEqual(["marketing emails", "team", "workflows"]);
+    expect(intel.business?.website).toBe("acme.com");
+  });
+
+  it("doesn't look up a private-app token as OAuth", async () => {
+    route([["/account-info/v3/details", () => json({})]]);
+    await pullHubSpot("pat-na1-123", now);
+    const calls = vi.mocked(fetchWithTimeout).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes("/oauth/v1/access-tokens/"))).toBe(false);
+  });
+});

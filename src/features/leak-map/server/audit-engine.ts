@@ -12,6 +12,7 @@ import { notifyUser } from "@/lib/notify";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
 import { fetchWithTimeout } from "@/lib/http";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -523,7 +524,7 @@ async function pullKlaviyoOpenRate(
     "https://a.klaviyo.com/api/campaigns/?filter=equals(status,'sent')&sort=-send_time&page[size]=4&fields[campaign]=statistics",
     {
       headers: {
-        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        Authorization: klaviyoAuthorization(apiKey),
         Revision: "2024-10-15",
       },
     }

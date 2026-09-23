@@ -288,7 +288,12 @@ export async function pullOnceHub(apiKey: string, now = new Date()): Promise<Acc
   const raw: Raw[] = [];
   let after: string | null = null;
   for (let i = 0; i < 6 && !r.outOfTime; i++) {
-    const page: { data?: Raw[] } | null = await r.json("bookings", `${base}/bookings?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`);
+    // Paged by `after` (the last id) and `limit`, filtered on
+    // last_updated_time.gt, as Airbyte's OnceHub connector reads them.
+    const page: { data?: Raw[] } | null = await r.json(
+      "bookings",
+      `${base}/bookings?limit=100&last_updated_time.gt=${encodeURIComponent(from.toISOString())}${after ? `&after=${encodeURIComponent(after)}` : ""}`
+    );
     const rows: Raw[] = page?.data ?? [];
     raw.push(...rows);
     if (rows.length < 100) break;
@@ -307,7 +312,10 @@ export async function pullOnceHub(apiKey: string, now = new Date()): Promise<Acc
         eventTypeId: b.booking_page ? String(b.booking_page) : null,
         eventName: b.subject ?? null,
         noShow: s.includes("no_show") ? true : s === "completed" ? false : null,
-        answers: (b.custom_fields ?? []).map((f: Raw) => ({ question: String(f.name ?? ""), answer: String(f.value ?? "") })),
+        // custom_fields per OnceHub's webhook docs (platforms/booking.ts);
+        // also looked for under form_submission, where the REST booking
+        // keeps what the form collected.
+        answers: [...(b.custom_fields ?? []), ...(b.form_submission?.custom_fields ?? [])].map((f: Raw) => ({ question: String(f.name ?? f.label ?? ""), answer: String(f.value ?? "") })),
         cancelReason: b.cancel_reschedule_reason ?? null,
       } satisfies BookingRecord;
     });

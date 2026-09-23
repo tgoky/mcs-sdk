@@ -10,6 +10,7 @@ import { summarizeCampaigns, summarizeDeals, type CampaignRecord, type DealRecor
 import { pullGhlCalendars } from "./booking";
 import { AccountReader, inBatches, type Raw } from "./reader";
 import type { AccountIntel, AudienceList, Automation, TeamMember } from "./types";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 
 const DEAL_LOOKBACK_DAYS = 365;
 
@@ -31,14 +32,49 @@ function prettySource(s: string): string {
 
 // ── HubSpot ──────────────────────────────────────────────────────────────
 
+/**
+ * Scopes each part needs, from HubSpot's public API specs
+ * (HubSpot-public-api-spec-collection). A part is skipped, and reported as
+ * not shared, when the token plainly lacks every scope that would allow it.
+ */
+export const HUBSPOT_PART_SCOPES: Record<string, string[]> = {
+  team: ["crm.objects.owners.read"],
+  pipeline: ["crm.objects.deals.read"],
+  deals: ["crm.objects.deals.read"],
+  contacts: ["crm.objects.contacts.read"],
+  "marketing emails": ["content", "marketing.email.read"],
+  workflows: ["automation"],
+};
+
+/**
+ * The scopes an OAuth token (a Composio sign-in) was actually granted:
+ * GET /oauth/v1/access-tokens/{token} returns them, with the portal's
+ * domain. Optional scopes may be left out at install, so they're checked,
+ * not assumed. Private-app tokens ("pat-...") aren't OAuth tokens; for
+ * those every part is simply tried.
+ */
+async function hubspotGrant(token: string, r: AccountReader): Promise<{ scopes: Set<string> | null; domain: string | null }> {
+  if (token.startsWith("pat-")) return { scopes: null, domain: null };
+  const info = await r.json<{ scopes?: string[]; hub_domain?: string }>("token", `https://api.hubapi.com/oauth/v1/access-tokens/${encodeURIComponent(token)}`);
+  return { scopes: Array.isArray(info?.scopes) ? new Set(info!.scopes) : null, domain: info?.hub_domain ?? null };
+}
+
 export async function pullHubSpot(token: string, now = new Date()): Promise<AccountIntel> {
   const r = new AccountReader({ Authorization: `Bearer ${token}` });
   const api = "https://api.hubapi.com";
+  const grant = await hubspotGrant(token, r);
+  const allowed = (part: string) => {
+    if (!grant.scopes) return true;
+    const ok = (HUBSPOT_PART_SCOPES[part] ?? []).some((s) => grant.scopes!.has(s)) || !HUBSPOT_PART_SCOPES[part];
+    if (!ok) r.blocked.add(part);
+    return ok;
+  };
+  const read = <T,>(part: string, url: string, init?: Parameters<AccountReader["json"]>[2]) => (allowed(part) ? r.json<T>(part, url, init) : Promise.resolve(null));
 
   const [account, owners, pipelines] = await Promise.all([
     r.json<{ portalId?: number; timeZone?: string; companyCurrency?: string }>("account", `${api}/account-info/v3/details`),
-    r.json<{ results?: Raw[] }>("team", `${api}/crm/v3/owners?limit=100&archived=false`),
-    r.json<{ results?: Raw[] }>("pipeline", `${api}/crm/v3/pipelines/deals`),
+    read<{ results?: Raw[] }>("team", `${api}/crm/v3/owners?limit=100&archived=false`),
+    read<{ results?: Raw[] }>("pipeline", `${api}/crm/v3/pipelines/deals`),
   ]);
 
   const team: TeamMember[] = (owners?.results ?? [])
@@ -59,7 +95,7 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
   const rawDeals: Raw[] = [];
   let after: string | undefined;
   for (let i = 0; i < 5 && !r.outOfTime; i++) {
-    const page = await r.json<{ results?: Raw[]; paging?: { next?: { after?: string } } }>("deals", `${api}/crm/v3/objects/deals/search`, {
+    const page = await read<{ results?: Raw[]; paging?: { next?: { after?: string } } }>("deals", `${api}/crm/v3/objects/deals/search`, {
       method: "POST",
       body: {
         filterGroups: [{ filters: [{ propertyName: "createdate", operator: "GTE", value: since }] }],
@@ -101,7 +137,7 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
   const canceled = outcomes.filter((o) => o === "CANCELED").length;
 
   // Contacts: how many, where the newest came from, lifecycle mix.
-  const contactsPage = await r.json<{ total?: number; results?: Raw[] }>("contacts", `${api}/crm/v3/objects/contacts/search`, {
+  const contactsPage = await read<{ total?: number; results?: Raw[] }>("contacts", `${api}/crm/v3/objects/contacts/search`, {
     method: "POST",
     body: { filterGroups: [], properties: ["lifecyclestage", "hs_analytics_source", "createdate"], sorts: [{ propertyName: "createdate", direction: "DESCENDING" }], limit: 100 },
   });
@@ -109,7 +145,7 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
   const cutoff30 = now.getTime() - 30 * 86_400_000;
 
   // Marketing emails and workflows need scopes some connections lack.
-  const emails = await r.json<{ results?: Raw[] }>("marketing emails", `${api}/marketing/v3/emails?limit=40&sort=-publishDate&includeStats=true`);
+  const emails = await read<{ results?: Raw[] }>("marketing emails", `${api}/marketing/v3/emails/?limit=40&sort=-publishDate&includeStats=true&isPublished=true`);
   const sent = (emails?.results ?? []).filter((e) => e.publishDate || e.publishedAt);
   const campaigns: CampaignRecord[] = sent.map((e) => {
     const c = e.stats?.counters ?? {};
@@ -125,7 +161,7 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
   });
   const firstFrom = sent.find((e) => e.from?.fromName || e.from?.replyTo)?.from;
 
-  const flows = await r.json<{ results?: Raw[] }>("workflows", `${api}/automation/v4/flows?limit=100`);
+  const flows = await read<{ results?: Raw[] }>("workflows", `${api}/automation/v4/flows?limit=100`);
   const automations: Automation[] = (flows?.results ?? []).filter((f) => f.name).map((f) => ({ name: String(f.name), status: f.isEnabled === false ? "off" : "on", trigger: f.flowType ?? null }));
 
   return {
@@ -134,6 +170,8 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
     coverage: r.coverage(),
     timeZone: account?.timeZone ?? null,
     currency: account?.companyCurrency ?? null,
+    // The portal's own domain, unless it's a HubSpot-hosted placeholder.
+    business: grant.domain && !/hubspot|hs-sites|hubspotpagebuilder/i.test(grant.domain) ? { website: grant.domain } : undefined,
     deals: deals.length ? summarizeDeals(deals, account?.companyCurrency ?? null) : undefined,
     pipelineStages: pipelineStages.length ? pipelineStages : undefined,
     meetings: outcomes.length
@@ -159,7 +197,7 @@ export async function pullHubSpot(token: string, now = new Date()): Promise<Acco
 // ── Klaviyo ──────────────────────────────────────────────────────────────
 
 export async function pullKlaviyo(apiKey: string, now = new Date()): Promise<AccountIntel> {
-  const r = new AccountReader({ Authorization: `Klaviyo-API-Key ${apiKey}`, Revision: "2024-10-15" });
+  const r = new AccountReader({ Authorization: klaviyoAuthorization(apiKey), Revision: "2024-10-15" });
   const api = "https://a.klaviyo.com/api";
 
   const [accounts, listsData, flowsData, metricsData] = await Promise.all([
@@ -342,7 +380,9 @@ export async function pullActiveCampaign(apiKey: string, baseUrl: string, now = 
   const dealRecords: DealRecord[] = (deals?.deals ?? []).map((d) => ({
     amount: num(d.value) !== null ? num(d.value)! / 100 : null,
     createdAt: d.cdate ?? null,
-    closedAt: d.edate ?? d.mdate ?? null,
+    // mdate is the last change, which for a won or lost deal is when it
+    // closed; edate isn't documented as a close date.
+    closedAt: String(d.status) === "1" || String(d.status) === "2" ? (d.mdate ?? null) : null,
     status: String(d.status) === "1" ? "won" : String(d.status) === "2" ? "lost" : "open",
     stage: stageName.get(String(d.stage)) ?? null,
   }));
@@ -355,8 +395,13 @@ export async function pullActiveCampaign(apiKey: string, baseUrl: string, now = 
     currency,
     contacts: contacts?.meta?.total != null ? { total: num(contacts.meta.total) } : undefined,
     email,
-    sender: fromMsg ? { fromName: fromMsg.fromname ?? null, fromEmail: fromMsg.fromemail ?? null, replyTo: fromMsg.reply2 ?? null } : undefined,
-    lists: (lists?.lists ?? []).map((l) => ({ id: String(l.id), name: String(l.name), count: num(l.subscriber_count) })),
+    sender: fromMsg
+      ? { fromName: fromMsg.fromname ?? null, fromEmail: fromMsg.fromemail ?? null, replyTo: fromMsg.reply2 ?? null }
+      : (lists?.lists ?? []).find((l) => l.sender_name)
+        ? { fromName: (lists!.lists!.find((l) => l.sender_name)!.sender_name as string) ?? null }
+        : undefined,
+    // Lists carry no subscriber count in ActiveCampaign's list payload.
+    lists: (lists?.lists ?? []).map((l) => ({ id: String(l.id), name: String(l.name) })),
     automations: (autos?.automations ?? []).map((a) => ({ name: String(a.name ?? "Automation"), status: String(a.status) === "1" ? "on" : "off" })),
     deals: dealRecords.length ? summarizeDeals(dealRecords, currency) : undefined,
     pipelineStages: (stages?.dealStages ?? []).map((s) => ({ pipeline: String(s.group ?? "Pipeline"), stage: String(s.title), closed: false })),

@@ -10,6 +10,7 @@
 
 
 import { fetchWithTimeout } from "@/lib/http";
+import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { postToClientSlack } from "@/lib/slack-delivery";
@@ -110,7 +111,7 @@ export class KlaviyoClient {
 
   constructor(apiKey: string) {
     this.headers = {
-      Authorization: `Klaviyo-API-Key ${apiKey}`,
+      Authorization: klaviyoAuthorization(apiKey),
       Revision: "2024-10-15",
       "Content-Type": "application/json",
       Accept: "application/json",
