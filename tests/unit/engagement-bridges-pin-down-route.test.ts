@@ -290,6 +290,46 @@ describe("POST /api/engagements/[id]/bridges/pin-down", () => {
     expect(editClientFact).toHaveBeenCalledWith("e1", "pick:recovery_list_id", { id: "L2", name: "No-shows", resource: "klaviyo-lists" });
   });
 
+  it("with a skill list, switches exactly those on, asks nothing Pin-Down needs when it's off, and runs nothing", async () => {
+    const fake = fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]);
+    Object.assign(db, fake);
+    const { POST } = await importRoute();
+    const res = await POST(postBody({ skills: ["leak-map"], bookingPlatform: "calendly" }), makeParams("e1"));
+
+    expect(res.status).toBe(200);
+    expect(setSkillEnabledForEngagement).toHaveBeenCalledWith("e1", "leak-map", true);
+    for (const off of ["pin-down", "pile-on", "pre-call-read", "win-back"]) expect(setSkillEnabledForEngagement).toHaveBeenCalledWith("e1", off, false);
+    expect(dispatchSkillRun).not.toHaveBeenCalled();
+    const saved = fake.set.mock.calls[0][0];
+    expect(saved.stack.booking_platform).toBe("calendly");
+    expect(saved.stack.showtime_setup_saved_at).toEqual(expect.any(String));
+  });
+
+  it("still needs the website and lead warmth when Pin-Down is switched on", async () => {
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
+    const { POST } = await importRoute();
+    const res = await POST(postBody({ skills: ["pin-down", "leak-map"], buyerDomain: "acme.com" }), makeParams("e1"));
+    expect(res.status).toBe(400);
+    expect(dispatchSkillRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the client's own confirmation page when asked, and refuses when there's none", async () => {
+    const fake = fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]);
+    Object.assign(db, fake);
+    const { POST } = await importRoute();
+    await POST(
+      postBody({ buyerDomain: "acme.com", trafficTemperature: "warm", existingConfirmationPageReuse: true, existingConfirmationPageUrl: "https://acme.com/thanks" }),
+      makeParams("e1")
+    );
+    const saved = fake.set.mock.calls[0][0];
+    expect(saved.stack.existing_confirmation_page_reuse).toBe(true);
+    expect(saved.stack.existing_confirmation_page_url).toBe("https://acme.com/thanks");
+
+    Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
+    const res = await POST(postBody({ buyerDomain: "acme.com", trafficTemperature: "warm", existingConfirmationPageReuse: true }), makeParams("e1"));
+    expect(res.status).toBe(400);
+  });
+
   it("refuses to save without a website", async () => {
     Object.assign(db, fakeDb([{ engagementId: "e1", buyer: "Acme", stack: {}, offerDetails: null, castingChoice: null }]));
     const { POST } = await importRoute();

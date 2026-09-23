@@ -62,6 +62,8 @@ export interface ShowtimeSetupState {
   buyer: string;
   /** Showtime has been saved once for this client. */
   configured: boolean;
+  /** Which Showtime skills are on for this client right now. */
+  skills: Record<string, boolean>;
   website: {
     domain: string;
     /** When and from which domain the site copy on file was read. */
@@ -90,6 +92,9 @@ export interface ShowtimeSetupState {
   picks: Partial<Record<PickSlot, PickState>>;
   tools: ToolState[];
   whopPlanOptions: { name?: string; price?: string }[];
+  /** A confirmation page the client already has (found on their site or
+   * saved), and whether Pin-Down should keep it instead of building one. */
+  existingPage: { url: string | null; reuse: boolean };
   preview: {
     designSignal: unknown;
     template: string;

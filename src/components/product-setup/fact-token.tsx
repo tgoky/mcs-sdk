@@ -10,7 +10,6 @@
 //   ask    - a dashed gap asking for the one thing we couldn't find
 
 import { useState, type ReactNode } from "react";
-import { Sparkles } from "lucide-react";
 import type { TrustTier } from "@/lib/fact-trust";
 import { Button } from "@/components/ui/button";
 import { AnchoredCard } from "./anchored-card";
@@ -74,7 +73,7 @@ export function FactToken({
         <p className="text-xs font-semibold text-[var(--text-muted)]">{title}</p>
         {source && (
           <p className="mt-1 flex items-start gap-1.5 text-xs leading-relaxed text-[var(--text-secondary)]">
-            {tier === "likely" && <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[var(--text-prefill-accent)]" />}
+            {tier === "likely" && <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-prefill-accent)]" aria-hidden="true" />}
             <span>{source}</span>
           </p>
         )}

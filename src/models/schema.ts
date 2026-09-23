@@ -556,6 +556,10 @@ export type EngagementStack = {
   // by ProductId rather than one flag per product so a 5th product never
   // needs a new column here, just a new key.
   product_onboarding_skip_dismissed_at?: Partial<Record<"showtime" | "reputation-manager" | "cold-open" | "whop-agent", string>>;
+  // When the Showtime setup screen was last saved (with its skill switches).
+  // Lets a client who only wants, say, the Funnel Audit count as set up
+  // without the offer details only the confirmation page needs.
+  showtime_setup_saved_at?: string;
 
   // ── Interactive product tours (src/lib/tours) ───────────────────────────
   // Progress survives a page reload or navigating away mid-tour — a tour

@@ -32,6 +32,8 @@ const SIMPLE_ICON_SLUGS: Record<string, string> = {
   webflow: "webflow",
   wordpress: "wordpress",
   nextjs_vercel: "vercel",
+  twilio: "twilio",
+  google_sheets: "googlesheets",
 };
 
 // Fixes the real bug: the connections page's <img src={`/logos/${provider}.png`}>
@@ -103,8 +105,11 @@ const LOGO_DOMAINS: Record<string, string> = {
 // don't get squashed. Four honest fallback tiers in order — verified
 // vector mark, then domain-resolved logo, then the local PNG, then the
 // plain icon — never a 404 glyph or a fabricated logo.
+// Choices that are a brand's own channel, drawn with that brand's mark.
+const LOGO_ALIASES: Record<string, string> = { ghl_sms: "ghl", hubspot_sms: "hubspot" };
+
 export function PlatformLogo({
-  provider,
+  provider: rawProvider,
   size = 20,
   monogram,
 }: {
@@ -114,6 +119,7 @@ export function PlatformLogo({
    * the generic mail glyph (round avatars read better with a letter). */
   monogram?: string;
 }) {
+  const provider = LOGO_ALIASES[rawProvider] ?? rawProvider;
   const simpleIconSlug = SIMPLE_ICON_SLUGS[provider];
   const logoDomain = LOGO_DOMAINS[provider];
   const [tier, setTier] = useState<"svg" | "domain" | "png" | "fallback">(
@@ -164,3 +170,24 @@ export function PlatformLogo({
   );
 }
 
+
+// Local PNGs in public/logos, keyed by provider.
+const LOCAL_LOGOS: Record<string, true> = {
+  activecampaign: true,
+  cal_com: true,
+  calendly: true,
+  hubspot: true,
+  convertkit: true,
+  klaviyo: true,
+  mailchimp: true,
+  oncehub: true,
+  whop: true,
+};
+
+/** Whether a value is a real brand this component can draw, rather than a
+ * choice like "none", "slack_webhook" or "time_slots" that would only ever
+ * get the generic fallback glyph. */
+export function hasPlatformLogo(rawProvider: string): boolean {
+  const provider = LOGO_ALIASES[rawProvider] ?? rawProvider;
+  return provider in SIMPLE_ICON_SLUGS || provider in LOGO_DOMAINS || provider in LOCAL_LOGOS;
+}

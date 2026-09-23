@@ -10,6 +10,7 @@ import { applyResolvableFacts } from "@/lib/field-writeback";
 import { verticalLabel } from "@/lib/verticals";
 import { SHOWTIME_TOOL_GROUPS, SHOWTIME_TOOLS, findShowtimeTool } from "@/lib/showtime-setup/catalog";
 import { showtimePickTargets } from "@/lib/showtime-setup/picks";
+import { SHOWTIME_SKILLS, needsFor } from "@/lib/showtime-setup/skills";
 import { checkAccountMatches, checkSite, matchSavedConnection, pickShowtimeIds } from "@/lib/showtime-setup/jev-setup";
 import { PICK_SLOT_META, type ActivationStep, type PickSlot } from "@/lib/showtime-setup/types";
 import { authorizeShowtimeSetup } from "../access";
@@ -44,7 +45,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const access = await authorizeShowtimeSetup(id, { requireInstalled: true });
   if (!access.ok) return access.response;
 
-  const body = (await req.json().catch(() => ({}))) as { domain?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { domain?: unknown; skills?: unknown };
+  // Which skills the person switched on; only their ids get picked. No list
+  // means every skill (older callers).
+  const skills = Array.isArray(body.skills) ? body.skills.filter((s): s is string => typeof s === "string") : SHOWTIME_SKILLS.map((s) => s.id);
+  const needs = needsFor(skills);
   const typed = typeof body.domain === "string" ? body.domain : "";
   const typedHost = bareHost(typed);
   if (typed.trim() && !typedHost) {
@@ -65,8 +70,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         const domain = (await getPrimaryDomainForEngagement(id)) ?? typedHost;
         const host = bareHost(domain ?? "");
-        if (!host) {
-          step({ id: "site", label: "No website to read", status: "failed", detail: "Add the website to set Showtime up from it." });
+        if (!host && needs.website) {
+          step({ id: "site", label: "No website to read", status: "failed", detail: "The confirmation page is built from the website. Add it, or switch that skill off." });
           send({ type: "done" });
           controller.close();
           return;
@@ -74,9 +79,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         // Reuse a read of this same site (from any product) instead of
         // crawling it again.
-        const corpus = await getClientFact(id, "rawVoiceCorpus");
+        const corpus = host ? await getClientFact(id, "rawVoiceCorpus") : null;
         const alreadyRead = corpus && typeof corpus.value === "string" && corpus.value.trim() && bareHost(corpus.sourceDetail ?? "") === host;
-        if (alreadyRead) {
+        if (!host) {
+          // Nothing switched on needs the site; the tools carry the rest.
+        } else if (alreadyRead) {
           step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus.updatedAt.toISOString() });
         } else {
           const result = await discoverClient(id);
@@ -87,7 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }
         }
 
-        const siteCheck = await checkSite(id, host);
+        const siteCheck = host ? await checkSite(id, host) : null;
         if (siteCheck && !siteCheck.isRealSite) {
           step({ id: "site-check", label: "This may not be the main website", status: "failed", detail: "It reads like a link page, a login or a placeholder. Double-check the address." });
         }
@@ -111,12 +118,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const vault = await listVaultCredentials(access.workspaceId);
         for (const t of SHOWTIME_TOOLS) {
           const saved = vault.filter((v) => v.provider === t.provider);
-          if (saved.length > 1) await matchSavedConnection(id, host, t.provider, saved);
+          if (saved.length > 1) await matchSavedConnection(id, host || null, t.provider, saved);
         }
         for (const t of SHOWTIME_TOOLS) {
           if (!t.needsKey || !(await hasCredential(id, t.provider))) continue;
           const label = vault.find((v) => v.provider === t.provider)?.label ?? null;
-          const check = await checkAccountMatches(id, host, t.provider, label);
+          const check = await checkAccountMatches(id, host || null, t.provider, label);
           if (check && !check.matches) {
             step({ id: `account-${t.provider}`, label: `${t.label} may be a different business's account`, status: "failed", detail: "Check it's the right account before turning Showtime on." });
           } else {
@@ -146,9 +153,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           // Already set in config: nothing to pick.
           const meta = (stack.hosting_platform_meta ?? {}) as Record<string, unknown>;
           const current = t.slot === "webflow_site_id" || t.slot === "vercel_project_name" ? meta[t.slot] : (stack as Record<string, unknown>)[t.slot];
-          return !current;
+          return !current && needs.picks.has(t.slot);
         });
-        const picks = await pickShowtimeIds(id, host, targets);
+        const picks = await pickShowtimeIds(id, host || null, targets);
         for (const p of picks) {
           const label = PICK_SLOT_META[p.slot as PickSlot]?.label ?? p.slot;
           step(

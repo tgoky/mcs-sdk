@@ -21,18 +21,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { useTour } from "@/components/tours/tour-provider";
-import { anySkillDisplayName } from "@/lib/any-skill";
 import { VERTICALS, verticalLabel } from "@/lib/verticals";
 import { CRM_NOTE_PLATFORMS, SHOWTIME_TOOL_GROUPS, findShowtimeTool, type ToolGroupId } from "@/lib/showtime-setup/catalog";
 import { PICK_PURPOSE, showtimePickTargets } from "@/lib/showtime-setup/picks";
 import type { ActivationStep, PickSlot, SetupValue, ShowtimeSetupState, TrustTier } from "@/lib/showtime-setup/types";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList, FactToken, TextEditor } from "./fact-token";
-import { ActivationSteps } from "./activation-steps";
+import { ActivationProgress } from "./activation-steps";
+import { AnchoredCard } from "./anchored-card";
+import { SkillSwitchRow } from "./skill-switch";
+import { SHOWTIME_SKILLS, needsFor, type CombinedNeeds } from "@/lib/showtime-setup/skills";
 import { ConfirmationPreview } from "./confirmation-preview";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +51,8 @@ interface Draft {
   choices: Record<ChoiceKey, string | null>;
   slackWebhookUrl: string;
   picks: Partial<Record<PickSlot, Pick | null>>;
+  /** Keep the client's own confirmation page instead of building one. */
+  keepPage: boolean;
 }
 
 const OFFER_KEYS: OfferKey[] = ["offerName", "offerPrice", "offerVertical", "offerIcp", "trafficTemperature", "castingChoice", "heroVideoUrl"];
@@ -77,6 +81,7 @@ function draftFrom(data: ShowtimeSetupState, prev: Draft | null, touched: Set<st
     choices,
     slackWebhookUrl: keep("slack") ? prev!.slackWebhookUrl : data.choices.slackWebhookUrl,
     picks,
+    keepPage: keep("keepPage") ? prev!.keepPage : data.existingPage.reuse,
   };
 }
 
@@ -168,6 +173,11 @@ export function ShowtimeSetup({
   const [draft, setDraft] = useState<Draft | null>(null);
   const touched = useRef(new Set<string>());
   const [steps, setSteps] = useState<ActivationStep[]>([]);
+  // Which Showtime skills this client wants. A client already set up starts
+  // from what's on; a new one starts with nothing picked, so nothing (not
+  // even the confirmation page) is assumed.
+  const [skills, setSkills] = useState<string[]>([]);
+  const baseNeeds = useMemo(() => needsFor(skills), [skills]);
   const [activateError, setActivateError] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [flashGroup, setFlashGroup] = useState<ToolGroupId | null>(null);
@@ -199,7 +209,10 @@ export function ShowtimeSetup({
         }
         return d;
       });
-      if (opts.initial) setPhase(next.configured ? "review" : "welcome");
+      if (opts.initial) {
+        setPhase(next.configured ? "review" : "welcome");
+        setSkills(next.configured ? SHOWTIME_SKILLS.filter((sk) => next.skills[sk.id]).map((sk) => sk.id) : []);
+      }
       return next;
     },
     [engagementId, storageKey]
@@ -237,6 +250,20 @@ export function ShowtimeSetup({
   const setPlatform = (g: ToolGroupId, v: string | null) => update((d) => ({ ...d, platforms: { ...d.platforms, [g]: v } }), `platform.${g}`);
   const setPick = (s: PickSlot, v: Pick | null) => update((d) => ({ ...d, picks: { ...d.picks, [s]: v } }), `pick.${s}`);
   const tierOf = (key: string, v: SetupValue | undefined): TrustTier => (touched.current.has(key) ? "done" : v?.tier ?? "ask");
+  // Keeping the client's own confirmation page means nothing to host or
+  // publish to, so hosting drops out of what's asked.
+  const needs = useMemo<CombinedNeeds>(() => {
+    if (!draft?.keepPage || !data?.existingPage.url) return baseNeeds;
+    const groups = new Set(baseNeeds.groups);
+    groups.delete("hosting");
+    const picks = new Set(baseNeeds.picks);
+    picks.delete("webflow_site_id");
+    picks.delete("vercel_project_name");
+    return { ...baseNeeds, groups, picks };
+  }, [baseNeeds, draft?.keepPage, data?.existingPage.url]);
+  const setKeepPage = (v: boolean) => update((d) => ({ ...d, keepPage: v }), "keepPage");
+  const toggleSkill = (id: string, on: boolean) =>
+    setSkills((cur) => (on ? SHOWTIME_SKILLS.map((sk) => sk.id).filter((x) => x === id || cur.includes(x)) : cur.filter((x) => x !== id)));
 
   // ── Tools ──
   const post = async (path: string, body: unknown) => {
@@ -292,11 +319,13 @@ export function ShowtimeSetup({
     setPhase("working");
     setSteps([]);
     setActivateError(null);
+    // Bring the progress panel into view; it replaces the button at the bottom.
+    setTimeout(() => document.getElementById("showtime-progress")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
     try {
       const res = await fetch(`/api/engagements/${engagementId}/setup/showtime/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: draft.domain }),
+        body: JSON.stringify({ domain: draft.domain, skills }),
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
@@ -329,8 +358,12 @@ export function ShowtimeSetup({
   }
 
   // ── Save ──
-  const blockers = useMemo(() => (data && draft ? findBlockers(data, draft) : []), [data, draft]);
-  const canSaveAtAll = Boolean(draft?.offer.trafficTemperature && (draft.domain || data?.website.domain));
+  const blockers = useMemo(() => (data && draft ? findBlockers(data, draft, needs) : []), [data, draft, needs]);
+  // The save route's own hard requirements; everything else can be saved
+  // and finished later. Switching everything off is allowed once set up.
+  const canSaveAtAll =
+    (skills.length > 0 || Boolean(data?.configured)) &&
+    (!needs.offer || Boolean(draft?.offer.trafficTemperature && (draft.domain || data?.website.domain)));
 
   async function save() {
     if (!data || !draft) return;
@@ -359,7 +392,12 @@ export function ShowtimeSetup({
       adDataPlatform: draft.choices.adDataPlatform ?? "",
       briefLandingDestination: draft.choices.briefLandingDestination ?? "",
       autoPicks,
+      skills,
     };
+    if (data.existingPage.url) {
+      body.existingConfirmationPageReuse = draft.keepPage;
+      body.existingConfirmationPageUrl = data.existingPage.url;
+    }
     // Only sent when there's something to set: an empty string would clear
     // a saved value on the server.
     if (draft.offer.heroVideoUrl.trim()) body.heroVideoUrl = draft.offer.heroVideoUrl.trim();
@@ -373,10 +411,16 @@ export function ShowtimeSetup({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
-      toast.success(blockers.length === 0 ? `Showtime is on for ${data.buyer}.` : `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before everything runs.`);
+      toast.success(
+        skills.length === 0
+          ? `Showtime is off for ${data.buyer}.`
+          : blockers.length === 0
+            ? `${skills.length} Showtime skill${skills.length === 1 ? " is" : "s are"} on for ${data.buyer}.`
+            : `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before everything runs.`
+      );
       touched.current.clear();
       router.refresh();
-      startTour("showtime");
+      if (skills.length > 0) startTour("showtime");
       if (onSaved) onSaved({ runId: json.runId });
       else await load();
     } catch (e) {
@@ -400,9 +444,11 @@ export function ShowtimeSetup({
   const domain = bareHost(draft.domain || data.website.domain);
   const toolState = (provider: string, group: ToolGroupId) => data.tools.find((t) => t.provider === provider && t.group === group);
 
+  const shownGroups = SHOWTIME_TOOL_GROUPS.filter((g) => needs.groups.has(g.id) || needs.optionalGroups.has(g.id));
   const toolRows = (compact: boolean) => (
     <div ref={toolsRef} className={cn("space-y-5", compact && "space-y-4")}>
-      {SHOWTIME_TOOL_GROUPS.map((group) => (
+      {shownGroups.length === 0 && <p className="text-[13px] text-[var(--text-muted)]">Switch on a skill above and we&apos;ll show only the tools it uses.</p>}
+      {shownGroups.map((group) => (
         <motion.div
           key={group.id}
           animate={flashGroup === group.id ? { backgroundColor: ["rgba(0,0,0,0)", "var(--surface-prefill)", "rgba(0,0,0,0)"] } : {}}
@@ -410,7 +456,10 @@ export function ShowtimeSetup({
           className="-mx-3 grid grid-cols-1 gap-3 rounded-xl px-3 py-1 @xl:grid-cols-[140px_1fr] @xl:items-center"
         >
           <div>
-            <p className="text-sm font-medium text-[var(--text-primary)]">{group.label}</p>
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              {group.label}
+              {!needs.groups.has(group.id) && <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">Optional</span>}
+            </p>
             <p className="text-xs text-[var(--text-muted)]">{group.hint}</p>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-3">
@@ -450,6 +499,9 @@ export function ShowtimeSetup({
               toolRows={toolRows(false)}
               phase={phase}
               steps={steps}
+              skills={skills}
+              needs={needs}
+              onToggleSkill={toggleSkill}
               activateError={activateError}
               onActivate={activate}
               onCancel={onCancel}
@@ -476,6 +528,10 @@ export function ShowtimeSetup({
               setChoice={setChoice}
               setPick={setPick}
               setSlack={(v) => update((d) => ({ ...d, slackWebhookUrl: v }), "slack")}
+              skills={skills}
+              needs={needs}
+              onToggleSkill={toggleSkill}
+              setKeepPage={setKeepPage}
               toolRows={toolRows(true)}
               onReread={() => {
                 setPhase("welcome");
@@ -489,6 +545,7 @@ export function ShowtimeSetup({
             />
             <SaveBar
               blockers={blockers}
+              skillCount={skills.length}
               configured={data.configured}
               saving={saving}
               canSave={canSaveAtAll}
@@ -515,6 +572,19 @@ export function ShowtimeSetup({
 
 // ── Welcome ────────────────────────────────────────────────────────────
 
+/** Showtime's own product mark, the same art the Library shows. */
+function ShowtimeMark({ size = 44 }: { size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-elevation-1 ring-1 ring-black/5 dark:ring-white/10"
+      style={{ width: size, height: size }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's */}
+      <img src="/images/showtime.png" alt="" className="h-[82%] w-[82%] object-contain" />
+    </span>
+  );
+}
+
 function Welcome({
   data,
   draft,
@@ -522,6 +592,9 @@ function Welcome({
   toolRows,
   phase,
   steps,
+  skills,
+  needs,
+  onToggleSkill,
   activateError,
   onActivate,
   onCancel,
@@ -534,6 +607,9 @@ function Welcome({
   toolRows: React.ReactNode;
   phase: "welcome" | "working" | "review";
   steps: ActivationStep[];
+  skills: string[];
+  needs: CombinedNeeds;
+  onToggleSkill: (id: string, on: boolean) => void;
   activateError: string | null;
   onActivate: () => void;
   onCancel: () => void;
@@ -546,93 +622,103 @@ function Welcome({
   const readHere = known && data.website.readDomain && bareHost(data.website.readDomain) === host;
   const readAgo = relativeTime(data.website.readAt);
   const connectedCount = data.tools.filter((t) => t.linked).length;
+  const canActivate = skills.length > 0 && (!needs.website || Boolean(host));
 
   return (
-    <div className="space-y-10">
-      <header className="space-y-3">
-        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          <Sparkles className="h-3.5 w-3.5 text-[var(--text-prefill-accent)]" /> Showtime
-        </p>
-        <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[32px]">
-          Set up Showtime for {data.buyer}
-        </h1>
-        <p className="max-w-xl text-[15px] leading-relaxed">
-          Give us your website and the tools you already use. We&apos;ll set up every Showtime skill from them: the confirmation page, the
-          pre-call emails and brief, no-show recovery and the funnel audit. You just check our work.
-        </p>
-      </header>
-
-      <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-50")}>
-        <label htmlFor="showtime-website" className="text-sm font-medium text-[var(--text-primary)]">
-          Your website
-        </label>
-        <div className="flex h-14 items-center border border-[var(--text-muted)]/40 bg-background transition-colors focus-within:border-[var(--text-primary)] dark:border-white/15">
-          <span className="select-none pl-4 text-lg text-[var(--text-muted)]">https://</span>
-          <input
-            id="showtime-website"
-            value={draft.domain.replace(/^https?:\/\//i, "")}
-            onChange={(e) => setDomain(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && host && onActivate()}
-            placeholder="yourwebsite.com"
-            autoComplete="url"
-            spellCheck={false}
-            className="h-full min-w-0 flex-1 bg-transparent pr-4 pl-0.5 text-lg text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]/60"
-          />
-        </div>
-        <AnimatePresence initial={false}>
-          {known && (
-            <motion.p
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-1.5 text-[13px] text-[var(--text-prefill-accent)]"
-            >
-              <Check className="h-3.5 w-3.5" strokeWidth={3} />
-              {readHere && readAgo
-                ? `We already read this site ${readAgo}. Activating takes seconds.`
-                : `Already on file for ${data.buyer}.`}
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </section>
-
-      <section className={cn("space-y-5 transition-opacity", working && "pointer-events-none opacity-50")}>
-        <div>
-          <h2 className="text-sm font-medium text-[var(--text-primary)]">Connect your tools</h2>
-          <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">
-            {connectedCount > 0
-              ? `${connectedCount} already connected. The more we can see, the less you'll ever type.`
-              : "Tap a logo. Tools you've connected for other clients show up ready to reuse."}
+    <div className="space-y-9">
+      <header className="flex items-start gap-4">
+        <ShowtimeMark />
+        <div className="min-w-0 space-y-1.5">
+          <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">
+            Set up Showtime for {data.buyer}
+          </h1>
+          <p className="max-w-xl text-[15px] leading-relaxed">
+            Pick what you want running. We set it up from your website and the tools you already use, and you check our work.
           </p>
         </div>
-        {toolRows}
+      </header>
+
+      <section className={cn("transition-opacity", working && "pointer-events-none opacity-60")}>
+        <h2 className="text-sm font-medium text-[var(--text-primary)]">What should Showtime do?</h2>
+        <ul className="mt-1 divide-y">
+          {SHOWTIME_SKILLS.map((sk) => (
+            <SkillSwitchRow key={sk.id} skillId={sk.id} blurb={sk.blurb} on={skills.includes(sk.id)} onChange={(on) => onToggleSkill(sk.id, on)} />
+          ))}
+        </ul>
       </section>
+
+      <AnimatePresence initial={false}>
+        {skills.length > 0 && (
+          <motion.div
+            key="inputs"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="space-y-9 overflow-hidden"
+          >
+            <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-60")}>
+              <label htmlFor="showtime-website" className="flex items-baseline gap-2 text-sm font-medium text-[var(--text-primary)]">
+                Your website
+                <span className="text-xs font-normal text-[var(--text-muted)]">
+                  {needs.website ? "The confirmation page is built from it" : "Optional. It helps us fill in the rest"}
+                </span>
+              </label>
+              <div className="flex h-14 items-center border border-[var(--text-muted)]/40 bg-background transition-colors focus-within:border-[var(--text-primary)] dark:border-white/15">
+                <span className="select-none pl-4 text-lg text-[var(--text-muted)]">https://</span>
+                <input
+                  id="showtime-website"
+                  value={draft.domain.replace(/^https?:\/\//i, "")}
+                  onChange={(e) => setDomain(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && canActivate && onActivate()}
+                  placeholder="yourwebsite.com"
+                  autoComplete="url"
+                  spellCheck={false}
+                  className="h-full min-w-0 flex-1 bg-transparent pr-4 pl-0.5 text-lg text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]/60"
+                />
+              </div>
+              {known && (
+                <p className="flex items-center gap-1.5 text-[13px] text-[var(--text-prefill-accent)]">
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                  {readHere && readAgo ? `We already read this site ${readAgo}, so this takes seconds.` : `Already on file for ${data.buyer}.`}
+                </p>
+              )}
+            </section>
+
+            <section className={cn("space-y-5 transition-opacity", working && "pointer-events-none opacity-60")}>
+              <div>
+                <h2 className="text-sm font-medium text-[var(--text-primary)]">Connect your tools</h2>
+                <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">
+                  {connectedCount > 0
+                    ? `${connectedCount} already connected. Only the tools your skills use are shown.`
+                    : "Tap a logo. Tools you've connected for other clients show up ready to reuse."}
+                </p>
+              </div>
+              {toolRows}
+            </section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <section>
         <AnimatePresence mode="wait" initial={false}>
           {working ? (
-            <motion.div key="steps" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 border-t pt-6">
-              <ActivationSteps
-                steps={steps}
-                working={!activateError}
-                workingLabel={steps.length === 0 ? `Reading ${host || "your site"}…` : "Setting up the rest…"}
-              />
-              {activateError && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-[var(--error)]">{activateError}</p>
-                  <Button variant="outline" size="sm" onClick={onActivate}>
-                    <RotateCcw /> Try again
-                  </Button>
-                </div>
-              )}
+            <motion.div key="progress" id="showtime-progress" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+              <ActivationProgress steps={steps} working={!activateError} host={host} error={activateError} onRetry={onActivate} />
             </motion.div>
           ) : (
             <motion.div key="cta" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t pt-6">
-              <Button size="lg" className="h-11 px-5 text-[15px]" onClick={onActivate} disabled={!host}>
-                Activate Showtime <ArrowRight />
+              <Button size="lg" className="h-11 px-5 text-[15px]" onClick={onActivate} disabled={!canActivate}>
+                {skills.length > 1 ? `Set up ${skills.length} skills` : "Set it up"} <ArrowRight />
               </Button>
               <p className="text-[13px] text-[var(--text-muted)]">
-                {readHere ? "Takes a few seconds." : "About a minute the first time we read a site."}
+                {skills.length === 0
+                  ? "Switch on at least one skill."
+                  : needs.website && !host
+                    ? "Add the website first."
+                    : readHere || !host
+                      ? "Takes a few seconds."
+                      : "About a minute the first time we read a site."}
               </p>
               <span className="ml-auto flex items-center gap-4">
                 {onBackToReview && (
@@ -669,7 +755,15 @@ function Review({
   onReread,
   onFocusGroup,
   engagementId,
+  skills,
+  needs,
+  onToggleSkill,
+  setKeepPage,
 }: {
+  skills: string[];
+  needs: CombinedNeeds;
+  onToggleSkill: (id: string, on: boolean) => void;
+  setKeepPage: (v: boolean) => void;
   data: ShowtimeSetupState;
   draft: Draft;
   domain: string;
@@ -706,17 +800,30 @@ function Review({
   const booking = draft.platforms.booking;
   const hosting = draft.platforms.hosting;
   const pick = (slot: PickSlot) => data.picks[slot];
+  const isOn = (id: string) => skills.includes(id);
+  const skillRow = (id: string) => {
+    const sk = SHOWTIME_SKILLS.find((x) => x.id === id)!;
+    return { skillId: id, blurb: sk.blurb, on: isOn(id), onChange: (v: boolean) => onToggleSkill(id, v) };
+  };
 
   return (
-    <div className="grid gap-x-12 gap-y-10 pb-28 @4xl:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="mx-auto max-w-3xl pb-28">
       <div className="min-w-0 space-y-10">
-        <header className="space-y-2">
+        <header className="flex items-start gap-4">
+          <ShowtimeMark size={40} />
+          <div className="min-w-0 space-y-1.5">
           <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
             {data.configured ? `Showtime for ${data.buyer}` : `Here's Showtime for ${data.buyer}`}
           </h1>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--text-muted)]">
             <span>
-              Set up from <span className="font-medium text-[var(--text-secondary)]">{domain || "your website"}</span>
+              {domain ? (
+                <>
+                  Set up from <span className="font-medium text-[var(--text-secondary)]">{domain}</span>
+                </>
+              ) : (
+                "Set up from your tools"
+              )}
               {readAgo ? ` · read ${readAgo}` : ""}
             </span>
             <span aria-hidden>·</span>
@@ -730,9 +837,11 @@ function Review({
               {domain} reads like a link page or placeholder, not the main site. If there&apos;s a better address, read that one instead.
             </p>
           )}
+          </div>
         </header>
 
-        {/* What we learned */}
+        {/* What we learned: only the confirmation page needs the offer described */}
+        {needs.offer && (
         <section className="space-y-3">
           <SectionTitle>What we learned</SectionTitle>
           <p className="max-w-[62ch] text-[17px] leading-[2.1] text-[var(--text-secondary)]">
@@ -811,51 +920,76 @@ function Review({
             {" "}is on camera.
           </p>
         </section>
+        )}
 
-        {/* Tools */}
-        <section className="space-y-4">
-          <SectionTitle hint="Tap a logo to connect, switch or disconnect.">Your tools</SectionTitle>
-          {toolRows}
-        </section>
-
-        {/* What runs */}
+        {/* Skills: switch each one on or off; what an on skill will do, editable */}
         <section className="space-y-1">
-          <SectionTitle hint="Every Showtime skill, set up from the above.">What runs</SectionTitle>
+          <SectionTitle hint="Switch any skill on or off. Tap a highlighted word to change it.">Skills</SectionTitle>
           <ul className="divide-y">
-            <RunLine skill={anySkillDisplayName("pin-down")} icon="1">
-              A confirmation page in your brand after every booking, with{" "}
-              {offerToken(
-                "heroVideoUrl",
-                "a video placeholder",
-                "Video on the page",
-                (close) => (
-                  <TextEditor initial={o.heroVideoUrl} placeholder="YouTube, Vimeo or Loom link" onSave={(v) => (setOffer("heroVideoUrl", v), close())} />
-                ),
-                o.heroVideoUrl ? "your video" : null
-              )}{" "}
-              at the top.{" "}
-              {!hosting ? (
-                <InlineLink onClick={() => onFocusGroup("hosting")}>Choose where it&apos;s hosted</InlineLink>
-              ) : hosting === "webflow" && pick("webflow_site_id") ? (
+            <SkillSwitchRow {...skillRow("pin-down")}>
+              {data.existingPage.url && draft.keepPage ? (
                 <>
-                  Published to{" "}
-                  <PickToken slot="webflow_site_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which Webflow site?" />
-                  {" "}on Webflow.
+                  We&apos;ll keep your own confirmation page at{" "}
+                  <a href={data.existingPage.url} target="_blank" rel="noreferrer" className="font-medium text-[var(--text-primary)] underline decoration-[var(--border)] underline-offset-4 hover:decoration-[var(--text-primary)]">
+                    {bareHost(data.existingPage.url)}
+                  </a>{" "}
+                  and check it for gaps. Nothing gets published. <InlineLink onClick={() => setKeepPage(false)}>Build ours instead</InlineLink>
                 </>
-              ) : hosting === "nextjs_vercel" && pick("vercel_project_name") ? (
-                <>
-                  Published to the{" "}
-                  <PickToken slot="vercel_project_name" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which project?" />
-                  {" "}project on Vercel.
-                </>
-              ) : hosting === "plain_html" || hosting === "lovable" ? (
-                "We host it and hand you the link."
               ) : (
-                `Published on ${toolLabel(hosting)}.`
+                <>
+                  A confirmation page in your brand after every booking, with{" "}
+                  {offerToken(
+                    "heroVideoUrl",
+                    "a video placeholder",
+                    "Video on the page",
+                    (close) => (
+                      <TextEditor initial={o.heroVideoUrl} placeholder="YouTube, Vimeo or Loom link" onSave={(v) => (setOffer("heroVideoUrl", v), close())} />
+                    ),
+                    o.heroVideoUrl ? "your video" : null
+                  )}{" "}
+                  at the top.{" "}
+                  {!hosting ? (
+                    <InlineLink onClick={() => onFocusGroup("hosting")}>Choose where it&apos;s hosted</InlineLink>
+                  ) : hosting === "webflow" && pick("webflow_site_id") ? (
+                    <>
+                      Published to{" "}
+                      <PickToken slot="webflow_site_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which Webflow site?" />
+                      {" "}on Webflow.
+                    </>
+                  ) : hosting === "nextjs_vercel" && pick("vercel_project_name") ? (
+                    <>
+                      Published to the{" "}
+                      <PickToken slot="vercel_project_name" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which project?" />
+                      {" "}project on Vercel.
+                    </>
+                  ) : hosting === "plain_html" || hosting === "lovable" ? (
+                    "We host it and hand you the link."
+                  ) : (
+                    `Published on ${toolLabel(hosting)}.`
+                  )}{" "}
+                  <PagePreview
+                    open={openKey === "preview"}
+                    onOpenChange={(v) => setOpenKey(v ? "preview" : null)}
+                    buyer={data.buyer}
+                    offer={o}
+                    designSignal={data.preview.designSignal}
+                    template={data.preview.template}
+                    domain={domain}
+                  />
+                  {data.existingPage.url && (
+                    <span className="mt-1 block text-[13px] text-[var(--text-muted)]">
+                      You already have one at{" "}
+                      <a href={data.existingPage.url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                        {bareHost(data.existingPage.url)}
+                      </a>
+                      . <InlineLink onClick={() => setKeepPage(true)}>Keep yours instead</InlineLink>
+                    </span>
+                  )}
+                </>
               )}
-            </RunLine>
+            </SkillSwitchRow>
 
-            <RunLine skill={anySkillDisplayName("pile-on")} icon="2">
+            <SkillSwitchRow {...skillRow("pile-on")}>
               {email ? (
                 <>
                   New bookings get warm-up emails through {toolLabel(email)}
@@ -899,9 +1033,9 @@ function Review({
                   Warm-up emails before every call. <InlineLink onClick={() => onFocusGroup("email")}>Connect where emails send from</InlineLink>
                 </>
               )}
-            </RunLine>
+            </SkillSwitchRow>
 
-            <RunLine skill={anySkillDisplayName("pre-call-read")} icon="3">
+            <SkillSwitchRow {...skillRow("pre-call-read")}>
               Before every call, a brief on the prospect lands{" "}
               <ChoiceToken
                 k="briefLandingDestination"
@@ -922,9 +1056,9 @@ function Review({
                 }
               />
               .
-            </RunLine>
+            </SkillSwitchRow>
 
-            <RunLine skill={anySkillDisplayName("win-back")} icon="4">
+            <SkillSwitchRow {...skillRow("win-back")}>
               {email || booking ? (
                 <>
                   No-shows get a rebooking sequence
@@ -950,33 +1084,21 @@ function Review({
                   No-shows get a rebooking sequence. <InlineLink onClick={() => onFocusGroup("booking")}>Connect your booking tool</InlineLink>
                 </>
               )}
-            </RunLine>
+            </SkillSwitchRow>
 
-            <RunLine skill={anySkillDisplayName("leak-map")} icon="5">
+            <SkillSwitchRow {...skillRow("leak-map")}>
               Every Monday, a report on where booked calls leak out of the funnel, on your dashboard.
-            </RunLine>
+            </SkillSwitchRow>
           </ul>
+        </section>
+
+        {/* Tools: only the groups the switched-on skills use */}
+        <section className="space-y-4">
+          <SectionTitle hint="Tap a logo to connect, switch or disconnect.">Your tools</SectionTitle>
+          {toolRows}
         </section>
       </div>
 
-      <aside className="hidden @4xl:block">
-        <div className="sticky top-6 space-y-3">
-          <p className="text-xs font-semibold text-[var(--text-muted)]">Your confirmation page</p>
-          <ConfirmationPreview
-            buyer={data.buyer}
-            offerName={o.offerName}
-            offerPrice={o.offerPrice}
-            offerIcp={o.offerIcp}
-            trafficTemperature={o.trafficTemperature}
-            heroVideoUrl={o.heroVideoUrl}
-            designSignal={data.preview.designSignal}
-            template={data.preview.template}
-          />
-          <p className="text-xs leading-relaxed text-[var(--text-muted)]">
-            {data.preview.designSignal ? `In ${domain}'s colors and fonts. ` : ""}Updates as you edit. Nothing is published until you turn Showtime on.
-          </p>
-        </div>
-      </aside>
     </div>
   );
 }
@@ -1000,17 +1122,58 @@ function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: st
   );
 }
 
-function RunLine({ skill, icon, children }: { skill: string; icon: string; children: React.ReactNode }) {
+/** The confirmation page, previewed on demand from the Show Rate Setup line
+ * rather than taking up the page: a small thumbnail button that opens it. */
+function PagePreview({
+  open,
+  onOpenChange,
+  buyer,
+  offer,
+  designSignal,
+  template,
+  domain,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  buyer: string;
+  offer: Draft["offer"];
+  designSignal: unknown;
+  template: string;
+  domain: string;
+}) {
   return (
-    <li className="grid grid-cols-1 gap-1 py-4 @xl:grid-cols-[170px_1fr] @xl:gap-6">
-      <p className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)] text-[10px] font-semibold tabular-nums text-[var(--text-secondary)]">
-          {icon}
-        </span>
-        {skill}
-      </p>
-      <p className="text-[15px] leading-[1.95] text-[var(--text-secondary)]">{children}</p>
-    </li>
+    <AnchoredCard
+      open={open}
+      onOpenChange={onOpenChange}
+      label="Confirmation page preview"
+      width={340}
+      anchor={(props) => (
+        <button
+          type="button"
+          {...props}
+          className="inline-flex items-center gap-1.5 align-baseline text-[13px] font-medium text-[var(--text-primary)] underline decoration-dashed decoration-[var(--text-muted)] underline-offset-4 hover:decoration-[var(--text-primary)] cursor-pointer"
+        >
+          <Eye className="h-3.5 w-3.5 self-center" /> Preview the page
+        </button>
+      )}
+    >
+      <div className="space-y-2.5 p-4">
+        <ConfirmationPreview
+          width={308}
+          buyer={buyer}
+          offerName={offer.offerName}
+          offerPrice={offer.offerPrice}
+          offerIcp={offer.offerIcp}
+          trafficTemperature={offer.trafficTemperature}
+          heroVideoUrl={offer.heroVideoUrl}
+          designSignal={designSignal}
+          template={template}
+        />
+        <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+          {designSignal ? `In ${domain}'s colors and fonts. ` : ""}Built from what&apos;s above. Nothing is published until you save.
+        </p>
+      </div>
+    </AnchoredCard>
   );
 }
 
@@ -1238,14 +1401,17 @@ interface Blocker {
 }
 
 /** What Showtime's own readiness checks (worker-config-completeness.ts)
- * would still stop on, in the words of this screen. */
-function findBlockers(data: ShowtimeSetupState, d: Draft): Blocker[] {
+ * would still stop on for the skills that are switched on, in the words
+ * of this screen. A skill that's off asks for nothing. */
+function findBlockers(data: ShowtimeSetupState, d: Draft, needs: CombinedNeeds): Blocker[] {
   const out: Blocker[] = [];
-  if (!d.offer.trafficTemperature) out.push({ key: "temp", label: "How warm leads are", openKey: "offer.trafficTemperature" });
-  if (!d.offer.offerName) out.push({ key: "offer", label: "What they sell", openKey: "offer.offerName" });
-  if (!d.offer.offerPrice) out.push({ key: "price", label: "The price", openKey: "offer.offerPrice" });
-  if (!d.offer.offerIcp) out.push({ key: "icp", label: "Who it's for", openKey: "offer.offerIcp" });
-  if (!d.offer.offerVertical) out.push({ key: "vertical", label: "The industry", openKey: "offer.offerVertical" });
+  if (needs.offer) {
+    if (!d.offer.trafficTemperature) out.push({ key: "temp", label: "How warm leads are", openKey: "offer.trafficTemperature" });
+    if (!d.offer.offerName) out.push({ key: "offer", label: "What they sell", openKey: "offer.offerName" });
+    if (!d.offer.offerPrice) out.push({ key: "price", label: "The price", openKey: "offer.offerPrice" });
+    if (!d.offer.offerIcp) out.push({ key: "icp", label: "Who it's for", openKey: "offer.offerIcp" });
+    if (!d.offer.offerVertical) out.push({ key: "vertical", label: "The industry", openKey: "offer.offerVertical" });
+  }
   const linked = (g: ToolGroupId) => {
     const p = d.platforms[g];
     if (!p) return false;
@@ -1255,17 +1421,19 @@ function findBlockers(data: ShowtimeSetupState, d: Draft): Blocker[] {
     if (g === "hosting" && !["webflow", "wordpress", "nextjs_vercel"].includes(p)) return true;
     return Boolean(data.tools.find((t) => t.provider === p && t.group === g)?.linked);
   };
-  if (!linked("booking")) out.push({ key: "booking", label: "A booking tool", group: "booking" });
-  if (!linked("email")) out.push({ key: "email", label: "An email tool", group: "email" });
-  if (!linked("hosting")) out.push({ key: "hosting", label: "Where the page is hosted", group: "hosting" });
-  if (!d.choices.briefLandingDestination) out.push({ key: "brief", label: "Where briefs land", openKey: "choice.briefLandingDestination" });
-  else if (d.choices.briefLandingDestination === "slack" && !d.slackWebhookUrl.trim())
-    out.push({ key: "slack", label: "The Slack webhook", openKey: "choice.briefLandingDestination" });
+  const GROUP_LABEL: Record<ToolGroupId, string> = { booking: "A booking tool", email: "An email tool", hosting: "Where the page is hosted" };
+  for (const g of GROUPS) if (needs.groups.has(g) && !linked(g)) out.push({ key: g, label: GROUP_LABEL[g], group: g });
+  if (needs.choices.has("briefLandingDestination")) {
+    if (!d.choices.briefLandingDestination) out.push({ key: "brief", label: "Where briefs land", openKey: "choice.briefLandingDestination" });
+    else if (d.choices.briefLandingDestination === "slack" && !d.slackWebhookUrl.trim())
+      out.push({ key: "slack", label: "The Slack webhook", openKey: "choice.briefLandingDestination" });
+  }
   return out;
 }
 
 function SaveBar({
   blockers,
+  skillCount,
   configured,
   saving,
   canSave,
@@ -1276,6 +1444,7 @@ function SaveBar({
   onBlocker,
 }: {
   blockers: Blocker[];
+  skillCount: number;
   configured: boolean;
   saving: boolean;
   canSave: boolean;
@@ -1285,7 +1454,7 @@ function SaveBar({
   cancelLabel: string;
   onBlocker: (b: Blocker) => void;
 }) {
-  const ready = blockers.length === 0;
+  const ready = blockers.length === 0 && (skillCount > 0 || configured);
   return (
     <div className="sticky bottom-0 z-20 mt-2 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
       <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
@@ -1299,7 +1468,7 @@ function SaveBar({
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
                 <Check className="h-3 w-3" strokeWidth={3.5} />
               </span>
-              Everything&apos;s set. Check anything above, then turn it on.
+              {skillCount === 0 ? "Every Showtime skill will be off for this client." : "Everything's set. Check anything above, then save."}
             </p>
           ) : (
             <div className="flex items-center gap-1.5 overflow-x-auto text-sm [scrollbar-width:none] @3xl:flex-wrap">
@@ -1331,7 +1500,7 @@ function SaveBar({
           )}
           <Button size="lg" className="h-10 px-5" onClick={onSave} disabled={saving || !ready}>
             {saving ? <Loader2 className="animate-spin" /> : null}
-            {configured ? "Save changes" : "Turn on Showtime"}
+            {configured ? "Save changes" : skillCount > 1 ? `Turn on ${skillCount} skills` : "Turn it on"}
           </Button>
         </div>
       </div>

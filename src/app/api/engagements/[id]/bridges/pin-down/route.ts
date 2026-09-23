@@ -15,6 +15,7 @@ import { normalizeVertical } from "@/lib/verticals";
 import { syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
 import { PICK_FACT_PREFIX, PICK_SLOT_META, type PickSlot } from "@/lib/showtime-setup/types";
+import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -209,17 +210,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // the client's name.
     const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 
+    // The setup screen sends which Showtime skills this client wants
+    // (someone may only want the Funnel Audit). Without it (older callers)
+    // this saves Pin-Down's setup exactly as before.
+    const chosenSkills = Array.isArray(body.skills) ? (body.skills as unknown[]).filter((s): s is SkillId => typeof s === "string" && (SKILL_IDS as string[]).includes(s)) : null;
+    const pinDownOn = chosenSkills ? chosenSkills.includes("pin-down") : true;
+
     // Pin-Down crawls the client's site for brand voice and pre-fill; it
     // can't run without one. (This check existed before the dossier rewrite
     // and was dropped with it.)
-    if (!text(body.buyerDomain) && !currentStack.buyer_domain) {
+    if (pinDownOn && !text(body.buyerDomain) && !currentStack.buyer_domain) {
       return NextResponse.json({ error: "Enter the client's website before saving." }, { status: 400 });
     }
 
     const trafficTemperature: TrafficTemperature | undefined = TRAFFIC_TEMPERATURES.includes(body.trafficTemperature)
       ? body.trafficTemperature
       : currentOffer.traffic_temperature;
-    if (!trafficTemperature) {
+    if (pinDownOn && !trafficTemperature) {
       return NextResponse.json({ error: "Pick how leads usually arrive (cold, warm or hot) before saving." }, { status: 400 });
     }
 
@@ -254,7 +261,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       brief_landing_destination:
         (text(body.briefLandingDestination) as EngagementStack["brief_landing_destination"] | undefined) ?? currentStack.brief_landing_destination,
       slack_webhook_url: typeof body.slackWebhookUrl === "string" ? body.slackWebhookUrl.trim() : currentStack.slack_webhook_url,
+      ...(chosenSkills ? { showtime_setup_saved_at: new Date().toISOString() } : {}),
     };
+
+    // Keep the client's own confirmation page instead of building one:
+    // Pin-Down then only audits it and publishes nothing (onboarding-service).
+    if (typeof body.existingConfirmationPageReuse === "boolean") {
+      const existingUrl = text(body.existingConfirmationPageUrl) ?? currentStack.existing_confirmation_page_url;
+      if (body.existingConfirmationPageReuse && !existingUrl) {
+        return NextResponse.json({ error: "There's no existing confirmation page on file to keep." }, { status: 400 });
+      }
+      updatedStack.existing_confirmation_page_reuse = body.existingConfirmationPageReuse;
+      if (existingUrl) updatedStack.existing_confirmation_page_url = existingUrl;
+    }
 
     // Account-specific ids the setup screen had Jev pick (or the person
     // changed): which list/workflow Pile-On and Win-Back use, which site or
@@ -279,7 +298,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // unlisted legacy value is kept as typed.
       vertical: typedVertical ? normalizeVertical(typedVertical) ?? typedVertical : currentOffer.vertical ?? "",
       icp: text(body.offerIcp) ?? currentOffer.icp ?? "",
-      traffic_temperature: trafficTemperature,
+      // Only unset when Pin-Down is off (checked above); the page is the one
+      // thing that needs it.
+      traffic_temperature: trafficTemperature as OfferDetails["traffic_temperature"],
       hybrid_mode_enabled: currentOffer.hybrid_mode_enabled ?? false,
     };
 
@@ -326,12 +347,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       console.error(`[bridges/pin-down] recording pick decisions failed for ${id}:`, err)
     );
 
-    // Only Pin-Down itself is switched on here. The other Showtime workers
-    // are on by default (isSkillEnabledForEngagement), so re-enabling them
-    // on every save did nothing for a new client and silently undid it
-    // when a user had switched one off. Their real state (ready / needs
-    // setup / off) is shown in the dossier's worker status grid.
-    await setSkillEnabledForEngagement(id, "pin-down", true);
+    // With a skill list, exactly those skills are on for this client and
+    // the rest off (they're on by default, so "off" has to be written).
+    // Without one, only Pin-Down is switched on, as before: re-enabling the
+    // others on every save would undo a user switching one off elsewhere.
+    if (chosenSkills) {
+      for (const skillId of SKILL_IDS) await setSkillEnabledForEngagement(id, skillId, chosenSkills.includes(skillId));
+    } else {
+      await setSkillEnabledForEngagement(id, "pin-down", true);
+    }
 
     if (body.buyerDomain) {
       seedPrimaryDomainFromUrl(id, body.buyerDomain).catch((err) =>
@@ -339,7 +363,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       );
     }
 
-    const runId = await dispatchSkillRun(id, "pin-down", engagementRow.buyer);
+    // Pin-Down builds the confirmation page; nothing to run when it's off.
+    const runId = pinDownOn ? await dispatchSkillRun(id, "pin-down", engagementRow.buyer) : undefined;
 
     return NextResponse.json({ ok: true, runId });
   } catch (error: unknown) {

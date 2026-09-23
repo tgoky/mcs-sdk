@@ -1,15 +1,18 @@
 "use client";
 
-// Phase 3's "Choice cards" (see the "Worker Onboarding & Gating: Plan"
-// doc's Worker Dossier section): "platform-choice fields become tappable
-// tiles with icons, not <select> dropdowns." Deliberately the exact same
-// prop signature as form-fields.tsx's SelectField — a drop-in
-// replacement wherever a caller wants it, not a new form-state pattern.
-// Reuses PlatformLogo (form-fields.tsx) for icons instead of inventing a
-// second icon system — the same /logos/{provider}.png assets every
-// SelectField already renders next to its own label.
+// Tappable tiles for a platform or mode choice, in place of a <select>.
+// Same props as form-fields.tsx's SelectField, so either drops in.
+//
+// The tiles size to the space they're in (container queries), not the
+// window: these forms open in narrow side panels as often as full pages,
+// and a three-across grid in a 360px panel cut every label to an icon.
+// Labels wrap instead of truncating, and a logo is shown only for a real
+// brand; a choice like "None" or "Slack channel" used to get a generic
+// envelope.
 
-import { PlatformLogo } from "@/app/dashboard/engagements/new/form-fields";
+import { Check } from "lucide-react";
+import { PlatformLogo, hasPlatformLogo } from "@/components/platform-logo";
+import { cn } from "@/lib/utils";
 
 export function ChoiceCardGroup({
   label,
@@ -29,36 +32,50 @@ export function ChoiceCardGroup({
   disabled?: boolean;
 }) {
   return (
-    <div className="space-y-1.5 w-full">
-      <label className="text-xs font-semibold block text-zinc-900 dark:text-zinc-100">
+    <div className="@container w-full space-y-2">
+      <p className="text-sm font-medium text-[var(--text-primary)]">
         {label}
-        {required && (
-          <span className="ml-1 font-mono text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">(REQUIRED)</span>
-        )}
-      </label>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {required && <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">Required</span>}
+      </p>
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-1 gap-2 @xs:grid-cols-2 @xl:grid-cols-3">
         {options.map((option) => {
           const selected = option.value === value;
+          const logo = option.value && hasPlatformLogo(option.value);
           return (
             <button
               key={option.value}
               type="button"
+              role="radio"
+              aria-checked={selected}
               disabled={disabled}
               onClick={() => onChange(option.value)}
-              aria-pressed={selected}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              className={cn(
+                "flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40",
                 selected
-                  ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
-                  : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600"
-              }`}
+                  ? "border-[var(--ink)] bg-[var(--accent-dim)] text-[var(--text-primary)] ring-1 ring-[var(--ink)]"
+                  : "bg-background text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+              )}
             >
-              <PlatformLogo provider={option.value} />
-              <span className="truncate">{option.label}</span>
+              {logo && (
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-black/10">
+                  <PlatformLogo provider={option.value} size={14} monogram={option.label} />
+                </span>
+              )}
+              <span className="min-w-0 flex-1 leading-snug">{option.label}</span>
+              <span
+                className={cn(
+                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                  selected ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ink-foreground)]" : "border-[var(--text-muted)]/50"
+                )}
+                aria-hidden="true"
+              >
+                {selected && <Check className="h-2.5 w-2.5" strokeWidth={4} />}
+              </span>
             </button>
           );
         })}
       </div>
-      {helpText && <p className="text-[11px] font-normal leading-normal text-zinc-500 dark:text-zinc-400">{helpText}</p>}
+      {helpText && <p className="text-xs leading-relaxed text-[var(--text-muted)]">{helpText}</p>}
     </div>
   );
 }

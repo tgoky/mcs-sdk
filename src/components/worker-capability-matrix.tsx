@@ -55,8 +55,8 @@ export function WorkerCapabilityMatrix({ workerId, engagementId }: { workerId: W
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Capabilities</h3>
-        <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">
+        <h3 className="text-xs font-semibold text-[var(--text-secondary)]">What this can do</h3>
+        <span className="text-xs tabular-nums text-[var(--text-muted)]">
           {activeCount}/{capabilities.length} active
         </span>
       </div>
@@ -69,9 +69,9 @@ export function WorkerCapabilityMatrix({ workerId, engagementId }: { workerId: W
               <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-zinc-300 dark:text-zinc-700" />
             )}
             <div className="min-w-0">
-              <p className={`text-xs font-semibold ${cap.active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-600"}`}>{cap.name}</p>
+              <p className={`text-sm font-medium ${cap.active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-600"}`}>{cap.name}</p>
               {!cap.active && (
-                <p className="text-[10.5px] text-zinc-400 dark:text-zinc-600 leading-snug">
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-snug">
                   Needs {cap.missingFieldKeys.length} more field{cap.missingFieldKeys.length === 1 ? "" : "s"}
                 </p>
               )}

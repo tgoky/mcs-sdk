@@ -19,6 +19,7 @@ import { hasCredential, listEngagementsUsingVaultCredential, listVaultCredential
 import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
 import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
 import { factTier } from "@/lib/fact-trust";
+import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { SHOWTIME_TOOLS, type ToolGroupId } from "./catalog";
 import { showtimePickTargets } from "./picks";
 import { PICK_FACT_PREFIX, type PickSlot, type PickState, type SetupValue, type ShowtimeSetupState, type ToolState } from "./types";
@@ -208,7 +209,10 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
   return {
     engagementId,
     buyer: row.buyer,
-    configured: Boolean(offer.traffic_temperature && stack.buyer_domain),
+    // Saved from this screen (it writes the skill switches) or the old
+    // dossier (it required the website and lead warmth).
+    configured: Boolean(stack.showtime_setup_saved_at) || Boolean(offer.traffic_temperature && stack.buyer_domain),
+    skills: await getEngagementSkillStates(engagementId),
     website: {
       domain,
       readAt: corpus ? corpus.updatedAt.toISOString() : null,
@@ -227,6 +231,14 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       !nonEmpty(offer.price) && planOptions && planOptions.status !== "rejected" && Array.isArray(planOptions.value)
         ? (planOptions.value as { name?: string; price?: string }[])
         : [],
+    existingPage: {
+      url:
+        (typeof stack.existing_confirmation_page_url === "string" && stack.existing_confirmation_page_url) ||
+        (typeof facts.existingConfirmationPageUrl?.value === "string" && facts.existingConfirmationPageUrl.status !== "rejected"
+          ? (facts.existingConfirmationPageUrl.value as string)
+          : null),
+      reuse: Boolean(stack.existing_confirmation_page_reuse),
+    },
     preview: {
       designSignal: facts.designSignal?.value ?? null,
       template: row.confirmationPageTemplate,
