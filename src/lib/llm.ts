@@ -1,3 +1,4 @@
+import { NO_DASHES_RULE, undash, undashDeep } from "@/lib/plain-punctuation";
 import { db } from "@/lib/db";
 import { skillRuns } from "@/models/schema";
 import { eq, sql } from "drizzle-orm";
@@ -57,6 +58,11 @@ async function recordRunUsage(
     .where(eq(skillRuns.id, runId));
 }
 
+/** The app's system prompt plus the house writing rules (no dashes). */
+function withHouseStyle(system: string): string {
+  return system?.trim() ? `${system}\n\n${NO_DASHES_RULE}` : NO_DASHES_RULE;
+}
+
 // Call options
 export interface ClaudeCallOptions {
   model: ModelKey;
@@ -100,7 +106,7 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
     body: JSON.stringify({
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
-      system: opts.system,
+      system: withHouseStyle(opts.system),
       messages: [{ role: "user", content: opts.userMessage }],
     }),
     signal: opts.signal,
@@ -112,7 +118,7 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
   }
 
   const data = await res.json();
-  const text: string = data.content?.[0]?.text ?? "";
+  const text = undash(data.content?.[0]?.text ?? "");
   const inputTokens: number = data.usage?.input_tokens ?? 0;
   const outputTokens: number = data.usage?.output_tokens ?? 0;
   const pricing = ANTHROPIC_PRICING[modelString] ?? { input: 0, output: 0 };
@@ -137,7 +143,8 @@ async function callViaAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResult> 
 
 async function fetchOpenRouterCompletion(
   modelString: string,
-  opts: { system: string; userMessage: string; maxTokens?: number; signal?: AbortSignal; runId?: string }
+  opts: { system: string; userMessage: string; maxTokens?: number; signal?: AbortSignal; runId?: string },
+  houseStyle: boolean
 ): Promise<ClaudeResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -158,7 +165,7 @@ async function fetchOpenRouterCompletion(
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
       messages: [
-        { role: "system", content: opts.system },
+        { role: "system", content: houseStyle ? withHouseStyle(opts.system) : opts.system },
         { role: "user", content: opts.userMessage },
       ],
     }),
@@ -171,7 +178,8 @@ async function fetchOpenRouterCompletion(
   }
 
   const data = await res.json();
-  const text: string = data.choices?.[0]?.message?.content ?? "";
+  const raw: string = data.choices?.[0]?.message?.content ?? "";
+  const text = houseStyle ? undash(raw) : raw;
   const inputTokens: number = data.usage?.prompt_tokens ?? 0;
   const outputTokens: number = data.usage?.completion_tokens ?? 0;
   const pricing = OPENROUTER_PRICING[modelString] ?? { input: 0, output: 0 };
@@ -195,7 +203,7 @@ async function fetchOpenRouterCompletion(
 }
 
 async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult> {
-  return fetchOpenRouterCompletion(OPENROUTER_MODELS[opts.model], opts);
+  return fetchOpenRouterCompletion(OPENROUTER_MODELS[opts.model], opts, true);
 }
 
 /**
@@ -214,12 +222,15 @@ async function callViaOpenRouter(opts: ClaudeCallOptions): Promise<ClaudeResult>
  * (currently a handful of entries) — anything else records $0 rather
  * than a guessed number. Add real pricing there if a configured engine's
  * cost needs to show up accurately.
+ *
+ * No house style here (see plain-punctuation.ts): the answer is a record
+ * of what that engine says, so it's kept exactly as given.
  */
 export async function callOpenRouterModel(
   modelString: string,
   opts: { system: string; userMessage: string; maxTokens?: number; signal?: AbortSignal; runId?: string }
 ): Promise<ClaudeResult> {
-  return fetchOpenRouterCompletion(modelString, opts);
+  return fetchOpenRouterCompletion(modelString, opts, false);
 }
 
 // Tool-calling
@@ -319,6 +330,12 @@ function convertAnthropicMessagesToOpenAI(messages: ClaudeMessage[]) {
   return out;
 }
 
+function undashBlock(block: ClaudeContentBlock): ClaudeContentBlock {
+  if (block.type === "text") return { ...block, text: undash(block.text) };
+  if (block.type === "tool_use") return { ...block, input: undashDeep(block.input) };
+  return block;
+}
+
 export async function callClaudeWithTools(opts: ClaudeToolCallOptions): Promise<ClaudeToolCallResult> {
   if (USE_OPENROUTER) {
     return callViaOpenRouterWithTools(opts);
@@ -342,7 +359,7 @@ async function callViaAnthropicWithTools(opts: ClaudeToolCallOptions): Promise<C
     body: JSON.stringify({
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
-      system: opts.system,
+      system: withHouseStyle(opts.system),
       messages: opts.messages,
       tools: opts.tools,
     }),
@@ -355,7 +372,7 @@ async function callViaAnthropicWithTools(opts: ClaudeToolCallOptions): Promise<C
   }
 
   const data = await res.json();
-  const content: ClaudeContentBlock[] = data.content ?? [];
+  const content = ((data.content ?? []) as ClaudeContentBlock[]).map(undashBlock);
   const inputTokens: number = data.usage?.input_tokens ?? 0;
   const outputTokens: number = data.usage?.output_tokens ?? 0;
   const pricing = ANTHROPIC_PRICING[modelString] ?? { input: 0, output: 0 };
@@ -375,9 +392,7 @@ async function callViaOpenRouterWithTools(opts: ClaudeToolCallOptions): Promise<
   const modelString = OPENROUTER_MODELS[opts.model];
 
   const openAiMessages: any[] = [];
-  if (opts.system?.trim()) {
-    openAiMessages.push({ role: "system", content: opts.system });
-  }
+  openAiMessages.push({ role: "system", content: withHouseStyle(opts.system) });
   openAiMessages.push(...convertAnthropicMessagesToOpenAI(opts.messages));
 
   const openAiTools = opts.tools.map((t) => ({
@@ -417,7 +432,7 @@ async function callViaOpenRouterWithTools(opts: ClaudeToolCallOptions): Promise<
   const contentBlocks: ClaudeContentBlock[] = [];
 
   if (message.content) {
-    contentBlocks.push({ type: "text", text: message.content });
+    contentBlocks.push({ type: "text", text: undash(message.content) });
   }
 
   if (Array.isArray(message.tool_calls)) {
@@ -434,7 +449,7 @@ async function callViaOpenRouterWithTools(opts: ClaudeToolCallOptions): Promise<
         type: "tool_use",
         id: tc.id,
         name: tc.function?.name ?? "",
-        input: parsedInput,
+        input: undashDeep(parsedInput),
       });
     }
   }
@@ -518,7 +533,7 @@ async function callViaAnthropicWithSearch(opts: ClaudeSearchCallOptions): Promis
     body: JSON.stringify({
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
-      system: opts.system,
+      system: withHouseStyle(opts.system),
       messages: [{ role: "user", content: opts.userMessage }],
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }],
     }),
@@ -538,11 +553,13 @@ async function callViaAnthropicWithSearch(opts: ClaudeSearchCallOptions): Promis
     content?: Array<{ url?: string }>;
   }
   const blocks: AnthropicSearchContentBlock[] = data.content ?? [];
-  const text = blocks
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  const text = undash(
+    blocks
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim()
+  );
   const searchesUsed = blocks.filter((b) => b.type === "server_tool_use" && b.name === "web_search").length;
   const citedUrls: string[] = [];
   for (const block of blocks) {
@@ -587,7 +604,7 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
       model: modelString,
       max_tokens: opts.maxTokens ?? 1500,
       messages: [
-        { role: "system", content: opts.system },
+        { role: "system", content: withHouseStyle(opts.system) },
         { role: "user", content: opts.userMessage },
       ],
       plugins: [
@@ -607,7 +624,7 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
 
   const data = await res.json();
   const message = data.choices?.[0]?.message ?? {};
-  const text: string = message.content ?? "";
+  const text = undash(message.content ?? "");
   interface OpenRouterAnnotation {
     type: string;
     url_citation?: { url?: string };
