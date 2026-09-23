@@ -13,6 +13,8 @@ import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/c
 import { applyResolvableFacts } from "@/lib/field-writeback";
 import { getClientFact, getClientFacts, recordDossierDecisions } from "@/lib/client-facts";
 import { splitFacts } from "@/lib/fact-suggestions";
+import { REP_SKILL_IDS, isRepSkillId } from "@/lib/rep-skill-manifest";
+import type { RepGoogleListing } from "@/models/schema";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -214,6 +216,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await setSkillEnabledForEngagement(id, "rep-onboarding", true);
 
+    // The setup screen's Google listing (found by its website matching the
+    // client's domain, then kept or removed by the person) and its skill
+    // switches: exactly the listed skills on, the rest off.
+    if ("googleListing" in body) {
+      const listing = readGoogleListing(body.googleListing);
+      await db.update(repIdentityGraphs).set({ googleListing: listing, updatedAt: new Date() }).where(eq(repIdentityGraphs.engagementId, id));
+    }
+    if (Array.isArray(body.skills)) {
+      const on = new Set((body.skills as unknown[]).filter((s): s is string => typeof s === "string" && isRepSkillId(s)));
+      for (const skill of REP_SKILL_IDS) {
+        if (skill === "rep-onboarding") continue;
+        await setSkillEnabledForEngagement(id, skill, on.has(skill));
+      }
+    }
+
     if (input.operatorDomains[0]) {
       seedPrimaryDomainFromUrl(id, input.operatorDomains[0]).catch((err) =>
         console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err)
@@ -228,4 +245,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     console.error("[engagements/[id]/bridges/rep-onboarding]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+/** Only a listing with a place id and a name is kept; anything else clears it. */
+function readGoogleListing(value: unknown): RepGoogleListing | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const str = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim().slice(0, 500) : null);
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const placeId = str(v.placeId);
+  const name = str(v.name);
+  if (!placeId || !name) return null;
+  return {
+    placeId,
+    name,
+    googleId: str(v.googleId),
+    address: str(v.address),
+    site: str(v.site),
+    rating: num(v.rating),
+    reviews: num(v.reviews),
+    reviewsPerScore: v.reviewsPerScore && typeof v.reviewsPerScore === "object" ? (v.reviewsPerScore as Record<string, number>) : null,
+    verified: typeof v.verified === "boolean" ? v.verified : null,
+    category: str(v.category),
+    link: str(v.link),
+  };
 }

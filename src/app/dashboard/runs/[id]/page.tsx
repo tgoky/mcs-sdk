@@ -139,6 +139,11 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
     // own header for why these fall to a generic summary view rather than
     // their own dedicated one (they write to no dedicated table; their
     // entire real output is the run's own summary).
+    // The three Outscraper watches: their findings are browsed on the
+    // client's findings page; a run's own record is its summary.
+    case "rep-google-reviews-watch":
+    case "rep-news-watch":
+    case "rep-search-watch":
     case "rep-engine-adhoc-check":
     case "rep-crisis-stress-test":
     case "rep-draft-response":

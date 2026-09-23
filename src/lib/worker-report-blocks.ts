@@ -27,7 +27,7 @@ import {
   repEngineFindings,
   repTrustpilotReviews,
   repRedditMentions,
-  repTwitterMentions,
+  repTwitterMentions, repWebFindings, type RepWebFindingSource,
   repIncidents,
 } from "@/models/schema";
 import { and, eq, gte } from "drizzle-orm";
@@ -181,6 +181,16 @@ const repTwitterWatchBlocks: ReportBlockResolver = async (engagementId, { start 
   return [mentionBlock("rep-twitter-watch", "Twitter/X mentions", rows)];
 };
 
+function repWebWatchBlocks(workerId: WorkerId, source: RepWebFindingSource, label: string): ReportBlockResolver {
+  return async (engagementId, { start }) => {
+    const rows = await db
+      .select({ sentiment: repWebFindings.sentiment, flagged: repWebFindings.flagged })
+      .from(repWebFindings)
+      .where(and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.source, source), start ? gte(repWebFindings.createdAt, start) : undefined));
+    return [mentionBlock(workerId, label, rows)];
+  };
+}
+
 const repCrisisResponseBlocks: ReportBlockResolver = async (engagementId, { start }) => {
   const rows = await db
     .select({ id: repIncidents.id })
@@ -208,6 +218,9 @@ export const WORKER_REPORT_RESOLVERS: Partial<Record<WorkerId, ReportBlockResolv
   "rep-trustpilot-watch": repTrustpilotWatchBlocks,
   "rep-reddit-watch": repRedditWatchBlocks,
   "rep-twitter-watch": repTwitterWatchBlocks,
+  "rep-google-reviews-watch": repWebWatchBlocks("rep-google-reviews-watch", "google_reviews", "Google reviews"),
+  "rep-news-watch": repWebWatchBlocks("rep-news-watch", "news", "News articles"),
+  "rep-search-watch": repWebWatchBlocks("rep-search-watch", "search_results", "Search results"),
   "rep-crisis-response": repCrisisResponseBlocks,
 };
 

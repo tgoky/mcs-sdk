@@ -28,6 +28,10 @@ const REP_REDDIT_WATCH_LOCAL_HOUR = 9;
 const REP_TWITTER_WATCH_LOCAL_HOUR = 10;
 const REP_CRISIS_RESPONSE_LOCAL_HOUR = 11;
 const REP_DIGEST_LOCAL_HOUR = 18;
+// The Outscraper watches, after X and before crisis-response reads them.
+const REP_GOOGLE_REVIEWS_WATCH_LOCAL_HOUR = 8;
+const REP_NEWS_WATCH_LOCAL_HOUR = 9;
+const REP_SEARCH_WATCH_LOCAL_HOUR = 10;
 
 /**
  * Dispatches rep-engine-panel once daily, at 07:00 in each engagement's own
@@ -92,6 +96,56 @@ export const repEnginePanelCron = inngest.createFunction(
     return { dispatched: prepared.length };
   }
 );
+
+/**
+ * A daily watch dispatcher: hourly cron that starts a run for every
+ * engagement whose local hour matches, skipping paused, deleted and
+ * switched-off engagements. Same body as the Trustpilot cron below, kept
+ * in one place for the three Outscraper watches.
+ */
+function dailyRepWatchCron(skillName: string, phase: string, localHour: number) {
+  return inngest.createFunction(
+    { id: `${skillName}-cron`, triggers: [{ cron: "0 * * * *" }], retries: 1 },
+    async ({ step }) => {
+      const now = new Date();
+      const prepared = await step.run(`prepare-${skillName}-runs`, async () => {
+        const rows = await db
+          .select({
+            engagementId: engagements.engagementId,
+            buyer: engagements.buyer,
+            pausedAt: engagements.pausedAt,
+            deletedAt: engagements.deletedAt,
+            stack: engagements.stack,
+          })
+          .from(repIdentityGraphs)
+          .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
+          .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
+        const disabled = await getDisabledEngagementIdsForSkill(skillName);
+        const out: { runId: string; engagementId: string }[] = [];
+        for (const row of rows) {
+          if (isEngagementPaused(row)) continue;
+          if (disabled.has(row.engagementId)) continue;
+          if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, localHour, now)) continue;
+          const runId = crypto.randomUUID();
+          await startRun({ id: runId, engagementId: row.engagementId, skillName, phase, label: row.buyer });
+          out.push({ runId, engagementId: row.engagementId });
+        }
+        return out;
+      });
+      if (prepared.length > 0) {
+        await step.sendEvent(
+          `dispatch-${skillName}-runs`,
+          prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName }))
+        );
+      }
+      return { dispatched: prepared.length };
+    }
+  );
+}
+
+export const repGoogleReviewsWatchCron = dailyRepWatchCron("rep-google-reviews-watch", "google_reviews_watch", REP_GOOGLE_REVIEWS_WATCH_LOCAL_HOUR);
+export const repNewsWatchCron = dailyRepWatchCron("rep-news-watch", "news_watch", REP_NEWS_WATCH_LOCAL_HOUR);
+export const repSearchWatchCron = dailyRepWatchCron("rep-search-watch", "search_watch", REP_SEARCH_WATCH_LOCAL_HOUR);
 
 /**
  * Dispatches rep-trustpilot-watch once daily, at 08:00 in each engagement's

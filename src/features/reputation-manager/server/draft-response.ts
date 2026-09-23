@@ -27,6 +27,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   reddit: "Reddit",
   twitter: "X/Twitter",
   engine_panel: "an AI engine's answer",
+  google: "Google review",
 };
 
 function postureInstruction(posture: ResponsePostureId | undefined): string {

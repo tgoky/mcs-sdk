@@ -42,7 +42,7 @@ const REDDIT_API_BASE = "https://api.redditapis.com";
  * brand/entity name than the operator's own name, and the same mention
  * could otherwise match more than one term.
  */
-async function fetchRedditMentions(searchTerms: string[]): Promise<RawMention[]> {
+export async function fetchRedditMentions(searchTerms: string[]): Promise<RawMention[]> {
   const apiKey = resolveRedditApiKey();
   if (!apiKey) return [];
 

@@ -301,7 +301,7 @@ export interface RepTwitterMentionRow {
 }
 
 export interface RepIncidentContributingFinding {
-  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
+  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "google_reviews" | "news" | "search_results" | "anomaly";
   excerpt: string;
   flagReason: string | null;
   reach?: number;

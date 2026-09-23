@@ -34,7 +34,7 @@ import {
 import type { EngagementStack } from "@/models/schema";
 
 export interface RoutableFinding {
-  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
+  source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "google_reviews" | "news" | "search_results" | "anomaly";
   excerpt: string;
   flagReason: string | null;
   compositeScore?: number;

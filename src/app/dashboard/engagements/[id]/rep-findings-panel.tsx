@@ -37,6 +37,8 @@ import {
   Search,
   Clock,
   ExternalLink,
+  MapPin,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SentimentPill, FlaggedPill } from "@/app/dashboard/runs/[id]/_shared/sentiment-pill";
@@ -47,6 +49,8 @@ type TrustpilotReview = { id: string; reviewerName: string | null; rating: numbe
 type RedditMention = { id: string; subreddit: string; author: string | null; permalink: string; mentionText: string; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
 type TwitterMention = { id: string; author: string | null; permalink: string; mentionText: string; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
 type Incident = { id: string; severityScore: number; summary: string; status: string; declaredAt: string };
+type WebSource = "google_reviews" | "news" | "search_results";
+type WebFinding = { id: string; source: WebSource; title: string | null; text: string; url: string | null; author: string | null; rating: number | null; ownerAnswered: boolean | null; query: string | null; position: number | null; sentiment: string; flagged: boolean; flagReason: string | null; createdAt: string };
 
 type FindingsData = {
   engineFindings: EngineFinding[];
@@ -54,9 +58,10 @@ type FindingsData = {
   redditMentions: RedditMention[];
   twitterMentions: TwitterMention[];
   incidents: Incident[];
+  webFindings?: WebFinding[];
 };
 
-type SourceKind = "engine" | "trustpilot" | "reddit" | "twitter" | "incident";
+type SourceKind = "engine" | "trustpilot" | "reddit" | "twitter" | WebSource | "incident";
 type SourceFilter = "all" | SourceKind;
 
 type TimelineEntry =
@@ -64,6 +69,7 @@ type TimelineEntry =
   | { kind: "trustpilot"; id: string; at: string; item: TrustpilotReview }
   | { kind: "reddit"; id: string; at: string; item: RedditMention }
   | { kind: "twitter"; id: string; at: string; item: TwitterMention }
+  | { kind: WebSource; id: string; at: string; item: WebFinding }
   | { kind: "incident"; id: string; at: string; item: Incident };
 
 const SOURCE_META: Record<SourceKind, { label: string; icon: typeof Radar; iconClass: string }> = {
@@ -71,6 +77,9 @@ const SOURCE_META: Record<SourceKind, { label: string; icon: typeof Radar; iconC
   trustpilot: { label: "Trustpilot", icon: Star, iconClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
   reddit: { label: "Reddit", icon: MessageSquare, iconClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
   twitter: { label: "X / Twitter", icon: AtSign, iconClass: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" },
+  google_reviews: { label: "Google reviews", icon: MapPin, iconClass: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
+  news: { label: "News", icon: Globe, iconClass: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300" },
+  search_results: { label: "Google search", icon: Search, iconClass: "bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300" },
   incident: { label: "Incidents", icon: ShieldAlert, iconClass: "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300" },
 };
 
@@ -88,6 +97,12 @@ function entryTitle(e: TimelineEntry): string {
       return `r/${e.item.subreddit}${e.item.author ? ` · u/${e.item.author}` : ""}`;
     case "twitter":
       return e.item.author ? `@${e.item.author}` : "X mention";
+    case "google_reviews":
+      return `${e.item.author ?? "Google reviewer"} · ${e.item.rating ?? "?"}/5${e.item.ownerAnswered === false ? " · no reply yet" : ""}`;
+    case "news":
+      return e.item.title ?? "News article";
+    case "search_results":
+      return `${e.item.position ? `#${e.item.position} for ` : ""}${e.item.query ?? "a search"}`;
     case "incident":
       return `Severity ${e.item.severityScore}/100`;
   }
@@ -103,6 +118,10 @@ function entrySnippet(e: TimelineEntry): string {
       return e.item.mentionText;
     case "twitter":
       return e.item.mentionText;
+    case "google_reviews":
+    case "news":
+    case "search_results":
+      return e.item.text;
     case "incident":
       return e.item.summary;
   }
@@ -123,6 +142,7 @@ function entryFlagged(e: TimelineEntry): { flagged: boolean; reason: string | nu
 
 function entryPermalink(e: TimelineEntry): string | null {
   if (e.kind === "reddit" || e.kind === "twitter") return e.item.permalink;
+  if (e.kind === "google_reviews" || e.kind === "news" || e.kind === "search_results") return e.item.url;
   return null;
 }
 
@@ -136,6 +156,11 @@ function entryDraftPlatform(e: TimelineEntry): string | null {
       return "reddit";
     case "twitter":
       return "twitter";
+    case "google_reviews":
+      return "google";
+    case "news":
+    case "search_results":
+      return null;
     case "incident":
       return null;
   }
@@ -148,6 +173,7 @@ function buildTimeline(data: FindingsData): TimelineEntry[] {
     ...data.redditMentions.map((m) => ({ kind: "reddit" as const, id: m.id, at: m.createdAt, item: m })),
     ...data.twitterMentions.map((m) => ({ kind: "twitter" as const, id: m.id, at: m.createdAt, item: m })),
     ...data.incidents.map((i) => ({ kind: "incident" as const, id: i.id, at: i.declaredAt, item: i })),
+    ...(data.webFindings ?? []).map((w) => ({ kind: w.source, id: w.id, at: w.createdAt, item: w })),
   ];
   return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
@@ -388,7 +414,7 @@ export function RepFindingsPanel({
   const timeline = useMemo(() => (data ? buildTimeline(data) : []), [data]);
 
   const counts = useMemo(() => {
-    const c: Record<SourceFilter, number> = { all: timeline.length, engine: 0, trustpilot: 0, reddit: 0, twitter: 0, incident: 0 };
+    const c: Record<SourceFilter, number> = { all: timeline.length, engine: 0, trustpilot: 0, reddit: 0, twitter: 0, google_reviews: 0, news: 0, search_results: 0, incident: 0 };
     for (const e of timeline) c[e.kind]++;
     return c;
   }, [timeline]);

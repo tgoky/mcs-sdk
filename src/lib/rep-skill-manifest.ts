@@ -32,6 +32,9 @@ export type RepSkillId =
   | "rep-trustpilot-watch"
   | "rep-reddit-watch"
   | "rep-twitter-watch"
+  | "rep-google-reviews-watch"
+  | "rep-news-watch"
+  | "rep-search-watch"
   | "rep-crisis-response"
   | "rep-digest";
 
@@ -41,6 +44,9 @@ export const REP_SKILL_IDS: RepSkillId[] = [
   "rep-trustpilot-watch",
   "rep-reddit-watch",
   "rep-twitter-watch",
+  "rep-google-reviews-watch",
+  "rep-news-watch",
+  "rep-search-watch",
   "rep-crisis-response",
   "rep-digest",
 ];
@@ -123,6 +129,29 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
     // Search's documented since: operator for scanning further back than
     // the daily watch's window (see rep-twitter-watch-config-form.tsx).
     hasHingesPanel: true,
+  },
+  "rep-google-reviews-watch": {
+    id: "rep-google-reviews-watch",
+    name: "Google Reviews Watch",
+    description:
+      "Checks this client's Google listing for new reviews daily, flags anything serious, and keeps count of bad reviews nobody has replied to.",
+    runOnSetup: false, // starts once setup has found the Google listing
+    hasHingesPanel: false,
+  },
+  "rep-news-watch": {
+    id: "rep-news-watch",
+    name: "News Watch",
+    description: "Searches Google News daily for articles naming this client, its founder or its products, and flags anything that raises a serious issue.",
+    runOnSetup: false,
+    hasHingesPanel: false,
+  },
+  "rep-search-watch": {
+    id: "rep-search-watch",
+    name: "Search Results Watch",
+    description:
+      "Checks what Google's first page shows when someone searches this client's name with words like reviews, scam or complaints, and flags new pages that could put a prospect off.",
+    runOnSetup: false,
+    hasHingesPanel: false,
   },
   "rep-crisis-response": {
     id: "rep-crisis-response",

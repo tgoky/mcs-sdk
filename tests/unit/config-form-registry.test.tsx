@@ -4,6 +4,7 @@ import { WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
 import { WORKERS_WITH_CONFIG_FORM, hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
+import { RepSetup } from "@/components/product-setup/rep-setup";
 import { WhopConnectConfigForm } from "@/components/worker-config-forms/whop-connect-config-form";
 import { WhopBridgeManagerConfigForm } from "@/components/worker-config-forms/whop-bridge-manager-config-form";
 import { IcpLockConfigForm } from "@/components/worker-config-forms/icp-lock-config-form";
@@ -45,6 +46,9 @@ describe("config form lookup", () => {
     const pinDown = element("pin-down", { engagementId: "e1", onClose: () => {}, onSaved });
     expect(pinDown.type).toBe(ShowtimeSetup);
     expect(pinDown.props.onSaved).toBe(onSaved);
+    const rep = element("rep-onboarding", { engagementId: "e1", onClose: () => {}, onSaved });
+    expect(rep.type).toBe(RepSetup);
+    expect(rep.props.onSaved).toBe(onSaved);
     expect(element("icp-lock", { engagementId: "e1", onClose: () => {}, onSaved }).type).toBe(IcpLockConfigForm);
   });
 

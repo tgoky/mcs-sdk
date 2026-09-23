@@ -14,19 +14,24 @@ import { AlertTriangle, Check, Loader2, RotateCcw } from "lucide-react";
 import type { ActivationStep } from "@/lib/showtime-setup/types";
 import { cn } from "@/lib/utils";
 
-const STAGES = [
-  { key: "site", label: "Reading the site" },
-  { key: "found", label: "Understanding the offer" },
-  { key: "account", label: "Reading your tools" },
-  { key: "pick", label: "Choosing lists and pages" },
-] as const;
+export interface ActivationStage {
+  label: string;
+  /** Step ids starting with this belong to the stage ("" = the first). */
+  prefix: string;
+}
+
+/** Showtime's four stages; other products pass their own. */
+const SHOWTIME_STAGES: ActivationStage[] = [
+  { label: "Reading the site", prefix: "" },
+  { label: "Understanding the offer", prefix: "found-" },
+  { label: "Reading your tools", prefix: "account-" },
+  { label: "Choosing lists and pages", prefix: "pick-" },
+];
 
 const CHIP_CAP = 12;
 
-function stageOf(step: ActivationStep): number {
-  if (step.id.startsWith("found-")) return 1;
-  if (step.id.startsWith("account-")) return 2;
-  if (step.id.startsWith("pick-")) return 3;
+function stageOf(step: ActivationStep, stages: ActivationStage[]): number {
+  for (let i = stages.length - 1; i > 0; i--) if (step.id.startsWith(stages[i].prefix)) return i;
   return 0;
 }
 
@@ -36,14 +41,17 @@ export function ActivationProgress({
   host,
   error,
   onRetry,
+  stages = SHOWTIME_STAGES,
 }: {
+  stages?: ActivationStage[];
   steps: ActivationStep[];
   working: boolean;
   host: string;
   error: string | null;
   onRetry: () => void;
 }) {
-  const stage = steps.length === 0 ? 0 : Math.min(3, Math.max(...steps.map(stageOf)) + (working ? 0 : 1));
+  const last = stages.length - 1;
+  const stage = steps.length === 0 ? 0 : Math.min(last, Math.max(...steps.map((s) => stageOf(s, stages))) + (working ? 0 : 1));
   const done = !working && !error;
   const headline = error
     ? "Setup stopped partway"
@@ -51,7 +59,7 @@ export function ActivationProgress({
       ? "Done. Here's what we set up."
       : steps.length === 0
         ? `Reading ${host || "your tools"}…`
-        : `${STAGES[Math.min(stage, 3)].label}…`;
+        : `${stages[Math.min(stage, last)].label}…`;
   const [showAll, setShowAll] = useState(false);
   const allChips = steps.filter((s) => s.id !== "site");
   // Problems first so a cap never hides one; the rest in arrival order.
@@ -100,9 +108,9 @@ export function ActivationProgress({
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5" aria-hidden="true">
-        {STAGES.map((s, i) => (
-          <div key={s.key} className="h-1 overflow-hidden rounded-full bg-[var(--accent-dim)]">
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }} aria-hidden="true">
+        {stages.map((s, i) => (
+          <div key={s.label} className="h-1 overflow-hidden rounded-full bg-[var(--accent-dim)]">
             <motion.div
               className="h-full rounded-full bg-[var(--ink)]"
               initial={{ width: 0 }}

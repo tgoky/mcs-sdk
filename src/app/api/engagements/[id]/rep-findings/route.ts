@@ -15,7 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repIncidents } from "@/models/schema";
+import { engagements, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repWebFindings, repIncidents } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, desc } from "drizzle-orm";
@@ -49,15 +49,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Client not found." }, { status: 404 });
     }
 
-    const [engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents] = await Promise.all([
+    const [engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents, webFindings] = await Promise.all([
       db.select().from(repEngineFindings).where(eq(repEngineFindings.engagementId, engagementId)).orderBy(desc(repEngineFindings.runAt)).limit(ROW_LIMIT),
       db.select().from(repTrustpilotReviews).where(eq(repTrustpilotReviews.engagementId, engagementId)).orderBy(desc(repTrustpilotReviews.createdAt)).limit(ROW_LIMIT),
       db.select().from(repRedditMentions).where(eq(repRedditMentions.engagementId, engagementId)).orderBy(desc(repRedditMentions.createdAt)).limit(ROW_LIMIT),
       db.select().from(repTwitterMentions).where(eq(repTwitterMentions.engagementId, engagementId)).orderBy(desc(repTwitterMentions.createdAt)).limit(ROW_LIMIT),
       db.select().from(repIncidents).where(eq(repIncidents.engagementId, engagementId)).orderBy(desc(repIncidents.declaredAt)).limit(ROW_LIMIT),
+      db.select().from(repWebFindings).where(eq(repWebFindings.engagementId, engagementId)).orderBy(desc(repWebFindings.createdAt)).limit(ROW_LIMIT * 3),
     ]);
 
-    return NextResponse.json({ engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents });
+    return NextResponse.json({ engineFindings, trustpilotReviews, redditMentions, twitterMentions, incidents, webFindings });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });

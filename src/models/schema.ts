@@ -2243,6 +2243,22 @@ export type RepCollision = {
   disambiguationNote: string;
 };
 
+/** A Google Maps place as Outscraper's /google-maps-search returns it,
+ * trimmed to what Reputation Manager uses. */
+export type RepGoogleListing = {
+  placeId: string;
+  googleId?: string | null;
+  name: string;
+  address?: string | null;
+  site?: string | null;
+  rating?: number | null;
+  reviews?: number | null;
+  reviewsPerScore?: Record<string, number> | null;
+  verified?: boolean | null;
+  category?: string | null;
+  link?: string | null;
+};
+
 export const repIdentityGraphs = pgTable(
   "rep_identity_graphs",
   {
@@ -2326,6 +2342,11 @@ export const repIdentityGraphs = pgTable(
     // doesn't re-trigger it on every edit — matches the source skill's
     // "push once" failure-mode guidance, not "push on every save."
     collisionCheckRunAt: timestamp("collision_check_run_at"),
+
+    // The client's own Google Maps listing, found at setup (matched by its
+    // website to the client's domain) and confirmed by a person. Read by
+    // rep-google-reviews-watch; null means no listing (or none confirmed).
+    googleListing: jsonb("google_listing").$type<RepGoogleListing | null>(),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -2497,6 +2518,48 @@ export const repTwitterMentions = pgTable(
   })
 );
 
+// ── Reputation Manager: Google reviews, news and search results ────────────
+// One table for the three Outscraper-backed watches (rep-google-reviews-
+// watch, rep-news-watch, rep-search-watch): each is a stream of findings
+// with the same shape as the Trustpilot/Reddit/X tables (text, link,
+// sentiment, flag), distinguished by `source`. Dedup on (engagement,
+// source, externalId): a Google review id, or a news/search result URL.
+export type RepWebFindingSource = "google_reviews" | "news" | "search_results";
+
+export const repWebFindings = pgTable(
+  "rep_web_findings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+
+    source: text("source").$type<RepWebFindingSource>().notNull(),
+    externalId: text("external_id").notNull(),
+    title: text("title"),
+    text: text("text").notNull(),
+    url: text("url"),
+    author: text("author"),
+    // Google reviews only: 1-5 stars, and whether the owner has replied.
+    rating: integer("rating"),
+    ownerAnswered: boolean("owner_answered"),
+    // News and search results: the query that surfaced it, and its rank.
+    query: text("query"),
+    position: integer("position"),
+    publishedAt: timestamp("published_at"),
+
+    sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    repWebFindingUnique: uniqueIndex("rep_web_finding_unique").on(table.engagementId, table.source, table.externalId),
+    repWebFindingsEngagementIdx: index("rep_web_findings_engagement_idx").on(table.engagementId, table.source, table.createdAt),
+  })
+);
+
 // ── Reputation Manager: Incidents ───────────────────────────────────────────
 // rep-crisis-response's own output — the last of the original 5-skill
 // roadmap. Reads across everything the other three watch skills flagged
@@ -2531,7 +2594,7 @@ export const repIncidents = pgTable("rep_incidents", {
       // "anomaly" is a synthetic entry anomaly-detection.ts produces when
       // a statistical spike/drop fires independent of any individual
       // flagged record — see crisis-response-service.ts.
-      source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly";
+      source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "google_reviews" | "news" | "search_results" | "anomaly";
       excerpt: string;
       flagReason: string | null;
       // Per-axis 1-10 scores and the resulting 0-100 composite (see

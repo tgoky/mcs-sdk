@@ -19,6 +19,9 @@ const RISK_WORKER_IDS = new Set<WorkerId>([
   "rep-trustpilot-watch",
   "rep-reddit-watch",
   "rep-twitter-watch",
+  "rep-google-reviews-watch",
+  "rep-news-watch",
+  "rep-search-watch",
   "rep-crisis-response",
 ]);
 

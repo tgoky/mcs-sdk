@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repIncidents, skillRuns } from "@/models/schema";
+import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repWebFindings, repIncidents, skillRuns } from "@/models/schema";
 import { and, eq, gt, gte, desc } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
@@ -21,7 +21,7 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-export type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "anomaly"; excerpt: string; flagReason: string | null };
+export type ContributingFinding = { source: "engine_panel" | "trustpilot" | "reddit" | "twitter" | "google_reviews" | "news" | "search_results" | "anomaly"; excerpt: string; flagReason: string | null };
 type ScoredFinding = ContributingFinding & {
   reach: number;
   sentiment: number;
@@ -31,7 +31,7 @@ type ScoredFinding = ContributingFinding & {
 };
 
 async function loadFlaggedFindingsSince(engagementId: string, since: Date | null): Promise<ContributingFinding[]> {
-  const [engineFindings, trustpilotReviews, redditMentions, twitterMentions] = await Promise.all([
+  const [engineFindings, trustpilotReviews, redditMentions, twitterMentions, webFindings] = await Promise.all([
     db
       .select({ promptText: repEngineFindings.promptText, responseText: repEngineFindings.responseText, flagReason: repEngineFindings.flagReason })
       .from(repEngineFindings)
@@ -64,6 +64,14 @@ async function loadFlaggedFindingsSince(engagementId: string, since: Date | null
           ? and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true), gt(repTwitterMentions.createdAt, since))
           : and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true))
       ),
+    db
+      .select({ source: repWebFindings.source, title: repWebFindings.title, text: repWebFindings.text, rating: repWebFindings.rating, flagReason: repWebFindings.flagReason })
+      .from(repWebFindings)
+      .where(
+        since
+          ? and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true), gt(repWebFindings.createdAt, since))
+          : and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true))
+      ),
   ]);
 
   return [
@@ -71,6 +79,7 @@ async function loadFlaggedFindingsSince(engagementId: string, since: Date | null
     ...trustpilotReviews.map((r) => ({ source: "trustpilot" as const, excerpt: `${r.rating}/5: ${r.reviewText}`, flagReason: r.flagReason })),
     ...redditMentions.map((m) => ({ source: "reddit" as const, excerpt: m.mentionText, flagReason: m.flagReason })),
     ...twitterMentions.map((m) => ({ source: "twitter" as const, excerpt: m.mentionText, flagReason: m.flagReason })),
+    ...webFindings.map((w) => ({ source: w.source, excerpt: `${w.rating != null ? `${w.rating}/5: ` : ""}${w.text}`, flagReason: w.flagReason })),
   ];
 }
 

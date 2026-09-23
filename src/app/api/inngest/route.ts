@@ -22,7 +22,7 @@ import {
   processWhopAdsDraft,
   processBulkPromoCodesBatch,
 } from "@/inngest/whop-agent";
-import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron, repDigestCron } from "@/inngest/reputation-manager";
+import { repEnginePanelCron, repTrustpilotWatchCron, repRedditWatchCron, repTwitterWatchCron, repCrisisResponseCron, repDigestCron, repGoogleReviewsWatchCron, repNewsWatchCron, repSearchWatchCron } from "@/inngest/reputation-manager";
 import { coldOpenDailySendCron, coldOpenReplySortCron } from "@/inngest/cold-open";
 import {
   nightlyBriefsCron,
@@ -188,6 +188,9 @@ export const { GET, POST, PUT } = serve({
     // reasoning (once daily, not the OG design's twice-daily default).
     repEnginePanelCron,
     repTrustpilotWatchCron,
+    repGoogleReviewsWatchCron,
+    repNewsWatchCron,
+    repSearchWatchCron,
     repRedditWatchCron,
     repTwitterWatchCron,
     repCrisisResponseCron,

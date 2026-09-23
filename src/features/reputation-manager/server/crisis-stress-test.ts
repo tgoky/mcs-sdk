@@ -24,7 +24,7 @@ import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-const VALID_SOURCES: ContributingFinding["source"][] = ["engine_panel", "trustpilot", "reddit", "twitter"];
+const VALID_SOURCES: ContributingFinding["source"][] = ["engine_panel", "trustpilot", "reddit", "twitter", "google_reviews", "news", "search_results"];
 
 export async function runCrisisStressTest(
   tenant: { engagementId: string },

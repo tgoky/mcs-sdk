@@ -135,3 +135,43 @@ describe("POST /api/engagements/[id]/bridges/rep-onboarding", () => {
     expect(saveRepIdentityGraphIntake).not.toHaveBeenCalled();
   });
 });
+
+describe("POST rep-onboarding from the setup screen", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getSession).mockResolvedValue({ whopUserId: "user-1" } as any);
+    vi.mocked(getActiveWorkspace).mockResolvedValue({ workspaceId: "ws-1" } as any);
+    vi.mocked(isPackageInstalledInWorkspace).mockResolvedValue(true);
+    vi.mocked(applyResolvableFacts).mockResolvedValue([]);
+    vi.mocked(saveRepIdentityGraphIntake).mockResolvedValue({ id: "g1" } as any);
+    vi.mocked(setSkillEnabledForEngagement).mockResolvedValue(undefined);
+    vi.mocked(dispatchSkillRun).mockResolvedValue("run-1");
+    Object.assign(db, fakeDb([savedRow]));
+  });
+
+  it("turns on exactly the chosen skills and the rest off, keeping Identity Setup on", async () => {
+    const { POST } = await importRoute();
+    const res = await POST(postBody({ operatorName: "Acme", soleAuthorityName: "Jane", skills: ["rep-news-watch", "rep-crisis-response", "not-a-skill"] }), makeParams("e1"));
+    expect(res.status).toBe(200);
+    const calls = new Map(vi.mocked(setSkillEnabledForEngagement).mock.calls.map((c) => [c[1], c[2]]));
+    expect(calls.get("rep-onboarding")).toBe(true);
+    expect(calls.get("rep-news-watch")).toBe(true);
+    expect(calls.get("rep-crisis-response")).toBe(true);
+    expect(calls.get("rep-google-reviews-watch")).toBe(false);
+    expect(calls.get("rep-reddit-watch")).toBe(false);
+    expect(calls.has("not-a-skill")).toBe(false);
+  });
+
+  it("saves the Google listing the person kept, and only a well-formed one", async () => {
+    const { POST } = await importRoute();
+    await POST(postBody({ operatorName: "Acme", soleAuthorityName: "Jane", googleListing: { placeId: "ChIJ1", name: "Acme", rating: 4.6, evil: "<script>" } }), makeParams("e1"));
+    const set = (db as unknown as { set: ReturnType<typeof vi.fn> }).set;
+    const saved = set.mock.calls.map((c) => c[0]).find((v) => v && "googleListing" in v);
+    expect(saved.googleListing).toMatchObject({ placeId: "ChIJ1", name: "Acme", rating: 4.6 });
+    expect(saved.googleListing).not.toHaveProperty("evil");
+
+    set.mockClear();
+    await POST(postBody({ operatorName: "Acme", soleAuthorityName: "Jane", googleListing: { name: "no place id" } }), makeParams("e1"));
+    expect(set.mock.calls.map((c) => c[0]).find((v) => v && "googleListing" in v).googleListing).toBeNull();
+  });
+});

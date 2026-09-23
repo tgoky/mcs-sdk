@@ -1,6 +1,6 @@
 "use client";
 
-import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert, Newspaper } from "lucide-react";
+import { Fingerprint, Radar, Star, MessageCircle, AtSign, ShieldAlert, Newspaper, MapPin, Globe, Search } from "lucide-react";
 import type { RepSkillId } from "@/lib/rep-skill-manifest";
 
 /**
@@ -18,6 +18,9 @@ export const REP_SKILL_SQUISHY_CONFIG: Record<RepSkillId, { bgClass: string; ico
   "rep-trustpilot-watch": { bgClass: "bg-[#bef264]", icon: Star }, // lime — reviews
   "rep-reddit-watch": { bgClass: "bg-[#fdba74]", icon: MessageCircle }, // orange — mentions/threads
   "rep-twitter-watch": { bgClass: "bg-[#c4b5fd]", icon: AtSign }, // violet — X mentions
+  "rep-google-reviews-watch": { bgClass: "bg-[#fde68a]", icon: MapPin }, // amber — Google listing reviews
+  "rep-news-watch": { bgClass: "bg-[#a5f3fc]", icon: Globe }, // cyan — press coverage
+  "rep-search-watch": { bgClass: "bg-[#f9a8d4]", icon: Search }, // pink — what Google's first page shows
   "rep-crisis-response": { bgClass: "bg-[#fca5a5]", icon: ShieldAlert }, // red — crisis/incident
   "rep-digest": { bgClass: "bg-[#e5e7eb]", icon: Newspaper }, // neutral gray — quiet rollup, not an alert color
 };

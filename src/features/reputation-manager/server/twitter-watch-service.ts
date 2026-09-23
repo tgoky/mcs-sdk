@@ -49,7 +49,7 @@ const TWITTER_API_BASE = "https://api.twitterapis.com";
  * so an empty results array — not a null cursor — is the real stop
  * signal).
  */
-async function fetchTwitterMentions(searchTerms: string[]): Promise<RawMention[]> {
+export async function fetchTwitterMentions(searchTerms: string[]): Promise<RawMention[]> {
   const apiKey = resolveTwitterApiKey();
   if (!apiKey) return [];
 

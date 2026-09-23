@@ -804,6 +804,9 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-trustpilot-watch": [],
   "rep-reddit-watch": [],
   "rep-twitter-watch": [],
+  "rep-google-reviews-watch": [],
+  "rep-news-watch": [],
+  "rep-search-watch": [],
   "rep-crisis-response": [],
   "rep-digest": [],
 };
@@ -1182,6 +1185,9 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "rep-trustpilot-watch": "Monitoring",
   "rep-reddit-watch": "Monitoring",
   "rep-twitter-watch": "Monitoring",
+  "rep-google-reviews-watch": "Monitoring",
+  "rep-news-watch": "Monitoring",
+  "rep-search-watch": "Monitoring",
   "rep-crisis-response": "Crisis & Recovery",
   "rep-digest": "Monitoring",
   "icp-lock": "Setup",
@@ -1326,6 +1332,9 @@ export const REP_SKILLS_WITH_FINDINGS_PAGE: WorkerId[] = [
   "rep-trustpilot-watch",
   "rep-reddit-watch",
   "rep-twitter-watch",
+  "rep-google-reviews-watch",
+  "rep-news-watch",
+  "rep-search-watch",
 ];
 
 /** `?source=` value each findings-page worker maps to — same keys
@@ -1335,6 +1344,9 @@ const REP_FINDINGS_SOURCE: Partial<Record<WorkerId, string>> = {
   "rep-trustpilot-watch": "trustpilot",
   "rep-reddit-watch": "reddit",
   "rep-twitter-watch": "twitter",
+  "rep-google-reviews-watch": "google_reviews",
+  "rep-news-watch": "news",
+  "rep-search-watch": "search_results",
 };
 
 /** rep-crisis-response's real destination: the existing incident-lifecycle

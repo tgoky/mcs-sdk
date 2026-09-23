@@ -21,7 +21,7 @@ const SETUP_HEADINGS: Partial<Record<string, string>> = {
 
 /** Setups that introduce themselves (their own heading and copy), so the
  * page only adds the way back. */
-const SELF_HEADED_SETUPS = new Set(["pin-down"]);
+const SELF_HEADED_SETUPS = new Set(["pin-down", "rep-onboarding"]);
 
 export default async function WorkerSetupPage({ params }: { params: Promise<{ id: string; workerId: string }> }) {
   const { id, workerId } = await params;

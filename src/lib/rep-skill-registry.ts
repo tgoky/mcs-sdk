@@ -4,6 +4,7 @@ import { runRepEnginePanel } from "@/features/reputation-manager/server/engine-p
 import { runRepTrustpilotWatch } from "@/features/reputation-manager/server/trustpilot-watch-service";
 import { runRepRedditWatch } from "@/features/reputation-manager/server/reddit-watch-service";
 import { runRepTwitterWatch } from "@/features/reputation-manager/server/twitter-watch-service";
+import { runRepGoogleReviewsWatch, runRepNewsWatch, runRepSearchWatch } from "@/features/reputation-manager/server/web-watch-service";
 import { runRepCrisisResponse } from "@/features/reputation-manager/server/crisis-response-service";
 import { runRepDigest } from "@/features/reputation-manager/server/digest";
 import {
@@ -52,6 +53,18 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
   "rep-twitter-watch": {
     ...REP_SKILL_MANIFEST["rep-twitter-watch"],
     execute: (tenant, runId, step) => runRepTwitterWatch(tenant, runId, step),
+  },
+  "rep-google-reviews-watch": {
+    ...REP_SKILL_MANIFEST["rep-google-reviews-watch"],
+    execute: (tenant, runId, step) => runRepGoogleReviewsWatch(tenant, runId, step),
+  },
+  "rep-news-watch": {
+    ...REP_SKILL_MANIFEST["rep-news-watch"],
+    execute: (tenant, runId, step) => runRepNewsWatch(tenant, runId, step),
+  },
+  "rep-search-watch": {
+    ...REP_SKILL_MANIFEST["rep-search-watch"],
+    execute: (tenant, runId, step) => runRepSearchWatch(tenant, runId, step),
   },
   "rep-crisis-response": {
     ...REP_SKILL_MANIFEST["rep-crisis-response"],

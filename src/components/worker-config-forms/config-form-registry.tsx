@@ -19,7 +19,7 @@ import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { WinBackConfigForm } from "./win-back-config-form";
 import { PreCallReadConfigForm } from "./pre-call-read-config-form";
 import { LeakMapConfigForm } from "./leak-map-config-form";
-import { RepOnboardingConfigForm } from "./rep-onboarding-config-form";
+import { RepSetup } from "@/components/product-setup/rep-setup";
 import { RepEnginePanelConfigForm } from "./rep-engine-panel-config-form";
 import { RepTrustpilotWatchConfigForm } from "./rep-trustpilot-watch-config-form";
 import { RepRedditWatchConfigForm } from "./rep-reddit-watch-config-form";
@@ -65,7 +65,7 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   "pre-call-read": simple(PreCallReadConfigForm),
   "leak-map": simple(LeakMapConfigForm),
   // Reputation Manager
-  "rep-onboarding": (h) => <RepOnboardingConfigForm engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  "rep-onboarding": (h) => <RepSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
   "rep-engine-panel": simple(RepEnginePanelConfigForm),
   "rep-trustpilot-watch": simple(RepTrustpilotWatchConfigForm),
   "rep-reddit-watch": simple(RepRedditWatchConfigForm),
