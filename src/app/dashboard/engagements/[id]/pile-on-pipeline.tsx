@@ -640,7 +640,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       </button>
                     </div>
 
-                    <h4 className="text-lg font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
+                    <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
                     <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                       <div className="flex items-center gap-2">
@@ -1040,7 +1040,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     </button>
                   </div>
 
-                  <h4 className="text-lg font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
                   <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                     <div className="flex items-center gap-2">
