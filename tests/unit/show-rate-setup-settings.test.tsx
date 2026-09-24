@@ -88,7 +88,7 @@ describe("Show Rate Setup settings", () => {
     // An animations change rebuilds the page and leaves the scripts alone.
     expect(screen.getByRole("switch", { name: "Rebuild and republish the confirmation page" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("switch", { name: "Rewrite the video scripts and ad briefs" })).toHaveAttribute("aria-checked", "false");
-    fireEvent.click(screen.getByRole("button", { name: "Save for now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/pin-down/run-piece"))).toBe(true));
     const patch = calls.find((c) => c.url.endsWith("/details"));
     expect(patch?.method).toBe("PATCH");
@@ -101,13 +101,25 @@ describe("Show Rate Setup settings", () => {
     expect(calls.some((c) => c.url.includes("/regenerate/"))).toBe(false);
   });
 
+  it("has one Save, off until something changes, and no filler hints", async () => {
+    mockFetch(true);
+    render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
+    await screen.findByText("The offer");
+    expect(screen.queryByRole("button", { name: "Save for now" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.queryByText(/Tap a logo/)).not.toBeInTheDocument();
+    expect(screen.queryByText("What the page tells bookers.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Sections fade in as the page loads" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
   it("rebuilds nothing when the person switches the rebuild off", async () => {
     const calls = mockFetch(true);
     render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
     await screen.findByText("The offer");
     fireEvent.click(screen.getByRole("switch", { name: "Sections fade in as the page loads" }));
     fireEvent.click(screen.getByRole("switch", { name: "Rebuild and republish the confirmation page" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save for now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/bridges/pin-down"))).toBe(true));
     await new Promise((r) => setTimeout(r, 0));
     expect(calls.some((c) => c.url.endsWith("/pin-down/run-piece") || c.url.includes("/regenerate/"))).toBe(false);

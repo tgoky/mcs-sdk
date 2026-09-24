@@ -83,7 +83,7 @@ export function AnchoredCard({
         <AnimatePresence>
           {open && (
             <FloatingFocusManager context={context} modal={false} initialFocus={-1} returnFocus>
-              <div ref={setFloating} style={{ ...floatingStyles, width, zIndex: 60 }} aria-label={label} {...getFloatingProps()}>
+              <div ref={setFloating} data-floating-layer="" style={{ ...floatingStyles, width, zIndex: 60 }} aria-label={label} {...getFloatingProps()}>
                 <motion.div
                   initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.82, y: side === "top" ? 6 : -6 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}

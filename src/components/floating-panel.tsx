@@ -78,6 +78,9 @@ export function FloatingPanel({
       const target = e.target as Node;
       if (anchorRef.current?.contains(target)) return;
       if (panelRef.current?.contains(target)) return;
+      // A card opened from inside this panel (a tool's connect card, a value's
+      // editor) is portaled outside it; clicking in it isn't clicking away.
+      if (target instanceof Element && target.closest("[data-floating-layer]")) return;
       close();
     }
     function onKeyDown(e: KeyboardEvent) {

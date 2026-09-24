@@ -725,6 +725,8 @@ export function ShowtimeSetup({
                 ) : null
               }
               configured={data.configured}
+              settings={focused}
+              dirty={changed.size > 0}
               saving={saving}
               canSave={canSaveAtAll}
               error={saveError}
@@ -1244,7 +1246,7 @@ function Review({
 
         {/* Tools: only the groups the switched-on skills use */}
         <section className="space-y-4">
-          <SectionTitle hint="Tap a logo to connect, switch or disconnect.">Your tools</SectionTitle>
+          <SectionTitle>Your tools</SectionTitle>
           {toolRows}
         </section>
       </div>
@@ -1460,8 +1462,8 @@ function TestimonialsEditor({
 /** A labelled settings row: the name of the setting, then its value. */
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-1 py-2.5 @md:grid-cols-[150px_1fr] @md:gap-4">
-      <p className="text-[13px] text-[var(--text-muted)] @md:pt-0.5">{label}</p>
+    <div className="grid grid-cols-1 gap-1 py-3 @md:grid-cols-[140px_1fr] @md:items-center @md:gap-5">
+      <p className="text-[13px] text-[var(--text-muted)]">{label}</p>
       <div className="min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">{children}</div>
     </div>
   );
@@ -1476,11 +1478,14 @@ function ToggleSetting({ on, onChange, label }: { on: boolean; onChange: (on: bo
   );
 }
 
-function SettingsGroup({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+/** A settings group: a quiet title over one soft card of rows. Space, not
+ * rules, separates rows, so the screen reads as settings rather than a
+ * ruled page. */
+function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-1">
-      <SectionTitle hint={hint}>{title}</SectionTitle>
-      <div className="divide-y">{children}</div>
+    <section className="space-y-2">
+      <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{title}</h2>
+      <div className="rounded-2xl bg-black/[0.025] px-4 py-1 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06] @md:px-5">{children}</div>
     </section>
   );
 }
@@ -1558,17 +1563,16 @@ function PinDownSettings({
   const keepingOwn = Boolean(data.existingPage.url && draft.keepPage);
 
   return (
-    <div className="space-y-7 pb-4">
-      <p className="text-[13px] leading-relaxed text-[var(--text-muted)]">
-        The confirmation page {data.buyer}&apos;s bookers see, and what it says. Tap a value to change it.
-        {domain ? <> Read from {domain}.</> : null}{" "}
+    <div className="space-y-6 pb-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+        <p className="text-[13px] text-[var(--text-muted)]">{domain ? `Read from ${domain}` : `${data.buyer}'s confirmation page`}</p>
         <a
           href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
-          className="font-medium text-[var(--text-secondary)] underline decoration-[var(--border)] underline-offset-4 hover:text-[var(--text-primary)]"
+          className="text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
-          Full Showtime setup
+          Full Showtime setup →
         </a>
-      </p>
+      </div>
 
       <SettingsGroup title="The page">
         {data.existingPage.url && (
@@ -1648,7 +1652,7 @@ function PinDownSettings({
         )}
       </SettingsGroup>
 
-      <SettingsGroup title="The offer" hint="What the page tells bookers.">
+      <SettingsGroup title="The offer">
         <SettingRow label="What they sell">{t.offerName}</SettingRow>
         <SettingRow label="Price">{t.offerPrice}</SettingRow>
         <SettingRow label="Who it's for">{t.offerIcp}</SettingRow>
@@ -1657,7 +1661,7 @@ function PinDownSettings({
         <SettingRow label="On camera">{t.castingChoice}</SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title="Scripts and briefs" hint="What the video scripts and ad briefs are written from.">
+      <SettingsGroup title="Scripts and briefs">
         <SettingRow label="Who runs the calls">
           {saved(
             "extra.prospectMeets",
@@ -1703,8 +1707,8 @@ function PinDownSettings({
         </SettingsGroup>
       )}
 
-      <SettingsGroup title="Tools" hint="Tap a logo to connect, switch or disconnect.">
-        <div className="py-3">{toolRows}</div>
+      <SettingsGroup title="Tools">
+        <div className="py-4">{toolRows}</div>
       </SettingsGroup>
     </div>
   );
@@ -2123,11 +2127,20 @@ function RebuildChoices({
   );
 }
 
+/** "the price, the industry and where the page is hosted" */
+function joinWords(items: React.ReactNode[]): React.ReactNode[] {
+  return items.flatMap((item, i) => (i === 0 ? [item] : [i === items.length - 1 ? " and " : ", ", item]));
+}
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
 function SaveBar({
   extra,
   blockers,
   skillCount,
   configured,
+  settings,
+  dirty,
   saving,
   canSave,
   error,
@@ -2139,6 +2152,10 @@ function SaveBar({
   blockers: Blocker[];
   skillCount: number;
   configured: boolean;
+  /** A skill's own settings: one Save, for whatever changed. */
+  settings: boolean;
+  /** Something on the screen changed since it was loaded or saved. */
+  dirty: boolean;
   saving: boolean;
   canSave: boolean;
   error: string | null;
@@ -2150,8 +2167,28 @@ function SaveBar({
   extra?: React.ReactNode;
 }) {
   const ready = blockers.length === 0 && (skillCount > 0 || configured);
+  const shown = blockers.slice(0, 4);
+  const missing = shown.length ? (
+    <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+      {settings ? "Still empty: " : "Still needed: "}
+      {joinWords(
+        shown.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            onClick={() => onBlocker(b)}
+            className="font-medium text-[var(--text-primary)] underline decoration-[var(--text-muted)]/50 decoration-dotted underline-offset-4 hover:decoration-[var(--text-primary)] cursor-pointer"
+          >
+            {lowerFirst(b.label)}
+          </button>
+        ))
+      )}
+      {blockers.length > shown.length ? `, and ${blockers.length - shown.length} more` : ""}.
+    </p>
+  ) : null;
+
   return (
-    <div className="sticky bottom-0 z-20 mt-2 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
+    <div className="sticky bottom-0 z-20 mt-4 bg-background/90 px-4 py-3 backdrop-blur-md shadow-[0_-12px_24px_-18px_rgba(0,0,0,0.35)]">
       {extra}
       <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
         <div className="min-w-0 flex-1">
@@ -2159,6 +2196,8 @@ function SaveBar({
             <p className="flex items-center gap-2 text-sm text-[var(--error)]">
               <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
             </p>
+          ) : settings ? (
+            (missing ?? (dirty ? <p className="text-[13px] text-[var(--text-secondary)]">Unsaved changes.</p> : null))
           ) : ready ? (
             <p className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
@@ -2167,37 +2206,31 @@ function SaveBar({
               {skillCount === 0 ? "Every Showtime skill will be off for this client." : "Everything's set. Check anything above, then save."}
             </p>
           ) : (
-            <div className="flex items-center gap-1.5 overflow-x-auto text-sm [scrollbar-width:none] @3xl:flex-wrap">
-              <span className="mr-1 shrink-0 text-[var(--text-secondary)]">
-                {blockers.length} thing{blockers.length === 1 ? "" : "s"} need{blockers.length === 1 ? "s" : ""} you:
-              </span>
-              {blockers.slice(0, 4).map((b) => (
-                <button
-                  key={b.key}
-                  type="button"
-                  onClick={() => onBlocker(b)}
-                  className="shrink-0 rounded-full border border-dashed border-[var(--text-muted)]/60 px-2.5 py-0.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--text-primary)] hover:bg-[var(--accent-dim)] cursor-pointer"
-                >
-                  {b.label}
-                </button>
-              ))}
-              {blockers.length > 4 && <span className="text-xs text-[var(--text-muted)]">+{blockers.length - 4} more</span>}
-            </div>
+            missing
           )}
         </div>
         <div className="flex items-center justify-end gap-2">
           <Button variant="ghost" className="hidden @md:inline-flex" onClick={onCancel} disabled={saving}>
             {cancelLabel}
           </Button>
-          {!ready && canSave && (
-            <Button variant="outline" onClick={onSave} disabled={saving}>
-              Save for now
+          {settings ? (
+            <Button className="h-9 px-4" onClick={onSave} disabled={saving || !dirty || !canSave}>
+              {saving ? <Loader2 className="animate-spin" /> : null}
+              Save
             </Button>
+          ) : (
+            <>
+              {!ready && canSave && (
+                <Button variant="outline" onClick={onSave} disabled={saving}>
+                  Save for now
+                </Button>
+              )}
+              <Button size="lg" className="h-10 px-5" onClick={onSave} disabled={saving || !ready}>
+                {saving ? <Loader2 className="animate-spin" /> : null}
+                {configured ? "Save changes" : skillCount > 1 ? `Turn on ${skillCount} skills` : "Turn it on"}
+              </Button>
+            </>
           )}
-          <Button size="lg" className="h-10 px-5" onClick={onSave} disabled={saving || !ready}>
-            {saving ? <Loader2 className="animate-spin" /> : null}
-            {configured ? "Save changes" : skillCount > 1 ? `Turn on ${skillCount} skills` : "Turn it on"}
-          </Button>
         </div>
       </div>
     </div>
