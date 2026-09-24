@@ -109,6 +109,10 @@ describe("Show Rate Setup settings", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     expect(screen.queryByText(/Tap a logo/)).not.toBeInTheDocument();
     expect(screen.queryByText("What the page tells bookers.")).not.toBeInTheDocument();
+    // What's still empty is marked on the field, not listed by the save button.
+    expect(screen.queryByText(/Still empty|things? needs? you/)).not.toBeInTheDocument();
+    expect(screen.getByText("Industry").closest("p")).toHaveTextContent("IndustryNeeded");
+    expect(screen.getByText("Price").closest("p")).not.toHaveTextContent("Needed");
     fireEvent.click(screen.getByRole("switch", { name: "Sections fade in as the page loads" }));
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });

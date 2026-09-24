@@ -601,6 +601,11 @@ export function ShowtimeSetup({
             <p className="text-sm font-medium text-[var(--text-primary)]">
               {group.label}
               {!needs.groups.has(group.id) && <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">Optional</span>}
+              {focused && blockers.some((b) => b.group === group.id) && (
+                <span className="ml-1.5 align-middle">
+                  <NeededMark />
+                </span>
+              )}
             </p>
             <p className="text-xs text-[var(--text-muted)]">{group.hint}</p>
           </div>
@@ -680,6 +685,7 @@ export function ShowtimeSetup({
                   setTimeout(() => setFlashGroup(null), 1500);
                 }}
                 engagementId={engagementId}
+                needed={new Set(blockers.map((b) => b.key))}
               />
             ) : (
             <Review
@@ -1460,13 +1466,21 @@ function TestimonialsEditor({
 }
 
 /** A labelled settings row: the name of the setting, then its value. */
-function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+function SettingRow({ label, needed, children }: { label: string; needed?: boolean; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 gap-1 py-3 @md:grid-cols-[140px_1fr] @md:items-center @md:gap-5">
-      <p className="text-[13px] text-[var(--text-muted)]">{label}</p>
+      <p className="flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
+        {label}
+        {needed && <NeededMark />}
+      </p>
       <div className="min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">{children}</div>
     </div>
   );
+}
+
+/** Marks a setting that's still empty and needed, where it sits. */
+function NeededMark() {
+  return <span className="rounded-full bg-[var(--surface-prefill)] px-1.5 py-px text-[10px] font-medium text-[var(--text-prefill-accent)]">Needed</span>;
 }
 
 function ToggleSetting({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
@@ -1515,7 +1529,10 @@ function PinDownSettings({
   toolRows,
   onFocusGroup,
   engagementId,
+  needed,
 }: {
+  /** Blocker keys (findBlockers) still empty. */
+  needed: ReadonlySet<string>;
   data: ShowtimeSetupState;
   draft: Draft;
   domain: string;
@@ -1594,7 +1611,7 @@ function PinDownSettings({
         )}
         {!keepingOwn && (
           <>
-            <SettingRow label="Published to">
+            <SettingRow label="Published to" needed={needed.has("hosting")}>
               <HostingTarget data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} onFocusGroup={onFocusGroup} />
             </SettingRow>
             <SettingRow label="Design">
@@ -1653,11 +1670,11 @@ function PinDownSettings({
       </SettingsGroup>
 
       <SettingsGroup title="The offer">
-        <SettingRow label="What they sell">{t.offerName}</SettingRow>
-        <SettingRow label="Price">{t.offerPrice}</SettingRow>
-        <SettingRow label="Who it's for">{t.offerIcp}</SettingRow>
-        <SettingRow label="Industry">{t.offerVertical}</SettingRow>
-        <SettingRow label="Leads arrive">{t.trafficTemperature}</SettingRow>
+        <SettingRow label="What they sell" needed={needed.has("offer")}>{t.offerName}</SettingRow>
+        <SettingRow label="Price" needed={needed.has("price")}>{t.offerPrice}</SettingRow>
+        <SettingRow label="Who it's for" needed={needed.has("icp")}>{t.offerIcp}</SettingRow>
+        <SettingRow label="Industry" needed={needed.has("vertical")}>{t.offerVertical}</SettingRow>
+        <SettingRow label="Leads arrive" needed={needed.has("temp")}>{t.trafficTemperature}</SettingRow>
         <SettingRow label="On camera">{t.castingChoice}</SettingRow>
       </SettingsGroup>
 
@@ -2197,7 +2214,8 @@ function SaveBar({
               <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
             </p>
           ) : settings ? (
-            (missing ?? (dirty ? <p className="text-[13px] text-[var(--text-secondary)]">Unsaved changes.</p> : null))
+            // Empty settings are marked where they sit, not listed here.
+            dirty ? <p className="text-[13px] text-[var(--text-secondary)]">Unsaved changes.</p> : null
           ) : ready ? (
             <p className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
