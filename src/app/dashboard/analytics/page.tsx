@@ -4,10 +4,11 @@ import { engagements, skillRuns, pendingActions, humanBlockers, auditRunsLog } f
 import { and, eq, gte, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { computeWinBackRevenueAttribution } from "@/features/win-back/server/revenue-attribution";
+import Link from "next/link";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcomes";
-import { PortfolioOutcomesSection } from "@/components/analytics/portfolio-outcomes-section";
+import { addCounts, emptyCounts, getClientResults, portfolioShowRate, productResults, RESULTS_WINDOW_DAYS } from "@/features/reports/server/client-results";
+import { ClientResultsTable, ProductResultsGrid, ShowRateThenNowCard, type ClientRow } from "@/components/analytics/client-results-section";
 import { getShowRateByTemplate } from "@/features/reports/server/show-rate-by-template";
 import { ShowRateByTemplateSection } from "@/components/analytics/show-rate-by-template-section";
 import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
@@ -186,7 +187,8 @@ function Legend({ swatch, label }: { swatch: string; label: string }) {
  * sections. Nothing is estimated or simulated; anything without enough
  * data yet says so instead of rendering a placeholder chart.
  */
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const tab = (await searchParams).tab === "system" ? "system" : "results";
   const session = await getSession();
   if (!session.whopUserId) redirect("/api/auth/login");
   const whopUserId = session.whopUserId;
@@ -198,7 +200,7 @@ export default async function AnalyticsPage() {
   // revenue-attribution calls below and the category-signal buyer
   // lookup both key off it.
   const engagementRows = await db
-    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer })
+    .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, offerDetails: engagements.offerDetails })
     .from(engagements)
     .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
 
@@ -213,7 +215,19 @@ export default async function AnalyticsPage() {
   // clients just sees the section's own empty state, no separate gate.
   const showRateByTemplate = await getShowRateByTemplate(whopUserId);
 
-  const [runRows, pendingWindow, blockersWindow, auditWindow, revenueResults] = await Promise.all([
+  // What each client got, last 30 days against the 30 before. The offer
+  // price is only there to put a labelled estimate on extra shows.
+  const clientResults =
+    tab === "results"
+      ? await getClientResults(
+          engagementRows.map((e) => {
+            const price = (e.offerDetails as Record<string, unknown> | null)?.price;
+            return { engagementId: e.engagementId, buyer: e.buyer, offerPrice: typeof price === "string" ? price : null };
+          })
+        )
+      : [];
+
+  const [runRows, pendingWindow, blockersWindow, auditWindow] = await Promise.all([
     db
       .select({ skillName: skillRuns.skillName, status: skillRuns.status, costInCents: skillRuns.costInCents, startedAt: skillRuns.startedAt, completedAt: skillRuns.completedAt })
       .from(skillRuns)
@@ -240,10 +254,6 @@ export default async function AnalyticsPage() {
       .from(auditRunsLog)
       .innerJoin(engagements, eq(auditRunsLog.engagementId, engagements.engagementId))
       .where(and(eq(engagements.whopUserId, whopUserId), gte(auditRunsLog.createdAt, since90), isNull(engagements.deletedAt))),
-
-    // Win-Back's own revenue-attribution module — deliberately left
-    // fetched-but-unused here, see the "Dropped" note below.
-    Promise.all(engagementRows.map((e) => computeWinBackRevenueAttribution(e.engagementId))),
   ]);
 
   // ── Skill comparison + top-line run stats (TREND_DAYS window) ─────────
@@ -337,14 +347,8 @@ export default async function AnalyticsPage() {
     blockerTypeMedians.set(b.blockerType, arr);
   }
 
-  // Dropped: a headline "revenue recovered/attributed" figure used to be
-  // shown here, sourced from computeWinBackRevenueAttribution — a
-  // price-parsing heuristic against offer text, not a real transaction.
-  // This app has no billing/Stripe integration, so presenting that
-  // estimate as a confident dollar figure read as fabricated data.
-  // revenueResults is still fetched above (Win-Back's own module, left
-  // as-is rather than touching the query destructure) but is
-  // intentionally unused here now.
+  // No "revenue recovered" headline: this app sees no transactions, so the
+  // only money on the page is the show-rate estimate, labelled as one.
 
   // ── By-category signals ─────────────────────────────────────────────
   // Replaces the old per-skill hardcoded Sections (show-rate calibration,
@@ -380,6 +384,31 @@ export default async function AnalyticsPage() {
 
   const categorySignals = getCategorySignals(portfolioAccounts, leakMapExtraFlags);
 
+  // ── Results (portfolio totals + one row per client) ─────────────────
+  const totals = clientResults.reduce((acc, r) => ({ cur: addCounts(acc.cur, r.current), prev: addCounts(acc.prev, r.previous) }), { cur: emptyCounts(), prev: emptyCounts() });
+  const portfolioProducts = productResults(totals.cur, totals.prev);
+  const portfolioShow = portfolioShowRate(clientResults);
+  const accountById = new Map(portfolioAccounts.map((a) => [a.engagementId, a]));
+  const clientRows: ClientRow[] = clientResults
+    .map((results) => {
+      const account = accountById.get(results.engagementId);
+      const flags = [...(account?.correlationFlags.map((f) => f.message) ?? []), ...(account?.atRiskBlocks.map((b) => `${b.label}: ${b.displayValue}`) ?? [])];
+      return { results, flags };
+    })
+    // Clients that need a look first, then the busiest.
+    .sort((a, b) => b.flags.length - a.flags.length || b.results.products.length - a.results.products.length || a.results.buyer.localeCompare(b.results.buyer));
+
+  const tabLink = (key: "results" | "system", label: string) => (
+    <Link
+      href={key === "system" ? "/dashboard/analytics?tab=system" : "/dashboard/analytics"}
+      className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+        tab === key ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <div className="relative min-h-screen w-full transition-colors duration-200 overflow-hidden pb-10">
       {/* --- HYPER-MICRO TIGHT DOT GRID (0.5px / 6px grid) --- */}
@@ -390,111 +419,116 @@ export default async function AnalyticsPage() {
 
       {/* --- ANALYTICS CONTENT --- */}
       <div className="relative z-10 w-full space-y-10 px-6 py-6">
-        <div>
-          <h1 className="text-xl tracking-tight" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
-            Analytics
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Which accounts need a look, and whether the automation running them is healthy.
-          </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-xl tracking-tight" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+              Analytics
+            </h1>
+            <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+              {tab === "results" ? "What your clients got this month, and which ones need a look." : "Whether the automation running your clients is healthy."}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5">
+            {tabLink("results", "Results")}
+            {tabLink("system", "System")}
+          </div>
         </div>
 
-        <PortfolioOutcomesSection accounts={portfolioAccounts} />
-
-        {/* Automation health is a group header for the four subsections
-            below it (daily activity, skill comparison, resolution times,
-            by category) — one tier above them, not a peer of Portfolio's
-            status card above. A divider marks the zone change instead of
-            repeating Portfolio's bare heading+caption a second time. */}
-        <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-          <h2 className="text-sm font-bold pt-4" style={{ color: "var(--text-primary)" }}>
-            Automation health
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Last {TREND_DAYS} days of activity, and up to {LOOKBACK_DAYS} days of slower-moving signals, across every client on this account.
-          </p>
-        </div>
-
-        {/* Daily activity trend */}
-        <Section title="Daily activity" caption={`Run volume and outcome mix, last ${TREND_DAYS} days`}>
-          <Card className="p-4">
-            {totalRuns === 0 ? <EmptyState>No skill runs in the last {TREND_DAYS} days.</EmptyState> : <DailyActivityChart days={dailyActivity} />}
-          </Card>
-        </Section>
-
-        {/* Show rate by confirmation-page template — Pin-Down's own
-            performance rollup, all time (not TREND/LOOKBACK-windowed —
-            template choice is a slow-moving, low-volume signal, and
-            windowing it would mostly just shrink an already-thin sample). */}
-        <Section title="Show rate by confirmation page template" caption="All-time, across every Pin-Down client on this account">
-          <Card>
-            <ShowRateByTemplateSection stats={showRateByTemplate} />
-          </Card>
-        </Section>
-
-        {/* Cross-skill comparison — the user picks which two skills to
-            actually compare, instead of every worker across every
-            installed product rendering at once (real value once there
-            are more than a handful, mostly just a long scroll before). */}
-        <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days. Pick two skills to compare side by side`}>
-          <SkillComparisonSection skills={skillStats} />
-        </Section>
-
-        {/* Per-skill deep dives (show-rate calibration, win-back funnel,
-            objections, funnel leaks, pile-on delivery, cross-client
-            benchmark, booking sync, and the old separately-merged RM
-            signal sections) used to live here as hand-written Sections —
-            replaced by CategorySignalsSection below, which is bounded at
-            the 5 fixed WorkerCategory values instead of growing by one
-            hardcoded block per worker. */}
-
-        {/* Cross-product — pending actions / human blockers apply to
-            either product's approval flows equally. */}
-        <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
-          <div className="grid grid-cols-1 gap-3">
-            <Card className="p-4 space-y-3">
-              <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
-              {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
-                <EmptyState>Nothing has been decided or resolved yet in this window.</EmptyState>
+        {tab === "results" ? (
+          <>
+            <Section title="Results" caption={`Every client combined, last ${RESULTS_WINDOW_DAYS} days against the ${RESULTS_WINDOW_DAYS} before`}>
+              {portfolioProducts.length === 0 ? (
+                <Card>
+                  <EmptyState>Nothing to show yet. Results appear here once a skill books a call, contacts a lead, catches a review or saves a member.</EmptyState>
+                </Card>
               ) : (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
-                    <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                      {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "No data"}
-                      {actionP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(actionP90Ms)} p90`}</span>}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 dark:text-zinc-500">Human blockers</span>
-                    <span className="font-mono text-zinc-800 dark:text-zinc-200">
-                      {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "No data"}
-                      {blockerP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(blockerP90Ms)} p90`}</span>}
-                    </span>
-                  </div>
-                  {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
-                    <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
-                      {[...actionTypeMedians.entries()].map(([type, arr]) => (
-                        <div key={`a-${type}`} className="flex items-center justify-between gap-3 text-xs">
-                          <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{ACTION_TYPE_LABELS[type] ?? type}</span>
-                          <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
-                        </div>
-                      ))}
-                      {[...blockerTypeMedians.entries()].map(([type, arr]) => (
-                        <div key={`b-${type}`} className="flex items-center justify-between gap-3 text-xs">
-                          <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{BLOCKER_TYPE_LABELS[type] ?? type}</span>
-                          <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="space-y-3">
+                  <ProductResultsGrid products={portfolioProducts} />
+                  {portfolioShow && <ShowRateThenNowCard showRate={portfolioShow} clients={portfolioShow.clients} />}
                 </div>
               )}
-            </Card>
-          </div>
-        </Section>
+            </Section>
 
-        <CategorySignalsSection signals={categorySignals} />
+            <Section title="Clients" caption={`Each client's main number per product, last ${RESULTS_WINDOW_DAYS} days`}>
+              {clientRows.length === 0 ? (
+                <Card>
+                  <EmptyState>No clients yet.</EmptyState>
+                </Card>
+              ) : (
+                <ClientResultsTable rows={clientRows} />
+              )}
+            </Section>
+
+            {/* Cross-skill comparison — the user picks which two skills to
+                compare side by side. */}
+            <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days. Pick two skills to compare side by side`}>
+              <SkillComparisonSection skills={skillStats} />
+            </Section>
+
+            {/* Pin-Down's own rollup, all time: template choice is a slow,
+                low-volume signal that a window would only thin out. */}
+            <Section title="Show rate by confirmation page template" caption="All-time, across every Pin-Down client on this account">
+              <Card>
+                <ShowRateByTemplateSection stats={showRateByTemplate} />
+              </Card>
+            </Section>
+
+            <CategorySignalsSection signals={categorySignals} />
+          </>
+        ) : (
+          <>
+            {/* Daily activity trend */}
+            <Section title="Daily activity" caption={`Run volume and outcome mix, last ${TREND_DAYS} days`}>
+              <Card className="p-4">
+                {totalRuns === 0 ? <EmptyState>No skill runs in the last {TREND_DAYS} days.</EmptyState> : <DailyActivityChart days={dailyActivity} />}
+              </Card>
+            </Section>
+
+            <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
+              <div className="grid grid-cols-1 gap-3">
+                <Card className="p-4 space-y-3">
+                  <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
+                  {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
+                    <EmptyState>Nothing has been decided or resolved yet in this window.</EmptyState>
+                  ) : (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
+                        <span className="font-mono text-zinc-800 dark:text-zinc-200">
+                          {actionMedianMs !== null ? `${fmtDuration(actionMedianMs)} median` : "No data"}
+                          {actionP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(actionP90Ms)} p90`}</span>}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-500 dark:text-zinc-500">Human blockers</span>
+                        <span className="font-mono text-zinc-800 dark:text-zinc-200">
+                          {blockerMedianMs !== null ? `${fmtDuration(blockerMedianMs)} median` : "No data"}
+                          {blockerP90Ms !== null && <span className="text-zinc-400 dark:text-zinc-600">{` · ${fmtDuration(blockerP90Ms)} p90`}</span>}
+                        </span>
+                      </div>
+                      {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
+                        <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
+                          {[...actionTypeMedians.entries()].map(([type, arr]) => (
+                            <div key={`a-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                              <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{ACTION_TYPE_LABELS[type] ?? type}</span>
+                              <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                            </div>
+                          ))}
+                          {[...blockerTypeMedians.entries()].map(([type, arr]) => (
+                            <div key={`b-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                              <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{BLOCKER_TYPE_LABELS[type] ?? type}</span>
+                              <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              </div>
+            </Section>
+          </>
+        )}
       </div>
     </div>
   );

@@ -39,6 +39,7 @@ import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { startOfWeek } from "@/lib/dashboard-stats";
 import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { getClientResults } from "@/features/reports/server/client-results";
 import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import {
   SKILLS,
@@ -179,11 +180,12 @@ export default async function EngagementDetailPage({
     if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
     return null;
   };
-  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot] = await Promise.all([
+  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot, [clientResults]] = await Promise.all([
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("week") }),
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("month") }),
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("all_time") }),
     getPriorSnapshot(id, startOfWeek(now)),
+    getClientResults([{ engagementId: id, buyer: engagement.buyer, offerPrice: typeof offerDetails?.price === "string" ? offerDetails.price : null }], now),
   ]);
   const reportBlocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]> = {
     week: attachTrends(weekBlocks, priorWeekSnapshot?.blocks ?? null),
@@ -331,7 +333,7 @@ export default async function EngagementDetailPage({
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
         <div data-tour="engagement-report">
-          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} />
+          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} />
         </div>
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />

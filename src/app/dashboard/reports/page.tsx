@@ -27,6 +27,7 @@ import { startOfWeek } from "@/lib/dashboard-stats";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { getClientResults } from "@/features/reports/server/client-results";
 import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import { FileText } from "lucide-react";
 
@@ -82,6 +83,11 @@ export default async function ReportsPage() {
   // avoid inside the component.
   const hasAnyWorkers = enabledWorkerIds.length > 0;
 
+  const offerPrice = (engagement?.offerDetails as Record<string, unknown> | null)?.price;
+  const [results] = engagementId && engagement
+    ? await getClientResults([{ engagementId, buyer: engagement.buyer, offerPrice: typeof offerPrice === "string" ? offerPrice : null }], now)
+    : [];
+
   const recentReviews = engagementId ? await getRecentAccountReviews(engagementId) : [];
   const initialReviews = recentReviews.map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
 
@@ -117,6 +123,7 @@ export default async function ReportsPage() {
               offerDetails={engagement.offerDetails as Record<string, string | boolean> | null}
               blocksByPeriod={blocksByPeriod}
               enabledWorkerIds={enabledWorkerIds}
+              results={results}
             />
           )}
 

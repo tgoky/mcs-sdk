@@ -20,6 +20,8 @@ import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { WorkerReportBlockGrid } from "./worker-report-block-grid";
 import { CompareView } from "./compare-view";
 import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { RESULTS_WINDOW_DAYS, type ClientResults } from "@/lib/client-results-shape";
+import { ProductResultsGrid, ShowRateThenNowCard } from "@/components/analytics/client-results-section";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
   { key: "week", label: "This week" },
@@ -32,6 +34,7 @@ export function DynamicClientReport({
   offerDetails,
   blocksByPeriod,
   enabledWorkerIds,
+  results,
 }: {
   engagementId: string;
   /** Real Showtime offer context when this client has one set up (pin-down)
@@ -47,6 +50,9 @@ export function DynamicClientReport({
    * check — a permanently-empty resolver means this forever, whether or
    * not the skill has actually finished running. */
   enabledWorkerIds: WorkerId[];
+  /** What this client got per product, last 30 days against the 30 before
+   * (client-results.ts). The same numbers Analytics shows for them. */
+  results?: ClientResults | null;
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const blocks = blocksByPeriod[period];
@@ -109,6 +115,16 @@ export function DynamicClientReport({
           ))}
         </div>
       </div>
+
+      {results && results.products.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">
+            Results, last {RESULTS_WINDOW_DAYS} days against the {RESULTS_WINDOW_DAYS} before
+          </p>
+          <ProductResultsGrid products={results.products} />
+          {results.showRate && <ShowRateThenNowCard showRate={results.showRate} />}
+        </div>
+      )}
 
       {offerIcp && (
         <div className="text-[15px] text-zinc-800 dark:text-zinc-200 leading-relaxed max-w-3xl">
