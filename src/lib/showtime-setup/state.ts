@@ -77,6 +77,12 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       castingChoice: engagements.castingChoice,
       confirmationPageUrl: engagements.confirmationPageUrl,
       confirmationPageTemplate: engagements.confirmationPageTemplate,
+      confirmationPageAnimationsEnabled: engagements.confirmationPageAnimationsEnabled,
+      heroVideoUrl: engagements.heroVideoUrl,
+      prospectMeets: engagements.prospectMeets,
+      topCallQuestions: engagements.topCallQuestions,
+      topObjections: engagements.topObjections,
+      rawVoiceCorpus: engagements.rawVoiceCorpus,
     })
     .from(engagements)
     .where(eq(engagements.engagementId, engagementId))
@@ -102,7 +108,9 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
     trafficTemperature: savedOrFact(offer.traffic_temperature, facts.trafficTemperature),
     // A visible default the old form already used; shown as "we think".
     castingChoice: casting.value ? casting : { ...ASK, value: "founder_on_camera", tier: "likely", source: "default" },
-    heroVideoUrl: savedOrFact(stack.hero_video_id, facts.heroVideoUrl),
+    // The page's own column first: it's what Pin-Down builds from, and what
+    // the client details drawer edits.
+    heroVideoUrl: savedOrFact(row.heroVideoUrl ?? stack.hero_video_id, facts.heroVideoUrl),
   };
 
   // ── Which tools ──
@@ -262,6 +270,15 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       designSignal: facts.designSignal?.value ?? null,
       template: row.confirmationPageTemplate,
       confirmationPageUrl: row.confirmationPageUrl ?? null,
+    },
+    pinDown: {
+      template: row.confirmationPageTemplate,
+      animations: row.confirmationPageAnimationsEnabled,
+      personalizedIntro: Boolean(offer.hybrid_mode_enabled),
+      prospectMeets: row.prospectMeets ?? "",
+      topCallQuestions: row.topCallQuestions ?? [],
+      topObjections: row.topObjections ?? [],
+      brandVoice: row.rawVoiceCorpus ?? "",
     },
   };
 }

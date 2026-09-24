@@ -45,6 +45,11 @@ export interface ConfigFormHandlers {
   onSaved?: (result: ConfigFormSaveResult) => void;
   /** Label for the form's own cancel/close button; each form has a default. */
   cancelLabel?: string;
+  /** "setup" is the product's onboarding page (bridges/[workerId]): the
+   * full setup, every skill and its switch. Anywhere else a form opens as
+   * that worker's own settings, which only differs for Show Rate Setup
+   * (see ShowtimeSetup's `focus`). */
+  mode?: "setup" | "settings";
 }
 
 type FormRenderer = (h: ConfigFormHandlers) => ReactNode;
@@ -58,7 +63,7 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // Showtime
   // Showtime's setup covers every Showtime skill from the website and the
   // connected tools; Pin-Down is the worker it lives under.
-  "pin-down": (h) => <ShowtimeSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  "pin-down": (h) => <ShowtimeSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} focus={h.mode === "setup" ? undefined : "pin-down"} />,
   "win-back": simple(WinBackConfigForm),
   "pre-call-read": simple(PreCallReadConfigForm),
   "leak-map": simple(LeakMapConfigForm),

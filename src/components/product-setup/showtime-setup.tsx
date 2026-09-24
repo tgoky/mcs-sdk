@@ -28,13 +28,14 @@ import { useTour } from "@/components/tours/tour-provider";
 import { VERTICALS, verticalLabel } from "@/lib/verticals";
 import { CRM_NOTE_PLATFORMS, SHOWTIME_TOOL_GROUPS, findShowtimeTool, type ToolGroupId } from "@/lib/showtime-setup/catalog";
 import { PICK_PURPOSE, showtimePickTargets } from "@/lib/showtime-setup/picks";
-import type { ActivationStep, PickSlot, SetupValue, ShowtimeSetupState, TrustTier } from "@/lib/showtime-setup/types";
+import type { ActivationStep, PickSlot, PinDownExtras, SetupValue, ShowtimeSetupState, TrustTier } from "@/lib/showtime-setup/types";
+import { TEMPLATE_IDS, TEMPLATE_META, DEFAULT_TEMPLATE, type TemplateId } from "@/features/pin-down/server/templates/types";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList, FactToken, TextEditor } from "./fact-token";
 import { ActivationProgress } from "./activation-steps";
 import { AnchoredCard } from "./anchored-card";
 import { AccountReadSection, hasAccountRead } from "./account-read";
-import { SkillSwitchRow } from "./skill-switch";
+import { SkillSwitchRow, Switch } from "./skill-switch";
 import { SHOWTIME_SKILLS, needsFor, type CombinedNeeds } from "@/lib/showtime-setup/skills";
 import { ConfirmationPreview } from "./confirmation-preview";
 import { cn } from "@/lib/utils";
@@ -168,11 +169,16 @@ export function ShowtimeSetup({
   onCancel,
   onSaved,
   cancelLabel = "Cancel",
+  focus,
 }: {
   engagementId: string;
   onCancel: () => void;
   onSaved?: (result: { runId?: string }) => void;
   cancelLabel?: string;
+  /** Open as this skill's own settings (see PinDownSettings) once Showtime
+   * is set up. Before that, the full setup shows either way: there's
+   * nothing to configure until it has run once. */
+  focus?: "pin-down";
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -188,7 +194,14 @@ export function ShowtimeSetup({
   // from what's on; a new one starts with nothing picked, so nothing (not
   // even the confirmation page) is assumed.
   const [skills, setSkills] = useState<string[]>([]);
-  const baseNeeds = useMemo(() => needsFor(skills), [skills]);
+  const focused = focus === "pin-down" && Boolean(data?.configured);
+  // Focused, only this skill's needs count: the Slack webhook Call Brief
+  // needs is not something Show Rate Setup's settings should ask for.
+  const baseNeeds = useMemo(() => needsFor(focused ? ["pin-down"] : skills), [focused, skills]);
+  // Pin-Down's inputs the setup never asked for; saved separately, and
+  // only the ones changed here (see savePinDownExtras).
+  const [extras, setExtras] = useState<PinDownExtras | null>(null);
+  const touchedExtras = useRef(new Set<keyof PinDownExtras>());
   const [activateError, setActivateError] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [flashGroup, setFlashGroup] = useState<ToolGroupId | null>(null);
@@ -220,6 +233,7 @@ export function ShowtimeSetup({
         }
         return d;
       });
+      if (opts.initial || touchedExtras.current.size === 0) setExtras(next.pinDown);
       if (opts.initial) {
         setPhase(next.configured ? "review" : "welcome");
         setSkills(next.configured ? SHOWTIME_SKILLS.filter((sk) => next.skills[sk.id]).map((sk) => sk.id) : []);
@@ -274,6 +288,10 @@ export function ShowtimeSetup({
   }, [baseNeeds, draft?.keepPage, data?.existingPage.url]);
   const setKeepPage = (v: boolean) => update((d) => ({ ...d, keepPage: v }), "keepPage");
   const setSalesCall = (id: string) => update((d) => ({ ...d, salesCallEventId: id }), "salesCall");
+  const setExtra = <K extends keyof PinDownExtras>(k: K, v: PinDownExtras[K]) => {
+    touchedExtras.current.add(k);
+    setExtras((e) => (e ? { ...e, [k]: v } : e));
+  };
   const toggleSkill = (id: string, on: boolean) =>
     setSkills((cur) => (on ? SHOWTIME_SKILLS.map((sk) => sk.id).filter((x) => x === id || cur.includes(x)) : cur.filter((x) => x !== id)));
 
@@ -377,6 +395,27 @@ export function ShowtimeSetup({
     (skills.length > 0 || Boolean(data?.configured)) &&
     (!needs.offer || Boolean(draft?.offer.trafficTemperature && (draft.domain || data?.website.domain)));
 
+  /** The touched extras, through the route the client details drawer uses. */
+  async function savePinDownExtras() {
+    if (!extras || touchedExtras.current.size === 0) return;
+    const t = touchedExtras.current;
+    const patch: Record<string, unknown> = {};
+    if (t.has("template")) patch.confirmationPageTemplate = extras.template;
+    if (t.has("animations")) patch.confirmationPageAnimationsEnabled = extras.animations;
+    if (t.has("personalizedIntro")) patch.offerDetails = { hybrid_mode_enabled: extras.personalizedIntro };
+    if (t.has("prospectMeets")) patch.prospectMeets = extras.prospectMeets;
+    if (t.has("topCallQuestions")) patch.topCallQuestions = extras.topCallQuestions;
+    if (t.has("topObjections")) patch.topObjections = extras.topObjections;
+    if (t.has("brandVoice")) patch.rawVoiceCorpus = extras.brandVoice;
+    const res = await fetch(`/api/engagements/${engagementId}/details`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
+  }
+
   async function save() {
     if (!data || !draft) return;
     setSaving(true);
@@ -404,8 +443,11 @@ export function ShowtimeSetup({
       adDataPlatform: draft.choices.adDataPlatform ?? "",
       briefLandingDestination: draft.choices.briefLandingDestination ?? "",
       autoPicks,
-      skills,
     };
+    // Only the full setup decides which skills run. Sent from a skill's own
+    // settings, this list would switch every other Showtime skill to
+    // whatever the screen last loaded.
+    if (!focused) body.skills = skills;
     if (draft.salesCallEventId) body.salesCallEventId = draft.salesCallEventId;
     if (data.existingPage.url) {
       body.existingConfirmationPageReuse = draft.keepPage;
@@ -417,6 +459,8 @@ export function ShowtimeSetup({
     if (draft.choices.briefLandingDestination === "slack" && draft.slackWebhookUrl.trim()) body.slackWebhookUrl = draft.slackWebhookUrl.trim();
 
     try {
+      // First, so the Pin-Down run the save starts reads them.
+      await savePinDownExtras();
       const res = await fetch(`/api/engagements/${engagementId}/bridges/pin-down`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -425,15 +469,20 @@ export function ShowtimeSetup({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
       toast.success(
-        skills.length === 0
+        focused
+          ? blockers.length === 0
+            ? "Show Rate Setup saved. The page is being rebuilt."
+            : `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before the page can be built.`
+          : skills.length === 0
           ? `Showtime is off for ${data.buyer}.`
           : blockers.length === 0
             ? `${skills.length} Showtime skill${skills.length === 1 ? " is" : "s are"} on for ${data.buyer}.`
             : `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before everything runs.`
       );
       touched.current.clear();
+      touchedExtras.current.clear();
       router.refresh();
-      if (skills.length > 0) startTour("showtime");
+      if (!focused && skills.length > 0) startTour("showtime");
       if (onSaved) onSaved({ runId: json.runId });
       else await load();
     } catch (e) {
@@ -530,6 +579,29 @@ export function ShowtimeSetup({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
+            {focused && extras ? (
+              <PinDownSettings
+                data={data}
+                draft={draft}
+                extras={extras}
+                setExtra={setExtra}
+                domain={domain}
+                tierOf={tierOf}
+                openKey={openKey}
+                setOpenKey={setOpenKey}
+                setOffer={setOffer}
+                setPick={setPick}
+                setKeepPage={setKeepPage}
+                setSalesCall={setSalesCall}
+                toolRows={toolRows(true)}
+                onFocusGroup={(g) => {
+                  toolsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  setFlashGroup(g);
+                  setTimeout(() => setFlashGroup(null), 1500);
+                }}
+                engagementId={engagementId}
+              />
+            ) : (
             <Review
               data={data}
               draft={draft}
@@ -557,9 +629,10 @@ export function ShowtimeSetup({
               }}
               engagementId={engagementId}
             />
+            )}
             <SaveBar
               blockers={blockers}
-              skillCount={skills.length}
+              skillCount={focused ? 1 : skills.length}
               configured={data.configured}
               saving={saving}
               canSave={canSaveAtAll}
@@ -797,24 +870,11 @@ function Review({
 }) {
   const o = draft.offer;
   const tokenProps = (key: string) => ({ open: openKey === key, onOpenChange: (open: boolean) => setOpenKey(open ? key : null) });
-  const offerToken = (k: OfferKey, placeholder: string, title: string, editor: (close: () => void) => React.ReactNode, display?: string | null, width?: number) => (
-    <FactToken
-      {...tokenProps(`offer.${k}`)}
-      display={display !== undefined ? display : o[k] || null}
-      placeholder={placeholder}
-      tier={tierOf(`offer.${k}`, data.offer[k])}
-      title={title}
-      source={o[k] ? sourceText(touchedSource(tierOf(`offer.${k}`, data.offer[k]), data.offer[k]), domain) : weakGuess(data.offer[k])}
-      width={width}
-    >
-      {editor(() => setOpenKey(null))}
-    </FactToken>
-  );
+  const t = offerTokens({ data, draft, domain, tierOf, tokenProps, setOffer, setOpenKey });
   const readAgo = relativeTime(data.website.readAt);
   const name = usable(data.offer.operatorName) ?? data.buyer;
   const email = draft.platforms.email;
   const booking = draft.platforms.booking;
-  const hosting = draft.platforms.hosting;
   const pick = (slot: PickSlot) => data.picks[slot];
   const isOn = (id: string) => skills.includes(id);
   const skillRow = (id: string) => {
@@ -862,77 +922,17 @@ function Review({
           <SectionTitle>What we learned</SectionTitle>
           <p className="max-w-[62ch] text-[17px] leading-[2.1] text-[var(--text-secondary)]">
             <span className="font-semibold text-[var(--text-primary)]">{name}</span> sells{" "}
-            {offerToken("offerName", "what they sell", "What they sell", (close) => (
-              <TextEditor initial={o.offerName} placeholder="e.g. 12-week growth program" onSave={(v) => (setOffer("offerName", v), close())} />
-            ))}
+            {t.offerName}
             {" "}for{" "}
-            {offerToken(
-              "offerPrice",
-              "a price",
-              "Price",
-              (close) => (
-                <TextEditor
-                  initial={o.offerPrice}
-                  placeholder="e.g. $2,500"
-                  onSave={(v) => (setOffer("offerPrice", v), close())}
-                  footer={
-                    data.whopPlanOptions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {data.whopPlanOptions.map((p, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => (setOffer("offerPrice", String(p.price ?? "")), close())}
-                            className="rounded-full border px-2.5 py-1 text-xs hover:bg-[var(--accent-dim)] cursor-pointer"
-                          >
-                            {p.name ? `${p.name}: ` : ""}
-                            {p.price}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null
-                  }
-                />
-              )
-            )}
+            {t.offerPrice}
             {" "}to{" "}
-            {offerToken("offerIcp", "who it's for", "Who it's for", (close) => (
-              <TextEditor multiline initial={o.offerIcp} placeholder="e.g. agency owners doing $30k+/month" onSave={(v) => (setOffer("offerIcp", v), close())} />
-            ), undefined, 360)}
+            {t.offerIcp}
             . It&apos;s a{" "}
-            {offerToken(
-              "offerVertical",
-              "type of",
-              "Industry",
-              (close) => (
-                <ChoiceList
-                  options={VERTICALS.map((v) => ({ value: v.id, label: v.label }))}
-                  value={o.offerVertical}
-                  onPick={(v) => (setOffer("offerVertical", v), close())}
-                />
-              ),
-              o.offerVertical ? verticalLabel(o.offerVertical).toLowerCase() : null
-            )}
+            {t.offerVertical}
             {" "}business. Leads usually arrive{" "}
-            {offerToken(
-              "trafficTemperature",
-              "how warm?",
-              "How warm are leads when they book?",
-              (close) => (
-                <ChoiceList options={[...TEMPERATURES]} value={o.trafficTemperature} onPick={(v) => (setOffer("trafficTemperature", v), close())} />
-              ),
-              o.trafficTemperature || null,
-              340
-            )}
+            {t.trafficTemperature}
             , and{" "}
-            {offerToken(
-              "castingChoice",
-              "someone",
-              "Who's on camera",
-              (close) => <ChoiceList options={[...CASTING]} value={o.castingChoice} onPick={(v) => (setOffer("castingChoice", v), close())} />,
-              CASTING.find((c) => c.value === o.castingChoice)?.label ?? null,
-              340
-            )}
+            {t.castingChoice}
             {" "}is on camera.
           </p>
         </section>
@@ -968,35 +968,9 @@ function Review({
               ) : (
                 <>
                   A confirmation page in your brand after every booking, with{" "}
-                  {offerToken(
-                    "heroVideoUrl",
-                    "a video placeholder",
-                    "Video on the page",
-                    (close) => (
-                      <TextEditor initial={o.heroVideoUrl} placeholder="YouTube, Vimeo or Loom link" onSave={(v) => (setOffer("heroVideoUrl", v), close())} />
-                    ),
-                    o.heroVideoUrl ? "your video" : null
-                  )}{" "}
+                  {t.heroVideoUrl}{" "}
                   at the top.{" "}
-                  {!hosting ? (
-                    <InlineLink onClick={() => onFocusGroup("hosting")}>Choose where it&apos;s hosted</InlineLink>
-                  ) : hosting === "webflow" && pick("webflow_site_id") ? (
-                    <>
-                      Published to{" "}
-                      <PickToken slot="webflow_site_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which Webflow site?" />
-                      {" "}on Webflow.
-                    </>
-                  ) : hosting === "nextjs_vercel" && pick("vercel_project_name") ? (
-                    <>
-                      Published to the{" "}
-                      <PickToken slot="vercel_project_name" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which project?" />
-                      {" "}project on Vercel.
-                    </>
-                  ) : hosting === "plain_html" || hosting === "lovable" ? (
-                    "We host it and hand you the link."
-                  ) : (
-                    `Published on ${toolLabel(hosting)}.`
-                  )}{" "}
+                  <HostingTarget data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} onFocusGroup={onFocusGroup} />{" "}
                   <PagePreview
                     open={openKey === "preview"}
                     onOpenChange={(v) => setOpenKey(v ? "preview" : null)}
@@ -1178,6 +1152,411 @@ function Review({
         </section>
       </div>
 
+    </div>
+  );
+}
+
+// ── Pieces shared by the setup and a skill's own settings ──────────────
+
+interface OfferTokenArgs {
+  data: ShowtimeSetupState;
+  draft: Draft;
+  domain: string;
+  tierOf: (key: string, v: SetupValue | undefined) => TrustTier;
+  tokenProps: TokenProps;
+  setOffer: (k: OfferKey, v: string) => void;
+  setOpenKey: (k: string | null) => void;
+}
+
+/** Each offer value as a tappable token with its editor. The setup reads
+ * them as one sentence; Show Rate Setup's settings list them one per row. */
+function offerTokens({ data, draft, domain, tierOf, tokenProps, setOffer, setOpenKey }: OfferTokenArgs): Record<OfferKey, React.ReactNode> {
+  const o = draft.offer;
+  const token = (k: OfferKey, placeholder: string, title: string, editor: (close: () => void) => React.ReactNode, display?: string | null, width?: number) => (
+    <FactToken
+      {...tokenProps(`offer.${k}`)}
+      display={display !== undefined ? display : o[k] || null}
+      placeholder={placeholder}
+      tier={tierOf(`offer.${k}`, data.offer[k])}
+      title={title}
+      source={o[k] ? sourceText(touchedSource(tierOf(`offer.${k}`, data.offer[k]), data.offer[k]), domain) : weakGuess(data.offer[k])}
+      width={width}
+    >
+      {editor(() => setOpenKey(null))}
+    </FactToken>
+  );
+  return {
+    offerName: token("offerName", "what they sell", "What they sell", (close) => (
+      <TextEditor initial={o.offerName} placeholder="e.g. 12-week growth program" onSave={(v) => (setOffer("offerName", v), close())} />
+    )),
+    offerPrice: token("offerPrice", "a price", "Price", (close) => (
+      <TextEditor
+        initial={o.offerPrice}
+        placeholder="e.g. $2,500"
+        onSave={(v) => (setOffer("offerPrice", v), close())}
+        footer={
+          data.whopPlanOptions.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {data.whopPlanOptions.map((p, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => (setOffer("offerPrice", String(p.price ?? "")), close())}
+                  className="rounded-full border px-2.5 py-1 text-xs hover:bg-[var(--accent-dim)] cursor-pointer"
+                >
+                  {p.name ? `${p.name}: ` : ""}
+                  {p.price}
+                </button>
+              ))}
+            </div>
+          ) : null
+        }
+      />
+    )),
+    offerIcp: token(
+      "offerIcp",
+      "who it's for",
+      "Who it's for",
+      (close) => <TextEditor multiline initial={o.offerIcp} placeholder="e.g. agency owners doing $30k+/month" onSave={(v) => (setOffer("offerIcp", v), close())} />,
+      undefined,
+      360
+    ),
+    offerVertical: token(
+      "offerVertical",
+      "type of",
+      "Industry",
+      (close) => (
+        <ChoiceList options={VERTICALS.map((v) => ({ value: v.id, label: v.label }))} value={o.offerVertical} onPick={(v) => (setOffer("offerVertical", v), close())} />
+      ),
+      o.offerVertical ? verticalLabel(o.offerVertical).toLowerCase() : null
+    ),
+    trafficTemperature: token(
+      "trafficTemperature",
+      "how warm?",
+      "How warm are leads when they book?",
+      (close) => <ChoiceList options={[...TEMPERATURES]} value={o.trafficTemperature} onPick={(v) => (setOffer("trafficTemperature", v), close())} />,
+      o.trafficTemperature || null,
+      340
+    ),
+    castingChoice: token(
+      "castingChoice",
+      "someone",
+      "Who's on camera",
+      (close) => <ChoiceList options={[...CASTING]} value={o.castingChoice} onPick={(v) => (setOffer("castingChoice", v), close())} />,
+      CASTING.find((c) => c.value === o.castingChoice)?.label ?? null,
+      340
+    ),
+    heroVideoUrl: token(
+      "heroVideoUrl",
+      "a video placeholder",
+      "Video on the page",
+      (close) => <TextEditor initial={o.heroVideoUrl} placeholder="YouTube, Vimeo or Loom link" onSave={(v) => (setOffer("heroVideoUrl", v), close())} />,
+      o.heroVideoUrl ? "your video" : null
+    ),
+  };
+}
+
+/** Where the confirmation page is published, with the site or project to
+ * publish to when the host has one to pick. */
+function HostingTarget({
+  data,
+  draft,
+  setPick,
+  tokenProps,
+  engagementId,
+  onFocusGroup,
+}: {
+  data: ShowtimeSetupState;
+  draft: Draft;
+  setPick: (s: PickSlot, v: Pick | null) => void;
+  tokenProps: TokenProps;
+  engagementId: string;
+  onFocusGroup: (g: ToolGroupId) => void;
+}) {
+  const hosting = draft.platforms.hosting;
+  if (!hosting) return <InlineLink onClick={() => onFocusGroup("hosting")}>Choose where it&apos;s hosted</InlineLink>;
+  if (hosting === "webflow" && data.picks.webflow_site_id) {
+    return (
+      <>
+        Published to{" "}
+        <PickToken slot="webflow_site_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which Webflow site?" />
+        {" "}on Webflow.
+      </>
+    );
+  }
+  if (hosting === "nextjs_vercel" && data.picks.vercel_project_name) {
+    return (
+      <>
+        Published to the{" "}
+        <PickToken slot="vercel_project_name" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which project?" />
+        {" "}project on Vercel.
+      </>
+    );
+  }
+  if (hosting === "plain_html" || hosting === "lovable") return <>We host it and hand you the link.</>;
+  return <>Published on {toolLabel(hosting)}.</>;
+}
+
+// ── Show Rate Setup's own settings ─────────────────────────────────────
+
+/** A labelled settings row: the name of the setting, then its value. */
+function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-1 py-2.5 @md:grid-cols-[150px_1fr] @md:gap-4">
+      <p className="text-[13px] text-[var(--text-muted)] @md:pt-0.5">{label}</p>
+      <div className="min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">{children}</div>
+    </div>
+  );
+}
+
+function ToggleSetting({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
+      <Switch on={on} onChange={onChange} label={label} />
+    </div>
+  );
+}
+
+function SettingsGroup({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-1">
+      <SectionTitle hint={hint}>{title}</SectionTitle>
+      <div className="divide-y">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * What the gear on Show Rate Setup opens once Showtime is set up: that
+ * skill's settings and nothing else. The full setup (every Showtime skill
+ * with an on/off switch, told as sentences) is onboarding; shown on a
+ * revisit it read as a page about Showtime rather than this skill's
+ * settings, and its switches turned other skills on and off from a
+ * screen the person opened to change one thing. The setup stays one link
+ * away for re-reading the website or choosing which skills run.
+ */
+function PinDownSettings({
+  data,
+  draft,
+  extras,
+  setExtra,
+  setSalesCall,
+  domain,
+  tierOf,
+  openKey,
+  setOpenKey,
+  setOffer,
+  setPick,
+  setKeepPage,
+  toolRows,
+  onFocusGroup,
+  engagementId,
+}: {
+  data: ShowtimeSetupState;
+  draft: Draft;
+  domain: string;
+  tierOf: (key: string, v: SetupValue | undefined) => TrustTier;
+  openKey: string | null;
+  setOpenKey: (k: string | null) => void;
+  setOffer: (k: OfferKey, v: string) => void;
+  setPick: (s: PickSlot, v: Pick | null) => void;
+  setKeepPage: (v: boolean) => void;
+  toolRows: React.ReactNode;
+  onFocusGroup: (g: ToolGroupId) => void;
+  engagementId: string;
+  extras: PinDownExtras;
+  setExtra: <K extends keyof PinDownExtras>(k: K, v: PinDownExtras[K]) => void;
+  setSalesCall: (id: string) => void;
+}) {
+  const tokenProps = (key: string) => ({ open: openKey === key, onOpenChange: (open: boolean) => setOpenKey(open ? key : null) });
+  const t = offerTokens({ data, draft, domain, tierOf, tokenProps, setOffer, setOpenKey });
+  const close = () => setOpenKey(null);
+  // A saved value, tappable to change. Empty ones read as a question.
+  const saved = (key: string, display: string | null, placeholder: string, title: string, editor: React.ReactNode, width?: number) => (
+    <FactToken {...tokenProps(key)} display={display} placeholder={placeholder} tier="done" title={title} source={display ? "Saved for this client." : null} width={width}>
+      {editor}
+    </FactToken>
+  );
+  const list = (key: "topCallQuestions" | "topObjections", noun: string, title: string, placeholder: string) =>
+    saved(
+      `extra.${key}`,
+      extras[key].length ? `${extras[key].length} ${noun}${extras[key].length === 1 ? "" : "s"}` : null,
+      "none yet",
+      title,
+      <TextEditor
+        multiline
+        initial={extras[key].join("\n")}
+        placeholder={placeholder}
+        onSave={(v) => (setExtra(key, v.split("\n").map((x) => x.trim()).filter(Boolean)), close())}
+      />,
+      380
+    );
+  const template = (TEMPLATE_IDS as string[]).includes(extras.template) ? (extras.template as TemplateId) : DEFAULT_TEMPLATE;
+  const eventTypes = data.accountRead.eventTypes;
+  const salesCall = eventTypes.find((e) => e.id === draft.salesCallEventId) ?? null;
+  const keepingOwn = Boolean(data.existingPage.url && draft.keepPage);
+  const { testimonials, faqs } = data.siteReading;
+
+  return (
+    <div className="space-y-7 pb-4">
+      <p className="text-[13px] leading-relaxed text-[var(--text-muted)]">
+        The confirmation page {data.buyer}&apos;s bookers see, and what it says. Tap a value to change it.
+        {domain ? <> Read from {domain}.</> : null}{" "}
+        <a
+          href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
+          className="font-medium text-[var(--text-secondary)] underline decoration-[var(--border)] underline-offset-4 hover:text-[var(--text-primary)]"
+        >
+          Full Showtime setup
+        </a>
+      </p>
+
+      <SettingsGroup title="The page">
+        {data.existingPage.url && (
+          <SettingRow label="Which page">
+            {keepingOwn ? (
+              <>
+                Your own, at{" "}
+                <a href={data.existingPage.url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                  {bareHost(data.existingPage.url)}
+                </a>
+                . We check it for gaps and publish nothing. <InlineLink onClick={() => setKeepPage(false)}>Build ours instead</InlineLink>
+              </>
+            ) : (
+              <>
+                One we build in your brand. <InlineLink onClick={() => setKeepPage(true)}>Keep yours at {bareHost(data.existingPage.url)}</InlineLink>
+              </>
+            )}
+          </SettingRow>
+        )}
+        {!keepingOwn && (
+          <>
+            <SettingRow label="Published to">
+              <HostingTarget data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} onFocusGroup={onFocusGroup} />
+            </SettingRow>
+            <SettingRow label="Design">
+              {saved(
+                "extra.template",
+                TEMPLATE_META[template].name,
+                "a design",
+                "Page design",
+                <ChoiceList
+                  options={TEMPLATE_IDS.map((id) => ({ value: id, label: TEMPLATE_META[id].name, hint: TEMPLATE_META[id].bestFor }))}
+                  value={template}
+                  onPick={(v) => (setExtra("template", v), close())}
+                />,
+                360
+              )}
+            </SettingRow>
+            <SettingRow label="Video at the top">{t.heroVideoUrl}</SettingRow>
+            <SettingRow label="Personal intro">
+              <ToggleSetting
+                on={extras.personalizedIntro}
+                onChange={(v) => setExtra("personalizedIntro", v)}
+                label="An AI-written opening paragraph for each booker"
+              />
+            </SettingRow>
+            <SettingRow label="Animations">
+              <ToggleSetting on={extras.animations} onChange={(v) => setExtra("animations", v)} label="Sections fade in as the page loads" />
+            </SettingRow>
+            {(testimonials.length > 0 || faqs.length > 0) && (
+              <SettingRow label="From your site">
+                {testimonials.length > 0 && (
+                  <SiteListToken
+                    tokenKey="site.testimonials"
+                    tokenProps={tokenProps}
+                    label={`${testimonials.length} testimonial${testimonials.length === 1 ? "" : "s"}`}
+                    title="Testimonials from your site"
+                    source={`Copied word for word from ${domain}.`}
+                    items={testimonials.map((x) => ({ primary: `“${x.quote}”`, secondary: [x.name, x.role, x.company].filter(Boolean).join(", ") }))}
+                  />
+                )}
+                {testimonials.length > 0 && faqs.length > 0 ? " and " : ""}
+                {faqs.length > 0 && (
+                  <SiteListToken
+                    tokenKey="site.faqs"
+                    tokenProps={tokenProps}
+                    label={`${faqs.length} question${faqs.length === 1 ? "" : "s"}`}
+                    title="Questions from your FAQ"
+                    source={`Your own FAQ on ${domain}, shown to bookers before the call.`}
+                    items={faqs.map((f) => ({ primary: f.question, secondary: f.answer }))}
+                  />
+                )}
+              </SettingRow>
+            )}
+            <SettingRow label="Preview">
+              <PagePreview
+                open={openKey === "preview"}
+                onOpenChange={(v) => setOpenKey(v ? "preview" : null)}
+                buyer={data.buyer}
+                offer={draft.offer}
+                designSignal={data.preview.designSignal}
+                template={data.preview.template}
+                domain={domain}
+              />
+            </SettingRow>
+          </>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup title="The offer" hint="What the page tells bookers.">
+        <SettingRow label="What they sell">{t.offerName}</SettingRow>
+        <SettingRow label="Price">{t.offerPrice}</SettingRow>
+        <SettingRow label="Who it's for">{t.offerIcp}</SettingRow>
+        <SettingRow label="Industry">{t.offerVertical}</SettingRow>
+        <SettingRow label="Leads arrive">{t.trafficTemperature}</SettingRow>
+        <SettingRow label="On camera">{t.castingChoice}</SettingRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Scripts and briefs" hint="What the video scripts and ad briefs are written from.">
+        <SettingRow label="Who runs the calls">
+          {saved(
+            "extra.prospectMeets",
+            extras.prospectMeets || null,
+            "someone",
+            "Who prospects meet on the call",
+            <TextEditor initial={extras.prospectMeets} placeholder="e.g. the founder, or a closer named Sam" onSave={(v) => (setExtra("prospectMeets", v.trim()), close())} />
+          )}
+        </SettingRow>
+        <SettingRow label="Questions on calls">{list("topCallQuestions", "question", "Questions prospects ask on calls", "One per line")}</SettingRow>
+        <SettingRow label="Objections">{list("topObjections", "objection", "What makes prospects hesitate", "One per line")}</SettingRow>
+        <SettingRow label="Brand voice">
+          {saved(
+            "extra.brandVoice",
+            extras.brandVoice ? `${extras.brandVoice.trim().split(/\s+/).length.toLocaleString()} words on file` : null,
+            "none yet",
+            "How the brand sounds",
+            <TextEditor multiline initial={extras.brandVoice} placeholder={`Copy that sounds like ${data.buyer}`} onSave={(v) => (setExtra("brandVoice", v), close())} />,
+            440
+          )}
+        </SettingRow>
+      </SettingsGroup>
+
+      {eventTypes.length > 0 && (
+        <SettingsGroup title="Bookings">
+          <SettingRow label="Sales call event">
+            <FactToken
+              {...tokenProps("salesCall")}
+              display={salesCall?.name ?? null}
+              placeholder="which event?"
+              tier={tierOf("salesCall", data.accountRead.salesCall ? ({ tier: data.accountRead.salesCall.tier } as SetupValue) : undefined)}
+              title="Which event is the sales call?"
+              source={data.accountRead.salesCall?.evidence ?? "Pick the event prospects book before they buy."}
+              width={340}
+            >
+              <ChoiceList
+                options={eventTypes.map((e) => ({ value: e.id, label: e.name, hint: e.durationMin ? `${e.durationMin} min` : undefined }))}
+                value={draft.salesCallEventId}
+                onPick={(id) => (setSalesCall(id), close())}
+              />
+            </FactToken>
+          </SettingRow>
+        </SettingsGroup>
+      )}
+
+      <SettingsGroup title="Tools" hint="Tap a logo to connect, switch or disconnect.">
+        <div className="py-3">{toolRows}</div>
+      </SettingsGroup>
     </div>
   );
 }

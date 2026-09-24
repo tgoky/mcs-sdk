@@ -111,6 +111,21 @@ export interface ShowtimeSetupState {
     template: string;
     confirmationPageUrl: string | null;
   };
+  /** Pin-Down's inputs the setup never asks for, shown in Show Rate
+   * Setup's own settings and saved through PATCH /details (the same
+   * route the client details drawer uses). */
+  pinDown: PinDownExtras;
+}
+
+export interface PinDownExtras {
+  template: string;
+  animations: boolean;
+  /** offerDetails.hybrid_mode_enabled: an AI-written intro per booker. */
+  personalizedIntro: boolean;
+  prospectMeets: string;
+  topCallQuestions: string[];
+  topObjections: string[];
+  brandVoice: string;
 }
 
 /** One line of activation progress, streamed as NDJSON. */

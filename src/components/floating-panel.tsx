@@ -38,7 +38,7 @@ export function FloatingPanel({
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(defaultOpen);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   function toggle() {
     setOpen((o) => !o);
@@ -63,7 +63,11 @@ export function FloatingPanel({
     let left = align === "end" ? rect.right - width : rect.left;
     left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - width - VIEWPORT_MARGIN);
     setResolvedWidth(width);
-    setCoords({ top, left });
+    // Ends above the bottom of the screen: 80vh from wherever the anchor
+    // sits ran past it, so a form's own save bar at the bottom of the
+    // panel was below the fold and couldn't be scrolled to.
+    const maxHeight = Math.max(160, window.innerHeight - top - VIEWPORT_MARGIN);
+    setCoords({ top, left, maxHeight });
   }, [open, align, panelWidth]);
 
   // Deliberately no scroll/resize listeners here — see the file doc above.
@@ -104,7 +108,8 @@ export function FloatingPanel({
               <div
                 ref={panelRef}
                 role="dialog"
-                className="rounded-lg surface-glass-3 text-zinc-900 dark:text-zinc-100 max-h-[80vh] overflow-y-auto font-sans antialiased"
+                style={{ maxHeight: coords.maxHeight }}
+                className="rounded-lg surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-y-auto font-sans antialiased"
               >
                 {typeof children === "function" ? children(close) : children}
               </div>

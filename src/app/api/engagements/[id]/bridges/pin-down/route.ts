@@ -315,6 +315,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         stack: updatedStack as EngagementStack,
         offerDetails,
         castingChoice,
+        // The confirmation page is built from this column, not the stack's
+        // hero_video_id, so a link saved only there never reached the page.
+        ...(typeof body.heroVideoUrl === "string" && /^https?:\/\//i.test(body.heroVideoUrl.trim()) ? { heroVideoUrl: body.heroVideoUrl.trim() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, id));

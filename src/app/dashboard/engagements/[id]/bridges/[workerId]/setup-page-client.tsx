@@ -44,6 +44,7 @@ export function SetupPageClient({
 
       {renderWorkerConfigForm(workerId, {
         engagementId,
+        mode: "setup",
         onClose: () => router.push(backHref),
         // A setup that started a run opens it; any other reported save goes back.
         onSaved: (result) => router.push(result.runId ? `/dashboard/runs/${result.runId}` : backHref),
