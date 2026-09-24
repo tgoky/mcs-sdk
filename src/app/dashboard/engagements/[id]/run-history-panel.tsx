@@ -11,13 +11,15 @@
 // caching, no server round-trip latency between a click and the table
 // updating — the click IS the update.
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, XCircle, Loader2, AlertCircle, Calendar } from "lucide-react";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { phaseLabel, runStatusLabel, runStatusColor } from "@/lib/copy";
 import { RunRowActions } from "./run-row-actions";
+import { RunHistoryDetail } from "./run-history-detail";
+import { cn } from "@/lib/utils";
 
 interface RunRow {
   id: string;
@@ -73,6 +75,9 @@ function todayKey(offsetDays = 0): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Matches the unified queue's default Details width.
+const DETAIL_WIDTH = 400;
+
 const chipBase = "px-2.5 py-1 rounded-md text-[11px] font-mono border transition-colors inline-flex items-center gap-1.5 select-none cursor-pointer";
 const chipActive = "bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100";
 const chipInactive = "bg-transparent border-border text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800";
@@ -90,6 +95,23 @@ export function RunHistoryPanel({
   const [skill, setSkill] = useState<string | null>(null);
   const [month, setMonth] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
+  // Open run in the side panel (desktop). On a phone there's no room for
+  // a third column, so a row click goes to the run page like before.
+  const [openRunId, setOpenRunId] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
+  const router = useRouter();
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  function openRun(runId: string) {
+    if (isDesktop) setOpenRunId((prev) => (prev === runId ? null : runId));
+    else router.push(`/dashboard/runs/${runId}`);
+  }
 
   const skillsWithRuns = useMemo(() => {
     const seen = new Map<string, number>();
@@ -236,38 +258,60 @@ export function RunHistoryPanel({
       )}
 
       {filteredRuns.length > 0 ? (
-        <div className="w-full overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
-          <ol className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+        <div className="w-full flex overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-colors motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
+          <ol className="flex-1 min-w-0 divide-y divide-zinc-200 dark:divide-zinc-800/50">
             {filteredRuns.slice(0, 20).map((run) => {
               const isFailed = run.status.toLowerCase() === "failed";
+              const isOpen = openRunId === run.id;
               return (
                 <li key={run.id} className="group relative">
-                  <Link href={`/dashboard/runs/${run.id}`} className="absolute inset-0 z-10" aria-label={`View run details for ${anySkillDisplayName(run.skillName)}`} />
-                  <div className="relative flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openRun(run.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openRun(run.id);
+                      }
+                    }}
+                    aria-label={`Open run details for ${anySkillDisplayName(run.skillName)}`}
+                    aria-pressed={isOpen}
+                    className={cn(
+                      "relative flex items-center gap-3 px-4 py-3.5 transition-colors cursor-pointer outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-800/40",
+                      isOpen ? "bg-zinc-100/80 dark:bg-zinc-900/60" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+                    )}
+                  >
                     <RunStatusIcon status={run.status} />
                     <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{anySkillDisplayName(run.skillName)}</span>
-                          <span className={`text-xs font-normal font-mono ${runStatusColor(run.status)}`}>{runStatusLabel(run.status)}</span>
+                          <span className="text-base font-bold text-zinc-900 dark:text-zinc-100">{anySkillDisplayName(run.skillName)}</span>
+                          <span className={`text-sm font-normal font-mono ${runStatusColor(run.status)}`}>{runStatusLabel(run.status)}</span>
                         </div>
-                        <div className="text-[11px] font-mono mt-0.5 text-zinc-400 dark:text-zinc-500">
+                        <div className="text-sm font-mono mt-0.5 text-zinc-500 dark:text-zinc-400">
                           {phaseLabel(run.phase)}
                           {run.stepCount > 0 ? ` · ${run.stepCount} step${run.stepCount === 1 ? "" : "s"}` : ""}
                         </div>
                         {isFailed && run.errorMessage ? (
-                          <div className="text-[11px] font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">{run.errorMessage}</div>
+                          <div className="text-sm font-mono text-rose-500/90 dark:text-rose-400/80 mt-1 leading-relaxed line-clamp-2 max-w-xl">{run.errorMessage}</div>
                         ) : run.subjectLabel ? (
-                          <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed truncate max-w-xl" title={run.subjectLabel}>
+                          <div className="text-sm text-zinc-600 dark:text-zinc-300 mt-1 leading-relaxed truncate max-w-xl" title={run.subjectLabel}>
                             {run.subjectLabel}
                           </div>
                         ) : null}
                       </div>
-                      <div className="shrink-0 flex items-center gap-2 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pt-0.5" title={new Date(run.startedAt).toLocaleString()}>
-                        <AnySkillBadge skill={run.skillName} size={22} enabled={true} />
-                        <span>{relativeTime(String(run.startedAt))}</span>
-                        <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                        <RunRowActions runId={run.id} engagementId={engagementId} skillName={run.skillName} skillLabel={anySkillDisplayName(run.skillName)} status={run.status} />
+                      <div className="shrink-0 flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 pt-0.5" title={new Date(run.startedAt).toLocaleString()}>
+                        <AnySkillBadge skill={run.skillName} size={24} enabled={true} />
+                        <span className="whitespace-nowrap">{relativeTime(String(run.startedAt))}</span>
+                        <ArrowRight className={cn("w-3.5 h-3.5 transition-all", isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5")} />
+                        {/* The menu renders in a portal, but React still
+                            bubbles its clicks through this row — stop them
+                            here so picking an action doesn't also open the
+                            details panel. */}
+                        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          <RunRowActions runId={run.id} engagementId={engagementId} skillName={run.skillName} skillLabel={anySkillDisplayName(run.skillName)} status={run.status} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -275,6 +319,16 @@ export function RunHistoryPanel({
               );
             })}
           </ol>
+
+          {/* RIGHT — details. A real flex sibling that opens by width, same
+              mechanics as the unified queue's Details panel. */}
+          <div
+            className="hidden md:flex relative shrink-0 flex-col border-l border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden transition-[width,opacity] duration-150 ease-out max-h-[720px]"
+            style={{ width: openRunId ? DETAIL_WIDTH : 0, opacity: openRunId ? 1 : 0 }}
+            aria-hidden={!openRunId}
+          >
+            {openRunId && <RunHistoryDetail runId={openRunId} onClose={() => setOpenRunId(null)} />}
+          </div>
         </div>
       ) : (
         <div className="h-28 border border-dashed border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-transparent rounded-xl flex flex-col items-center justify-center space-y-1 transition-colors motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">

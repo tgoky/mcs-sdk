@@ -128,9 +128,9 @@ export default function PitchPackagePage({ params }: { params: Promise<{ id: str
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move B: Press Outreach</h1>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Get featured in the press</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Tier-1 targets, drafted pitches, and outreach tracking. Every send happens from your own email. This only drafts and tracks.
+          Make a list of publications and writers, draft a short pitch for each, and track who replied. You send every email yourself from your own inbox. Nothing is sent for you.
         </p>
       </div>
 

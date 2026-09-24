@@ -77,9 +77,11 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move A: Schema & Wikidata</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Generated from this client&apos;s identity graph. Paste the JSON-LD into every owned domain, then work through the Wikidata submission by hand.
+        <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Tell Google who you are</h1>
+        <p className="text-[15px] text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
+          Google and AI assistants like ChatGPT work out who someone is by joining up their website and profiles. This
+          step helps them get it right, so searches for this client show the right person and the right links. There are
+          two parts, and neither needs any coding.
         </p>
       </div>
 
@@ -89,28 +91,52 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
       {!loading && !error && (
         <>
           <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">JSON-LD graph</h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100">1. Add a snippet to your website</h2>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  We&apos;ve written a short, invisible snippet that lists this client&apos;s official profiles. Copy it and
+                  send it to whoever looks after the website. They paste it into the site&apos;s header (most site
+                  builders have a &quot;custom code&quot; or &quot;header code&quot; box). Visitors never see it, only Google does.
+                </p>
+              </div>
               <button
                 onClick={copyJsonLd}
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shrink-0 cursor-pointer"
               >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? "Copied" : "Copy <script> tag"}
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+                {copied ? "Copied" : "Copy snippet"}
               </button>
             </div>
-            <pre className="text-[11px] font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-3 overflow-x-auto max-h-96 text-zinc-700 dark:text-zinc-300">
-              {jsonLdText}
-            </pre>
+            <details className="group">
+              <summary className="cursor-pointer text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+                See what&apos;s in the snippet
+              </summary>
+              <pre className="mt-2 text-[11px] font-mono bg-zinc-50 dark:bg-zinc-950 rounded-lg p-3 overflow-x-auto max-h-96 text-zinc-700 dark:text-zinc-300">
+                {jsonLdText}
+              </pre>
+            </details>
           </section>
 
           <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 p-4 space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Wikidata statements</h2>
+            <div>
+              <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100">2. Create a Wikidata page (optional)</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                Wikidata is the free public database behind Wikipedia, and Google and AI assistants read it. Create a
+                free account at{" "}
+                <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">
+                  wikidata.org
+                </a>
+                , start a new item for this client, and add each fact below. Rows marked &quot;You fill this in&quot; are
+                things we don&apos;t know yet. Wikidata asks for a source link for every fact, such as a profile page or
+                a news article.
+              </p>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-1.5 pr-3">Property</th>
+                  <tr className="text-left text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                    <th className="py-1.5 pr-3">Fact</th>
                     <th className="py-1.5 pr-3">Value</th>
                     <th className="py-1.5">Note</th>
                   </tr>
@@ -118,11 +144,12 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
                 <tbody>
                   {statements.map((s, idx) => (
                     <tr key={`${s.property}-${idx}`} className="border-b border-zinc-100 dark:border-zinc-800/50 last:border-0">
-                      <td className="py-2 pr-3 font-mono font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-                        {s.property} <span className="text-zinc-400 dark:text-zinc-500 font-normal">{s.label}</span>
+                      <td className="py-2 pr-3 text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                        <span className="first-letter:uppercase inline-block">{s.label}</span>{" "}
+                        <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">{s.property}</span>
                       </td>
-                      <td className="py-2 pr-3 font-mono text-zinc-600 dark:text-zinc-400 break-all">
-                        {s.value || <span className="italic text-amber-600 dark:text-amber-400">needs manual input</span>}
+                      <td className="py-2 pr-3 text-zinc-600 dark:text-zinc-400 break-all">
+                        {s.value || <span className="italic text-zinc-400 dark:text-zinc-500">You fill this in</span>}
                       </td>
                       <td className="py-2 text-zinc-500 dark:text-zinc-400">{s.note ?? ""}</td>
                     </tr>
@@ -130,15 +157,12 @@ export default function SchemaWikidataPage({ params }: { params: Promise<{ id: s
                 </tbody>
               </table>
             </div>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
-              Every statement still needs its own reference URL (P854) and retrieved-date (P813) at submission time.
-            </p>
           </section>
         </>
       )}
 
       <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 p-4">
-        <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100 mb-2">Deploy checklist</h2>
+        <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100 mb-2">Your steps</h2>
         <OffensiveChecklist engagementId={id} move="a" />
       </section>
     </div>

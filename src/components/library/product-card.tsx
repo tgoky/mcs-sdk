@@ -90,21 +90,21 @@ export function ProductCard({
             <img
               src={image}
               alt={name}
-              className="w-11 h-11 shrink-0 object-contain group-hover:scale-105 transition-transform"
+              className="w-12 h-12 shrink-0 object-contain group-hover:scale-105 transition-transform"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                   {name}
                 </h2>
                 {installed && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-1.5 py-0.5 rounded-md">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-1.5 py-0.5 rounded-md">
                     <Download size={10} className="stroke-[2.5]" /> Installed
                   </span>
                 )}
               </div>
-              <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-medium">By {HOME_COPY.footerNote}</p>
-              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-1 max-w-md line-clamp-2">{description}</p>
+              <p className="text-xs font-mono text-zinc-500 dark:text-zinc-400 font-medium">By {HOME_COPY.footerNote}</p>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-1.5 max-w-md line-clamp-2">{description}</p>
             </div>
           </div>
           <ArrowUpRight
@@ -134,7 +134,7 @@ export function ProductCard({
               </div>
             ))}
           </div>
-          <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300 truncate" title={skillNames}>
+          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate" title={skillNames}>
             {skillIds.length} skill{skillIds.length === 1 ? "" : "s"}
             {skillIds.length > INSIDE_BADGE_LIMIT ? ` · ${skillIds.length - INSIDE_BADGE_LIMIT} more inside` : ""}
           </span>

@@ -362,9 +362,9 @@ export default async function EngagementDetailPage({
               </div>
               <div>
                 <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                  Offensive Playbook
+                  Grow your reputation
                 </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Schema/Wikidata, press outreach, and the Reddit ramp. Moves A, B, and C.</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Three guided steps to improve what Google and AI assistants say about this client: their website, the press, and Reddit.</p>
               </div>
             </div>
             <ArrowRight size={16} className="text-zinc-400 shrink-0" />

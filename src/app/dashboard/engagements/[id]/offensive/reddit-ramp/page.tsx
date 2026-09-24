@@ -126,9 +126,9 @@ export default function RedditRampPage({ params }: { params: Promise<{ id: strin
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Move C: Reddit Ramp</h1>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Build a presence on Reddit</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          A 90-day plan for building real thread density by hand. Tracking only. Nothing here posts or comments for you.
+          A 90-day plan to become a known, trusted name in the subreddits your buyers read. AI assistants quote Reddit a lot, so real activity there shows up in their answers. You do the posting yourself. This page only tracks it.
         </p>
       </div>
 

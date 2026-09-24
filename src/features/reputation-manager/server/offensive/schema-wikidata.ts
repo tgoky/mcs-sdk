@@ -177,7 +177,7 @@ export function generateWikidataStatements(input: {
     { property: "P31", label: "instance of", value: "human (Q5)", needsManualInput: false, referenceUrl: null },
     { property: "P21", label: "sex or gender", value: "", needsManualInput: true, referenceUrl: null },
     { property: "P27", label: "country of citizenship", value: "", needsManualInput: true, referenceUrl: null },
-    { property: "P106", label: "occupation", value: "", needsManualInput: true, referenceUrl: null, note: "Add two occupation statements per the template." },
+    { property: "P106", label: "occupation", value: "", needsManualInput: true, referenceUrl: null, note: "Add two, for example \"entrepreneur\" and \"consultant\"." },
     { property: "P101", label: "field of work", value: "", needsManualInput: true, referenceUrl: null },
     { property: "P735", label: "given name", value: "", needsManualInput: true, referenceUrl: null },
     {

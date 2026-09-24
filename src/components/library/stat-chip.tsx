@@ -30,8 +30,8 @@ export function StatChip({
 
   return (
     <div className={cn("flex flex-col", size === "lg" ? "gap-1.5" : "gap-0.5")}>
-      <span className={cn(size === "lg" ? "text-[28px] font-semibold tracking-tight" : "text-lg font-bold", "tabular-nums leading-none", toneClass)}>{value}</span>
-      <span className={cn(size === "lg" ? "text-xs" : "text-[10px]", "font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400")}>{label}</span>
+      <span className={cn(size === "lg" ? "text-[28px] font-semibold tracking-tight" : "text-xl font-bold", "tabular-nums leading-none", toneClass)}>{value}</span>
+      <span className={cn(size === "lg" ? "text-xs" : "text-[11px]", "font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400")}>{label}</span>
     </div>
   );
 }

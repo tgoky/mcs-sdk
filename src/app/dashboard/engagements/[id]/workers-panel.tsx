@@ -3,13 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
-import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
+import { type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
-import { StatusSwatch } from "@/components/status-swatch";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
 import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
@@ -216,19 +215,6 @@ export function WorkersPanel({
   // risking for a one-line difference.
   const activeCount = workerIds.filter((id) => states[id] ?? true).length;
 
-  // Aggregated "X of Y need setup" rollup — built from
-  // CONFIG_CHECKED_WORKER_IDS, the one place that actually knows which
-  // workers have real required fields, precisely so this can't drift into
-  // the exact mislabeling that'd make it worse than no rollup at all:
-  // counting one of the on/off-only workers as an incomplete setup step
-  // just because it happens to be enabled. Only enabled workers are in
-  // scope — a disabled one has nothing "next" to do here; re-enabling it
-  // is what would put it back in this math.
-  const enabledIds = workerIds.filter((id) => states[id] ?? true);
-  const configurableEnabledIds = enabledIds.filter((id) => CONFIG_CHECKED_WORKER_IDS.includes(id));
-  const incompleteConfigurable = configurableEnabledIds.filter((id) => (missingFieldsByWorkerId[id]?.length ?? 0) > 0);
-  const toggleOnlyEnabledCount = enabledIds.length - configurableEnabledIds.length;
-
   return (
     <div className="w-full space-y-3 font-sans">
       <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-zinc-200/80 dark:border-zinc-800/60">
@@ -251,61 +237,6 @@ export function WorkersPanel({
           </span>
         </div>
       </div>
-
-      {/* Stripe/Zapier-style rollup — one place to see what's left,
-          instead of hunting card by card. The denominator is
-          configurableEnabledIds only, never workerIds/enabledIds — an
-          on/off-only worker (most of them) has nothing to configure and
-          must never silently count as either "done" or "needs setup," so
-          it's named explicitly rather than folded into the ratio. Hidden
-          entirely when no enabled worker has a field to fill in at all —
-          nothing to roll up, same as Stripe not showing a checklist with
-          zero items on it. */}
-      {!expandedWorker && configurableEnabledIds.length > 0 && (
-        <div
-          className={`rounded-lg border px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-mono ${
-            incompleteConfigurable.length > 0
-              ? "border-orange-300/70 dark:border-orange-500/30 bg-orange-50/50 dark:bg-orange-500/[0.06]"
-              : "border-emerald-300/60 dark:border-emerald-500/25 bg-emerald-50/40 dark:bg-emerald-500/[0.05]"
-          }`}
-        >
-          {incompleteConfigurable.length > 0 ? (
-            <>
-              <span className="font-bold text-orange-700 dark:text-orange-400">
-                {configurableEnabledIds.length - incompleteConfigurable.length} of {configurableEnabledIds.length} configured skills fully set up
-              </span>
-              <span className="text-zinc-300 dark:text-zinc-700">·</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {incompleteConfigurable.map((id) => {
-                  const w = WORKER_REGISTRY[id];
-                  const count = missingFieldsByWorkerId[id]?.length ?? 0;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => hasWorkerConfigForm(id) && setExpandedWorker(id)}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-orange-300/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 hover:bg-orange-100/60 dark:hover:bg-orange-500/10 transition-colors cursor-pointer"
-                    >
-                      <Settings2 className="w-2.5 h-2.5" />
-                      {w.name} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              All {configurableEnabledIds.length} configured skills are fully set up
-            </span>
-          )}
-          {toggleOnlyEnabledCount > 0 && (
-            <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic ml-auto">
-              +{toggleOnlyEnabledCount} other enabled {toggleOnlyEnabledCount === 1 ? "skill is" : "skills are"} plain on/off. Nothing to configure.
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
           configuring a worker hides the whole card grid and renders the
@@ -395,14 +326,6 @@ export function WorkersPanel({
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-semibold">Status</span>
-                    <StatusSwatch
-                      status={status}
-                      title={isNeedsSetup ? `Missing: ${missingFields.map((f) => f.label).join(", ")}` : undefined}
-                    />
-                  </div>
-
                   {isEnabled && latestRun ? (
                     <div className="space-y-0.5 text-xs">
                       <div className="flex items-center justify-between font-mono text-[10.5px]">

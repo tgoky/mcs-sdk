@@ -111,7 +111,7 @@ export function DynamicClientReport({
       </div>
 
       {offerIcp && (
-        <div className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-3xl">
+        <div className="text-[15px] text-zinc-800 dark:text-zinc-200 leading-relaxed max-w-3xl">
           <span className="font-semibold text-zinc-900 dark:text-zinc-200">Targeting: </span>
           {offerIcp}
         </div>

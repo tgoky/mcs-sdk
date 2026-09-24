@@ -11,22 +11,22 @@ const MOVES = [
   {
     move: "a" as const,
     slug: "schema-wikidata",
-    name: "Move A: Schema & Wikidata",
-    description: "Generate a Schema.org JSON-LD identity graph and a Wikidata statements guide for manual submission.",
+    name: "Tell Google who you are",
+    description: "Get a ready-made snippet for your website plus a guide for a Wikidata page, so Google and AI assistants link your name to your real profiles.",
     icon: FileJson,
   },
   {
     move: "b" as const,
     slug: "pitch-package",
-    name: "Move B: Press Outreach",
-    description: "Build a Tier-1 target list, draft pitches, and track outreach through to placement.",
+    name: "Get featured in the press",
+    description: "List the publications worth pitching, draft a short pitch for each, and track who replied and who ran a story.",
     icon: Mail,
   },
   {
     move: "c" as const,
     slug: "reddit-ramp",
-    name: "Move C: Reddit Ramp",
-    description: "A 90-day plan to build real thread density: subreddit tiering, cadence, and karma gates.",
+    name: "Build a presence on Reddit",
+    description: "A 90-day plan to become a trusted voice in the subreddits your buyers read: where to post, how often, and when.",
     icon: MessageSquare,
   },
 ];
@@ -78,9 +78,9 @@ export default function OffensivePlaybookIndexPage({ params }: { params: Promise
       </button>
 
       <div>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Offensive Playbook</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Reputation-building moves that run alongside monitoring. Generation and drafting tools you execute yourself.
+        <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Grow your reputation</h1>
+        <p className="text-[15px] text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
+          Monitoring tells you what people and AI assistants already say about you. These three steps help you change it. We prepare the material. You do the posting and sending yourself, and tick off each step as you go.
         </p>
       </div>
 
@@ -96,14 +96,14 @@ export default function OffensivePlaybookIndexPage({ params }: { params: Promise
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                   {name}
                 </h2>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 shrink-0">
                   {progressLabel(progress[move])}
                 </span>
               </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{description}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{description}</p>
             </div>
           </Link>
         ))}
