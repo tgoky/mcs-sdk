@@ -14,6 +14,7 @@ import { COLD_OPEN_SEND_TOOLS, findSetupTool, findShowtimeTool, type SetupTool }
 import { loadToolStates } from "@/lib/showtime-setup/tool-states";
 import { getColdOpenConfig, type ColdOpenConfigRow } from "@/features/cold-open/server/config";
 import { buildColdOpenProposal, type SavedColdOpen } from "./proposal";
+import { hostOf } from "@/lib/rep-setup/proposal";
 import { loadCampaignMatches } from "./jev";
 import type { BuyerProfile } from "./analyze";
 import type { SenderIntel } from "./sender";
@@ -61,7 +62,7 @@ export async function clientTimezone(engagementId: string): Promise<string | nul
 }
 
 export async function loadColdOpenSetupState(engagementId: string, workspaceId: string): Promise<ColdOpenSetupState | null> {
-  const [row] = await db.select({ buyer: engagements.buyer }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+  const [row] = await db.select({ buyer: engagements.buyer, offer: engagements.offerDetails }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!row) return null;
 
   const [config, facts, domain, skills, matches, timezone] = await Promise.all([
@@ -91,12 +92,13 @@ export async function loadColdOpenSetupState(engagementId: string, workspaceId: 
     buyer: row.buyer,
     configured: Boolean(saved?.icps.length && saved.productIdentity?.name),
     skills,
-    website: { domain, readAt: corpus ? corpus.updatedAt.toISOString() : null },
+    // Bare host: some saves stored the full URL ("https://site.com/").
+    website: { domain: hostOf(domain), readAt: corpus ? corpus.updatedAt.toISOString() : null },
     tools,
     crm,
     outbound,
     buyers,
-    proposal: buildColdOpenProposal({ domain, saved, facts, sender, buyers, campaignMatch: matches, clientTimezone: timezone, tierOf: factTier, platformLabel }),
+    proposal: buildColdOpenProposal({ domain, saved, facts, sender, buyers, campaignMatch: matches, clientTimezone: timezone, showtimeOffer: row.offer ?? null, tierOf: factTier, platformLabel }),
     leadSources: (config?.leadSources ?? []).map((s) => ({ icp: s.icp, rows: s.csvContent ? Math.max(0, s.csvContent.trim().split(/\r?\n/).length - 1) : 0 })),
   };
 }

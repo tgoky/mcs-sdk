@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X, CheckCircle2 } from "lucide-react";
 import { type ModuleStatus, phaseLabel } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
-import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { CONFIG_CHECKED_WORKER_IDS, type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { StatusSwatch } from "@/components/status-swatch";
@@ -283,7 +283,7 @@ export function WorkersPanel({
                     <button
                       key={id}
                       type="button"
-                      onClick={() => w.hasHingesPanel && setExpandedWorker(id)}
+                      onClick={() => hasWorkerConfigForm(id) && setExpandedWorker(id)}
                       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-orange-300/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 hover:bg-orange-100/60 dark:hover:bg-orange-500/10 transition-colors cursor-pointer"
                     >
                       <Settings2 className="w-2.5 h-2.5" />
@@ -437,7 +437,7 @@ export function WorkersPanel({
 
               <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                  {worker.hasHingesPanel ? (
+                  {hasWorkerConfigForm(workerId) ? (
                     <button
                       type="button"
                       onClick={() => setExpandedWorker((prev) => (prev === workerId ? null : workerId))}

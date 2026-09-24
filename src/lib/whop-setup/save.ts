@@ -11,7 +11,7 @@ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { syncAgentWebhookEvents } from "@/features/whop-agent/server/webhook-subscription-service";
-import { eventsFor } from "./analyze";
+import { SKILL_EVENTS, eventsFor } from "./analyze";
 
 export interface WhopSetupInput {
   skills: string[];
@@ -66,6 +66,9 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
 
 /** The events the chosen workers can actually use: the save offer needs
  * an offer to make, the bridge needs somewhere to send. */
+/** Every event the setup's workers can ask for. */
+const SETUP_EVENTS = new Set(Object.values(SKILL_EVENTS).flat());
+
 export function webhookEventsFor(input: WhopSetupInput): string[] {
   const usable = input.skills.filter((s) => (s !== "whop-cancellation-save-offer" || input.saveOffer) && (s !== "whop-bridge-manager" || input.bridgeUrl));
   return eventsFor(usable);
@@ -115,7 +118,9 @@ export async function saveWhopSetup(engagementId: string, input: WhopSetupInput,
   // Settings stay saved even if Whop refuses the webhook; the screen says so.
   const events = webhookEventsFor(input);
   try {
-    const { action } = await sync(engagementId, events);
+    // Drops only the events of workers switched off here; events another
+    // worker added to the same webhook stay.
+    const { action } = await sync(engagementId, events, { keep: (e) => !SETUP_EVENTS.has(e) });
     return { ok: true, webhook: { action, events } };
   } catch (err) {
     return { ok: true, webhook: { error: err instanceof Error ? err.message : "Whop didn't accept the webhook.", events } };

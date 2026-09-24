@@ -26,10 +26,9 @@ import { RepEnginePanelConfigForm } from "./rep-engine-panel-config-form";
 import { RepTrustpilotWatchConfigForm } from "./rep-trustpilot-watch-config-form";
 import { RepRedditWatchConfigForm } from "./rep-reddit-watch-config-form";
 import { RepTwitterWatchConfigForm } from "./rep-twitter-watch-config-form";
-import { VoiceCaptureConfigForm } from "./voice-capture-config-form";
-import { SourceConnectConfigForm } from "./source-connect-config-form";
-import { SendConnectConfigForm } from "./send-connect-config-form";
-import { DailySendConfigForm } from "./daily-send-config-form";
+import { COLD_OPEN_SKILL_IDS } from "@/lib/cold-open-skill-manifest";
+import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
+import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 
 export interface ConfigFormSaveResult {
   /** The run a setup form started on save, when it started one. */
@@ -46,18 +45,43 @@ export interface ConfigFormHandlers {
   /** Label for the form's own cancel/close button; each form has a default. */
   cancelLabel?: string;
   /** "setup" is the product's onboarding page (bridges/[workerId]): the
-   * full setup, every skill and its switch. Anywhere else a form opens as
-   * that worker's own settings, which only differs for Show Rate Setup
-   * (see ShowtimeSetup's `focus`). */
+   * full setup, every skill and its switch, for the product's onboarding
+   * worker. Anywhere else, and for every other worker, a product's setup
+   * opens as that one skill's own settings (see each setup's `focus`). */
   mode?: "setup" | "settings";
 }
 
 type FormRenderer = (h: ConfigFormHandlers) => ReactNode;
 
 // Forms that only take onCancel (they save in place and show "Saved").
-const simple =
-  (Form: (props: { engagementId: string; onCancel: () => void; cancelLabel?: string }) => ReactNode): FormRenderer =>
-  (h) => <Form engagementId={h.engagementId} onCancel={h.onClose} cancelLabel={h.cancelLabel} />;
+const simple = (Form: (props: { engagementId: string; onCancel: () => void; cancelLabel?: string }) => ReactNode): FormRenderer => {
+  function SimpleForm(h: ConfigFormHandlers) {
+    return <Form engagementId={h.engagementId} onCancel={h.onClose} cancelLabel={h.cancelLabel} />;
+  }
+  return SimpleForm;
+};
+
+// A product setup as one skill's settings. The onboarding worker's own
+// setup page shows the whole setup instead.
+const focused = (
+  Setup: (props: { engagementId: string; onCancel: () => void; onSaved?: ConfigFormHandlers["onSaved"]; cancelLabel?: string; focus?: string }) => ReactNode,
+  onboarding: WorkerId,
+  id: WorkerId
+): FormRenderer => {
+  function SkillSettings(h: ConfigFormHandlers) {
+    return <Setup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} focus={h.mode === "setup" && id === onboarding ? undefined : id} />;
+  }
+  return SkillSettings;
+};
+
+// The Rep watches whose form is a one-off "scan further back" action, not
+// settings; they keep it.
+const REP_OWN_FORMS: Partial<Record<WorkerId, FormRenderer>> = {
+  "rep-engine-panel": simple(RepEnginePanelConfigForm),
+  "rep-trustpilot-watch": simple(RepTrustpilotWatchConfigForm),
+  "rep-reddit-watch": simple(RepRedditWatchConfigForm),
+  "rep-twitter-watch": simple(RepTwitterWatchConfigForm),
+};
 
 const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // Showtime
@@ -67,25 +91,11 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   "win-back": simple(WinBackConfigForm),
   "pre-call-read": simple(PreCallReadConfigForm),
   "leak-map": simple(LeakMapConfigForm),
-  // Reputation Manager
-  "rep-onboarding": (h) => <RepSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
-  "rep-engine-panel": simple(RepEnginePanelConfigForm),
-  "rep-trustpilot-watch": simple(RepTrustpilotWatchConfigForm),
-  "rep-reddit-watch": simple(RepRedditWatchConfigForm),
-  "rep-twitter-watch": simple(RepTwitterWatchConfigForm),
-  // Cold Open
-  // Cold Open's setup covers the product, buyers, voice, campaigns and
-  // daily sending from the website and the connected tools.
-  "icp-lock": (h) => <ColdOpenSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
-  "voice-capture": simple(VoiceCaptureConfigForm),
-  "source-connect": simple(SourceConnectConfigForm),
-  "send-connect": simple(SendConnectConfigForm),
-  "daily-send": simple(DailySendConfigForm),
-  // Whop Agent: one setup covers the connection, the save offer, alert
-  // levels, the bridge and the webhook the workers need.
-  "whop-connect": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
-  "whop-cancellation-save-offer": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
-  "whop-bridge-manager": (h) => <WhopSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} />,
+  // Reputation Manager, Cold Open and Whop Agent: every skill opens its
+  // product's review narrowed to the rows it owns.
+  ...Object.fromEntries(REP_SKILL_IDS.map((id) => [id, REP_OWN_FORMS[id] ?? focused(RepSetup, "rep-onboarding", id)])),
+  ...Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, focused(ColdOpenSetup, "icp-lock", id)])),
+  ...Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, focused(WhopSetup, "whop-connect", id)])),
 };
 
 /** Workers with a self-loading config form. (Pile-On's small form takes

@@ -9,7 +9,7 @@ import crypto from "crypto";
 import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { isDryRunRequired, clearDryRunForSkill } from "@/lib/whop-agent/dry-run";
-import { ensureAgentWebhookSubscription } from "./webhook-subscription-service";
+import { addAgentWebhookEvents } from "./webhook-subscription-service";
 import { queuePendingAction } from "@/lib/approval-gate";
 import type { GetStepTools, Inngest } from "inngest";
 
@@ -282,7 +282,7 @@ export async function runProductLaunchPreflight(
     if (input.webhookEvents?.length) {
       await logStep(runId, { phase: "webhook_subscription", status: "running" });
       try {
-        await runStep("ensure-webhook-subscription", () => ensureAgentWebhookSubscription(engagementId, input.webhookEvents!));
+        await runStep("ensure-webhook-subscription", () => addAgentWebhookEvents(engagementId, input.webhookEvents!));
         await logStep(runId, { phase: "webhook_subscription", status: "success" });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

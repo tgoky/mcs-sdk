@@ -19,6 +19,7 @@ vi.mock("@/lib/safe-fetch", () => {
 vi.mock("@/features/whop-agent/server/webhook-subscription-service", () => ({ syncAgentWebhookEvents: vi.fn() }));
 
 import { saveWhopSetup, type WhopSetupInput } from "@/lib/whop-setup/save";
+import { mergeWebhookEvents } from "@/features/whop-agent/server/webhook-events";
 
 const input = (over: Partial<WhopSetupInput> = {}): WhopSetupInput => ({
   skills: ["whop-dispute-response", "whop-weekly-ops-report"],
@@ -62,6 +63,17 @@ describe("saveWhopSetup", () => {
     const sync = vi.fn(async () => ({ whopWebhookId: "hook_1", action: "updated" as const }));
     await saveWhopSetup("e1", input({ skills: ["whop-cancellation-save-offer", "whop-bridge-manager"], saveOffer: { discount: 30, months: 2, message: "Stay", minTenureDays: null, cooldownDays: 60 }, bridgeUrl: "https://hooks.example.com/x" }), sync);
     expect(patch.mock.calls[0][1]).toMatchObject({ whop_save_offer_discount_percentage: 30, whop_save_offer_duration_months: 2, whop_save_offer_message: "Stay", whop_save_offer_cooldown_days: 60, whop_bridge_destination_url: "https://hooks.example.com/x" });
-    expect(sync.mock.calls[0]).toEqual(["e1", expect.arrayContaining(["membership.cancel_at_period_end_changed", "payment.succeeded"])]);
+    expect(sync.mock.calls[0]).toEqual(["e1", expect.arrayContaining(["membership.cancel_at_period_end_changed", "payment.succeeded"]), expect.anything()]);
+  });
+
+  it("keeps events another worker added to the webhook, and drops only switched-off workers' events", async () => {
+    const sync = vi.fn<(id: string, events: string[], opts?: { keep?: (e: string) => boolean }) => Promise<{ whopWebhookId: string; action: "updated" }>>(async () => ({ whopWebhookId: "hook_1", action: "updated" }));
+    await saveWhopSetup("e1", input(), sync);
+    const keep = sync.mock.calls[0][2]!.keep!;
+    // A preflight event isn't the setup's to drop; a setup worker's event is.
+    expect(keep("course.created")).toBe(true);
+    expect(keep("dispute.created")).toBe(false);
+    expect(mergeWebhookEvents(["course.created", "refund.updated"], ["dispute.created"], keep)).toEqual(["course.created", "dispute.created"]);
+    expect(mergeWebhookEvents(["course.created"], ["dispute.created"], () => true)).toEqual(["course.created", "dispute.created"]);
   });
 });

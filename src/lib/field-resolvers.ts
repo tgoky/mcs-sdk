@@ -383,7 +383,7 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
   const domain = await getPrimaryDomainForEngagement(engagementId);
   const productCandidate =
     wantProduct && productName && productValueProp
-      ? { name: productName, url: domain ? `https://${domain}` : "", price: productPrice, valueProp: productValueProp }
+      ? { name: productName, url: domain ? `https://${domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}` : "", price: productPrice, valueProp: productValueProp }
       : null;
 
   const rawIcps = Array.isArray(parsed?.icps) ? (parsed?.icps as Array<Record<string, unknown>>) : [];
@@ -458,32 +458,42 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
     return { resolved: [], skipped: true };
   }
 
-  const result = await askJev({ state, questions });
+  // Jev only scores what Claude read. If it fails, the reading is still
+  // written, unscored, so it shows as a suggestion to check instead of
+  // leaving the setup blank.
+  let result: Awaited<ReturnType<typeof askJev>> | null = null;
+  try {
+    result = await askJev({ state, questions });
+  } catch (err) {
+    console.warn(`[field-resolvers] resolveColdOpenDerivedFields: Jev failed for ${engagementId}, keeping Claude's reading unscored:`, err instanceof Error ? err.message : err);
+  }
+  const answers = result?.answers ?? {};
+  const model = result?.model ?? "none";
   const resolved: string[] = [];
 
   if (productCandidate) {
-    const answer = result.answers.productIdentityVerification;
+    const answer = answers.productIdentityVerification;
     await upsertClientFact(engagementId, "productIdentity", productCandidate, {
-      source: "jev",
+      source: result ? "jev" : "llm",
       sourceDetail: "rawVoiceCorpus",
       confidence: scoreToConfidence(answer, PRODUCT_IDENTITY_LEVELS.length),
       evidence:
         answer && answer.type === "score"
-          ? `Claude-extracted product identity scored ${answer.score.toFixed(2)}/${PRODUCT_IDENTITY_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`
+          ? `Claude-extracted product identity scored ${answer.score.toFixed(2)}/${PRODUCT_IDENTITY_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${model}).`
           : "Claude-extracted product identity; Jev returned no score, so it stays a suggestion.",
     });
     resolved.push("productIdentity");
   }
 
   if (icpCandidate) {
-    const answer = result.answers.icpsVerification;
+    const answer = answers.icpsVerification;
     await upsertClientFact(engagementId, "icps", icpCandidate, {
-      source: "jev",
+      source: result ? "jev" : "llm",
       sourceDetail: "rawVoiceCorpus",
       confidence: scoreToConfidence(answer, ICP_LEVELS.length),
       evidence:
         answer && answer.type === "score"
-          ? `Claude-extracted ICPs scored ${answer.score.toFixed(2)}/${ICP_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`
+          ? `Claude-extracted ICPs scored ${answer.score.toFixed(2)}/${ICP_LEVELS.length - 1} by Jev against site copy (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${model}).`
           : "Claude-extracted ICPs; Jev returned no score, so they stay a suggestion.",
     });
     resolved.push("icps");
@@ -493,7 +503,7 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
     const bounds: Record<string, ColdOpenSizingBound> = {};
     const confidences: number[] = [];
     for (const icp of sizingIcps) {
-      const band = result.answers[`teamSize_${icp.slug}`];
+      const band = answers[`teamSize_${icp.slug}`];
       const bandDef = band && band.type === "choice" ? TEAM_SIZE_BANDS[band.choice] : undefined;
       if (band && band.type === "choice" && bandDef && band.choice !== "unclear") confidences.push(Math.round(band.confidence * 100));
       bounds[icp.slug] = {
@@ -501,7 +511,7 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
         disqualifyIf: disqualifiersBySlug[icp.slug] ?? [],
       };
     }
-    const disqConfidence = scoreToConfidence(result.answers.disqualifiersVerification, DISQUALIFIER_LEVELS.length);
+    const disqConfidence = scoreToConfidence(answers.disqualifiersVerification, DISQUALIFIER_LEVELS.length);
     if (disqConfidence !== undefined) confidences.push(disqConfidence);
     const hasContent = Object.values(bounds).some((b) => b.teamSizeMin !== undefined || b.disqualifyIf.length > 0);
     if (hasContent) {
@@ -511,14 +521,17 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
         // The weakest part decides: one confident band doesn't vouch for a
         // guessed exclusion list.
         confidence: confidences.length > 0 ? Math.min(...confidences) : undefined,
-        evidence: `Team-size bands chosen by Jev per ICP; exclusions proposed by Claude and scored by Jev (model ${result.model}).`,
+        evidence: `Team-size bands chosen by Jev per ICP; exclusions proposed by Claude and scored by Jev (model ${model}).`,
       });
       resolved.push("sizingBounds");
     }
   }
 
-  const toneAnswer = result.answers.voiceTone;
-  if (wantVoice && toneAnswer && toneAnswer.type === "choice") {
+  const toneAnswer = answers.voiceTone;
+  const toneChosen = toneAnswer && toneAnswer.type === "choice" ? toneAnswer : null;
+  // No tone from Jev, no voice profile: a default tone is never stored as
+  // read from the site (the setup screen offers its own marked default).
+  if (wantVoice && toneChosen) {
     const extractedGreeting = str(parsed?.greeting);
     const extractedSignOff = str(parsed?.signOff);
     const greetingNote =
@@ -529,15 +542,16 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
       engagementId,
       "voiceProfile",
       {
-        greeting: extractedGreeting || "Hi {first_name},",
+        // The greeting word only: Cold Open adds the first name and comma.
+        greeting: extractedGreeting.replace(/\{+\s*first_?name\s*\}+/gi, "").replace(/[,:!\s]+$/, "").trim() || "Hi",
         signOff: extractedSignOff || "Best,",
-        tone: toneAnswer.choice,
+        tone: toneChosen.choice,
       },
       {
         source: "jev",
         sourceDetail: "rawVoiceCorpus",
-        confidence: Math.round(toneAnswer.confidence * 100),
-        evidence: `Tone "${toneAnswer.choice}" chosen by Jev from site copy (model ${result.model}); ${greetingNote}.`,
+        confidence: Math.round(toneChosen.confidence * 100),
+        evidence: `Tone "${toneChosen.choice}" chosen by Jev from site copy (model ${model}); ${greetingNote}.`,
       }
     );
     resolved.push("voiceProfile");

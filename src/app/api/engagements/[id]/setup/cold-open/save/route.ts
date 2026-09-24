@@ -10,13 +10,18 @@ import { authorizeProductSetup } from "../../showtime/access";
 export const runtime = "nodejs";
 export const revalidate = 0;
 
-/** Saves the reviewed Cold Open setup. Never turns live sending on. */
+/** Saves the reviewed Cold Open setup. Never turns live sending on. With
+ * settings: true (one skill's own settings) it saves the same way but
+ * leaves which skills are on alone and starts no ICP Lock run, which only
+ * confirms the config is in place. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await authorizeProductSetup(id, "cold-open", { requireInstalled: true });
   if (!access.ok) return access.response;
 
-  const input = parseColdOpenSetup(await req.json().catch(() => null));
+  const raw = await req.json().catch(() => null);
+  const settingsOnly = Boolean(raw && typeof raw === "object" && (raw as { settings?: unknown }).settings === true);
+  const input = parseColdOpenSetup(raw);
   if ("error" in input) return NextResponse.json({ error: input.error }, { status: 400 });
 
   try {
@@ -29,6 +34,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       voiceProfile: input.voice,
       sizingBounds: Object.fromEntries(input.icps.map((i) => [i.slug, { teamSizeMin: i.teamSizeMin ?? undefined, teamSizeMax: i.teamSizeMax ?? undefined, disqualifyIf: i.disqualifyIf }])),
     }).catch((err) => console.error(`[setup/cold-open/save] recording decisions failed for ${id}:`, err));
+
+    if (settingsOnly) return NextResponse.json({ ok: true, warnings: result.warnings, sendingSaved: result.sendingSaved });
 
     await setSkillEnabledForEngagement(id, "icp-lock", true);
     const chosen = new Set(input.skills);

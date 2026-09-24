@@ -6,22 +6,26 @@
 //   welcome   the Whop key (a connected client isn't asked again) and
 //             which workers to run
 //   working   "Set it up" streams its real steps
-//   review    the business at a glance, then the save offer, alert levels,
-//             bridge and the one webhook the workers need. Save writes the
-//             settings and that webhook; nothing else is written to Whop.
+//   review    the business at a glance, "What we did" (what was read and
+//             the levels set from it, each with Change), "Left to do" (the
+//             save offer and bridge, never guessed), and Approve, which
+//             writes the settings and the one webhook the workers need.
+//             Nothing else is written to Whop.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, Loader2, Star } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { PlatformLogo } from "@/components/platform-logo";
 import type { ActivationStep } from "@/lib/showtime-setup/types";
 import type { WhopSetupState } from "@/lib/whop-setup/types";
-import { eventsFor } from "@/lib/whop-setup/analyze";
+import { SKILL_EVENTS, eventsFor } from "@/lib/whop-setup/analyze";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
+import { ApproveBar, Feed, Labeled, Pill, Popover, ReviewCard, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry, type TodoItem } from "./review-kit";
+import { anySkillDisplayName } from "@/lib/any-skill";
 import { cn } from "@/lib/utils";
 
 // ── Workers ────────────────────────────────────────────────────────────
@@ -45,6 +49,16 @@ const WHEN_ASKED: { id: string; blurb: string }[] = [
   { id: "whop-ads-draft-approve", blurb: "Drafts Whop Ads campaigns. Going live is a separate, confirmed step." },
 ];
 const ALL_SKILLS = [...ON_THEIR_OWN, ...WHEN_ASKED].map((s) => s.id);
+
+/** What each skill's own settings show: the review rows (and "Left to do"
+ * steps) it owns. A skill not listed has nothing of its own to set. */
+const WHOP_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean }> = {
+  "whop-connect": { rows: ["breaker", "plans", "lock-", "events", "hook-"], todos: ["key", "version"], save: false },
+  "whop-cancellation-save-offer": { rows: ["canceling", "offer"], todos: ["offer"], save: true },
+  "whop-refund-dispute-velocity": { rows: ["alerts"], todos: [], save: true },
+  "whop-bridge-manager": { rows: ["bridge"], todos: ["bridge"], save: true },
+};
+const NOTHING_TO_SET = { rows: ["breaker", "lock-"], todos: ["key"], save: false };
 
 const STAGES: ActivationStage[] = [
   { label: "Connecting", prefix: "" },
@@ -101,11 +115,15 @@ export function WhopSetup({
   onCancel,
   onSaved,
   cancelLabel = "Cancel",
+  focus,
 }: {
   engagementId: string;
   onCancel: () => void;
   onSaved?: (result: { runId?: string }) => void;
   cancelLabel?: string;
+  /** Opens as this one skill's own settings once Whop Agent is set up:
+   * only the rows it owns, saved without touching which workers are on. */
+  focus?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -204,6 +222,9 @@ export function WhopSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skills, draft]);
 
+  const settings = Boolean(focus && data?.configured);
+  const dirty = useMemo(() => (data && draft ? JSON.stringify({ ...draft, apiKey: "" }) !== JSON.stringify(draftFrom(data)) : false), [data, draft]);
+
   async function save() {
     if (!data || !draft || offerProblem) return;
     setSaving(true);
@@ -220,7 +241,8 @@ export function WhopSetup({
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
       const hook = json.webhook as { action?: string; error?: string } | undefined;
       if (hook?.error) toast.error(`Settings saved, but Whop didn't accept the webhook: ${hook.error}`);
-      else toast.success(hook?.action === "created" ? "Saved. Whop will now send events to Whop Agent." : "Saved.");
+      // A skill's own settings panel says it saved; elsewhere, say so here.
+      else if (!settings || !onSaved) toast.success(hook?.action === "created" ? "Saved. Whop will now send events to Whop Agent." : "Saved.");
       await load().catch(() => undefined);
       if (onSaved) onSaved({});
       else router.refresh();
@@ -259,31 +281,22 @@ export function WhopSetup({
     <div className="@container mx-auto w-full max-w-3xl px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} skills={skills} toggleSkill={toggleSkill} events={events} onReread={() => setPhase("welcome")} onQueueFix={queueFix} />
-          <div className="sticky bottom-0 z-20 mt-8 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
-              <div className="min-w-0 flex-1 text-sm">
-                {saveError || offerProblem ? (
-                  <p className="flex items-center gap-2 text-[var(--error)]">
-                    <AlertTriangle className="h-4 w-4 shrink-0" /> {saveError ?? offerProblem}
-                  </p>
-                ) : (
-                  <p className="text-[var(--text-secondary)]">
-                    {events.length ? "Saving also sets up the one webhook these workers need on your Whop. Nothing else is written to Whop." : "Nothing is written to Whop."}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="ghost" className="hidden @md:inline-flex" onClick={onCancel} disabled={saving}>
-                  {cancelLabel}
-                </Button>
-                <Button size="lg" className="h-10 px-5" onClick={save} disabled={saving || Boolean(offerProblem)}>
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
+          <Review data={data} draft={draft} set={set} skills={skills} toggleSkill={toggleSkill} events={events} onReread={() => setPhase("welcome")} onQueueFix={queueFix} focus={settings ? focus : undefined} />
+          {settings ? (
+            (WHOP_FOCUS[focus!] ?? NOTHING_TO_SET).save && (
+              <ApproveBar label="Save" error={saveError ?? offerProblem} saving={saving} disabled={!dirty || Boolean(offerProblem)} onApprove={save} onCancel={onCancel} cancelLabel={cancelLabel} />
+            )
+          ) : (
+            <ApproveBar
+              note={events.length ? "Approve sets up the one webhook these workers need on your Whop. Nothing else is written to Whop." : "Nothing is written to Whop."}
+              error={saveError ?? offerProblem}
+              saving={saving}
+              disabled={Boolean(offerProblem)}
+              onApprove={save}
+              onCancel={onCancel}
+              cancelLabel={cancelLabel}
+            />
+          )}
         </>
       ) : (
         <Welcome
@@ -451,6 +464,8 @@ function SkillList({ skills, toggleSkill }: { skills: string[]; toggleSkill: (id
 
 // ── Review ─────────────────────────────────────────────────────────────
 
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
 function Review({
   data,
   draft,
@@ -460,6 +475,7 @@ function Review({
   events,
   onReread,
   onQueueFix,
+  focus,
 }: {
   data: WhopSetupState;
   draft: Draft;
@@ -469,300 +485,536 @@ function Review({
   events: string[];
   onReread: () => void;
   onQueueFix: (body: { action: "dedupe"; groupKey: string } | { action: "pin"; whopWebhookId: string }) => Promise<void>;
+  focus?: string;
 }) {
   const s = data.snapshot;
   const read = data.read;
+  const found = draftFrom(data);
+  const readOn = read
+    ? new Date(read.readAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+  const fromWhop = readOn ? `Your Whop, read ${readOn}` : "Your Whop";
+
   const stats: { value: string; label: string; warn?: boolean }[] = [];
-  if (s?.mrr) stats.push({ value: money(s.mrr.value, s.mrr.currency), label: s.mrr.source === "plans" ? "a month, from plan prices × members" : "monthly recurring revenue" });
-  if (s?.members != null) stats.push({ value: s.members.toLocaleString(), label: "active members" });
-  if (s?.canceling) stats.push({ value: `${s.canceling.count}${s.canceling.more ? "+" : ""}`, label: "set to cancel", warn: s.canceling.count > 0 });
-  if (s?.newMembers30d) stats.push({ value: `${s.newMembers30d.count}${s.newMembers30d.more ? "+" : ""}`, label: "new members this month" });
-  if (s?.refundRate != null) stats.push({ value: pct(s.refundRate)!, label: "of payments refunded (90 days)" });
-  if (s?.disputeRate != null) stats.push({ value: pct(s.disputeRate)!, label: "of payments disputed (90 days)", warn: s.disputeRate >= 0.01 });
-  const topPlans = [...(read?.plans ?? [])].filter((p) => p.memberCount).sort((a, b) => (b.memberCount ?? 0) - (a.memberCount ?? 0)).slice(0, 3);
-  const rated = (read?.products ?? []).filter((p) => p.rating != null && p.reviews);
-  const lowReviews = (read?.reviews ?? []).filter((r) => r.stars <= 2).slice(0, 2);
-  const current = data.webhook.current ? [...data.webhook.current].sort() : null;
+  if (s?.mrr)
+    stats.push({
+      value: money(s.mrr.value, s.mrr.currency),
+      label: s.mrr.source === "plans" ? "a month, from plans" : "MRR",
+    });
+  if (s?.members != null) stats.push({ value: s.members.toLocaleString(), label: "members" });
+  if (s?.canceling)
+    stats.push({
+      value: `${s.canceling.count}${s.canceling.more ? "+" : ""}`,
+      label: "set to cancel",
+      warn: s.canceling.count > 0,
+    });
+  if (s?.disputeRate != null)
+    stats.push({
+      value: pct(s.disputeRate)!,
+      label: "disputed, 90 days",
+      warn: s.disputeRate >= 0.01,
+    });
+  else if (s?.newMembers30d)
+    stats.push({
+      value: `${s.newMembers30d.count}${s.newMembers30d.more ? "+" : ""}`,
+      label: "new this month",
+    });
+
+  // A skill's own settings show its rows even while it is switched off.
+  const on = (id: string) => skills.includes(id) || focus === id;
+  const offer = {
+    discount: draft.discount.trim(),
+    months: draft.months.trim(),
+    message: draft.message.trim(),
+  };
+  const offerSet = Boolean(offer.discount && offer.months && offer.message);
+  // Events another worker added to the same webhook stay on it; only the
+  // setup's own are compared.
+  const setupEvents = new Set(Object.values(SKILL_EVENTS).flat());
+  const current = data.webhook.current ? [...data.webhook.current].filter((e) => setupEvents.has(e)).sort() : null;
   const sameEvents = current && current.length === events.length && current.every((e, i) => e === events[i]);
 
-  return (
-    <div className="space-y-11">
-      <header className="flex items-start gap-4">
-        <WhopMark />
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)]">{data.buyer} on Whop</h1>
-          <p className="text-[14px] text-[var(--text-secondary)]">
-            {data.connection.accountId ?? "Not connected"}
-            {read ? ` · read ${new Date(read.readAt).toLocaleDateString()}` : ""} ·{" "}
-            <button type="button" onClick={onReread} className="font-medium underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
-              Read again or change key
-            </button>
-          </p>
-        </div>
-      </header>
+  const feed: FeedEntry[] = [];
+  if (data.connection.breakerOpen)
+    feed.push({
+      key: "breaker",
+      warn: true,
+      text: (
+        <>
+          Whop has been refusing this key, so Whop Agent has <b>paused</b>.
+        </>
+      ),
+      action: { label: "Change key", onClick: onReread },
+    });
 
-      {data.connection.breakerOpen && (
-        <p className="flex items-start gap-2 border-l-2 border-[var(--error)] pl-3 text-sm text-[var(--text-primary)]">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--error)]" /> Whop has been refusing this key, so Whop Agent has paused. Paste a working key to start it again.
-        </p>
-      )}
-
-      {stats.length > 0 && (
-        <section className="space-y-5">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 sm:grid-cols-3">
-            {stats.slice(0, 6).map((x) => (
-              <div key={x.label} className="min-w-0">
-                <p className={cn("text-2xl font-semibold tabular-nums tracking-tight", x.warn ? "text-[var(--error)]" : "text-[var(--text-primary)]")}>{x.value}</p>
-                <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">{x.label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2">
-            {topPlans.length > 0 && (
-              <List title="Biggest plans">
-                {topPlans.map((p) => (
-                  <li key={p.id} className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-[var(--text-primary)]">{p.title ?? p.productTitle ?? p.id}</span>
-                    <span className="shrink-0 tabular-nums">{p.memberCount} · {p.formattedPrice ?? ""}</span>
-                  </li>
-                ))}
-              </List>
-            )}
-            {(rated.length > 0 || lowReviews.length > 0) && (
-              <List title="Reviews">
-                {rated.slice(0, 3).map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3">
-                    <span className="truncate text-[var(--text-primary)]">{p.title}</span>
-                    <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-                      <Star className="h-3 w-3 fill-current" /> {p.rating!.toFixed(1)} ({p.reviews})
-                    </span>
-                  </li>
-                ))}
-                {lowReviews.map((r, i) => (
-                  <li key={i} className="line-clamp-2">
-                    <span className="font-medium text-[var(--text-primary)]">{r.stars}★ on {r.product}:</span> {r.title ?? r.text}
-                  </li>
-                ))}
-              </List>
-            )}
-            {read?.promoCodes && read.promoCodes.length > 0 && (
-              <List title="Most-used promo codes">
-                {read.promoCodes.slice(0, 3).map((c, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-3">
-                    <span className="truncate font-mono text-[var(--text-primary)]">{c.code ?? "(no code)"}</span>
-                    <span className="shrink-0 tabular-nums">{c.uses} uses</span>
-                  </li>
-                ))}
-              </List>
-            )}
-            {read?.affiliates && read.affiliates.length > 0 && (
-              <List title="Top affiliates">
-                {read.affiliates.slice(0, 3).map((a, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-[var(--text-primary)]">{a.name ?? "Unnamed"}</span>
-                    <span className="shrink-0 tabular-nums">{a.referrals} referrals · {money(a.revenueUsd, "usd")}</span>
-                  </li>
-                ))}
-              </List>
-            )}
-          </div>
-        </section>
-      )}
-
-      {skills.includes("whop-cancellation-save-offer") && (
-        <Section title="Save offer" hint="Proposed to each member who sets their plan to cancel. You approve every one.">
-          <div className="space-y-4">
-            {data.saveOffer.evidence.length > 0 && (
-              <ul className="space-y-1 text-[13px] text-[var(--text-secondary)]">
-                {data.saveOffer.evidence.map((e) => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
-            )}
-            <Field label="Discount">
-              <div className="flex flex-wrap items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                <NumberInput value={draft.discount} onChange={(v) => set((d) => ({ ...d, discount: v }))} placeholder="e.g. 30" /> % off for
-                <NumberInput value={draft.months} onChange={(v) => set((d) => ({ ...d, months: v }))} placeholder="e.g. 2" /> months
-              </div>
-              {data.saveOffer.source && <p className="mt-1 text-[12px] text-[var(--text-prefill-accent)]">From {data.saveOffer.source}.</p>}
-            </Field>
-            <Field label="Message">
-              <textarea
-                value={draft.message}
-                onChange={(e) => set((d) => ({ ...d, message: e.target.value }))}
-                rows={2}
-                placeholder="What members see with the offer. You can use {discount} and {months}."
-                className="w-full max-w-lg resize-y border-b border-[var(--text-muted)]/40 bg-transparent py-1.5 text-[15px] leading-relaxed text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-              />
-            </Field>
-            <Field label="Only offer to">
-              <div className="flex flex-wrap items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                members of at least <NumberInput value={draft.tenure} onChange={(v) => set((d) => ({ ...d, tenure: v }))} placeholder="30" /> days, once every
-                <NumberInput value={draft.cooldown} onChange={(v) => set((d) => ({ ...d, cooldown: v }))} placeholder="90" /> days
-              </div>
-            </Field>
-            {!draft.discount && !draft.months && !draft.message && <p className="text-[12px] text-[var(--text-muted)]">Leave it empty and no offer is made. We never pick a discount for you.</p>}
-          </div>
-        </Section>
-      )}
-
-      {skills.includes("whop-refund-dispute-velocity") && (
-        <Section title="Refund and dispute alerts" hint={data.alerts.saved ? "Your saved levels." : data.alerts.fromData ? "Set from your last 90 days." : undefined}>
-          <div className="space-y-4">
-            <Field label="Refund rate">
-              <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                above <NumberInput value={draft.refundPct} onChange={(v) => set((d) => ({ ...d, refundPct: v }))} /> % of payments in a week
-              </div>
-              <Why>{data.alerts.why.refund}</Why>
-            </Field>
-            <Field label="Dispute rate">
-              <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                above <NumberInput value={draft.disputePct} onChange={(v) => set((d) => ({ ...d, disputePct: v }))} /> % of payments in a week
-              </div>
-              <Why>{data.alerts.why.dispute}</Why>
-            </Field>
-            <Field label="Dispute alerts">
-              <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                <NumberInput value={draft.alerts} onChange={(v) => set((d) => ({ ...d, alerts: v }))} /> or more in a week
-              </div>
-              <Why>{data.alerts.why.alerts}</Why>
-            </Field>
-            <Field label="Payments needed">
-              <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                <NumberInput value={draft.sample} onChange={(v) => set((d) => ({ ...d, sample: v }))} /> in a week before a rate counts
-              </div>
-              <Why>{data.alerts.why.sample}</Why>
-            </Field>
-          </div>
-        </Section>
-      )}
-
-      {skills.includes("whop-bridge-manager") && (
-        <Section title="Bridge" hint="Where Whop events are forwarded.">
-          <Field label="Send events to">
-            <input
-              value={draft.bridgeUrl}
-              onChange={(e) => set((d) => ({ ...d, bridgeUrl: e.target.value }))}
-              placeholder="https://..."
-              spellCheck={false}
-              className="h-10 w-full max-w-lg border-b border-[var(--text-muted)]/40 bg-transparent text-[15px] text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-            />
-            {data.bridge.signingSecret && draft.bridgeUrl === data.bridge.url && (
-              <div className="mt-2 space-y-1">
-                <p className="text-[12px] text-[var(--text-muted)]">Signing secret. Your receiver can check each event&apos;s X-Whop-Agent-Signature header with it.</p>
-                <code className="block max-w-lg break-all border px-2 py-1.5 font-mono text-[12px] text-[var(--text-primary)]">{data.bridge.signingSecret}</code>
-              </div>
-            )}
-            {data.bridge.ghlConnected && !draft.bridgeUrl && <Why>GoHighLevel is connected for {data.buyer}. Paste an inbound webhook address from a GoHighLevel workflow to send events there.</Why>}
-          </Field>
-        </Section>
-      )}
-
-      <Section title="Events from Whop" hint="Whop tells Whop Agent when these happen.">
-        <div className="space-y-4">
-          {events.length === 0 ? (
-            <p className="text-[14px] text-[var(--text-secondary)]">None of the workers you picked need events, so no webhook is set up.</p>
-          ) : (
+  if (read) {
+    const plans = [...read.plans].filter((p) => p.memberCount).sort((a, b) => (b.memberCount ?? 0) - (a.memberCount ?? 0));
+    const top = plans[0];
+    feed.push({
+      key: "plans",
+      text: (
+        <>
+          Read <b>{plural(read.plans.length, "plan")}</b> across <b>{plural(read.products.length, "product")}</b>
+          {top ? (
             <>
-              <div className="flex flex-wrap gap-1.5">
-                {events.map((e) => (
-                  <span key={e} className="rounded-full border px-2.5 py-0.5 font-mono text-[12px] text-[var(--text-primary)]">
-                    {e}
-                  </span>
-                ))}
-              </div>
-              <p className="text-[13px] text-[var(--text-secondary)]">
-                {!current ? "Saving creates one webhook on your Whop for these." : sameEvents ? "Your webhook already sends exactly these." : "Saving updates your existing Whop Agent webhook to these."}{" "}
-                {!data.connection.pinnedVersionDate && <span className="text-[var(--error)]">Whop&apos;s API version couldn&apos;t be checked yet, so the webhook can&apos;t be set up. Read again to retry.</span>}
-              </p>
+              . The biggest is <b>{top.title ?? top.productTitle ?? top.id}</b> with {plural(top.memberCount ?? 0, "member")}
+              {top.formattedPrice ? ` at ${top.formattedPrice}` : ""}.
             </>
+          ) : (
+            "."
           )}
-          {data.webhook.problems.length > 0 && (
-            <div className="space-y-2 border-l-2 border-[var(--error)] pl-3">
-              <p className="text-sm font-medium text-[var(--text-primary)]">Other webhooks on your account</p>
-              {data.webhook.problems.map((p, i) => (
-                <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-[var(--text-secondary)]">
-                  <span className="min-w-0 flex-1">{p.detail}</span>
-                  {p.kind === "duplicate" && p.groupKey && (
-                    <button type="button" onClick={() => onQueueFix({ action: "dedupe", groupKey: p.groupKey! })} className="shrink-0 text-[12px] font-medium underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
-                      Clean up (you approve)
-                    </button>
-                  )}
-                  {p.kind === "unpinned" && p.whopWebhookId && (
-                    <button type="button" onClick={() => onQueueFix({ action: "pin", whopWebhookId: p.whopWebhookId! })} className="shrink-0 text-[12px] font-medium underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
-                      Pin it (you approve)
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+        </>
+      ),
+      source: fromWhop,
+    });
+    if (read.canceling && read.canceling.count > 0) {
+      const reasons = [...new Set(read.canceling.reasons.map((r) => r.toLowerCase()))].slice(0, 2);
+      feed.push({
+        key: "canceling",
+        text: (
+          <>
+            <b>
+              {plural(read.canceling.count, "member")}
+              {read.canceling.more ? "+" : ""}
+            </b>{" "}
+            set to cancel
+            {reasons.length ? (
+              <>
+                , most often saying &ldquo;{reasons.join("\u201d and \u201c")}
+                &rdquo;
+              </>
+            ) : (
+              ""
+            )}
+            .
+          </>
+        ),
+        source: fromWhop,
+      });
+    }
+    const rated = read.products.filter((p) => p.rating != null && p.reviews).sort((a, b) => (b.reviews ?? 0) - (a.reviews ?? 0));
+    const low = read.reviews.filter((r) => r.stars <= 2);
+    if (rated.length || low.length) {
+      feed.push({
+        key: "reviews",
+        text: (
+          <>
+            {rated[0] ? (
+              <>
+                <b>{rated[0].title}</b> is rated <b>{rated[0].rating!.toFixed(1)}★</b> from {plural(rated[0].reviews ?? 0, "review")}
+              </>
+            ) : (
+              "Read your reviews"
+            )}
+            {low.length ? (
+              <>
+                , with <b>{plural(low.length, "low review")}</b> recently
+              </>
+            ) : (
+              ""
+            )}
+            .
+          </>
+        ),
+        source: fromWhop,
+      });
+    }
+    const code = read.promoCodes?.[0];
+    const aff = read.affiliates?.[0];
+    if ((code && code.uses) || (aff && aff.referrals)) {
+      feed.push({
+        key: "growth",
+        text: (
+          <>
+            {code && code.uses ? (
+              <>
+                Your most-used code is <b className="font-mono">{code.code ?? "(no code)"}</b> ({plural(code.uses, "use")})
+              </>
+            ) : null}
+            {code && code.uses && aff && aff.referrals ? "; " : ""}
+            {aff && aff.referrals ? (
+              <>
+                your top affiliate is <b>{aff.name ?? "unnamed"}</b> ({plural(aff.referrals, "referral")})
+              </>
+            ) : null}
+            .
+          </>
+        ),
+        source: fromWhop,
+      });
+    }
+  }
+
+  // Where a row lives follows what was found, not what is being typed, so
+  // an editor stays open while someone fills it in.
+  const offerFound = Boolean(found.discount && found.months && found.message.trim());
+  const bridgeFound = Boolean(found.bridgeUrl.trim());
+  if (on("whop-cancellation-save-offer") && offerFound && offerSet) {
+    feed.push({
+      key: "offer",
+      text: (
+        <>
+          Save offer:{" "}
+          <b>
+            {offer.discount}% off for {plural(Number(offer.months) || 0, "month")}
+          </b>{" "}
+          to members who set their plan to cancel. You approve every one.
+        </>
+      ),
+      source: data.saveOffer.source ? `From ${data.saveOffer.source}` : undefined,
+      editor: (close) => <OfferEditor draft={draft} set={set} close={close} />,
+      undo:
+        draft.discount !== found.discount || draft.months !== found.months || draft.message !== found.message
+          ? () =>
+              set((d) => ({
+                ...d,
+                discount: found.discount,
+                months: found.months,
+                message: found.message,
+                tenure: found.tenure,
+                cooldown: found.cooldown,
+              }))
+          : undefined,
+    });
+  }
+
+  if (on("whop-refund-dispute-velocity")) {
+    const changed = (["refundPct", "disputePct", "alerts", "sample"] as const).some((k) => draft[k] !== found[k]);
+    feed.push({
+      key: "alerts",
+      text: (
+        <>
+          Warn you when a week&apos;s refunds pass <b>{draft.refundPct}%</b> of payments, disputes pass <b>{draft.disputePct}%</b>, or <b>{draft.alerts}</b> dispute alerts arrive.
+        </>
+      ),
+      source: changed ? "Changed by you" : data.alerts.saved ? "Your saved levels" : data.alerts.fromData ? `Set from your last 90 days. ${data.alerts.why.refund}` : data.alerts.why.refund,
+      editor: (close) => <AlertsEditor data={data} draft={draft} set={set} close={close} />,
+      undo: changed
+        ? () =>
+            set((d) => ({
+              ...d,
+              refundPct: found.refundPct,
+              disputePct: found.disputePct,
+              alerts: found.alerts,
+              sample: found.sample,
+            }))
+        : undefined,
+    });
+  }
+
+  if (on("whop-bridge-manager") && bridgeFound && draft.bridgeUrl.trim()) {
+    feed.push({
+      key: "bridge",
+      text: (
+        <>
+          Forward Whop events to <b className="break-all">{draft.bridgeUrl.trim()}</b>.
+        </>
+      ),
+      editor: (close) => <BridgeEditor data={data} draft={draft} set={set} close={close} />,
+      body:
+        data.bridge.signingSecret && draft.bridgeUrl === data.bridge.url ? (
+          <div className="space-y-1">
+            <p className="text-[12px] text-[var(--text-muted)]">Signing secret. Your receiver can check each event&apos;s X-Whop-Agent-Signature header with it.</p>
+            <code className="block break-all rounded-lg bg-black/[0.03] px-2 py-1.5 font-mono text-[12px] text-[var(--text-primary)] dark:bg-white/[0.05]">{data.bridge.signingSecret}</code>
+          </div>
+        ) : undefined,
+    });
+  }
+
+  if (events.length) {
+    feed.push({
+      key: "events",
+      text: (
+        <>
+          {!current ? "Whop will send" : sameEvents ? "Your Whop Agent webhook already sends" : "Your Whop Agent webhook will be updated to send"} <b>{plural(events.length, "event")}</b> the workers
+          need.
+        </>
+      ),
+      body: (
+        <div className="flex flex-wrap gap-1.5">
+          {events.map((e) => (
+            <span key={e} className="rounded-full px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)] ring-1 ring-inset ring-black/10 dark:ring-white/10">
+              {e}
+            </span>
+          ))}
         </div>
-      </Section>
+      ),
+    });
+  }
 
-      {data.connection.locked.length > 0 && (
-        <Section title="What your key can't reach" hint="Give the key these permissions in Whop to unlock them.">
-          <ul className="space-y-1.5 text-[13px] text-[var(--text-secondary)]">
-            {data.connection.locked.map((l) => (
-              <li key={l.label}>
-                <span className="font-medium text-[var(--text-primary)]">{l.label}:</span> {l.locks}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      <Section title="Workers" hint="Switch any of them off.">
-        <SkillList skills={skills} toggleSkill={toggleSkill} />
-      </Section>
-    </div>
+  data.webhook.problems.forEach((p, i) =>
+    feed.push({
+      key: `hook-${i}`,
+      warn: true,
+      text: p.detail,
+      source: p.kind === "failing" ? undefined : "Nothing changes until you approve it in your queue.",
+      action:
+        p.kind === "duplicate" && p.groupKey
+          ? {
+              label: "Clean up",
+              onClick: () => void onQueueFix({ action: "dedupe", groupKey: p.groupKey! }),
+            }
+          : p.kind === "unpinned" && p.whopWebhookId
+            ? {
+                label: "Pin it",
+                onClick: () =>
+                  void onQueueFix({
+                    action: "pin",
+                    whopWebhookId: p.whopWebhookId!,
+                  }),
+              }
+            : undefined,
+    }),
   );
-}
 
-// ── Pieces ─────────────────────────────────────────────────────────────
+  data.connection.locked.forEach((l) =>
+    feed.push({
+      key: `lock-${l.label}`,
+      warn: true,
+      text: (
+        <>
+          Your key can&apos;t reach <b>{l.label}</b>.
+        </>
+      ),
+      source: `Held back: ${l.locks.replace(/\.$/, "")}. Give the key this permission in Whop, then read again.`,
+    }),
+  );
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-2.5">
-        <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h2>
-        {hint && <p className="text-xs text-[var(--text-muted)]">{hint}</p>}
+  feed.push({
+    key: "workers",
+    text: (
+      <>
+        <b>
+          {skills.length} of {ALL_SKILLS.length}
+        </b>{" "}
+        workers are on.
+      </>
+    ),
+    editLabel: "Change",
+    editor: () => (
+      <div className="space-y-2">
+        <p className="text-[13px] font-medium text-[var(--text-primary)]">Workers</p>
+        <ToggleList
+          items={ALL_SKILLS.map((id) => ({
+            label: anySkillDisplayName(id),
+            hint: [...ON_THEIR_OWN, ...WHEN_ASKED].find((x) => x.id === id)?.blurb,
+            on: skills.includes(id),
+          }))}
+          onToggle={(i) => toggleSkill(ALL_SKILLS[i], !skills.includes(ALL_SKILLS[i]))}
+        />
       </div>
+    ),
+  });
+
+  const todos: TodoItem[] = [];
+  if (data.connection.breakerOpen)
+    todos.push({
+      key: "key",
+      label: "Paste a working Whop key",
+      done: false,
+      action: <TodoButton onClick={onReread}>Change key</TodoButton>,
+    });
+  if (events.length && !data.connection.pinnedVersionDate)
+    todos.push({
+      key: "version",
+      label: "Read again so we can check Whop's API version before setting up the webhook",
+      done: false,
+      action: <TodoButton onClick={onReread}>Read again</TodoButton>,
+    });
+  if (on("whop-cancellation-save-offer") && (!offerFound || !offerSet))
+    todos.push({
+      key: "offer",
+      label: offerSet ? `Save offer: ${offer.discount}% off for ${offer.months} ${offer.months === "1" ? "month" : "months"}` : "Choose a save offer. Without one, no offer is made; we never pick a discount for you.",
+      done: offerSet,
+      optional: true,
+      action: (
+        <Popover label={offerSet ? "Change" : "Add"} title="Save offer" strong={!offerSet}>
+          {(close) => <OfferEditor draft={draft} set={set} close={close} />}
+        </Popover>
+      ),
+    });
+  if (on("whop-bridge-manager") && (!bridgeFound || !draft.bridgeUrl.trim()))
+    todos.push({
+      key: "bridge",
+      label: draft.bridgeUrl.trim() ? `Forward Whop events to ${draft.bridgeUrl.trim()}` : data.bridge.ghlConnected
+        ? "Where to forward Whop events. GoHighLevel is connected; paste an inbound webhook address from one of its workflows."
+        : "Where to forward Whop events, such as your CRM",
+      done: Boolean(draft.bridgeUrl.trim()),
+      optional: true,
+      action: (
+        <Popover label={draft.bridgeUrl.trim() ? "Change" : "Add"} title="Forward events to" strong={!draft.bridgeUrl.trim()}>
+          {(close) => <BridgeEditor data={data} draft={draft} set={set} close={close} />}
+        </Popover>
+      ),
+    });
+
+  if (focus) {
+    const f = WHOP_FOCUS[focus] ?? NOTHING_TO_SET;
+    const rows = pick(feed, f.rows);
+    const steps = pick(todos, f.todos);
+    const blurb = [...ON_THEIR_OWN, ...WHEN_ASKED].find((x) => x.id === focus)?.blurb;
+    return (
+      <div className="space-y-6">
+        <SettingsHeader mark={<WhopMark size={36} />} name={anySkillDisplayName(focus)} buyer={data.buyer} fullSetupHref={`/dashboard/engagements/${data.engagementId}/bridges/whop-connect`} />
+        {blurb && (
+          <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">
+            {blurb}
+            {WHOP_FOCUS[focus] ? "" : " There's nothing to set: it runs on your Whop connection."}
+          </p>
+        )}
+        {rows.length > 0 && <Feed entries={rows} title={focus === "whop-connect" ? "Your connection" : "Settings"} />}
+        {steps.length > 0 && <Todos items={steps} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-9">
+      <ReviewCard
+        mark={<WhopMark />}
+        eyebrow="Whop Agent"
+        title={`${data.buyer} on Whop`}
+        pills={
+          <>
+            {data.connection.accountId && <Pill>{data.connection.accountId}</Pill>}
+            <Pill tone={data.connection.breakerOpen ? "off" : "on"}>{data.connection.breakerOpen ? "Paused" : "Connected"}</Pill>
+            {readOn && <Pill>Read {readOn}</Pill>}
+          </>
+        }
+      >
+        {stats.length > 0 && (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 @xl:grid-cols-4">
+            {stats.slice(0, 4).map((x) => (
+              <div key={x.label} className="min-w-0">
+                <p className={x.warn ? "text-2xl font-semibold tabular-nums tracking-tight text-[var(--error)]" : "text-2xl font-semibold tabular-nums tracking-tight text-[var(--text-primary)]"}>
+                  {x.value}
+                </p>
+                <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">{x.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </ReviewCard>
+      <Feed entries={feed} onReread={onReread} />
+      <Todos items={todos} />
+    </div>
+  );
+}
+
+function TodoButton({ onClick, children }: { onClick: () => void; children: string }) {
+  return (
+    <button type="button" onClick={onClick} className="shrink-0 text-[13px] font-medium text-[var(--text-primary)] underline underline-offset-4 cursor-pointer">
       {children}
-    </section>
+    </button>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+// ── Editors ────────────────────────────────────────────────────────────
+
+const numberInput = (value: string, onChange: (v: string) => void, label: string, placeholder?: string) => (
+  <input aria-label={label} inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ""))} className={`${inputCls} h-9 tabular-nums`} />
+);
+
+function EditorFoot({ close, onClear }: { close: () => void; onClear?: () => void }) {
   return (
-    <div className="grid gap-1.5 @xl:grid-cols-[170px_1fr] @xl:items-baseline @xl:gap-4">
-      <p className="text-[13px] text-[var(--text-muted)]">{label}</p>
-      <div className="min-w-0">{children}</div>
+    <div className="flex items-center justify-between pt-1">
+      {onClear ? (
+        <button type="button" onClick={onClear} className="text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+          Remove
+        </button>
+      ) : (
+        <span />
+      )}
+      <button type="button" onClick={close} className="h-8 rounded-lg bg-[var(--ink)] px-3 text-[13px] font-medium text-[var(--ink-foreground)] cursor-pointer">
+        Done
+      </button>
     </div>
   );
 }
 
-function List({ title, children }: { title: string; children: ReactNode }) {
+function OfferEditor({ draft, set, close }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  const up = (k: keyof Draft) => (v: string) => set((d) => ({ ...d, [k]: v }));
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">{title}</p>
-      <ul className="space-y-1.5 text-[13px] text-[var(--text-secondary)]">{children}</ul>
+    <div className="space-y-3">
+      <p className="text-[13px] text-[var(--text-secondary)]">Offered to each member who sets their plan to cancel. You approve every one.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Labeled label="% off">{numberInput(draft.discount, up("discount"), "Discount percent", "e.g. 30")}</Labeled>
+        <Labeled label="For how many months">{numberInput(draft.months, up("months"), "Months", "e.g. 2")}</Labeled>
+      </div>
+      <Labeled label="What members see">
+        <textarea
+          aria-label="Message"
+          rows={3}
+          value={draft.message}
+          onChange={(e) => set((d) => ({ ...d, message: e.target.value }))}
+          placeholder="You can use {discount} and {months}."
+          className={`${inputCls} resize-y py-2 leading-relaxed`}
+        />
+      </Labeled>
+      <div className="grid grid-cols-2 gap-3">
+        <Labeled label="Members of at least (days)">{numberInput(draft.tenure, up("tenure"), "Minimum days as a member", "30")}</Labeled>
+        <Labeled label="At most once every (days)">{numberInput(draft.cooldown, up("cooldown"), "Days between offers", "90")}</Labeled>
+      </div>
+      <EditorFoot close={close} onClear={draft.discount || draft.months || draft.message ? () => set((d) => ({ ...d, discount: "", months: "", message: "" })) : undefined} />
     </div>
   );
 }
 
-function Why({ children }: { children: ReactNode }) {
-  return <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">{children}</p>;
+function AlertsEditor({ data, draft, set, close }: { data: WhopSetupState; draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  const up = (k: keyof Draft) => (v: string) => set((d) => ({ ...d, [k]: v }));
+  const rows: { k: keyof Draft; label: string; why: string }[] = [
+    {
+      k: "refundPct",
+      label: "Refunds, % of a week's payments",
+      why: data.alerts.why.refund,
+    },
+    {
+      k: "disputePct",
+      label: "Disputes, % of a week's payments",
+      why: data.alerts.why.dispute,
+    },
+    {
+      k: "alerts",
+      label: "Dispute alerts in a week",
+      why: data.alerts.why.alerts,
+    },
+    {
+      k: "sample",
+      label: "Payments in a week before a rate counts",
+      why: data.alerts.why.sample,
+    },
+  ];
+  return (
+    <div className="space-y-3">
+      {rows.map((r) => (
+        <div key={r.k} className="space-y-1">
+          <Labeled label={r.label}>{numberInput(draft[r.k], up(r.k), r.label)}</Labeled>
+          <p className="text-[11px] leading-snug text-[var(--text-muted)]">{r.why}</p>
+        </div>
+      ))}
+      <EditorFoot close={close} />
+    </div>
+  );
 }
 
-function NumberInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function BridgeEditor({ data, draft, set, close }: { data: WhopSetupState; draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
   return (
-    <input
-      inputMode="decimal"
-      value={value}
-      onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ""))}
-      placeholder={placeholder}
-      className="h-8 w-16 border-b border-[var(--text-muted)]/40 bg-transparent text-center tabular-nums text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-    />
+    <div className="space-y-3">
+      <Labeled label="Send Whop events to">
+        <input
+          aria-label="Bridge address"
+          value={draft.bridgeUrl}
+          onChange={(e) => set((d) => ({ ...d, bridgeUrl: e.target.value }))}
+          placeholder="https://..."
+          spellCheck={false}
+          className={`${inputCls} h-9`}
+        />
+      </Labeled>
+      {data.bridge.ghlConnected && <p className="text-[12px] text-[var(--text-muted)]">GoHighLevel is connected for {data.buyer}. An inbound webhook address from one of its workflows works here.</p>}
+      <EditorFoot close={close} onClear={draft.bridgeUrl ? () => set((d) => ({ ...d, bridgeUrl: "" })) : undefined} />
+    </div>
   );
 }

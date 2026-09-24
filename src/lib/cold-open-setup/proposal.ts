@@ -37,11 +37,32 @@ export interface ProposalInput {
   /** Jev's ICP slug -> campaign id matches, with confidence 0 to 100. */
   campaignMatch: Record<string, { id: string; confidence: number } | null> | null;
   clientTimezone: string | null;
+  /** The offer saved in this client's Showtime setup, when there is one. */
+  showtimeOffer?: { name?: string | null; price?: string | null; icp?: string | null; vertical?: string | null } | null;
   tierOf: (fact: ClientFact | undefined) => TrustTier;
   platformLabel: (platform: string) => string;
 }
 
 const SITE = "your website";
+const SHOWTIME = "your Showtime setup";
+const DEFAULT = "a common default";
+
+/** "https://muddventures.com/" or "muddventures.com" -> "https://muddventures.com". */
+export function siteUrl(value: string | null | undefined): string {
+  const v = (value ?? "").trim();
+  if (!v) return "";
+  try {
+    const u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+    return `https://${u.hostname.replace(/^www\./i, "")}${u.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return "";
+  }
+}
+
+/** "Hi {first_name}," -> "Hi": Cold Open adds the first name and comma itself. */
+export function greetingWord(value: string): string {
+  return value.replace(/\{+\s*first_?name\s*\}+/gi, "").replace(/[,:!\s]+$/, "").trim();
+}
 const usable = (f: ClientFact | undefined) => Boolean(f) && f!.status !== "rejected";
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const conf = (c: number): TrustTier => (c >= 75 ? "done" : c >= 45 ? "likely" : "ask");
@@ -70,22 +91,29 @@ export function buildColdOpenProposal(input: ProposalInput): ColdOpenProposal {
   const platformName = sender ? input.platformLabel(sender.platform) : null;
   const fromPlatform = platformName ? `your ${platformName} emails` : "";
 
-  // ── Product ──
+  // ── Product: saved, else the site read, else what Showtime already has ──
   const pf = facts.productIdentity;
   const sp = saved?.productIdentity ?? undefined;
+  const st = input.showtimeOffer ?? null;
+  const fromShowtime = (value: string | null | undefined, tier: TrustTier = "done"): Sourced<string> | undefined => (value?.trim() ? { value: value.trim(), tier, source: SHOWTIME } : undefined);
+  const url = sourced(sp?.url, pf, "url", tierOf, input.domain ? { value: siteUrl(input.domain), tier: "done", source: SITE } : undefined);
   const product = {
-    name: sourced(sp?.name, pf, "name", tierOf),
-    url: sourced(sp?.url, pf, "url", tierOf, input.domain ? { value: `https://${input.domain}`, tier: "done", source: SITE } : undefined),
-    price: sourced(sp?.price, pf, "price", tierOf),
-    valueProp: sourced(sp?.valueProp, pf, "valueProp", tierOf),
+    name: sourced(sp?.name, pf, "name", tierOf, fromShowtime(st?.name)),
+    url: { ...url, value: siteUrl(url.value) || url.value },
+    price: sourced(sp?.price, pf, "price", tierOf, fromShowtime(st?.price)),
+    valueProp: sourced(sp?.valueProp, pf, "valueProp", tierOf, st?.name && st.icp ? fromShowtime(`${st.name} for ${st.icp}`, "likely") : undefined),
   };
 
   // ── ICPs, with sizing from won deals when the site didn't say ──
   const factIcps = usable(facts.icps) && Array.isArray(facts.icps.value) ? (facts.icps.value as ColdOpenIcp[]) : [];
   const factSizing = usable(facts.sizingBounds) ? (facts.sizingBounds.value as Record<string, ColdOpenSizingBound>) : {};
-  const icpsFrom = saved?.icps.length ? saved.icps : factIcps;
+  // Nothing saved or read: the buyer Showtime was set up for.
+  const showtimeIcp: ColdOpenIcp[] = st?.icp?.trim()
+    ? [{ slug: st.icp.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "icp", label: st.icp.trim(), weight: 1 }]
+    : [];
+  const icpsFrom = saved?.icps.length ? saved.icps : factIcps.length ? factIcps : showtimeIcp;
   const sizing = saved?.icps.length ? saved.sizingBounds : factSizing;
-  const icpTier: TrustTier = saved?.icps.length ? "done" : tierOf(facts.icps);
+  const icpTier: TrustTier = saved?.icps.length ? "done" : factIcps.length ? tierOf(facts.icps) : "likely";
   const icps: IcpProposal[] = icpsFrom.map((i) => {
     const b = sizing[i.slug];
     const fromDeals = !b?.teamSizeMin && !b?.teamSizeMax && buyers?.sweetSpot ? buyers.sweetSpot : null;
@@ -98,7 +126,7 @@ export function buildColdOpenProposal(input: ProposalInput): ColdOpenProposal {
       teamSizeMax: b?.teamSizeMax ?? fromDeals?.max ?? null,
       disqualifyIf: b?.disqualifyIf ?? [],
       tier: icpTier,
-      evidence: evidence || null,
+      evidence: evidence || (!saved?.icps.length && !factIcps.length && showtimeIcp.length ? `From ${SHOWTIME}${st?.vertical ? ` (${st.vertical})` : ""}` : null),
     };
   });
 
@@ -106,10 +134,21 @@ export function buildColdOpenProposal(input: ProposalInput): ColdOpenProposal {
   const vf = facts.voiceProfile;
   const learned = sender ? voiceFromSteps(sender.steps) : { greeting: null, signOff: null };
   const sv = saved?.voiceProfile ?? undefined;
+  const siteGreeting = sourced(undefined, vf, "greeting", tierOf);
   const voice = {
-    greeting: sv?.greeting ? { value: sv.greeting, tier: "done" as const, source: "saved" } : learned.greeting ? { value: learned.greeting, tier: "done" as const, source: fromPlatform } : sourced(undefined, vf, "greeting", tierOf),
-    signOff: sv?.signOff ? { value: sv.signOff, tier: "done" as const, source: "saved" } : learned.signOff ? { value: learned.signOff, tier: "done" as const, source: fromPlatform } : sourced(undefined, vf, "signOff", tierOf),
-    tone: sourced(sv?.tone, vf, "tone", tierOf),
+    greeting: sv?.greeting
+      ? { value: greetingWord(sv.greeting) || sv.greeting, tier: "done" as const, source: "saved" }
+      : learned.greeting
+        ? { value: learned.greeting, tier: "done" as const, source: fromPlatform }
+        : siteGreeting.value && greetingWord(siteGreeting.value)
+          ? { ...siteGreeting, value: greetingWord(siteGreeting.value) }
+          : { value: "Hi", tier: "likely" as const, source: DEFAULT },
+    signOff: sv?.signOff
+      ? { value: sv.signOff, tier: "done" as const, source: "saved" }
+      : learned.signOff
+        ? { value: learned.signOff, tier: "done" as const, source: fromPlatform }
+        : sourced(undefined, vf, "signOff", tierOf, { value: "Best,", tier: "likely", source: DEFAULT }),
+    tone: sourced(sv?.tone, vf, "tone", tierOf, { value: "Plain and friendly", tier: "likely", source: DEFAULT }),
   };
 
   // ── Subject lines: saved, else the platform's best first-email subjects

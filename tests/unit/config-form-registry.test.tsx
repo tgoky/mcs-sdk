@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
-import { WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { PRODUCTS_WITH_SKILL_SETTINGS, WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
 import { WORKERS_WITH_CONFIG_FORM, hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
@@ -13,8 +13,8 @@ const element = (id: Parameters<typeof renderWorkerConfigForm>[0], h: Parameters
   renderWorkerConfigForm(id, h) as ReactElement<AnyProps>;
 
 describe("config form lookup", () => {
-  it("has a form for exactly the workers the registry says have a Configure panel", () => {
-    const withPanel = WORKER_IDS.filter((id) => WORKER_REGISTRY[id].hasHingesPanel).sort();
+  it("has a form for exactly the workers with a Configure panel, and for every skill of a product whose setup opens per skill", () => {
+    const withPanel = WORKER_IDS.filter((id) => WORKER_REGISTRY[id].hasHingesPanel || PRODUCTS_WITH_SKILL_SETTINGS.includes(WORKER_REGISTRY[id].productId)).sort();
     expect([...WORKERS_WITH_CONFIG_FORM].sort()).toEqual(withPanel);
   });
 
@@ -58,5 +58,17 @@ describe("config form lookup", () => {
       expect(el.type, id).toBe(WhopSetup);
       expect(el.props.onSaved).toBe(onSaved);
     }
+  });
+
+  it("opens each Cold Open, Rep and Whop skill as its own settings, and the onboarding page as the full setup", () => {
+    const h = { engagementId: "e1", onClose: () => {} };
+    expect(element("voice-capture", h).props.focus).toBe("voice-capture");
+    expect(element("voice-capture", { ...h, mode: "setup" }).props.focus).toBe("voice-capture");
+    expect(element("icp-lock", h).props.focus).toBe("icp-lock");
+    expect(element("icp-lock", { ...h, mode: "setup" }).props.focus).toBeUndefined();
+    expect(element("rep-crisis-response", h).type).toBe(RepSetup);
+    expect(element("rep-crisis-response", h).props.focus).toBe("rep-crisis-response");
+    expect(element("whop-dispute-response", h).type).toBe(WhopSetup);
+    expect(element("whop-connect", { ...h, mode: "setup" }).props.focus).toBeUndefined();
   });
 });

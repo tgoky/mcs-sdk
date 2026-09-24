@@ -7,11 +7,12 @@
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { whopWebhookRegistry } from "@/models/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { encryptSecret, decryptSecret } from "@/lib/credentials";
 import { inngest, whopWebhookProcess } from "@/lib/inngest";
 import { duplicateGroupKey } from "./webhook-audit-service";
+import { mergeWebhookEvents } from "./webhook-events";
 import { isUniqueConstraintViolation } from "@/lib/db-errors";
 
 interface CreatedWebhookResponse {
@@ -121,22 +122,29 @@ export async function ensureAgentWebhookSubscription(engagementId: string, event
 }
 
 /**
- * Keeps the agent's one subscription carrying exactly `events`: created
- * the first time (pinned, as ensureAgentWebhookSubscription requires),
- * then updated in place with PATCH /webhooks/{id} when the events change,
- * so choosing different workers never leaves a second, overlapping
- * subscription delivering the same events twice. An empty list leaves
- * whatever exists alone.
+ * Keeps the agent's one subscription carrying `events`: created the first
+ * time (pinned, as ensureAgentWebhookSubscription requires), then updated
+ * in place with PATCH /webhooks/{id} when the events change, so choosing
+ * different workers never leaves a second, overlapping subscription
+ * delivering the same events twice. Events it already carries that
+ * `keep` accepts stay on it (the setup keeps what Product Launch Preflight
+ * added). An empty result leaves whatever exists alone. If an older
+ * duplicate left more than one agent subscription, the oldest is the one
+ * kept up to date; the setup lists the rest to clean up.
  */
-export async function syncAgentWebhookEvents(engagementId: string, events: string[]): Promise<{ whopWebhookId: string | null; action: "created" | "updated" | "unchanged" | "none" }> {
-  const wanted = [...new Set(events)].sort();
-  if (wanted.length === 0) return { whopWebhookId: null, action: "none" };
-
+export async function syncAgentWebhookEvents(
+  engagementId: string,
+  events: string[],
+  opts: { keep?: (event: string) => boolean } = {}
+): Promise<{ whopWebhookId: string | null; action: "created" | "updated" | "unchanged" | "none" }> {
   const rows = await db
     .select({ id: whopWebhookRegistry.id, whopWebhookId: whopWebhookRegistry.whopWebhookId, url: whopWebhookRegistry.url, events: whopWebhookRegistry.events })
     .from(whopWebhookRegistry)
-    .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.createdByAgent, true)));
+    .where(and(eq(whopWebhookRegistry.engagementId, engagementId), eq(whopWebhookRegistry.createdByAgent, true)))
+    .orderBy(asc(whopWebhookRegistry.createdAt));
   const row = rows[0];
+  const wanted = mergeWebhookEvents(row?.events ?? [], events, opts.keep);
+  if (wanted.length === 0) return { whopWebhookId: null, action: "none" };
   if (!row) {
     const { whopWebhookId } = await ensureAgentWebhookSubscription(engagementId, wanted);
     return { whopWebhookId, action: "created" };
@@ -242,4 +250,11 @@ export async function replayGapDeliveries(engagementId: string, whopWebhookId: s
   }
 
   return { replayed, skipped };
+}
+
+/** Adds events to the agent's one subscription, keeping every event it
+ * already carries, instead of creating a second subscription. What a
+ * worker that needs extra events (Product Launch Preflight) calls. */
+export function addAgentWebhookEvents(engagementId: string, events: string[]) {
+  return syncAgentWebhookEvents(engagementId, events, { keep: () => true });
 }

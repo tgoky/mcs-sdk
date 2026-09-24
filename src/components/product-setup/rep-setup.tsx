@@ -7,14 +7,15 @@
 //             tools that add names (already-connected ones show as such;
 //             one connection per client serves every product)
 //   working   "Set it up" streams its real steps
-//   review    where the reputation stands right now, then every name the
-//             watches will search for, each with where it came from and a
-//             switch, then who's paged in a crisis. Preview and save.
+//   review    where the reputation stands right now, "What we did" (every
+//             name the watches will search for, as chips switched in place,
+//             each with where it came from), "Left to do" (who's paged in a
+//             crisis, never pre-filled), and Approve.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, ExternalLink, Loader2, Plus, Star, X } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { PlatformLogo } from "@/components/platform-logo";
@@ -28,6 +29,7 @@ import type { RepEngineId } from "@/models/schema";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
+import { ApproveBar, ChipRow, Feed, Labeled, Pill, Popover, ReviewCard, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry, type TodoItem } from "./review-kit";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -55,6 +57,17 @@ const SKILL_BLURB: Partial<Record<RepSkillId, string>> = {
   "rep-search-watch": "What Google's first page shows next to \"reviews\" or \"scam\".",
   "rep-crisis-response": "Pages you the moment serious findings add up. Never posts anything.",
   "rep-digest": "One daily summary of the quieter findings.",
+};
+
+/** What each skill's own settings show: the review rows (and "Left to do"
+ * steps) it owns, and a line on what it does. */
+const REP_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean; about?: string }> = {
+  "rep-onboarding": { rows: ["name", "aliases", "domains", "handles", "emails", "google", "brands", "offerings", "competitors", "press", "collisions"], todos: ["name", "tools"], save: true },
+  "rep-crisis-response": { rows: ["threshold"], todos: ["authority"], save: true, about: "Pages this person the moment serious findings add up. Nothing is ever posted on your behalf." },
+  "rep-google-reviews-watch": { rows: ["google"], todos: [], save: true, about: "New reviews on your Google listing, and bad ones nobody answered." },
+  "rep-news-watch": { rows: ["name", "brands", "press"], todos: [], save: true, about: "News articles that name you, your brands or your products." },
+  "rep-search-watch": { rows: ["name", "aliases", "brands"], todos: [], save: true, about: "What Google's first page shows next to these names with \u201creviews\u201d or \u201cscam\u201d." },
+  "rep-digest": { rows: [], todos: [], save: false, about: "One daily summary of the quieter findings from every watch. There's nothing to set." },
 };
 
 const STAGES: ActivationStage[] = [
@@ -140,11 +153,15 @@ export function RepSetup({
   onCancel,
   onSaved,
   cancelLabel = "Cancel",
+  focus,
 }: {
   engagementId: string;
   onCancel: () => void;
   onSaved?: (result: { runId?: string }) => void;
   cancelLabel?: string;
+  /** Opens as this one skill's own settings once Reputation Manager is set
+   * up: only the rows it owns, saved without touching which skills are on. */
+  focus?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -157,7 +174,6 @@ export function RepSetup({
   const [activateError, setActivateError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const authorityRef = useRef<HTMLDivElement>(null);
   const storageKey = `rep-setup:${engagementId}:domain`;
 
   const load = useCallback(
@@ -313,6 +329,9 @@ export function RepSetup({
     return m;
   }, [draft]);
 
+  const settings = Boolean(focus && data?.configured);
+  const dirty = useMemo(() => (data && draft ? JSON.stringify({ ...draft, domain: "" }) !== JSON.stringify({ ...draftFrom(data), domain: "" }) : false), [data, draft]);
+
   async function save() {
     if (!data || !draft) return;
     setSaving(true);
@@ -338,14 +357,21 @@ export function RepSetup({
       activeEngines: draft.engines.length === data.engines.available.length ? null : draft.engines,
       operatorPagePhone: draft.phone.trim() || null,
       googleListing: draft.googleListing,
-      skills: skills.filter((id) => id !== "rep-google-reviews-watch" || draft.googleListing),
+      // A skill's own settings leave which skills are on alone.
+      ...(settings ? {} : { skills: skills.filter((id) => id !== "rep-google-reviews-watch" || draft.googleListing) }),
     };
     try {
       const res = await fetch(`/api/engagements/${engagementId}/bridges/rep-onboarding`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
-      toast.success(data.configured ? "Saved." : `Watching ${name} now.`);
       await load().catch(() => undefined);
+      if (settings) {
+        // The panel it opened in says it saved; elsewhere, say so here.
+        if (onSaved) onSaved({});
+        else toast.success("Saved.");
+        return;
+      }
+      toast.success(data.configured ? "Saved." : `Watching ${name} now.`);
       if (onSaved) onSaved({ runId: json.runId });
       else router.refresh();
     } catch (e) {
@@ -378,38 +404,31 @@ export function RepSetup({
     <div className="@container mx-auto w-full max-w-3xl px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} skills={skills} setSkills={setSkills} authorityRef={authorityRef} onReread={() => setPhase("welcome")} toolRow={toolRow} />
-          <div className="sticky bottom-0 z-20 mt-8 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
-              <div className="min-w-0 flex-1 text-sm">
-                {saveError ? (
-                  <p className="flex items-center gap-2 text-[var(--error)]">
-                    <AlertTriangle className="h-4 w-4 shrink-0" /> {saveError}
-                  </p>
-                ) : missing.length ? (
-                  <button type="button" onClick={() => authorityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })} className="text-left text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
-                    Add {missing.join(" and ")} to start watching.
-                  </button>
-                ) : (
-                  <p className="flex items-center gap-2 text-[var(--text-secondary)]">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
-                      <Check className="h-3 w-3" strokeWidth={3.5} />
-                    </span>
-                    {skills.length} {skills.length === 1 ? "skill" : "skills"} ready. Nothing ever posts on your behalf.
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="ghost" className="hidden @md:inline-flex" onClick={onCancel} disabled={saving}>
-                  {cancelLabel}
-                </Button>
-                <Button size="lg" className="h-10 px-5" onClick={save} disabled={saving || missing.length > 0}>
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {data.configured ? "Save changes" : "Start watching"}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <Review data={data} draft={draft} set={set} skills={skills} setSkills={setSkills} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} />
+          {settings ? (
+            REP_FOCUS[focus!]?.save && (
+              <ApproveBar
+                label="Save"
+                note={missing.length ? `Add ${missing.join(" and ")}, then save.` : undefined}
+                error={saveError}
+                saving={saving}
+                disabled={!dirty || missing.length > 0}
+                onApprove={save}
+                onCancel={onCancel}
+                cancelLabel={cancelLabel}
+              />
+            )
+          ) : (
+            <ApproveBar
+              note={missing.length ? `Add ${missing.join(" and ")} below, then approve.` : `${skills.length} ${skills.length === 1 ? "watch" : "watches"} ready. Nothing ever posts on your behalf.`}
+              error={saveError}
+              saving={saving}
+              disabled={missing.length > 0}
+              onApprove={save}
+              onCancel={onCancel}
+              cancelLabel={cancelLabel}
+            />
+          )}
         </>
       ) : (
         <Welcome
@@ -595,385 +614,603 @@ function Welcome({
 
 // ── Review ─────────────────────────────────────────────────────────────
 
+type ListKey = "aliases" | "domains" | "emails" | "offerings" | "competitors" | "press" | "prompts";
+
+const chips = (xs: { value: string; on: boolean; sources: string[]; tier: TrustTier }[]) =>
+  xs.map((x) => ({
+    value: x.value,
+    on: x.on,
+    guess: x.tier === "likely",
+    hint: `From ${x.sources.join(", ")}${x.on ? ". Tap to stop watching for it." : ". Tap to watch for it."}`,
+  }));
+
+const count = (xs: { on: boolean }[], one: string, many = `${one}s`) => {
+  const n = xs.filter((x) => x.on).length;
+  return `${n} ${n === 1 ? one : many}`;
+};
+
 function Review({
   data,
   draft,
   set,
   skills,
   setSkills,
-  authorityRef,
   onReread,
   toolRow,
+  focus,
 }: {
   data: RepSetupState;
   draft: Draft;
   set: (fn: (d: Draft) => Draft) => void;
   skills: string[];
   setSkills: (fn: (s: string[]) => string[]) => void;
-  authorityRef: React.RefObject<HTMLDivElement | null>;
   onReread: () => void;
   toolRow: ReactNode;
+  focus?: string;
 }) {
-  type ListKey = "aliases" | "domains" | "emails" | "offerings" | "competitors" | "press" | "prompts";
-  const toggle = (key: ListKey, i: number) => set((d) => ({ ...d, [key]: d[key].map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }));
-  const add = (key: ListKey, value: string) =>
-    set((d) => (d[key].some((x) => x.value.toLowerCase() === value.toLowerCase()) ? d : { ...d, [key]: [...d[key], { value, on: true, sources: ["you"], tier: "done" as const }] }));
+  const toggle = (key: ListKey) => (i: number) =>
+    set((d) => ({
+      ...d,
+      [key]: d[key].map((x, j) => (j === i ? { ...x, on: !x.on } : x)),
+    }));
+  const add =
+    (key: ListKey, clean: (v: string) => string = (v) => v) =>
+    (raw: string) => {
+      const value = clean(raw);
+      if (!value) return;
+      set((d) =>
+        d[key].some((x) => x.value.toLowerCase() === value.toLowerCase())
+          ? d
+          : {
+              ...d,
+              [key]: [...d[key], { value, on: true, sources: ["you"], tier: "done" as const }],
+            },
+      );
+    };
   const suggestion = data.proposal.soleAuthority.suggestion;
+  const found = data.proposal;
+  const look = data.firstLook;
+  const name = draft.operatorName.trim();
+  const connected = data.tools.filter((t) => t.linked).length + (data.whop.linked ? 1 : 0);
+  const listing = found.googleListing?.listing ?? null;
 
-  return (
-    <div className="space-y-11">
-      <header className="flex items-start gap-4">
-        <RepMark />
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)]">{draft.operatorName || data.buyer}, right now</h1>
-          <p className="text-[14px] text-[var(--text-secondary)]">
-            {data.website.domain ?? "No website yet"} ·{" "}
-            <button type="button" onClick={onReread} className="font-medium underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
-              Change website or tools
-            </button>
-          </p>
-        </div>
-      </header>
-
-      {data.firstLook && <FirstLookPanel look={data.firstLook} />}
-
-      <Section title="How you're known" hint="Every name here is searched daily. Tap to switch one off.">
-        <div className="space-y-4">
-          <Field label="Name">
-            <input
-              value={draft.operatorName}
-              onChange={(e) => set((d) => ({ ...d, operatorName: e.target.value }))}
-              className="h-10 w-full max-w-md border-b border-[var(--text-muted)]/40 bg-transparent text-[17px] font-medium text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-            />
-          </Field>
-          <ChipField label="Also known as" items={draft.aliases} onToggle={(i) => toggle("aliases", i)} onAdd={(v) => add("aliases", v)} placeholder="Add a name" />
-          <ChipField label="Websites" items={draft.domains} onToggle={(i) => toggle("domains", i)} onAdd={(v) => add("domains", bareHost(v))} placeholder="Add a domain" />
-          <ChipField
-            label="Handles"
-            items={draft.handles.map((h) => ({ ...h, value: `${h.platform}: ${h.value}` }))}
-            onToggle={(i) => set((d) => ({ ...d, handles: d.handles.map((h, j) => (j === i ? { ...h, on: !h.on } : h)) }))}
-          />
-          <ChipField label="Contact emails" items={draft.emails} onToggle={(i) => toggle("emails", i)} onAdd={(v) => add("emails", v.toLowerCase())} placeholder="Add an email" />
-          {data.proposal.googleListing && (
-            <Field label="Google listing">
+  const feed: FeedEntry[] = [];
+  // Where the name lives follows what was found, so its editor stays open
+  // while someone types it.
+  const nameFound = Boolean(found.operatorName.value.trim());
+  if (nameFound && name) {
+    feed.push({
+      key: "name",
+      text: (
+        <>
+          Watching for <b>{name}</b>
+          {data.website.domain ? <>, from {data.website.domain}</> : null}.
+        </>
+      ),
+      source: found.operatorName.source ? `From ${found.operatorName.source}` : undefined,
+      editor: (close) => <NameEditor draft={draft} set={set} close={close} />,
+      undo: draft.operatorName !== found.operatorName.value ? () => set((d) => ({ ...d, operatorName: found.operatorName.value })) : undefined,
+    });
+  }
+  feed.push({
+    key: "aliases",
+    text: (
+      <>
+        Also known as <b>{count(draft.aliases, "other name")}</b>.
+      </>
+    ),
+    body: <ChipRow items={chips(draft.aliases)} onToggle={toggle("aliases")} onAdd={add("aliases")} addLabel="Add a name" />,
+  });
+  feed.push({
+    key: "domains",
+    text: (
+      <>
+        <b>{count(draft.domains, "website")}</b> you own.
+      </>
+    ),
+    body: <ChipRow items={chips(draft.domains)} onToggle={toggle("domains")} onAdd={add("domains", bareHost)} addLabel="Add a domain" />,
+  });
+  if (draft.handles.length)
+    feed.push({
+      key: "handles",
+      text: (
+        <>
+          <b>{count(draft.handles, "social handle")}</b>.
+        </>
+      ),
+      body: (
+        <ChipRow
+          items={chips(
+            draft.handles.map((h) => ({
+              ...h,
+              value: `${h.platform}: ${h.value}`,
+            })),
+          )}
+          onToggle={(i) =>
+            set((d) => ({
+              ...d,
+              handles: d.handles.map((h, j) => (j === i ? { ...h, on: !h.on } : h)),
+            }))
+          }
+        />
+      ),
+    });
+  feed.push({
+    key: "emails",
+    text: (
+      <>
+        <b>{count(draft.emails, "contact email")}</b>.
+      </>
+    ),
+    body: <ChipRow items={chips(draft.emails)} onToggle={toggle("emails")} onAdd={add("emails", (v) => v.trim().toLowerCase())} addLabel="Add an email" />,
+  });
+  if (listing) {
+    feed.push({
+      key: "google",
+      todo: !draft.googleListing,
+      text: draft.googleListing ? (
+        <>
+          Matched your Google listing, <b>{listing.name}</b>
+          {listing.address ? <>, {listing.address}</> : null}.
+        </>
+      ) : (
+        <>
+          Not watching the Google listing <b>{listing.name}</b>. You said it isn&apos;t you.
+        </>
+      ),
+      action: {
+        label: draft.googleListing ? "Not us" : "This is us",
+        onClick: () => {
+          const next = draft.googleListing ? null : listing;
+          set((d) => ({ ...d, googleListing: next }));
+          if (!next) setSkills((s) => s.filter((id) => id !== "rep-google-reviews-watch"));
+        },
+      },
+    });
+  }
+  feed.push({
+    key: "brands",
+    text: (
+      <>
+        <b>{count(draft.entities, "brand")}</b>. Starred ones are searched on Reddit and X every day.
+      </>
+    ),
+    body: (
+      <ChipRow
+        items={draft.entities.map((e, i) => ({
+          value: e.value,
+          on: e.on,
+          guess: e.tier === "likely",
+          hint: `From ${e.sources.join(", ")}`,
+          star: {
+            on: e.highPriority,
+            onToggle: () =>
+              set((d) => ({
+                ...d,
+                entities: d.entities.map((x, j) => (j === i ? { ...x, highPriority: !x.highPriority, on: true } : x)),
+              })),
+          },
+        }))}
+        onToggle={(i) =>
+          set((d) => ({
+            ...d,
+            entities: d.entities.map((x, j) => (j === i ? { ...x, on: !x.on } : x)),
+          }))
+        }
+      />
+    ),
+  });
+  feed.push({
+    key: "offerings",
+    text: (
+      <>
+        <b>{count(draft.offerings, "product")}</b>.
+      </>
+    ),
+    body: <ChipRow items={chips(draft.offerings)} onToggle={toggle("offerings")} onAdd={add("offerings")} addLabel="Add a product" />,
+  });
+  feed.push({
+    key: "competitors",
+    text: (
+      <>
+        <b>{count(draft.competitors, "competitor")}</b>, so we can tell when you&apos;re compared.
+      </>
+    ),
+    body: <ChipRow items={chips(draft.competitors)} onToggle={toggle("competitors")} onAdd={add("competitors")} addLabel="Add a competitor" />,
+  });
+  if (draft.press.length)
+    feed.push({
+      key: "press",
+      text: (
+        <>
+          <b>{count(draft.press, "publication")}</b> that&apos;s covered you.
+        </>
+      ),
+      body: <ChipRow items={chips(draft.press)} onToggle={toggle("press")} onAdd={add("press")} addLabel="Add a publication" />,
+    });
+  if (draft.collisions.length)
+    feed.push({
+      key: "collisions",
+      text: (
+        <>
+          <b>{count(draft.collisions, "other", "others")}</b> with a similar name. We keep them apart from you.
+        </>
+      ),
+      body: (
+        <ul className="space-y-1.5">
+          {draft.collisions.map((c, i) => (
+            <li key={c.name} className="flex items-baseline gap-3 text-[13px]">
+              <span className={c.on ? "min-w-0 flex-1 text-[var(--text-secondary)]" : "min-w-0 flex-1 text-[var(--text-muted)] line-through"}>
+                <span className="font-medium text-[var(--text-primary)]">{c.name}</span>, {c.whoTheyAre}
+              </span>
               <button
                 type="button"
-                onClick={() => set((d) => ({ ...d, googleListing: d.googleListing ? null : data.proposal.googleListing!.listing }))}
-                className={cn("flex w-full max-w-md items-center gap-3 border px-3 py-2.5 text-left transition-colors cursor-pointer", draft.googleListing ? "border-[var(--text-primary)]" : "border-dashed opacity-60")}
+                onClick={() =>
+                  set((d) => ({
+                    ...d,
+                    collisions: d.collisions.map((x, j) => (j === i ? { ...x, on: !x.on } : x)),
+                  }))
+                }
+                className="shrink-0 text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
               >
-                <PlatformLogo provider="google" size={18} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-[var(--text-primary)]">{data.proposal.googleListing.listing.name}</span>
-                  <span className="block truncate text-xs text-[var(--text-muted)]">{data.proposal.googleListing.listing.address ?? data.proposal.googleListing.listing.site}</span>
-                </span>
-                <span className="text-xs text-[var(--text-secondary)]">{draft.googleListing ? "This is us" : "Not us"}</span>
+                {c.on ? "Remove" : "Keep apart"}
               </button>
-            </Field>
-          )}
-        </div>
-      </Section>
-
-      <Section title="What we watch for" hint="Starred brands are searched on Reddit and X every day.">
-        <div className="space-y-4">
-          <Field label="Brands">
-            <div className="flex flex-wrap gap-1.5">
-              {draft.entities.map((e, i) => (
-                <span key={e.value} className={cn("inline-flex items-center overflow-hidden rounded-full border text-[13px]", e.on ? "text-[var(--text-primary)]" : "border-dashed text-[var(--text-muted)]")} title={`From ${e.sources.join(", ")}`}>
-                  <button type="button" aria-label={e.highPriority ? "Unstar" : "Star"} onClick={() => set((d) => ({ ...d, entities: d.entities.map((x, j) => (j === i ? { ...x, highPriority: !x.highPriority, on: true } : x)) }))} className="pl-2.5 cursor-pointer">
-                    <Star className={cn("h-3.5 w-3.5", e.highPriority ? "fill-current" : "opacity-40")} />
-                  </button>
-                  <button type="button" onClick={() => set((d) => ({ ...d, entities: d.entities.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} className={cn("px-2 py-1 cursor-pointer", !e.on && "line-through")}>
-                    {e.value}
-                  </button>
-                </span>
-              ))}
-            </div>
-          </Field>
-          <ChipField label="Products" items={draft.offerings} onToggle={(i) => toggle("offerings", i)} onAdd={(v) => add("offerings", v)} placeholder="Add a product" />
-          <ChipField label="Competitors" items={draft.competitors} onToggle={(i) => toggle("competitors", i)} onAdd={(v) => add("competitors", v)} placeholder="Add a competitor" />
-          <ChipField label="Press that's covered you" items={draft.press} onToggle={(i) => toggle("press", i)} onAdd={(v) => add("press", v)} placeholder="Add a publication" />
-        </div>
-      </Section>
-
-      {draft.collisions.length > 0 && (
-        <Section title="Not you" hint="Others with a similar name. We keep them apart from you.">
-          <ul className="divide-y">
-            {draft.collisions.map((c, i) => (
-              <li key={c.name} className="flex items-start gap-3 py-3">
-                <div className={cn("min-w-0 flex-1", !c.on && "opacity-50")}>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{c.name}</p>
-                  <p className="text-[13px] text-[var(--text-secondary)]">{c.whoTheyAre}</p>
-                </div>
-                <button type="button" onClick={() => set((d) => ({ ...d, collisions: d.collisions.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
-                  {c.on ? "Remove" : "Keep apart"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      {skills.includes("rep-engine-panel") && (
-        <Section title="What we ask the AI engines" hint="Asked on a schedule. The answers are watched for trouble.">
-          <div className="space-y-4">
-            <ul className="space-y-1.5">
-              {draft.prompts.map((p, i) => (
-                <li key={p.value}>
-                  <button type="button" onClick={() => toggle("prompts", i)} className={cn("flex w-full items-start gap-2.5 text-left text-[15px] cursor-pointer", p.on ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] line-through")}>
-                    <span className={cn("mt-1.5 h-3.5 w-3.5 shrink-0 rounded-sm border", p.on ? "border-[var(--ink)] bg-[var(--ink)]" : "border-[var(--text-muted)]")}>{p.on && <Check className="h-3 w-3 text-[var(--ink-foreground)]" strokeWidth={3} />}</span>
-                    {p.value}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <AddInline placeholder="Add a question people ask about you" onAdd={(v) => add("prompts", v)} />
-            <div className="flex flex-wrap gap-1.5">
-              {data.engines.available.map((e) => {
-                const active = draft.engines.includes(e);
-                return (
-                  <button key={e} type="button" onClick={() => set((d) => ({ ...d, engines: active ? d.engines.filter((x) => x !== e) : [...d.engines, e] }))} className={cn("rounded-full border px-3 py-1 text-[13px] cursor-pointer", active ? "border-[var(--text-primary)] text-[var(--text-primary)]" : "border-dashed text-[var(--text-muted)]")}>
-                    {REP_ENGINE_LABELS[e as RepEngineId] ?? e}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Section>
-      )}
-
-      <div ref={authorityRef}>
-        <Section title="When something's serious" hint="We page this person. Nothing is ever posted on your behalf.">
-          <div className="space-y-4">
-            <Field label="Who decides">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  value={draft.soleAuthority}
-                  onChange={(e) => set((d) => ({ ...d, soleAuthority: e.target.value }))}
-                  placeholder="Their name"
-                  className="h-10 w-64 border-b border-[var(--text-muted)]/40 bg-transparent text-[15px] text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-                />
-                {!draft.soleAuthority && suggestion && (
-                  <button type="button" onClick={() => set((d) => ({ ...d, soleAuthority: suggestion.name }))} className="rounded-full border border-dashed px-3 py-1 text-[13px] text-[var(--text-secondary)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] cursor-pointer">
-                    Use {suggestion.name}{suggestion.role ? `, ${suggestion.role}` : ""}
-                  </button>
-                )}
-              </div>
-            </Field>
-            <Field label="Text them too">
-              <input
-                value={draft.phone}
-                onChange={(e) => set((d) => ({ ...d, phone: e.target.value }))}
-                placeholder="Optional phone number"
-                inputMode="tel"
-                className="h-10 w-64 border-b border-[var(--text-muted)]/40 bg-transparent text-[15px] text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-              />
-            </Field>
-            <Field label="Page at">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={50}
-                  max={95}
-                  step={5}
-                  value={draft.threshold ?? 80}
-                  onChange={(e) => set((d) => ({ ...d, threshold: Number(e.target.value) === 80 ? null : Number(e.target.value) }))}
-                  className="w-48 accent-[var(--ink)]"
-                />
-                <span className="text-[13px] text-[var(--text-secondary)]">
-                  severity {draft.threshold ?? 80}
-                  {draft.threshold == null ? " (default)" : ""}. Lower pages you sooner.
-                </span>
-              </div>
-            </Field>
-          </div>
-        </Section>
-      </div>
-
-      <Section title="Skills" hint="Switch any of them off.">
-        <ul className="divide-y">
-          {REP_SETUP_SKILLS.map((id) => {
-            const noListing = id === "rep-google-reviews-watch" && !draft.googleListing;
-            return (
-              <SkillSwitchRow
-                key={id}
-                skillId={id}
-                blurb={noListing ? "No Google listing matched your website, so there's nothing to watch here yet." : (SKILL_BLURB[id] ?? "")}
-                on={skills.includes(id) && !noListing}
-                onChange={(v) => !noListing && setSkills((s) => (v ? [...new Set([...s, id])] : s.filter((x) => x !== id)))}
-              />
-            );
-          })}
-        </ul>
-      </Section>
-
-      <Section title="Your tools" hint="Optional. Each one adds names to watch for.">
-        {toolRow}
-      </Section>
-    </div>
-  );
-}
-
-function FirstLookPanel({ look }: { look: FirstLook }) {
-  const stats: { value: string; label: string; warn?: boolean }[] = [];
-  if (look.google) {
-    if (look.google.rating != null) stats.push({ value: `${look.google.rating}★`, label: `Google${look.google.reviews != null ? `, ${look.google.reviews} reviews` : ""}` });
-    stats.push({ value: String(look.google.unansweredNegative), label: "bad Google reviews with no reply", warn: look.google.unansweredNegative > 0 });
-  }
-  if (look.trustpilot?.rating != null) stats.push({ value: `${look.trustpilot.rating}★`, label: `Trustpilot${look.trustpilot.reviews != null ? `, ${look.trustpilot.reviews} reviews` : ""}` });
-  if (look.reddit) stats.push({ value: String(look.reddit.mentions), label: `Reddit mentions this month${look.reddit.negative ? `, ${look.reddit.negative} negative` : ""}`, warn: look.reddit.negative > 0 });
-  if (look.x) stats.push({ value: String(look.x.mentions), label: `X mentions this month${look.x.negative ? `, ${look.x.negative} negative` : ""}`, warn: look.x.negative > 0 });
-  if (look.news) stats.push({ value: String(look.news.articles), label: `news articles this month${look.news.negative ? `, ${look.news.negative} negative` : ""}`, warn: look.news.negative > 0 });
-  const risky = look.search?.results.filter((r) => r.risky) ?? [];
-
-  return (
-    <section className="space-y-5">
-      {stats.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 sm:grid-cols-3">
-          {stats.slice(0, 6).map((s) => (
-            <div key={s.label} className="min-w-0">
-              <p className={cn("text-2xl font-semibold tabular-nums tracking-tight", s.warn ? "text-[var(--error)]" : "text-[var(--text-primary)]")}>{s.value}</p>
-              <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">{s.label}</p>
-            </div>
+            </li>
           ))}
-        </div>
-      )}
-      {look.engines.length > 0 && (
+        </ul>
+      ),
+    });
+  if (skills.includes("rep-engine-panel"))
+    feed.push({
+      key: "prompts",
+      text: (
+        <>
+          <b>{count(draft.prompts, "question")}</b> we&apos;ll ask <b>{draft.engines.length} AI {draft.engines.length === 1 ? "engine" : "engines"}</b> on a schedule, then watch the answers.
+        </>
+      ),
+      body: (
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">What the AI engines say</p>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {look.engines.map((e) => (
-              <li key={e.engine} className="flex gap-2.5">
-                <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", e.sentiment === "negative" || e.flagged ? "bg-[var(--error)]" : e.sentiment === "positive" ? "bg-emerald-500" : "bg-[var(--text-muted)]")} />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{e.engine}</p>
-                  <p className="line-clamp-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">{e.excerpt}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <ChipRow items={chips(draft.prompts)} onToggle={toggle("prompts")} onAdd={add("prompts")} addLabel="Add a question" />
+          <ChipRow
+            items={data.engines.available.map((e) => ({
+              value: REP_ENGINE_LABELS[e as RepEngineId] ?? e,
+              on: draft.engines.includes(e),
+            }))}
+            onToggle={(i) => {
+              const e = data.engines.available[i];
+              set((d) => ({
+                ...d,
+                engines: d.engines.includes(e) ? d.engines.filter((x) => x !== e) : [...d.engines, e],
+              }));
+            }}
+          />
         </div>
-      )}
-      {(risky.length > 0 || (look.google?.recentNegative.length ?? 0) > 0) && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">Worth a look</p>
-          <ul className="space-y-2">
-            {look.google?.recentNegative.map((r, i) => (
-              <li key={`g${i}`} className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-                <span className="font-medium text-[var(--text-primary)]">Google, {r.rating}★:</span> {r.text}
-                {r.url && (
-                  <a href={r.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </li>
-            ))}
-            {risky.slice(0, 3).map((r) => (
-              <li key={r.url} className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-                <span className="font-medium text-[var(--text-primary)]">#{r.position} on Google for {look.search!.query}:</span>{" "}
-                <a href={r.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-[var(--text-primary)]">
-                  {r.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {look.skipped.length > 0 && <p className="text-xs text-[var(--text-muted)]">Not checked this time: {look.skipped.join(", ")}.</p>}
-    </section>
-  );
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-2.5">
-        <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h2>
-        {hint && <p className="text-xs text-[var(--text-muted)]">{hint}</p>}
+      ),
+    });
+  if (look?.engines.length)
+    feed.push({
+      key: "look-engines",
+      text: <>Asked the AI engines about you once already.</>,
+      body: <EngineAnswers look={look} />,
+    });
+  const risky = look?.search?.results.filter((r) => r.risky) ?? [];
+  const badReviews = look?.google?.recentNegative ?? [];
+  if (risky.length || badReviews.length)
+    feed.push({
+      key: "look-risky",
+      warn: true,
+      text: (
+        <>
+          <b>
+            {risky.length + badReviews.length} {risky.length + badReviews.length === 1 ? "thing" : "things"}
+          </b>{" "}
+          worth a look today.
+        </>
+      ),
+      body: <WorthALook look={look!} />,
+    });
+  if (skills.includes("rep-crisis-response") || focus === "rep-crisis-response")
+    feed.push({
+      key: "threshold",
+      text: (
+        <>
+          Page at severity <b>{draft.threshold ?? 80}</b>
+          {draft.threshold == null ? " (the default)" : ""}.
+        </>
+      ),
+      source: "Lower pages you sooner.",
+      editor: (close) => <ThresholdEditor draft={draft} set={set} close={close} />,
+      undo: draft.threshold !== data.crisisThreshold ? () => set((d) => ({ ...d, threshold: data.crisisThreshold })) : undefined,
+    });
+  feed.push({
+    key: "skills",
+    text: (
+      <>
+        <b>
+          {skills.length} of {REP_SETUP_SKILLS.length}
+        </b>{" "}
+        watches are on.
+      </>
+    ),
+    editor: () => (
+      <div className="space-y-2">
+        <p className="text-[13px] font-medium text-[var(--text-primary)]">Watches</p>
+        <ToggleList
+          items={REP_SETUP_SKILLS.map((id) => {
+            const noListing = id === "rep-google-reviews-watch" && !draft.googleListing;
+            return {
+              label: REP_SKILL_MANIFEST[id].name,
+              hint: noListing ? "No Google listing is matched, so there's nothing to watch here yet." : SKILL_BLURB[id],
+              on: skills.includes(id) && !noListing,
+            };
+          })}
+          onToggle={(i) => {
+            const id = REP_SETUP_SKILLS[i];
+            if (id === "rep-google-reviews-watch" && !draft.googleListing) return;
+            setSkills((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+          }}
+        />
       </div>
-      {children}
-    </section>
-  );
-}
+    ),
+  });
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1.5 @xl:grid-cols-[150px_1fr] @xl:items-baseline @xl:gap-4">
-      <p className="text-[13px] text-[var(--text-muted)]">{label}</p>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
+  const authority = draft.soleAuthority.trim();
+  const todos: TodoItem[] = [];
+  if (!nameFound || !name)
+    todos.push({
+      key: "name",
+      label: name ? `Watching for ${name}` : "Add the name you do business under",
+      done: Boolean(name),
+      action: (
+        <Popover label={name ? "Change" : "Add"} title="Your name" strong={!name}>
+          {(close) => <NameEditor draft={draft} set={set} close={close} />}
+        </Popover>
+      ),
+    });
+  todos.push({
+    key: "authority",
+    label: authority ? (
+      <>
+        <b className="font-semibold text-[var(--text-primary)]">{authority}</b>{" "}is paged when something&apos;s serious
+        {draft.phone.trim() ? <>, and texted at {draft.phone.trim()}</> : null}
+      </>
+    ) : (
+      "Choose who's paged when something's serious"
+    ),
+    done: Boolean(authority),
+    action: (
+      <Popover label={authority ? "Change" : "Choose"} title="Who's paged" strong={!authority}>
+        {(close) => <AuthorityEditor draft={draft} set={set} close={close} suggestion={suggestion} />}
+      </Popover>
+    ),
+  });
+  todos.push({
+    key: "tools",
+    label: connected ? `${connected} ${connected === 1 ? "tool" : "tools"} connected` : "Connect tools to also watch for your founder's and closers' names",
+    done: connected > 0,
+    optional: true,
+    action: (
+      <Popover label={connected ? "Change" : "Connect"} title="Your tools" strong={!connected}>
+        {() => toolRow}
+      </Popover>
+    ),
+  });
 
-function ChipField({
-  label,
-  items,
-  onToggle,
-  onAdd,
-  placeholder,
-}: {
-  label: string;
-  items: { value: string; on: boolean; sources: string[]; tier: TrustTier }[];
-  onToggle: (i: number) => void;
-  onAdd?: (value: string) => void;
-  placeholder?: string;
-}) {
-  if (items.length === 0 && !onAdd) return null;
-  return (
-    <Field label={label}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {items.map((it, i) => (
-          <button
-            key={`${it.value}-${i}`}
-            type="button"
-            onClick={() => onToggle(i)}
-            title={`From ${it.sources.join(", ")}${it.on ? ". Tap to stop watching for it." : ". Tap to watch for it."}`}
-            className={cn(
-              "inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer",
-              it.on
-                ? it.tier === "likely"
-                  ? "border-transparent bg-[var(--surface-prefill)] text-[var(--text-primary)]"
-                  : "text-[var(--text-primary)]"
-                : "border-dashed text-[var(--text-muted)] line-through"
-            )}
-          >
-            <span className="truncate">{it.value}</span>
-            {it.on && <X className="h-3 w-3 shrink-0 opacity-40" />}
-          </button>
-        ))}
-        {onAdd && <AddInline placeholder={placeholder ?? "Add"} onAdd={onAdd} compact />}
-      </div>
-    </Field>
-  );
-}
+  const stats: { value: string; label: string; warn?: boolean }[] = [];
+  if (look?.google) {
+    if (look.google.rating != null)
+      stats.push({
+        value: `${look.google.rating}★`,
+        label: `Google${look.google.reviews != null ? `, ${look.google.reviews} reviews` : ""}`,
+      });
+    stats.push({
+      value: String(look.google.unansweredNegative),
+      label: "bad reviews, no reply",
+      warn: look.google.unansweredNegative > 0,
+    });
+  }
+  if (look?.trustpilot?.rating != null) stats.push({ value: `${look.trustpilot.rating}★`, label: "Trustpilot" });
+  if (look?.reddit)
+    stats.push({
+      value: String(look.reddit.mentions),
+      label: `Reddit this month${look.reddit.negative ? `, ${look.reddit.negative} negative` : ""}`,
+      warn: look.reddit.negative > 0,
+    });
+  if (look?.x)
+    stats.push({
+      value: String(look.x.mentions),
+      label: `X this month${look.x.negative ? `, ${look.x.negative} negative` : ""}`,
+      warn: look.x.negative > 0,
+    });
+  if (look?.news)
+    stats.push({
+      value: String(look.news.articles),
+      label: `news this month${look.news.negative ? `, ${look.news.negative} negative` : ""}`,
+      warn: look.news.negative > 0,
+    });
 
-function AddInline({ placeholder, onAdd, compact }: { placeholder: string; onAdd: (v: string) => void; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const submit = () => {
-    const v = value.trim();
-    if (v) onAdd(v);
-    setValue("");
-    setOpen(false);
-  };
-  if (!open) {
+  if (focus) {
+    const f = REP_FOCUS[focus] ?? { rows: [], todos: [], save: false };
+    const rows = pick(feed, f.rows);
+    const steps = pick(todos, f.todos);
+    const about = focus === "rep-google-reviews-watch" && !listing ? "No Google listing matched your website, so there's nothing to watch here yet." : f.about;
     return (
-      <button type="button" onClick={() => setOpen(true)} className={cn("inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer", compact && "rounded-full border border-dashed px-2.5 py-1")}>
-        <Plus className="h-3 w-3" /> {compact ? "Add" : placeholder}
-      </button>
+      <div className="space-y-6">
+        <SettingsHeader mark={<RepMark size={36} />} name={REP_SKILL_MANIFEST[focus as RepSkillId]?.name ?? "Settings"} buyer={data.buyer} fullSetupHref={`/dashboard/engagements/${data.engagementId}/bridges/rep-onboarding`} />
+        {about && <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">{about}</p>}
+        {rows.length > 0 && <Feed entries={rows} title={focus === "rep-onboarding" || focus === "rep-news-watch" || focus === "rep-search-watch" ? "What we watch" : "Settings"} />}
+        {steps.length > 0 && <Todos items={steps} />}
+      </div>
     );
   }
+
   return (
-    <input
-      autoFocus
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") submit();
-        if (e.key === "Escape") setOpen(false);
-      }}
-      onBlur={submit}
-      placeholder={placeholder}
-      className="h-8 w-56 border-b border-[var(--text-primary)] bg-transparent text-[13px] text-[var(--text-primary)] outline-none"
-    />
+    <div className="space-y-9">
+      <ReviewCard
+        mark={<RepMark />}
+        eyebrow="Reputation Manager"
+        title={`${name || data.buyer}, right now`}
+        pills={
+          <>
+            {data.website.domain && <Pill>{data.website.domain}</Pill>}
+            <Pill tone={connected ? "on" : undefined}>{connected ? `${connected} ${connected === 1 ? "tool" : "tools"} connected` : "No tools yet"}</Pill>
+            <Pill>Never posts for you</Pill>
+          </>
+        }
+      >
+        {stats.length > 0 && (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 @xl:grid-cols-4">
+            {stats.slice(0, 4).map((x) => (
+              <div key={x.label} className="min-w-0">
+                <p className={x.warn ? "text-2xl font-semibold tabular-nums tracking-tight text-[var(--error)]" : "text-2xl font-semibold tabular-nums tracking-tight text-[var(--text-primary)]"}>
+                  {x.value}
+                </p>
+                <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">{x.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {look && look.skipped.length > 0 && <p className="mt-3 text-[12px] text-[var(--text-muted)]">Not checked this time: {look.skipped.join(", ")}.</p>}
+      </ReviewCard>
+      <Feed entries={feed} onReread={onReread} />
+      <Todos items={todos} />
+    </div>
+  );
+}
+
+function EngineAnswers({ look }: { look: FirstLook }) {
+  return (
+    <ul className="grid gap-3 @xl:grid-cols-2">
+      {look.engines.map((e) => (
+        <li key={e.engine} className="flex gap-2.5">
+          <span
+            className={cn(
+              "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+              e.sentiment === "negative" || e.flagged ? "bg-[var(--error)]" : e.sentiment === "positive" ? "bg-emerald-500" : "bg-[var(--text-muted)]",
+            )}
+          />
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[var(--text-primary)]">{e.engine}</p>
+            <p className="line-clamp-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">{e.excerpt}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function WorthALook({ look }: { look: FirstLook }) {
+  const risky = look.search?.results.filter((r) => r.risky) ?? [];
+  return (
+    <ul className="space-y-2">
+      {look.google?.recentNegative.map((r, i) => (
+        <li key={`g${i}`} className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text-primary)]">Google, {r.rating}★:</span> {r.text}
+          {r.url && (
+            <a href={r.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </li>
+      ))}
+      {risky.slice(0, 3).map((r) => (
+        <li key={r.url} className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text-primary)]">
+            #{r.position} on Google for {look.search!.query}:
+          </span>{" "}
+          <a href={r.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-[var(--text-primary)]">
+            {r.title}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Editors ────────────────────────────────────────────────────────────
+
+function Done({ close }: { close: () => void }) {
+  return (
+    <div className="flex justify-end pt-1">
+      <button type="button" onClick={close} className="h-8 rounded-lg bg-[var(--ink)] px-3 text-[13px] font-medium text-[var(--ink-foreground)] cursor-pointer">
+        Done
+      </button>
+    </div>
+  );
+}
+
+function NameEditor({ draft, set, close }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  return (
+    <div className="space-y-3">
+      <Labeled label="The name you do business under">
+        <input
+          aria-label="Your name"
+          autoFocus
+          value={draft.operatorName}
+          onChange={(e) => set((d) => ({ ...d, operatorName: e.target.value }))}
+          onKeyDown={(e) => e.key === "Enter" && close()}
+          className={`${inputCls} h-9`}
+        />
+      </Labeled>
+      <Done close={close} />
+    </div>
+  );
+}
+
+function AuthorityEditor({ draft, set, close, suggestion }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void; suggestion: { name: string; role?: string | null } | null }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-[var(--text-secondary)]">The one person who decides what to do when serious findings add up. Nothing is ever posted on your behalf.</p>
+      <Labeled label="Their name">
+        <input
+          aria-label="Who's paged"
+          autoFocus
+          value={draft.soleAuthority}
+          onChange={(e) => set((d) => ({ ...d, soleAuthority: e.target.value }))}
+          placeholder="Their name"
+          className={`${inputCls} h-9`}
+        />
+      </Labeled>
+      {!draft.soleAuthority.trim() && suggestion && (
+        <button
+          type="button"
+          onClick={() => set((d) => ({ ...d, soleAuthority: suggestion.name }))}
+          className="rounded-full border border-dashed px-3 py-1 text-[13px] text-[var(--text-secondary)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] cursor-pointer"
+        >
+          Use {suggestion.name}
+          {suggestion.role ? `, ${suggestion.role}` : ""}
+        </button>
+      )}
+      <Labeled label="Text them too (optional)">
+        <input aria-label="Phone" value={draft.phone} onChange={(e) => set((d) => ({ ...d, phone: e.target.value }))} placeholder="Phone number" inputMode="tel" className={`${inputCls} h-9`} />
+      </Labeled>
+      <Done close={close} />
+    </div>
+  );
+}
+
+function ThresholdEditor({ draft, set, close }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  return (
+    <div className="space-y-3">
+      <Labeled label={`Page at severity ${draft.threshold ?? 80}${draft.threshold == null ? " (the default)" : ""}`}>
+        <input
+          aria-label="Severity"
+          type="range"
+          min={50}
+          max={95}
+          step={5}
+          value={draft.threshold ?? 80}
+          onChange={(e) =>
+            set((d) => ({
+              ...d,
+              threshold: Number(e.target.value) === 80 ? null : Number(e.target.value),
+            }))
+          }
+          className="w-full accent-[var(--ink)]"
+        />
+      </Labeled>
+      <p className="text-[12px] text-[var(--text-muted)]">Lower pages you sooner.</p>
+      <Done close={close} />
+    </div>
   );
 }

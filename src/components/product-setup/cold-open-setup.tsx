@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, Loader2, Plus, X } from "lucide-react";
+import { ArrowRight, Check, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { COLD_OPEN_SEND_TOOLS, findSetupTool, findShowtimeTool } from "@/lib/showtime-setup/catalog";
@@ -24,8 +24,10 @@ import type { ActivationStep } from "@/lib/showtime-setup/types";
 import type { ColdOpenSetupState, TrustTier } from "@/lib/cold-open-setup/types";
 import type { ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
+import { ChoiceList } from "./fact-token";
+import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry } from "./review-kit";
+import { anySkillDisplayName } from "@/lib/any-skill";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
-import { SkillSwitchRow } from "./skill-switch";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -34,10 +36,22 @@ import { cn } from "@/lib/utils";
 const SETUP_SKILLS: ColdOpenSkillId[] = ["voice-capture", "source-connect", "send-connect"];
 /** The day-to-day workers a person can switch off. */
 const RUN_SKILLS: ColdOpenSkillId[] = ["daily-send", "reply-sort", "send-report"];
-const SKILL_BLURB: Partial<Record<ColdOpenSkillId, string>> = {
-  "daily-send": "Picks the day's leads, writes their emails and queues them in your campaigns.",
-  "reply-sort": "Sorts replies into interested, not now, not a fit and unsubscribe.",
-  "send-report": "A weekly summary of what was sent and what came back.",
+/** What each skill's own settings show: the review rows (and "Left to do"
+ * steps) it owns, whether it has anything to save, and a line on what it
+ * does when it has nothing to set. */
+const COLD_OPEN_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean; about?: string }> = {
+  "icp-lock": { rows: ["site", "offer", "buyers", "crm"], todos: [], save: true },
+  "voice-capture": { rows: ["voice", "subjects", "emails"], todos: [], save: true },
+  "send-connect": { rows: ["outbound", "dns-", "campaign-"], todos: ["tool", "campaigns"], save: true, about: "Where your emails go out, and which campaign each group of buyers goes into." },
+  "source-connect": { rows: [], todos: [], save: false, about: "Where each group's leads come from. A list is used as soon as you add it." },
+  "daily-send": { rows: ["schedule", "emails"], todos: [], save: true },
+  "reply-sort": {
+    rows: ["outbound"],
+    todos: ["tool"],
+    save: false,
+    about: "Sorts each reply as it comes in (interested, not now, not a fit, an objection, an auto-reply or an unsubscribe) and sends anything real to your Queue. There's nothing to set: it reads replies from your sending tool.",
+  },
+  "send-report": { rows: [], todos: [], save: false, about: "Sums up each week's sending: how many emails went out, what happened to them, and how people replied. There's nothing to set." },
 };
 
 const STAGES: ActivationStage[] = [
@@ -106,6 +120,16 @@ function bareHost(value: string): string {
   return value.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
 }
 
+/** What still stands between this client and a first send, in words. */
+function stepsBeforeSending(data: ColdOpenSetupState, campaignMap: Record<string, string>): string[] {
+  const out: string[] = [];
+  const sending = data.tools.some((t) => t.group === "sending" && t.linked);
+  if (!sending) out.push("connect a sending tool");
+  else if (Object.keys(campaignMap).length === 0) out.push("pick a campaign for each buyer group");
+  if (data.leadSources.length === 0) out.push("add a lead list");
+  return out;
+}
+
 const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? "am" : "pm"}`;
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -115,11 +139,15 @@ export function ColdOpenSetup({
   onCancel,
   onSaved,
   cancelLabel = "Cancel",
+  focus,
 }: {
   engagementId: string;
   onCancel: () => void;
   onSaved?: (result: { runId?: string }) => void;
   cancelLabel?: string;
+  /** Opens as this one skill's own settings once Cold Open is set up: only
+   * the rows it owns, saved without touching which skills are on. */
+  focus?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -289,6 +317,9 @@ export function ColdOpenSetup({
     return m;
   }, [draft, onTouchsets]);
 
+  const settings = Boolean(focus && data?.configured);
+  const dirty = useMemo(() => (data && draft ? JSON.stringify({ ...draft, domain: "" }) !== JSON.stringify({ ...draftFrom(data), domain: "" }) : false), [data, draft]);
+
   async function save() {
     if (!data || !draft) return;
     setSaving(true);
@@ -305,13 +336,21 @@ export function ColdOpenSetup({
       campaignMap: Object.fromEntries(Object.entries(draft.campaignMap).filter(([slug, id]) => id && icps.some((i) => i.slug === slug))),
       daily: { volume: draft.volume, localHour: draft.localHour, timezone: draft.timezone.trim() || null, copyMode: draft.copyMode },
       skills: [...SETUP_SKILLS, ...skills],
+      ...(settings ? { settings: true } : {}),
     };
     try {
       const res = await fetch(`/api/engagements/${engagementId}/setup/cold-open/save`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.step ? `${json.step}: ${json.error}` : (json.error ?? "Couldn't save."));
-      toast.success(data.configured ? "Saved." : "Cold Open is set up. Live sending is still off.");
       await load({ fresh: true }).catch(() => undefined);
+      if (settings) {
+        // The panel it opened in says it saved; elsewhere, say so here.
+        if (onSaved) onSaved({});
+        else toast.success("Saved.");
+        return;
+      }
+      const left = stepsBeforeSending(data, body.campaignMap as Record<string, string>);
+      toast.success(left.length ? `Saved. Before anything sends: ${left.join(", ")}.` : "Saved. Nothing sends until you switch live sending on.");
       if (onSaved) onSaved({ runId: json.runId });
       else router.refresh();
     } catch (e) {
@@ -342,36 +381,31 @@ export function ColdOpenSetup({
     <div ref={topRef} className="@container mx-auto w-full max-w-3xl px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} skills={skills} setSkills={setSkills} onReread={() => setPhase("welcome")} toolRow={toolRow} />
-          <div className="sticky bottom-0 z-20 mt-8 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
-              <div className="min-w-0 flex-1 text-sm">
-                {saveError ? (
-                  <p className="flex items-center gap-2 text-[var(--error)]">
-                    <AlertTriangle className="h-4 w-4 shrink-0" /> {saveError}
-                  </p>
-                ) : missing.length ? (
-                  <p className="text-[var(--text-secondary)]">Add {missing.join(", ")} to save.</p>
-                ) : (
-                  <p className="flex items-center gap-2 text-[var(--text-secondary)]">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
-                      <Check className="h-3 w-3" strokeWidth={3.5} />
-                    </span>
-                    Ready. Nothing is sent until you switch live sending on.
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="ghost" className="hidden @md:inline-flex" onClick={onCancel} disabled={saving}>
-                  {cancelLabel}
-                </Button>
-                <Button size="lg" className="h-10 px-5" onClick={save} disabled={saving || missing.length > 0}>
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {data.configured ? "Save changes" : "Save setup"}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} />
+          {settings ? (
+            COLD_OPEN_FOCUS[focus!]?.save && (
+              <ApproveBar
+                label="Save"
+                note={missing.length ? "Something the full setup needs is missing. Open the full setup to add it." : undefined}
+                error={saveError}
+                saving={saving}
+                disabled={!dirty || missing.length > 0}
+                onApprove={save}
+                onCancel={onCancel}
+                cancelLabel={cancelLabel}
+              />
+            )
+          ) : (
+            <ApproveBar
+              note={missing.length ? "Add what we couldn't find above, then approve." : undefined}
+              error={saveError}
+              saving={saving}
+              disabled={missing.length > 0}
+              onApprove={save}
+              onCancel={onCancel}
+              cancelLabel={cancelLabel}
+            />
+          )}
         </>
       ) : (
         <Welcome
@@ -537,409 +571,917 @@ function Welcome({
 
 // ── Review ─────────────────────────────────────────────────────────────
 
+// ── Review: the campaign, what we did, what's left ─────────────────────
+//
+// What "Set it up" found, said back as a short feed the person approves:
+// the campaign at a glance, each thing we did with where it came from
+// (Change opens a small editor; Undo puts back what we found), and the
+// few steps left before anything sends. No form on the page itself.
+
 function Review({
   data,
   draft,
   set,
-  skills,
-  setSkills,
   onReread,
   toolRow,
+  focus,
+  reload,
 }: {
   data: ColdOpenSetupState;
   draft: Draft;
   set: (fn: (d: Draft) => Draft) => void;
-  skills: string[];
-  setSkills: (fn: (s: string[]) => string[]) => void;
   onReread: () => void;
   toolRow: ReactNode;
+  focus?: string;
+  reload: () => Promise<unknown>;
 }) {
   const p = data.proposal;
   const out = data.outbound;
-  const platformName = p.platform ? (findSetupTool(`cold_open_${p.platform}`)?.label ?? p.platform) : null;
-  const setIcp = (i: number, patch: Partial<IcpDraft>) => set((d) => ({ ...d, icps: d.icps.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
-  const shareTotal = draft.icps.reduce((a, i) => a + (i.label.trim() ? i.share : 0), 0);
-  const liveOn = p.daily.liveSendEnabled;
+  const initial = useMemo(() => draftFrom(data), [data]);
+  const icps = draft.icps.filter((i) => i.label.trim());
+  const platformName = out ? (findSetupTool(`cold_open_${out.platform}`)?.label ?? out.platform) : null;
+  const sendingLinked = data.tools.some((t) => t.group === "sending" && t.linked);
+  const campaigns = out?.campaigns ?? [];
+  const unmapped = icps.filter((i) => !draft.campaignMap[i.slug]);
   const bridge = (worker: string) => `/dashboard/engagements/${data.engagementId}/bridges/${worker}`;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  // "your website" -> "From your website"; a default says so plainly.
+  const from = (source: string) => (source === "saved" ? "Saved" : source === "a common default" ? "A starting point. Change it anytime." : source ? `From ${source}` : "");
+
+  const entries: FeedEntry[] = [];
+
+  entries.push(
+    data.website.domain
+      ? { key: "site", text: <>Read <b>{data.website.domain}</b></>, source: data.website.readAt ? `Read ${new Date(data.website.readAt).toLocaleDateString()}` : "" }
+      : { key: "site", todo: true, text: <>No website yet</>, action: { label: "Add it", onClick: onReread } }
+  );
+
+  const offerEditor = (close: () => void) => (
+    <OfferEditor
+      value={draft.product}
+      onSave={(v) => {
+        set((d) => ({ ...d, product: v }));
+        close();
+      }}
+    />
+  );
+  entries.push(
+    draft.product.name.trim()
+      ? {
+          key: "offer",
+          text: (
+            <>
+              Your offer is <b>{draft.product.name}</b>
+              {draft.product.price ? <> at <b>{draft.product.price}</b></> : null}
+              {draft.product.valueProp ? <span className="block text-[var(--text-muted)]">{draft.product.valueProp}</span> : <span className="block text-[var(--text-muted)]">We still need a line on what it does for people.</span>}
+            </>
+          ),
+          source: from(p.product.name.source),
+          editor: offerEditor,
+          undo: same(draft.product, initial.product) ? undefined : () => set((d) => ({ ...d, product: initial.product })),
+          todo: !draft.product.valueProp.trim(),
+        }
+      : { key: "offer", todo: true, text: <>Couldn&apos;t tell what you sell</>, editor: offerEditor, editLabel: "Add it" }
+  );
+
+  const buyersEditor = (close: () => void) => (
+    <BuyersEditor
+      value={draft.icps}
+      showShare={icps.length > 1}
+      onSave={(list) => {
+        set((d) => ({ ...d, icps: list }));
+        close();
+      }}
+    />
+  );
+  entries.push(
+    icps.length
+      ? {
+          key: "buyers",
+          text: (
+            <>
+              Writing to{" "}
+              {icps.map((i, n) => (
+                <span key={i.slug}>
+                  {n > 0 ? (n === icps.length - 1 ? " and " : ", ") : ""}
+                  <b>{i.label}</b>
+                  {i.min || i.max ? ` (${i.min || "1"}${i.max ? `-${i.max}` : "+"} people)` : ""}
+                </span>
+              ))}
+            </>
+          ),
+          source: icps[0].evidence ?? (icps[0].tier === "done" ? "Saved" : "From your website"),
+          editor: buyersEditor,
+          undo: same(draft.icps, initial.icps) ? undefined : () => set((d) => ({ ...d, icps: initial.icps })),
+        }
+      : { key: "buyers", todo: true, text: <>Couldn&apos;t tell who you sell to</>, editor: buyersEditor, editLabel: "Add them" }
+  );
+
+  entries.push({
+    key: "voice",
+    text: (
+      <>
+        Emails open with <b>&ldquo;{draft.voice.greeting || "Hi"}&rdquo;</b>, sign off <b>&ldquo;{draft.voice.signOff || "Best,"}&rdquo;</b> and sound <b>{draft.voice.tone.toLowerCase() || "plain"}</b>
+      </>
+    ),
+    source: from(p.voice.tone.source),
+    editor: (close) => (
+      <VoiceEditor
+        value={draft.voice}
+        onSave={(v) => {
+          set((d) => ({ ...d, voice: v }));
+          close();
+        }}
+      />
+    ),
+    undo: same(draft.voice, initial.voice) ? undefined : () => set((d) => ({ ...d, voice: initial.voice })),
+  });
+
+  if (out) {
+    entries.push({
+      key: "outbound",
+      text: (
+        <>
+          Read {platformName}: <b>{out.campaigns.length} campaigns</b>
+          {out.overallReplyRate != null ? <>, <b>{out.overallReplyRate}%</b> replied</> : null}
+          {out.capacity != null ? <>, mailboxes send up to <b>{out.capacity} a day</b></> : null}
+        </>
+      ),
+      source: `Read ${new Date(out.pulledAt).toLocaleDateString()}`,
+    });
+    for (const d of out.domains.filter((x) => !x.ok)) {
+      entries.push({ key: `dns-${d.domain}`, warn: true, text: <><b>{d.domain}</b> is missing email records: {d.problems.join(" ")}</>, source: "Fix before sending more" });
+    }
+  }
+  if (data.buyers) {
+    const b = data.buyers;
+    entries.push({
+      key: "crm",
+      text: (
+        <>
+          Your <b>{b.companies} customers</b> in HubSpot are mostly {b.industries[0] ? <b>{b.industries[0].industry}</b> : "varied"}
+          {b.sweetSpot ? <>, <b>{b.sweetSpot.min}{b.sweetSpot.max ? `-${b.sweetSpot.max}` : "+"} people</b></> : null}
+        </>
+      ),
+      source: `${b.wonDeals} won deals`,
+    });
+  }
+
+  const subjectsOn = draft.subjects.filter((x) => x.on).length;
+  if (draft.subjects.length || focus === "voice-capture") {
+    const toggleSubject = (i: number) => set((d) => ({ ...d, subjects: d.subjects.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }));
+    entries.push({
+      key: "subjects",
+      text: subjectsOn ? <>Reusing <b>{subjectsOn} of your best subject lines</b></> : <>No subject lines of your own, so each lead gets one written for them</>,
+      source: draft.subjects.length ? (platformName ? `From ${platformName}` : "Saved") : undefined,
+      // In Voice Capture's own settings the lines are chips to switch and add to.
+      ...(focus
+        ? {
+            body: (
+              <ChipRow
+                items={draft.subjects.map((x) => ({ value: x.value, on: x.on, hint: x.replyRate != null ? `${x.replyRate}% replied` : undefined }))}
+                onToggle={toggleSubject}
+                onAdd={(v) => set((d) => (d.subjects.some((x) => x.value.toLowerCase() === v.toLowerCase()) ? d : { ...d, subjects: [...d.subjects, { value: v, source: "you", replyRate: null, on: true }] }))}
+                addLabel="Add a subject line"
+              />
+            ),
+          }
+        : {
+            editor: () => (
+              <ToggleList items={draft.subjects.map((x) => ({ label: x.value, hint: x.replyRate != null ? `${x.replyRate}% replied` : undefined, on: x.on }))} onToggle={toggleSubject} />
+            ),
+          }),
+    });
+  }
+
+  const ownOn = draft.touchsets.filter((t) => t.on).length;
+  entries.push({
+    key: "emails",
+    text:
+      draft.copyMode === "upload" ? (
+        <>Sending <b>{ownOn} of your own sequences</b> as written</>
+      ) : (
+        <>Writing <b>fresh emails for each lead</b>, three per person</>
+      ),
+    source: draft.copyMode === "upload" ? `From ${platformName ?? "your saved emails"}` : "",
+    editor: () => <EmailsEditor draft={draft} set={set} />,
+  });
+
+  if (campaigns.length) {
+    for (const i of icps.filter((x) => draft.campaignMap[x.slug])) {
+      const c = campaigns.find((x) => x.id === draft.campaignMap[i.slug]);
+      entries.push({
+        key: `campaign-${i.slug}`,
+        text: <>{i.label} go into <b>{c?.name ?? "a campaign"}</b></>,
+        source: p.campaignMap[i.slug]?.id === draft.campaignMap[i.slug] ? "Matched by Jev" : "",
+        editor: (close) => <CampaignPicker campaigns={campaigns} value={draft.campaignMap[i.slug]} onPick={(v) => (set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [i.slug]: v } })), close())} />,
+      });
+    }
+  }
+
+  entries.push({
+    key: "schedule",
+    text: (
+      <>
+        <b>{draft.volume} new leads a day</b> at <b>{hourLabel(draft.localHour)}</b>
+        {draft.timezone ? <> {draft.timezone.replace(/_/g, " ")}</> : null}
+      </>
+    ),
+    source: p.daily.volumeSource === "saved" ? "Saved" : p.daily.volumeSource.charAt(0).toUpperCase() + p.daily.volumeSource.slice(1),
+    editor: (close) => (
+      <ScheduleEditor
+        value={{ volume: draft.volume, localHour: draft.localHour, timezone: draft.timezone }}
+        onSave={(v) => {
+          set((d) => ({ ...d, ...v }));
+          close();
+        }}
+      />
+    ),
+  });
+
+  // ── Left to do ──
+  const todos: { key: string; label: string; done: boolean; action?: ReactNode }[] = [
+    { key: "tool", label: sendingLinked ? `Sending through ${platformName ?? "your tool"}` : "Connect your sending tool", done: sendingLinked, action: sendingLinked ? null : <Popover label="Connect" title="Your sending tool" strong>{() => <div className="py-1">{toolRow}</div>}</Popover> },
+  ];
+  if (sendingLinked && icps.length) {
+    todos.push({
+      key: "campaigns",
+      label: unmapped.length ? `Choose a campaign for ${unmapped.map((i) => i.label).join(" and ")}` : "Each group has a campaign",
+      done: unmapped.length === 0,
+      action: unmapped.length && campaigns.length ? (
+        <Popover label="Choose" title={`Campaign for ${unmapped[0].label}`} strong>
+          {(close) => <CampaignPicker campaigns={campaigns} value={null} onPick={(v) => (set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [unmapped[0].slug]: v } })), close())} />}
+        </Popover>
+      ) : null,
+    });
+  }
+  todos.push({
+    key: "leads",
+    label: data.leadSources.length ? `Leads from ${data.leadSources.map((l) => l.icp).join(", ")}` : "Add a lead list",
+    done: data.leadSources.length > 0,
+    action: data.leadSources.length ? null : <a href={bridge("source-connect")} className="text-[13px] font-medium text-[var(--text-primary)] underline underline-offset-4">Add</a>,
+  });
+  todos.push({
+    key: "live",
+    label: p.daily.liveSendEnabled ? "Live sending is on" : "Switch on live sending when you're ready (until then, emails are drafts)",
+    done: p.daily.liveSendEnabled,
+    action: p.daily.liveSendEnabled ? null : <a href={bridge("daily-send")} className="text-[13px] text-[var(--text-muted)] underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)]">Later</a>,
+  });
+  const ready = todos.filter((t) => t.key !== "live").every((t) => t.done);
+
+  if (focus) {
+    const f = COLD_OPEN_FOCUS[focus] ?? { rows: [], todos: [], save: false };
+    const rows = pick(entries, f.rows);
+    const steps = pick(todos, f.todos);
+    const own = focus === "source-connect" || focus === "daily-send";
+    return (
+      <div className="space-y-6">
+        <SettingsHeader mark={<ColdOpenMark size={36} />} name={anySkillDisplayName(focus)} buyer={data.buyer} fullSetupHref={bridge("icp-lock")} />
+        {f.about && <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">{f.about}</p>}
+        {(rows.length > 0 || own) && (
+          <ol className="space-y-1">
+            {rows.map((e) => (
+              <FeedRow key={e.key} entry={e} />
+            ))}
+            {focus === "source-connect" && <LeadLists engagementId={data.engagementId} icps={icps} />}
+            {focus === "daily-send" && (
+              <>
+                <LiveSending engagementId={data.engagementId} daily={p.daily} onChanged={reload} />
+                <HeldLeads engagementId={data.engagementId} />
+              </>
+            )}
+          </ol>
+        )}
+        {steps.length > 0 && <Todos items={steps} />}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-11">
-      <header className="flex items-start gap-4">
-        <ColdOpenMark />
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)]">{draft.product.name || data.buyer}&apos;s cold email</h1>
-          <p className="text-[14px] text-[var(--text-secondary)]">
-            {data.website.domain ?? "No website yet"} ·{" "}
-            <button type="button" onClick={onReread} className="font-medium underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
-              Change website or tools
-            </button>
-          </p>
+    <div className="space-y-9">
+      {/* The campaign at a glance */}
+      <header className="rounded-2xl bg-black/[0.025] p-5 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06] @xl:p-6">
+        <div className="flex items-start gap-4">
+          <ColdOpenMark size={40} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)]">{data.buyer}&apos;s cold email</p>
+            <h1 className="mt-1 text-[22px] font-semibold leading-snug tracking-tight text-[var(--text-primary)] @xl:text-[26px]">
+              {draft.product.name || "Your offer"} <span className="text-[var(--text-muted)]">to</span> {icps.map((i) => i.label).join(" and ") || "your buyers"}
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2 text-[12px]">
+              <Pill>{draft.volume} a day at {hourLabel(draft.localHour)}</Pill>
+              <Pill>Sounds {draft.voice.tone.toLowerCase() || "plain"}</Pill>
+              <Pill>{draft.copyMode === "upload" ? "Your own emails" : "Written per lead"}</Pill>
+              <Pill tone={ready && p.daily.liveSendEnabled ? "on" : "off"}>{ready ? (p.daily.liveSendEnabled ? "Sending" : "Drafts only") : "Not sending yet"}</Pill>
+            </div>
+          </div>
         </div>
       </header>
 
-      {(out || data.buyers) && <Findings data={data} />}
-
-      <Section title="What you sell">
-        <div className="space-y-4">
-          <TextField label="Product" value={draft.product.name} tier={p.product.name.tier} onChange={(v) => set((d) => ({ ...d, product: { ...d.product, name: v } }))} />
-          <TextField label="Web address" value={draft.product.url} tier={p.product.url.tier} onChange={(v) => set((d) => ({ ...d, product: { ...d.product, url: v } }))} />
-          <TextField label="Price" value={draft.product.price} tier={p.product.price.tier} placeholder="Optional" onChange={(v) => set((d) => ({ ...d, product: { ...d.product, price: v } }))} />
-          <TextField label="What it does for people" value={draft.product.valueProp} tier={p.product.valueProp.tier} multiline onChange={(v) => set((d) => ({ ...d, product: { ...d.product, valueProp: v } }))} />
+      {/* What we did */}
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between gap-4 px-1">
+          <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">What we did</h2>
+          <button type="button" onClick={onReread} className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            Read again
+          </button>
         </div>
-      </Section>
+        <ol className="space-y-1">
+          {entries.map((e) => (
+            <FeedRow key={e.key} entry={e} />
+          ))}
+        </ol>
+      </section>
 
-      <Section title="Who you sell to" hint={shareTotal && shareTotal !== 100 ? `Shares add to ${shareTotal}%. We scale them to 100.` : "Each group gets its share of the day's leads."}>
-        <ul className="space-y-5">
-          {draft.icps.map((icp, i) => (
-            <li key={icp.slug} className="space-y-2 border-l-2 pl-4" style={{ borderColor: icp.tier === "likely" ? "var(--text-prefill-accent)" : undefined }}>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  value={icp.label}
-                  onChange={(e) => setIcp(i, { label: e.target.value })}
-                  placeholder="e.g. Marketing agencies"
-                  className="h-9 min-w-0 flex-1 border-b border-[var(--text-muted)]/40 bg-transparent text-[16px] font-medium text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-                />
-                <label className="flex items-center gap-1 text-[13px] text-[var(--text-secondary)]">
-                  <input type="number" min={0} max={100} value={icp.share} onChange={(e) => setIcp(i, { share: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-14 border-b border-[var(--text-muted)]/40 bg-transparent text-right tabular-nums outline-none focus:border-[var(--text-primary)]" />%
-                </label>
-                <button type="button" aria-label="Remove" onClick={() => set((d) => ({ ...d, icps: d.icps.filter((_, j) => j !== i) }))} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--text-secondary)]">
-                Team size
-                <input inputMode="numeric" value={icp.min} onChange={(e) => setIcp(i, { min: e.target.value.replace(/\D/g, "") })} placeholder="any" className="h-7 w-14 border-b border-[var(--text-muted)]/40 bg-transparent text-center tabular-nums outline-none focus:border-[var(--text-primary)]" />
-                to
-                <input inputMode="numeric" value={icp.max} onChange={(e) => setIcp(i, { max: e.target.value.replace(/\D/g, "") })} placeholder="any" className="h-7 w-14 border-b border-[var(--text-muted)]/40 bg-transparent text-center tabular-nums outline-none focus:border-[var(--text-primary)]" />
-                people
-              </div>
-              <Chips
-                label="Skip if"
-                items={icp.disqualifyIf}
-                onRemove={(k) => setIcp(i, { disqualifyIf: icp.disqualifyIf.filter((_, j) => j !== k) })}
-                onAdd={(v) => setIcp(i, { disqualifyIf: [...icp.disqualifyIf, v] })}
-                placeholder="e.g. already a customer"
-              />
-              {icp.evidence && <p className="text-[12px] text-[var(--text-prefill-accent)]">{icp.evidence}.</p>}
-              {out && (
-                <div className="flex flex-wrap items-center gap-2 text-[13px] text-[var(--text-secondary)]">
-                  Goes into
-                  <select
-                    value={draft.campaignMap[icp.slug] ?? ""}
-                    onChange={(e) => set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [icp.slug]: e.target.value } }))}
-                    className="h-8 max-w-[18rem] truncate border-b border-[var(--text-muted)]/40 bg-transparent text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)] cursor-pointer"
-                  >
-                    <option value="">No campaign yet</option>
-                    {out.campaigns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.replyRate != null ? ` (${c.replyRate}% replied)` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {!draft.campaignMap[icp.slug] && p.campaignMap[icp.slug]?.tier === "ask" && (
-                    <button type="button" onClick={() => set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [icp.slug]: p.campaignMap[icp.slug]!.id } }))} className="rounded-full border border-dashed px-2.5 py-0.5 text-[12px] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] cursor-pointer">
-                      Maybe {p.campaignMap[icp.slug]!.name}?
-                    </button>
-                  )}
-                </div>
-              )}
+      {/* Left to do */}
+      <section className="space-y-3">
+        <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{ready ? "Ready" : "Left to do"}</h2>
+        <ul className="rounded-2xl bg-black/[0.025] px-4 py-1 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
+          {todos.map((t) => (
+            <li key={t.key} className="flex items-center gap-3 py-3">
+              <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", t.done ? "bg-[var(--ink)] text-[var(--ink-foreground)]" : "ring-1 ring-inset ring-[var(--text-muted)]/50")}>
+                {t.done && <Check className="h-3 w-3" strokeWidth={3.5} />}
+              </span>
+              <span className={cn("min-w-0 flex-1 text-[14px]", t.done ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]")}>{t.label}</span>
+              {t.action}
             </li>
           ))}
         </ul>
+      </section>
+    </div>
+  );
+}
+
+function OfferEditor({ value, onSave }: { value: Draft["product"]; onSave: (v: Draft["product"]) => void }) {
+  const [v, setV] = useState(value);
+  const up = (k: keyof Draft["product"]) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), onSave({ ...v, name: v.name.trim(), price: v.price.trim(), valueProp: v.valueProp.trim(), url: v.url.trim() }))} className="space-y-3">
+      <Labeled label="What you sell">
+        <input autoFocus value={v.name} onChange={up("name")} className={cn(inputCls, "h-10")} />
+      </Labeled>
+      <Labeled label="What it does for people">
+        <textarea value={v.valueProp} onChange={up("valueProp")} rows={2} className={cn(inputCls, "resize-none py-2 leading-relaxed")} />
+      </Labeled>
+      <div className="grid grid-cols-2 gap-2">
+        <Labeled label="Price (optional)">
+          <input value={v.price} onChange={up("price")} className={cn(inputCls, "h-10")} />
+        </Labeled>
+        <Labeled label="Links go to">
+          <input value={v.url} onChange={up("url")} className={cn(inputCls, "h-10")} />
+        </Labeled>
+      </div>
+      <div className="flex justify-end">
+        <Button type="submit" size="sm" disabled={!v.name.trim()}>
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function VoiceEditor({ value, onSave }: { value: Draft["voice"]; onSave: (v: Draft["voice"]) => void }) {
+  const [v, setV] = useState(value);
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), onSave({ greeting: v.greeting.trim(), signOff: v.signOff.trim(), tone: v.tone.trim() }))} className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Labeled label="Opens with">
+          <input autoFocus value={v.greeting} onChange={(e) => setV((x) => ({ ...x, greeting: e.target.value }))} placeholder="Hi" className={cn(inputCls, "h-10")} />
+        </Labeled>
+        <Labeled label="Signs off">
+          <input value={v.signOff} onChange={(e) => setV((x) => ({ ...x, signOff: e.target.value }))} placeholder="Best," className={cn(inputCls, "h-10")} />
+        </Labeled>
+      </div>
+      <Labeled label="Sounds">
+        <input value={v.tone} onChange={(e) => setV((x) => ({ ...x, tone: e.target.value }))} placeholder="Plain and friendly" className={cn(inputCls, "h-10")} />
+      </Labeled>
+      <p className="text-[12px] text-[var(--text-muted)]">Their first name goes after the greeting.</p>
+      <div className="flex justify-end">
+        <Button type="submit" size="sm" disabled={!v.greeting.trim() || !v.signOff.trim() || !v.tone.trim()}>
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function BuyersEditor({ value, showShare, onSave }: { value: IcpDraft[]; showShare: boolean; onSave: (v: IcpDraft[]) => void }) {
+  const [list, setList] = useState<IcpDraft[]>(() => (value.length ? value : [{ slug: `icp-${Date.now().toString(36)}`, label: "", share: 100, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }]));
+  const up = (i: number, patch: Partial<IcpDraft>) => setList((l) => l.map((x, j) => (j === i ? { ...x, ...patch, tier: "done" } : x)));
+  const many = showShare || list.length > 1;
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), onSave(list.filter((x) => x.label.trim()).map((x) => ({ ...x, label: x.label.trim() }))))} className="space-y-3">
+      {list.map((g, i) => (
+        <div key={g.slug} className="space-y-2 rounded-xl border p-3">
+          <div className="flex items-center gap-2">
+            <input autoFocus={i === 0} value={g.label} onChange={(e) => up(i, { label: e.target.value })} placeholder="e.g. Marketing agencies" className={cn(inputCls, "h-9")} />
+            <button type="button" aria-label="Remove" onClick={() => setList((l) => l.filter((_, j) => j !== i))} className="text-[var(--text-muted)] hover:text-[var(--error)] cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+            <input inputMode="numeric" value={g.min} onChange={(e) => up(i, { min: e.target.value.replace(/\D/g, "") })} placeholder="any" className={cn(inputCls, "h-8 w-14 px-2 text-center")} />
+            to
+            <input inputMode="numeric" value={g.max} onChange={(e) => up(i, { max: e.target.value.replace(/\D/g, "") })} placeholder="any" className={cn(inputCls, "h-8 w-14 px-2 text-center")} />
+            people
+            {many && (
+              <>
+                <span className="ml-auto" />
+                <input inputMode="numeric" value={String(g.share)} onChange={(e) => up(i, { share: Number(e.target.value.replace(/\D/g, "")) || 0 })} className={cn(inputCls, "h-8 w-12 px-2 text-center")} />% of leads
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => set((d) => ({ ...d, icps: [...d.icps, { slug: `icp-${Date.now().toString(36)}`, label: "", share: d.icps.length ? 0 : 100, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }] }))}
+          onClick={() => setList((l) => [...l, { slug: `icp-${Date.now().toString(36)}`, label: "", share: 0, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }])}
           className="inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
         >
-          <Plus className="h-3 w-3" /> Add a group
+          <Plus className="h-3 w-3" /> Another group
         </button>
-      </Section>
+        <Button type="submit" size="sm" disabled={!list.some((x) => x.label.trim())}>
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
 
-      <Section title="How you write" hint={p.voice.greeting.source && p.voice.greeting.source !== "saved" ? `From ${p.voice.greeting.source}` : undefined}>
-        <div className="space-y-4">
-          <TextField label="Greeting" value={draft.voice.greeting} tier={p.voice.greeting.tier} placeholder="e.g. Hi (their first name follows)" onChange={(v) => set((d) => ({ ...d, voice: { ...d.voice, greeting: v } }))} />
-          <TextField label="Sign-off" value={draft.voice.signOff} tier={p.voice.signOff.tier} multiline onChange={(v) => set((d) => ({ ...d, voice: { ...d.voice, signOff: v } }))} />
-          <TextField label="Tone" value={draft.voice.tone} tier={p.voice.tone.tier} placeholder="e.g. Plain, friendly, no hype" onChange={(v) => set((d) => ({ ...d, voice: { ...d.voice, tone: v } }))} />
-        </div>
-      </Section>
-
-      <Section title="Subject lines" hint={draft.subjects.length ? "Rotated across leads. Tap to switch one off." : "Optional. Without them we write our own."}>
-        <ul className="space-y-1.5">
-          {draft.subjects.map((s, i) => (
-            <li key={`${s.value}-${i}`}>
-              <button type="button" onClick={() => set((d) => ({ ...d, subjects: d.subjects.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} className={cn("flex w-full items-start gap-2.5 text-left cursor-pointer", s.on ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] line-through")}>
-                <Tick on={s.on} />
-                <span className="min-w-0 flex-1 text-[15px]">{s.value}</span>
-                <span className="shrink-0 text-[12px] text-[var(--text-muted)] no-underline">
-                  {s.replyRate != null ? `${s.replyRate}% replied` : s.source === "saved" ? "" : s.source}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <AddInline placeholder="Add a subject line, e.g. question about {company_name}" onAdd={(v) => set((d) => ({ ...d, subjects: [...d.subjects, { value: v, source: "you", replyRate: null, on: true }] }))} />
-      </Section>
-
-      <Section title="The emails" hint="Write fresh for each lead, or send your own proven sequence as written.">
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {(["generate", "upload"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                disabled={mode === "upload" && draft.touchsets.length === 0}
-                onClick={() => set((d) => ({ ...d, copyMode: mode }))}
-                className={cn("rounded-full border px-3.5 py-1.5 text-[13px] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40", draft.copyMode === mode ? "border-[var(--text-primary)] text-[var(--text-primary)]" : "border-dashed text-[var(--text-muted)]")}
-              >
-                {mode === "generate" ? "Write for each lead" : "Send my own emails"}
-              </button>
+function ScheduleEditor({ value, onSave }: { value: { volume: number; localHour: number; timezone: string }; onSave: (v: { volume: number; localHour: number; timezone: string }) => void }) {
+  const [v, setV] = useState({ ...value, volume: String(value.volume) });
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), onSave({ volume: Math.max(1, Math.min(500, Number(v.volume) || value.volume)), localHour: v.localHour, timezone: v.timezone.trim() }))} className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Labeled label="New leads a day">
+          <input autoFocus inputMode="numeric" value={v.volume} onChange={(e) => setV((x) => ({ ...x, volume: e.target.value.replace(/\D/g, "") }))} className={cn(inputCls, "h-10")} />
+        </Labeled>
+        <Labeled label="Queued at">
+          <select value={v.localHour} onChange={(e) => setV((x) => ({ ...x, localHour: Number(e.target.value) }))} className={cn(inputCls, "h-10 cursor-pointer")}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>
+                {hourLabel(h)}
+              </option>
             ))}
-          </div>
-          {draft.touchsets.length > 0 && (
-            <ul className="space-y-3">
-              {draft.touchsets.map((t, i) => (
-                <li key={i} className={cn("border p-3 transition-opacity", !t.on && "opacity-50")}>
-                  <button type="button" onClick={() => set((d) => ({ ...d, touchsets: d.touchsets.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} className="flex w-full items-start gap-2.5 text-left cursor-pointer">
-                    <Tick on={t.on} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-[var(--text-primary)]">{t.subject}</span>
-                      <span className="mt-0.5 line-clamp-2 block text-[13px] leading-relaxed text-[var(--text-secondary)]">{t.body1}</span>
-                      <span className="mt-1 block text-[12px] text-[var(--text-muted)]">From {t.campaign === "saved" ? "your saved emails" : t.campaign}, 3 emails</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {p.touchsetsDropped > 0 && (
-            <p className="text-[12px] text-[var(--text-muted)]">
-              {p.touchsetsDropped} more {p.touchsetsDropped === 1 ? "sequence uses" : "sequences use"} fields we can&apos;t fill in, so {p.touchsetsDropped === 1 ? "it's" : "they're"} left out.
-            </p>
-          )}
-        </div>
-      </Section>
+          </select>
+        </Labeled>
+      </div>
+      <Labeled label="Time zone">
+        <input value={v.timezone} onChange={(e) => setV((x) => ({ ...x, timezone: e.target.value }))} placeholder="e.g. America/New_York" className={cn(inputCls, "h-10")} />
+      </Labeled>
+      <div className="flex justify-end">
+        <Button type="submit" size="sm">
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
 
-      <Section title="Daily sending" hint={p.daily.volumeSource !== "saved" ? `Volume: ${p.daily.volumeSource}.` : undefined}>
-        <div className="space-y-4">
-          <Field label="New leads a day">
-            <input type="number" min={1} max={500} value={draft.volume} onChange={(e) => set((d) => ({ ...d, volume: Math.max(1, Math.min(500, Number(e.target.value) || 1)) }))} className="h-9 w-24 border-b border-[var(--text-muted)]/40 bg-transparent tabular-nums text-[15px] text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]" />
-            {out?.capacity != null && <span className="ml-3 text-[13px] text-[var(--text-muted)]">Your mailboxes send up to {out.capacity} a day.</span>}
-          </Field>
-          <Field label="Queued at">
-            <div className="flex flex-wrap items-center gap-2 text-[14px]">
-              <select value={draft.localHour} onChange={(e) => set((d) => ({ ...d, localHour: Number(e.target.value) }))} className="h-9 border-b border-[var(--text-muted)]/40 bg-transparent text-[var(--text-primary)] outline-none cursor-pointer">
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>
-                    {hourLabel(h)}
-                  </option>
-                ))}
-              </select>
-              <input value={draft.timezone} onChange={(e) => set((d) => ({ ...d, timezone: e.target.value }))} placeholder="Time zone, e.g. America/New_York" className="h-9 w-64 border-b border-[var(--text-muted)]/40 bg-transparent text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]" />
-            </div>
-          </Field>
-          <Field label="Leads from">
-            {data.leadSources.length ? (
-              <p className="text-[14px] text-[var(--text-primary)]">
-                {data.leadSources.map((s) => `${s.icp}${s.rows ? ` (${s.rows} rows)` : ""}`).join(", ")}{" "}
-                <a href={bridge("source-connect")} className="ml-1 text-[13px] text-[var(--text-muted)] underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)]">
-                  Change
-                </a>
-              </p>
-            ) : (
-              <a href={bridge("source-connect")} className="text-[14px] font-medium text-[var(--text-primary)] underline decoration-dashed underline-offset-4">
-                Add a lead list
-              </a>
-            )}
-          </Field>
-          <Field label="Live sending">
-            <p className="text-[14px] text-[var(--text-primary)]">
-              {liveOn ? "On. Leads go into your campaigns each day." : "Off. Each day's emails are drafted for you to look over, not sent."}{" "}
-              <a href={bridge("daily-send")} className="ml-1 text-[13px] text-[var(--text-muted)] underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)]">
-                {liveOn ? "Change" : "Switch on when ready"}
-              </a>
-            </p>
-          </Field>
-        </div>
-      </Section>
+function CampaignPicker({ campaigns, value, onPick }: { campaigns: { id: string; name: string; replyRate: number | null }[]; value: string | null | undefined; onPick: (id: string) => void }) {
+  return <ChoiceList options={campaigns.map((c) => ({ value: c.id, label: c.name, hint: c.replyRate != null ? `${c.replyRate}% replied` : undefined }))} value={value ?? null} onPick={onPick} />;
+}
 
-      <Section title="Skills" hint="Switch any of them off.">
-        <ul className="divide-y">
-          {RUN_SKILLS.map((id) => (
-            <SkillSwitchRow key={id} skillId={id} blurb={SKILL_BLURB[id] ?? ""} on={skills.includes(id)} onChange={(v) => setSkills((s) => (v ? [...new Set([...s, id])] : s.filter((x) => x !== id)))} />
-          ))}
-        </ul>
-      </Section>
 
-      <Section title="Your tools" hint={platformName ? `Sending through ${platformName}.` : "Connect your sending tool to pick campaigns."}>
-        {toolRow}
-      </Section>
+
+// ── Emails ─────────────────────────────────────────────────────────────
+
+function EmailsEditor({ draft, set }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void }) {
+  const [writing, setWriting] = useState(false);
+  return (
+    <div className="space-y-3">
+      <ChoiceList
+        options={[
+          { value: "generate", label: "Write fresh for each lead" },
+          { value: "upload", label: "Send my own sequences as written", hint: draft.touchsets.length ? `${draft.touchsets.length} to choose from` : "Write at least two below" },
+        ]}
+        value={draft.copyMode}
+        onPick={(v) => set((d) => ({ ...d, copyMode: v as Draft["copyMode"] }))}
+      />
+      {draft.copyMode === "upload" && draft.touchsets.length > 0 && (
+        <ToggleList items={draft.touchsets.map((t) => ({ label: t.subject, hint: t.campaign, on: t.on }))} onToggle={(i) => set((d) => ({ ...d, touchsets: d.touchsets.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} />
+      )}
+      {draft.copyMode === "upload" &&
+        (writing ? (
+          <SequenceWriter
+            onAdd={(t) => {
+              set((d) => ({ ...d, touchsets: [...d.touchsets, { ...t, campaign: "Written by you", on: true }] }));
+              setWriting(false);
+            }}
+            onCancel={() => setWriting(false)}
+          />
+        ) : (
+          <button type="button" onClick={() => setWriting(true)} className="inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            <Plus className="h-3 w-3" /> Write one yourself
+          </button>
+        ))}
     </div>
   );
 }
 
-function Findings({ data }: { data: ColdOpenSetupState }) {
-  const out = data.outbound;
-  const b = data.buyers;
-  const stats: { value: string; label: string; warn?: boolean }[] = [];
-  if (out) {
-    stats.push({ value: String(out.campaigns.length), label: `campaigns in ${findSetupTool(`cold_open_${out.platform}`)?.label ?? out.platform}` });
-    if (out.overallReplyRate != null) stats.push({ value: `${out.overallReplyRate}%`, label: "of people replied overall" });
-    if (out.capacity != null) stats.push({ value: String(out.capacity), label: `emails a day across ${out.mailboxes.length} mailboxes` });
-    const broken = out.mailboxes.filter((m) => m.broken || (m.health != null && m.health < 70)).length;
-    if (broken) stats.push({ value: String(broken), label: "mailboxes unhealthy or not sending", warn: true });
-  }
-  if (b) stats.push({ value: String(b.companies), label: `customers behind ${b.wonDeals} won deals` });
-  const best = out?.campaigns.filter((c) => c.replyRate != null).slice(0, 3) ?? [];
-  const badDomains = out?.domains.filter((d) => !d.ok) ?? [];
-
+function SequenceWriter({ onAdd, onCancel }: { onAdd: (t: { subject: string; body1: string; body2: string; body3: string }) => void; onCancel: () => void }) {
+  const [t, setT] = useState({ subject: "", body1: "", body2: "", body3: "" });
+  const up = (k: keyof typeof t) => (e: { target: { value: string } }) => setT((x) => ({ ...x, [k]: e.target.value }));
+  const ready = Object.values(t).every((v) => v.trim());
+  const area = cn(inputCls, "resize-y py-2 leading-relaxed");
   return (
-    <section className="space-y-5">
-      {stats.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 sm:grid-cols-3">
-          {stats.slice(0, 6).map((s) => (
-            <div key={s.label} className="min-w-0">
-              <p className={cn("text-2xl font-semibold tabular-nums tracking-tight", s.warn ? "text-[var(--error)]" : "text-[var(--text-primary)]")}>{s.value}</p>
-              <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="grid gap-6 sm:grid-cols-2">
-        {best.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">What worked best</p>
-            <ul className="space-y-1.5">
-              {best.map((c) => (
-                <li key={c.id} className="flex items-baseline justify-between gap-3 text-[13px]">
-                  <span className="truncate text-[var(--text-primary)]">{c.name}</span>
-                  <span className="shrink-0 tabular-nums text-[var(--text-secondary)]">{c.replyRate}% of {c.sent}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {b && (b.industries.length > 0 || b.sweetSpot) && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">Who really buys</p>
-            <ul className="space-y-1.5 text-[13px] text-[var(--text-secondary)]">
-              {b.industries.slice(0, 3).map((i) => (
-                <li key={i.industry}>
-                  <span className="text-[var(--text-primary)]">{i.industry}</span>, {i.count} of {b.companies}
-                </li>
-              ))}
-              {b.sweetSpot && (
-                <li>
-                  Mostly <span className="text-[var(--text-primary)]">{b.sweetSpot.min}{b.sweetSpot.max ? `-${b.sweetSpot.max}` : "+"} people</span> ({b.sweetSpot.share}%)
-                </li>
-              )}
-            </ul>
-          </div>
-        )}
-      </div>
-      {badDomains.length > 0 && (
-        <div className="space-y-1.5 border-l-2 border-[var(--error)] pl-3">
-          <p className="text-sm font-medium text-[var(--text-primary)]">Fix before sending more</p>
-          {badDomains.map((d) => (
-            <p key={d.domain} className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-              <span className="font-medium text-[var(--text-primary)]">{d.domain}:</span> {d.problems.join(" ")}
-            </p>
-          ))}
-        </div>
-      )}
-      {out && out.blocked.length > 0 && <p className="text-xs text-[var(--text-muted)]">The key couldn&apos;t read: {out.blocked.join(", ")}.</p>}
-    </section>
-  );
-}
-
-function Tick({ on }: { on: boolean }) {
-  return (
-    <span className={cn("mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border", on ? "border-[var(--ink)] bg-[var(--ink)]" : "border-[var(--text-muted)]")}>
-      {on && <Check className="h-3 w-3 text-[var(--ink-foreground)]" strokeWidth={3} />}
-    </span>
-  );
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-2.5">
-        <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h2>
-        {hint && <p className="text-xs text-[var(--text-muted)]">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1.5 @xl:grid-cols-[170px_1fr] @xl:items-baseline @xl:gap-4">
-      <p className="text-[13px] text-[var(--text-muted)]">{label}</p>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function TextField({ label, value, onChange, tier, placeholder, multiline }: { label: string; value: string; onChange: (v: string) => void; tier: TrustTier; placeholder?: string; multiline?: boolean }) {
-  const cls = cn(
-    "w-full max-w-lg border-b bg-transparent text-[15px] text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]",
-    tier === "likely" && value ? "border-[var(--text-prefill-accent)] bg-[var(--surface-prefill)]/50" : "border-[var(--text-muted)]/40"
-  );
-  return (
-    <Field label={label}>
-      {multiline ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={2} className={cn(cls, "resize-y py-1.5 leading-relaxed")} />
-      ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn(cls, "h-10")} />
-      )}
-      {tier === "likely" && value && <p className="mt-1 text-[12px] text-[var(--text-prefill-accent)]">Our best guess. Check it.</p>}
-    </Field>
-  );
-}
-
-function Chips({ label, items, onRemove, onAdd, placeholder }: { label: string; items: string[]; onRemove: (i: number) => void; onAdd: (v: string) => void; placeholder: string }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--text-secondary)]">
-      {label}
-      {items.map((it, i) => (
-        <button key={`${it}-${i}`} type="button" onClick={() => onRemove(i)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[var(--text-primary)] cursor-pointer">
-          {it} <X className="h-3 w-3 opacity-40" />
+    <div className="space-y-2.5 rounded-xl bg-black/[0.025] p-3 dark:bg-white/[0.035]">
+      <Labeled label="Subject">
+        <input autoFocus value={t.subject} onChange={up("subject")} className={cn(inputCls, "h-9")} />
+      </Labeled>
+      <Labeled label="First email">
+        <textarea value={t.body1} onChange={up("body1")} rows={3} className={area} />
+      </Labeled>
+      <Labeled label="Follow-up">
+        <textarea value={t.body2} onChange={up("body2")} rows={2} className={area} />
+      </Labeled>
+      <Labeled label="Last follow-up">
+        <textarea value={t.body3} onChange={up("body3")} rows={2} className={area} />
+      </Labeled>
+      <div className="flex items-center justify-end gap-3">
+        <button type="button" onClick={onCancel} className="text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+          Cancel
         </button>
-      ))}
-      <AddInline placeholder={placeholder} onAdd={onAdd} compact />
+        <Button type="button" size="sm" disabled={!ready} onClick={() => onAdd({ subject: t.subject.trim(), body1: t.body1.trim(), body2: t.body2.trim(), body3: t.body3.trim() })}>
+          Add
+        </Button>
+      </div>
     </div>
   );
 }
 
-function AddInline({ placeholder, onAdd, compact }: { placeholder: string; onAdd: (v: string) => void; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const submit = () => {
-    const v = value.trim();
-    if (v) onAdd(v);
-    setValue("");
-    setOpen(false);
-  };
-  if (!open) {
+// ── Lead lists (Source Connect) ────────────────────────────────────────
+
+interface LeadSource {
+  icp: string;
+  fetcherType: "csv" | "apify" | "sales_nav";
+  dailyLimit?: number;
+  csvContent?: string;
+  csvMapping?: Record<string, string>;
+  apifyActorId?: string;
+  salesNavExportNote?: string;
+}
+
+const csvRows = (text?: string) => (text ? Math.max(0, text.trim().split(/\r?\n/).length - 1) : 0);
+const csvHeader = (text: string) =>
+  (text.split(/\r?\n/)[0] ?? "")
+    .split(",")
+    .map((h) => h.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+
+/** Which column holds what, matched on the usual header names. */
+function guessColumns(headers: string[]): Record<string, string> {
+  const find = (re: RegExp) => headers.find((h) => re.test(h));
+  const out: Record<string, string> = {};
+  const pairs: [string, RegExp][] = [
+    ["email", /e-?mail/i],
+    ["companyName", /company|organi[sz]ation|account|business/i],
+    ["firstName", /first/i],
+    ["lastName", /last|surname/i],
+  ];
+  for (const [field, re] of pairs) {
+    const h = find(re);
+    if (h) out[field] = h;
+  }
+  return out;
+}
+
+function describeSource(s: LeadSource): string {
+  if (s.fetcherType === "csv") return `${csvRows(s.csvContent).toLocaleString()} people from a CSV`;
+  if (s.fetcherType === "apify") return `pulled from the Apify actor ${s.apifyActorId ?? ""}`.trim();
+  return "from a Sales Navigator export";
+}
+
+function LeadLists({ engagementId, icps }: { engagementId: string; icps: { slug: string; label: string }[] }) {
+  const toast = useToast();
+  const url = `/api/engagements/${engagementId}/bridges/source-connect`;
+  const [state, setState] = useState<{ sources: LeadSource[]; apifyConnected: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? "Couldn't load your lead lists.");
+        setState({ sources: body.leadSources ?? [], apifyConnected: body.defaultFetcherType === "apify" });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't load your lead lists.");
+      }
+    })();
+  }, [url]);
+
+  async function put(slug: string, source: Omit<LeadSource, "icp"> | null): Promise<string | null> {
+    if (!state) return "Still loading.";
+    const next = [...state.sources.filter((s) => s.icp !== slug), ...(source ? [{ ...source, icp: slug }] : [])];
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leadSources: next }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return body.error ?? "Couldn't save the list.";
+    setState((s) => (s ? { sources: next, apifyConnected: s.apifyConnected || source?.fetcherType === "apify" } : s));
+    toast.success(source ? "Lead list saved." : "Lead list removed.");
+    return null;
+  }
+
+  if (error) return <li className="px-1 py-2 text-sm text-[var(--error)]">{error}</li>;
+  if (!state) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={cn("inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer", compact && "rounded-full border border-dashed px-2.5 py-0.5")}>
-        <Plus className="h-3 w-3" /> {compact ? "Add" : placeholder}
-      </button>
+      <li className="px-1 py-2 text-[var(--text-muted)]">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </li>
     );
   }
+  if (icps.length === 0) return <FeedRow entry={{ key: "leads-none", todo: true, text: <>Say who you sell to in the full setup first, then add a list for each group.</> }} />;
   return (
-    <input
-      autoFocus
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") submit();
-        if (e.key === "Escape") setOpen(false);
+    <>
+      {icps.map((i) => {
+        const s = state.sources.find((x) => x.icp === i.slug);
+        return (
+          <FeedRow
+            key={i.slug}
+            entry={{
+              key: `leads-${i.slug}`,
+              todo: !s,
+              text: s ? (
+                <>
+                  <b>{i.label}</b>: {describeSource(s)}
+                </>
+              ) : (
+                <>
+                  No leads for <b>{i.label}</b> yet
+                </>
+              ),
+              editLabel: s ? "Change" : "Add",
+              editor: (close) => (
+                <LeadListEditor
+                  engagementId={engagementId}
+                  current={s ?? null}
+                  apifyConnected={state.apifyConnected}
+                  onSave={async (src) => {
+                    const err = await put(i.slug, src);
+                    if (!err) close();
+                    return err;
+                  }}
+                />
+              ),
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function LeadListEditor({
+  engagementId,
+  current,
+  apifyConnected,
+  onSave,
+}: {
+  engagementId: string;
+  current: LeadSource | null;
+  apifyConnected: boolean;
+  onSave: (s: Omit<LeadSource, "icp"> | null) => Promise<string | null>;
+}) {
+  const [kind, setKind] = useState<"csv" | "apify">(current?.fetcherType === "apify" ? "apify" : "csv");
+  const [file, setFile] = useState<{ name: string; text: string } | null>(null);
+  const [columns, setColumns] = useState<Record<string, string>>({});
+  const [actor, setActor] = useState(current?.apifyActorId ?? "");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const headers = file ? csvHeader(file.text) : [];
+  const rows = csvRows(file?.text);
+  const ready = kind === "csv" ? Boolean(file && rows > 0 && columns.email && columns.companyName) : Boolean(actor.trim() && (apifyConnected || token.trim()));
+
+  async function read(f: File) {
+    const text = await f.text();
+    setFile({ name: f.name, text });
+    setColumns(guessColumns(csvHeader(text)));
+  }
+
+  async function run(fn: () => Promise<string | null>) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const e = await fn();
+      if (e) setErr(e);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const submit = () =>
+    run(async () => {
+      if (kind === "apify" && !apifyConnected) {
+        const res = await fetch("/api/credentials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engagementId, provider: "cold_open_apify", value: token.trim() }) });
+        if (!res.ok) return (await res.json().catch(() => ({}))).error ?? "Couldn't save the Apify key.";
+      }
+      const base = { dailyLimit: current?.dailyLimit };
+      return onSave(kind === "csv" ? { ...base, fetcherType: "csv", csvContent: file!.text, csvMapping: columns } : { ...base, fetcherType: "apify", apifyActorId: actor.trim() });
+    });
+
+  const missingColumns = (["email", "companyName"] as const).filter((k) => !columns[k]);
+  const columnLabel: Record<string, string> = { email: "Which column has the email?", companyName: "Which column has the company?" };
+
+  return (
+    <div className="space-y-3">
+      <ChoiceList
+        options={[
+          { value: "csv", label: "Upload a CSV" },
+          { value: "apify", label: "Pull from an Apify actor" },
+        ]}
+        value={kind}
+        onPick={(v) => setKind(v as "csv" | "apify")}
+      />
+      {kind === "csv" ? (
+        <div className="space-y-2">
+          <label className="flex h-10 cursor-pointer items-center justify-center rounded-lg border border-dashed text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            {file ? file.name : current?.fetcherType === "csv" ? "Choose a file to replace this list" : "Choose a CSV file"}
+            <input type="file" accept=".csv,text/csv" aria-label="CSV file" className="sr-only" onChange={(e) => e.target.files?.[0] && void read(e.target.files[0])} />
+          </label>
+          {file && (
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              {rows.toLocaleString()} people.
+              {columns.email ? ` Emails from \u201c${columns.email}\u201d` : ""}
+              {columns.companyName ? `, companies from \u201c${columns.companyName}\u201d` : ""}
+              {columns.firstName ? `, names from \u201c${columns.firstName}\u201d${columns.lastName ? ` and \u201c${columns.lastName}\u201d` : ""}` : ""}.
+            </p>
+          )}
+          {file &&
+            missingColumns.map((k) => (
+              <Labeled key={k} label={columnLabel[k]}>
+                <select aria-label={columnLabel[k]} value="" onChange={(e) => setColumns((c) => ({ ...c, [k]: e.target.value }))} className={cn(inputCls, "h-9")}>
+                  <option value="" disabled>
+                    Choose a column
+                  </option>
+                  {headers.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+              </Labeled>
+            ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Labeled label="Actor">
+            <input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="code_crafter/leads-finder" spellCheck={false} className={cn(inputCls, "h-9")} />
+          </Labeled>
+          {!apifyConnected && (
+            <Labeled label="Your Apify key">
+              <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="apify_api_..." autoComplete="off" className={cn(inputCls, "h-9 font-mono")} />
+            </Labeled>
+          )}
+        </div>
+      )}
+      {err && <p className="text-[13px] text-[var(--error)]">{err}</p>}
+      <div className="flex items-center justify-between pt-1">
+        {current ? (
+          <button type="button" disabled={busy} onClick={() => run(() => onSave(null))} className="text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            Stop using this list
+          </button>
+        ) : (
+          <span />
+        )}
+        <Button type="button" size="sm" disabled={!ready || busy} onClick={submit}>
+          {busy ? <Loader2 className="animate-spin" /> : null}
+          Use this list
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Live sending and held leads (Daily Send) ───────────────────────────
+
+function LiveSending({ engagementId, daily, onChanged }: { engagementId: string; daily: ColdOpenSetupState["proposal"]["daily"]; onChanged: () => Promise<unknown> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const on = daily.liveSendEnabled;
+
+  // Only ever switched by this explicit step; saving the setup never turns it on.
+  async function flip(close: () => void) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/bridges/daily-send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ volume: daily.volume, localHour: daily.localHour, timezone: daily.timezone ?? undefined, copyMode: daily.copyMode, liveSendEnabled: !on }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Couldn't change live sending.");
+      toast.success(on ? "Live sending is off. Runs are dry runs again." : "Live sending is on. Real emails go out from the next run.");
+      close();
+      await onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't change live sending.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <FeedRow
+      entry={{
+        key: "live",
+        todo: !on,
+        text: on ? (
+          <>
+            Live sending is <b>on</b>. Real emails go out every day.
+          </>
+        ) : (
+          <>
+            Live sending is <b>off</b>. Each run picks leads and writes emails, but sends nothing.
+          </>
+        ),
+        source: on ? undefined : "Turn it on once a dry run looks right.",
+        editLabel: on ? "Turn off" : "Turn on",
+        editor: (close) => (
+          <div className="space-y-3">
+            <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">{on ? "Runs go back to dry runs. Nothing is sent." : `Real emails go out from the next run, up to ${daily.volume} a day.`}</p>
+            <div className="flex justify-end">
+              <Button type="button" size="sm" disabled={busy} onClick={() => void flip(close)}>
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {on ? "Turn off live sending" : "Turn on live sending"}
+              </Button>
+            </div>
+          </div>
+        ),
       }}
-      onBlur={submit}
-      placeholder={placeholder}
-      className="h-8 w-72 max-w-full border-b border-[var(--text-primary)] bg-transparent text-[13px] text-[var(--text-primary)] outline-none"
     />
+  );
+}
+
+interface HeldLead {
+  id: string;
+  email: string;
+  companyName: string;
+  firstName: string | null;
+  lastName: string | null;
+  statusDetail: { copy?: { subject: string } } | null;
+}
+
+/** Leads Daily Send set aside for a person to approve or drop. */
+function HeldLeads({ engagementId }: { engagementId: string }) {
+  const toast = useToast();
+  const url = `/api/engagements/${engagementId}/bridges/daily-send/held-leads`;
+  const [leads, setLeads] = useState<HeldLead[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(url, { cache: "no-store" }).catch(() => null);
+      const body = res?.ok ? await res.json().catch(() => ({})) : {};
+      setLeads(body.leads ?? []);
+    })();
+  }, [url]);
+
+  async function act(id: string, action: "approve" | "discard") {
+    setBusy(id);
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leadId: id, action }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Couldn't do that.");
+      setLeads((ls) => ls.filter((l) => l.id !== id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't do that.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      {leads.map((l) => (
+        <FeedRow
+          key={l.id}
+          entry={{
+            key: `held-${l.id}`,
+            warn: true,
+            text: (
+              <>
+                <b>{[l.firstName, l.lastName].filter(Boolean).join(" ") || l.email}</b>
+                {l.companyName ? ` at ${l.companyName}` : ""} is held for your review
+              </>
+            ),
+            source: l.statusDetail?.copy?.subject ? `\u201c${l.statusDetail.copy.subject}\u201d` : undefined,
+            body: (
+              <div className="flex gap-4 text-[13px]">
+                <button type="button" disabled={busy === l.id} onClick={() => void act(l.id, "approve")} className="font-medium text-[var(--text-primary)] underline underline-offset-4 cursor-pointer disabled:opacity-50">
+                  Approve and send
+                </button>
+                <button type="button" disabled={busy === l.id} onClick={() => void act(l.id, "discard")} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50">
+                  Discard
+                </button>
+              </div>
+            ),
+          }}
+        />
+      ))}
+    </>
   );
 }

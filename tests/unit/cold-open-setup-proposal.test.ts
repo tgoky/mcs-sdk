@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import type { ClientFact } from "@/lib/client-facts";
-import { buildColdOpenProposal, icpEvidence, type ProposalInput, type SavedColdOpen } from "@/lib/cold-open-setup/proposal";
+import { buildColdOpenProposal, greetingWord, icpEvidence, siteUrl, type ProposalInput, type SavedColdOpen } from "@/lib/cold-open-setup/proposal";
 import { parseColdOpenSetup, slugify } from "@/lib/cold-open-setup/save";
 import { summarizeOutbound } from "@/lib/cold-open-setup/outbound";
 import type { BuyerProfile } from "@/lib/cold-open-setup/analyze";
@@ -139,6 +139,38 @@ describe("buildColdOpenProposal", () => {
     expect(p.subjects).toEqual([]);
     expect(p.campaignMap).toEqual({ agencies: null, saas: null });
     expect(p.daily).toMatchObject({ volume: 20, timezone: "Europe/London", volumeSource: "a careful starting point" });
+  });
+
+  it("fills a website-only setup from Showtime when the site read found nothing", () => {
+    const p = buildColdOpenProposal(
+      input({
+        domain: "https://muddventures.com/",
+        facts: {},
+        sender: null,
+        buyers: null,
+        campaignMatch: null,
+        showtimeOffer: { name: "AI Clarity Call", price: "$500", icp: "Agency owners", vertical: "Marketing" },
+      })
+    );
+    expect(p.product.name).toEqual({ value: "AI Clarity Call", tier: "done", source: "your Showtime setup" });
+    expect(p.product.price.value).toBe("$500");
+    expect(p.product.valueProp).toMatchObject({ value: "AI Clarity Call for Agency owners", tier: "likely" });
+    // The saved domain had its own https://; it isn't doubled.
+    expect(p.product.url.value).toBe("https://muddventures.com");
+    expect(p.icps).toMatchObject([{ slug: "agency-owners", label: "Agency owners", weight: 1, tier: "likely", evidence: "From your Showtime setup (Marketing)" }]);
+    // Nothing read for the voice: plain defaults, shown as guesses to check.
+    expect(p.voice.greeting).toEqual({ value: "Hi", tier: "likely", source: "a common default" });
+    expect(p.voice.signOff.value).toBe("Best,");
+    expect(p.voice.tone.value).toBe("Plain and friendly");
+  });
+
+  it("keeps the greeting to the word Cold Open puts the first name after", () => {
+    expect(greetingWord("Hi {first_name},")).toBe("Hi");
+    expect(greetingWord("Hey {{firstName}}!")).toBe("Hey");
+    expect(siteUrl("muddventures.com/")).toBe("https://muddventures.com");
+    expect(siteUrl("https://www.muddventures.com/about/")).toBe("https://muddventures.com/about");
+    const p = buildColdOpenProposal(input({ sender: null, facts: { ...facts, voiceProfile: fact({ greeting: "Hi {first_name},", signOff: "Cheers", tone: "Warm" }) } }));
+    expect(p.voice.greeting.value).toBe("Hi");
   });
 
   it("ignores rejected facts", () => {

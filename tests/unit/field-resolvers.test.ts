@@ -72,7 +72,8 @@ describe("resolveColdOpenDerivedFields", () => {
     // 2/4 quality x 0.5 peakedness = 25 — stays a suggestion (< 75)
     expect(upsertFor("icps")?.[3]).toMatchObject({ source: "jev", confidence: 25 });
     expect(upsertFor("voiceProfile")?.[3]).toMatchObject({ source: "jev", confidence: 62 });
-    expect(upsertFor("voiceProfile")?.[2]).toEqual({ greeting: "Hey {first_name},", signOff: "Cheers,", tone: "Direct" });
+    // The greeting word only: Cold Open adds the first name and comma itself.
+    expect(upsertFor("voiceProfile")?.[2]).toEqual({ greeting: "Hey", signOff: "Cheers,", tone: "Direct" });
   });
 
   it("writes no product identity when the name isn't found, instead of a placeholder", async () => {
@@ -89,6 +90,22 @@ describe("resolveColdOpenDerivedFields", () => {
     expect(upsertFor("icps")).toBeUndefined();
     const questions = vi.mocked(askJev).mock.calls[0][0].questions;
     expect(Object.keys(questions)).toEqual(["voiceTone"]);
+  });
+
+  it("keeps Claude's reading, unscored, when Jev fails, instead of leaving setup blank", async () => {
+    factStore({ rawVoiceCorpus: { value: "We help agencies." } });
+    vi.mocked(getPrimaryDomainForEngagement).mockResolvedValue("https://acme.com/");
+    claudeJson({ productName: "Acme", productValueProp: "Growth for agencies", icps: [{ slug: "agencies", label: "Agencies", weight: 1 }] });
+    vi.mocked(askJev).mockRejectedValue(new Error("Jev down"));
+
+    const result = await resolveColdOpenDerivedFields("e1");
+
+    expect(result.resolved.sort()).toEqual(["icps", "productIdentity"]);
+    expect(upsertFor("productIdentity")?.[3]).toMatchObject({ source: "llm", confidence: undefined });
+    // A saved domain with its own scheme isn't doubled.
+    expect((upsertFor("productIdentity")?.[2] as { url: string }).url).toBe("https://acme.com");
+    expect(upsertFor("icps")?.[3]).toMatchObject({ source: "llm" });
+    expect(upsertFor("voiceProfile")).toBeUndefined();
   });
 
   it("writes no voice profile when Jev returns no tone, instead of a default tone", async () => {

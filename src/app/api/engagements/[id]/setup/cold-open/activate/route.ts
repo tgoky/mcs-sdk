@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { engagements } from "@/models/schema";
 import { getClientFact, getClientFacts, upsertClientFact } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { discoverClient } from "@/lib/discover-client";
@@ -58,8 +61,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           if (corpus && typeof corpus.value === "string" && corpus.value.trim() && hostOf(corpus.sourceDetail) === host) {
             step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus.updatedAt.toISOString() });
             // Read for another product: the Cold Open fields may not exist yet.
-            const product = await getClientFact(id, "productIdentity");
-            if (!product) await resolveColdOpenDerivedFields(id);
+            const have = await Promise.all(["productIdentity", "icps", "voiceProfile"].map((k) => getClientFact(id, k)));
+            if (have.some((f) => !f || f.status === "rejected")) {
+              await resolveColdOpenDerivedFields(id).catch((err) => console.warn(`[setup/cold-open/activate] cold open read failed for ${id}:`, err instanceof Error ? err.message : err));
+            }
           } else {
             const result = await discoverClient(id);
             step(
@@ -78,8 +83,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const product = v("productIdentity") as { name?: string } | undefined;
         const siteIcps = Array.isArray(v("icps")) ? (v("icps") as ColdOpenIcp[]) : [];
         const voice = v("voiceProfile") as { tone?: string } | undefined;
+        const [eng] = await db.select({ offer: engagements.offerDetails }).from(engagements).where(eq(engagements.engagementId, id)).limit(1);
+        const showtime = eng?.offer ?? null;
         if (product?.name) step({ id: "found-product", label: `Product: ${product.name}`, status: "done" });
+        else if (showtime?.name) step({ id: "found-product", label: `Product: ${showtime.name}, from Showtime`, status: "reused" });
+        else step({ id: "found-product", label: "Couldn't tell what you sell from the site", status: "failed", detail: "Type it in on the next screen." });
         if (siteIcps.length) step({ id: "found-icps", label: plural(siteIcps.length, "likely buyer group"), status: "done" });
+        else if (showtime?.icp) step({ id: "found-icps", label: `Buyers: ${showtime.icp}, from Showtime`, status: "reused" });
         if (voice?.tone) step({ id: "found-voice", label: "Your tone of voice", status: "done" });
 
         // ── 3. The sending platform: what they sent and what worked ──

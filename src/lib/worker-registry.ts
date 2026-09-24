@@ -1429,18 +1429,22 @@ export function workerSettingsHref(workerId: WorkerId, engagementId: string): st
   return `/dashboard/engagements/${engagementId}/skills/${workerId}?configure=1`;
 }
 
+/** Products whose setup opens as one skill's own settings: every skill of
+ * theirs has a settings form, the product's review narrowed to the rows
+ * that skill owns (config-form-registry.tsx). */
+export const PRODUCTS_WITH_SKILL_SETTINGS: ProductId[] = ["cold-open", "reputation-manager", "whop-agent"];
+
 /**
  * Whose config form holds this skill's settings. A skill with its own
- * form (hasHingesPanel) owns them; every other skill is set up by its
- * product's setup (Showtime, Reputation Manager, Cold Open or Whop setup,
- * each of which lists and switches these skills), so its settings are that
- * form. Null for Pile-On, whose settings only exist on its own page (see
- * SKILLS_CONFIGURED_ON_OWN_PAGE).
+ * form (hasHingesPanel), or of a product in PRODUCTS_WITH_SKILL_SETTINGS,
+ * owns them; every other skill is set up by its product's setup, so its
+ * settings are that form. Null for Pile-On, whose settings only exist on
+ * its own page (see SKILLS_CONFIGURED_ON_OWN_PAGE).
  */
 export function workerSettingsFormId(workerId: WorkerId): WorkerId | null {
   if (SKILLS_CONFIGURED_ON_OWN_PAGE.includes(workerId)) return null;
   const worker = WORKER_REGISTRY[workerId];
-  return worker.hasHingesPanel ? workerId : PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
+  return worker.hasHingesPanel || PRODUCTS_WITH_SKILL_SETTINGS.includes(worker.productId) ? workerId : PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
 }
 
 /**
