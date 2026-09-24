@@ -11,6 +11,8 @@
 import { fetchWithTimeout } from "@/lib/http";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
+import { activeCampaignApiBase } from "@/lib/outbound-urls";
+import { safeFetch } from "@/lib/safe-fetch";
 
 export type PageKind = "marketing_site" | "about_page" | "sales_page" | "pricing_page" | "proof_page" | "faq_page" | "booking_page" | "supporting_page";
 
@@ -149,14 +151,9 @@ function normalizeDomain(domain: string): string {
 
 async function fetchPageDirect(url: string): Promise<FetchedPage | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CRAWL_TIMEOUT_MS);
-    const res = await fetchWithTimeout(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
-      signal: controller.signal,
-      redirect: "follow",
-    });
-    clearTimeout(timeout);
+    // The site is whatever address was typed, and so is every link on it:
+    // safeFetch keeps each hop, redirects included, on public addresses.
+    const res = await safeFetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "text/html" } }, { timeoutMs: CRAWL_TIMEOUT_MS });
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html")) return null;
@@ -518,7 +515,8 @@ async function scrapeActiveCampaignBroadcasts(
   baseUrl: string,
   apiKey: string
 ): Promise<{ text: string; wordCount: number }[]> {
-  const cleanBase = baseUrl.trim().replace(/\/+$/, "");
+  const cleanBase = activeCampaignApiBase(baseUrl);
+  if (!cleanBase) return [];
   const headers = { "Api-Token": apiKey, "Content-Type": "application/json" };
 
   const listRes = await fetchWithTimeout(`${cleanBase}/campaigns?orders[sdate]=DESC&limit=3`, { headers });

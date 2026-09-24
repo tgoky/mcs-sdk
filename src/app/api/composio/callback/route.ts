@@ -187,9 +187,11 @@ export async function GET(request: Request) {
         // and logs its own errors; this is only guarding against the
         // getComposioCredentialValue call itself throwing.
         if (isHarvestableProvider(provider)) {
-          getComposioCredentialValue(connectedAccountId)
-            .then((value) => harvestAccountMetadata(engagementId, provider, value))
-            .catch((err) => console.error(`[composio/callback] account harvest kickoff failed for ${provider}:`, err));
+          afterResponse(() =>
+            getComposioCredentialValue(connectedAccountId)
+              .then((value) => harvestAccountMetadata(engagementId, provider, value))
+              .catch((err) => console.error(`[composio/callback] account harvest kickoff failed for ${provider}:`, err))
+          );
         }
         // The deep read of the account's history, after the redirect is sent.
         afterResponse(() => deepPullAfterConnect(engagementId, provider));

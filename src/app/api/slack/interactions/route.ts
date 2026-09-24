@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements, pendingActions, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
@@ -108,6 +108,13 @@ export async function POST(req: Request) {
 
     if (!(await verifyEngagementSlackSignature(engagementId, timestamp, rawBody, receivedSignature))) {
       return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });
+    }
+
+    // The signature proves which engagement's Slack sent this, so the
+    // action has to be that engagement's too.
+    const [owned] = await db.select({ engagementId: pendingActions.engagementId }).from(pendingActions).where(eq(pendingActions.id, id)).limit(1);
+    if (!owned || owned.engagementId !== engagementId) {
+      return NextResponse.json({ error: "Pending action not found." }, { status: 404 });
     }
 
     const decision = action.action_id === "pending_action_approve" ? "approved" : "rejected";

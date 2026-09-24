@@ -15,6 +15,7 @@ import { getClientFact, getClientFacts, recordDossierDecisions } from "@/lib/cli
 import { splitFacts } from "@/lib/fact-suggestions";
 import { REP_SKILL_IDS, isRepSkillId } from "@/lib/rep-skill-manifest";
 import type { RepGoogleListing } from "@/models/schema";
+import { afterResponse } from "@/lib/after-response";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -232,8 +233,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (input.operatorDomains[0]) {
-      seedPrimaryDomainFromUrl(id, input.operatorDomains[0]).catch((err) =>
-        console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err)
+      const seedUrl = input.operatorDomains[0];
+      afterResponse(() =>
+        seedPrimaryDomainFromUrl(id, seedUrl).catch((err) =>
+          console.error(`[bridges/rep-onboarding] domain seed failed for ${id}:`, err)
+        )
       );
     }
 

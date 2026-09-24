@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 /**
  * Pile-On recovery gap 1 — durable SMS sequence sender for the
@@ -16,6 +17,9 @@ import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
  * Replaced relative step.sleep calculations with robust step.sleepUntil parameters
  * to handle out-of-order offset entries ([0, 1440, 60]) natively without collision.
  */
+/** How late a message can start and still be sent. */
+const SEND_LATE_GRACE_MS = 30 * 60 * 1000;
+
 export const processPileOnSmsSequence = inngest.createFunction(
   { id: "process-pile-on-sms-sequence", triggers: [pileOnSmsSequenceStart] },
   async ({ event, step }) => {
@@ -116,13 +120,21 @@ export const processPileOnSmsSequence = inngest.createFunction(
       };
     }).sort((a, b) => a.targetTimestamp - b.targetTimestamp); // Force non-colliding chronological sorting
 
+    // When the sequence started, taken once in a step so every replay sees
+    // the same value. Inngest re-runs this function from the top after
+    // each sleep; reading the clock directly here skipped every message
+    // the moment its own sleep ended, so nothing was ever sent.
+    const startedAt = await step.run("sequence-started-at", async () => Date.now());
+
     let sent = 0;
 
     for (const msg of absoluteTimeline) {
-      const now = Date.now();
-      
-      // Skip messages whose scheduled delivery target falls behind our current runtime timeline
-      if (msg.targetTimestamp <= now) continue;
+      // Skip messages whose time had already passed when the sequence
+      // started (a booking that reached us late, or a sequence resumed
+      // after the A2P wait). The grace keeps the "just booked" message,
+      // timed at the booking itself, from being skipped by the moments
+      // it takes the booking to reach us.
+      if (msg.targetTimestamp < startedAt - SEND_LATE_GRACE_MS) continue;
 
       // Safety check: Never deliver pre-call notifications if the message target window falls within 10 minutes of the call starting
       if (msg.targetTimestamp >= parsedCallTime - (10 * 60 * 1000)) continue;
@@ -131,11 +143,13 @@ export const processPileOnSmsSequence = inngest.createFunction(
       const stillActive = await step.run(`check-still-active-${msg.id}`, async () => {
         const [row] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
         const currentStack = row?.stack as EngagementStack | null;
+        // A paused or deleted client sends nothing more, even mid-sequence.
+        if (!row || row.deletedAt || isEngagementPaused(row)) return false;
         return currentStack?.sms_platform === "twilio" || currentStack?.sms_platform === "ghl_sms";
       });
 
       if (!stillActive) {
-        return { sent, reason: "sms_platform reconfigured or cancelled mid-sequence (stopping)" };
+        return { sent, reason: "sms_platform reconfigured, or the client was paused or deleted, mid-sequence (stopping)" };
       }
 
       // Durably park the function run context until the next absolute milestone date arrives

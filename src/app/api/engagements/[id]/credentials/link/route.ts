@@ -98,13 +98,17 @@ export async function POST(
     // the provider's harvest for this client (which also starts the website
     // crawl when a domain is known and the site isn't crawled yet).
     // Fire-and-forget — a harvest failure must never fail the link.
-    resolveVaultCredentialValue(vaultId)
-      .then((value) =>
-        isHarvestableProvider(provider)
-          ? harvestAccountMetadata(engagementId, provider, value)
-          : harvestPasteKeyMetadata(engagementId, provider, value)
-      )
-      .catch((err) => console.error(`[credentials/link] harvest after link failed for ${provider}:`, err));
+    // Registered to run after the response: a bare promise can be frozen
+    // with the function once the response is sent.
+    afterResponse(() =>
+      resolveVaultCredentialValue(vaultId)
+        .then((value) =>
+          isHarvestableProvider(provider)
+            ? harvestAccountMetadata(engagementId, provider, value)
+            : harvestPasteKeyMetadata(engagementId, provider, value)
+        )
+        .catch((err) => console.error(`[credentials/link] harvest after link failed for ${provider}:`, err))
+    );
     afterResponse(() => deepPullAfterConnect(engagementId, provider));
 
     return NextResponse.json({ ok: true });

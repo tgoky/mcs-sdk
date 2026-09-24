@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { resolveVaultCredentialValue, vaultCredentialBelongsToTenant } from "@/lib/credentials";
+import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT } from "@/lib/outbound-urls";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing API Key or Base URL" }, { status: 400 });
     }
 
-    const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+    const normalizedBaseUrl = activeCampaignApiBase(baseUrl);
+    if (!normalizedBaseUrl) {
+      return NextResponse.json({ error: ACTIVECAMPAIGN_URL_HINT }, { status: 400 });
+    }
 
     const res = await fetch(`${normalizedBaseUrl}/automations?limit=100`, {
       headers: {
@@ -44,8 +48,7 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-      const errorBody = await res.text().catch(() => "Unknown");
-      return NextResponse.json({ error: `ActiveCampaign API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
+      return NextResponse.json({ error: `ActiveCampaign turned the key down (${res.status}).` }, { status: res.status === 401 || res.status === 403 ? 401 : 502 });
     }
 
     const payload = await res.json();

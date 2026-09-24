@@ -24,6 +24,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { fetchWithTimeout } from "@/lib/http";
+import { slackWebhookUrl } from "@/lib/outbound-urls";
 
 export interface SlackMessage {
   text: string;
@@ -72,6 +73,8 @@ export async function postToClientSlack(
   }
 
   if (webhookUrl) {
+    // Saved before the address was checked on save: only Slack's own host.
+    if (!slackWebhookUrl(webhookUrl)) throw new Error("The Slack webhook address isn't a hooks.slack.com address. Update it in the client's settings.");
     const res = await fetchWithTimeout(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

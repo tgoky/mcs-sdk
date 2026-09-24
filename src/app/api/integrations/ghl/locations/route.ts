@@ -6,6 +6,7 @@ import { harvestGHLLocation } from "@/lib/account-harvest";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
+import { afterResponse } from "@/lib/after-response";
 
 export const runtime = "nodejs";
 
@@ -86,14 +87,14 @@ export async function POST(request: Request) {
     // applies before touching a client's data. Fire-and-forget: this
     // verification response must not wait on or fail over the harvest.
     if (engagementId) {
-      db.select({ id: engagements.id })
+      afterResponse(() => db.select({ id: engagements.id })
         .from(engagements)
         .where(and(eq(engagements.engagementId, engagementId), eq(engagements.whopUserId, session.whopUserId), eq(engagements.workspaceId, activeWorkspace.workspaceId)))
         .limit(1)
         .then(([owned]) => {
           if (owned) harvestGHLLocation(engagementId, apiKey!, locationId!).catch((err) => console.error(`[ghl locations] harvest failed for ${engagementId}:`, err));
         })
-        .catch((err) => console.error(`[ghl locations] ownership check failed for ${engagementId}:`, err));
+        .catch((err) => console.error(`[ghl locations] ownership check failed for ${engagementId}:`, err)));
     }
 
     return NextResponse.json({

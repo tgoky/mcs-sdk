@@ -17,6 +17,7 @@ import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
 import { PICK_FACT_PREFIX, PICK_SLOT_META, type PickSlot } from "@/lib/showtime-setup/types";
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { recordSalesCallChoice } from "@/lib/account-intel/decisions";
+import { afterResponse } from "@/lib/after-response";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -370,8 +371,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (body.buyerDomain) {
-      seedPrimaryDomainFromUrl(id, body.buyerDomain).catch((err) =>
-        console.error(`[bridges/pin-down] domain seed failed for ${id}:`, err)
+      const seedUrl = body.buyerDomain;
+      afterResponse(() =>
+        seedPrimaryDomainFromUrl(id, seedUrl).catch((err) =>
+          console.error(`[bridges/pin-down] domain seed failed for ${id}:`, err)
+        )
       );
     }
 

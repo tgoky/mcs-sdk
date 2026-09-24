@@ -35,6 +35,7 @@ import { findSetupTool } from "@/lib/showtime-setup/catalog";
 import { checkInstantlyCredential, checkLemlistCredential, checkReplyIoCredential, checkSmartleadCredential } from "@/features/cold-open/server/credential-check";
 import { checkAccountMatches } from "@/lib/showtime-setup/jev-setup";
 import { authorizeShowtimeSetup } from "../access";
+import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT } from "@/lib/outbound-urls";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -102,7 +103,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "That tool can't be connected here." }, { status: 400 });
   }
   const ghl = isGhlProvider(provider);
-  const acBaseUrl = typeof body.activecampaignBaseUrl === "string" && body.activecampaignBaseUrl.trim() ? body.activecampaignBaseUrl.trim().replace(/\/+$/, "") : null;
+  const acBaseUrlRaw = typeof body.activecampaignBaseUrl === "string" ? body.activecampaignBaseUrl.trim() : "";
+  const acBaseUrl = acBaseUrlRaw ? activeCampaignApiBase(acBaseUrlRaw) : null;
+  if (acBaseUrlRaw && !acBaseUrl) return NextResponse.json({ error: ACTIVECAMPAIGN_URL_HINT }, { status: 400 });
   const typedLocationRaw = ghl && typeof body.ghlLocationId === "string" ? body.ghlLocationId.trim() : "";
   const typedLocation = parseGhlLocationId(typedLocationRaw);
   if (typedLocationRaw && !typedLocation) {
@@ -236,6 +239,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           : harvestPasteKeyMetadata(id, provider, value)
     ).catch((err) => console.error(`[setup/showtime/connect] harvest failed for ${provider}:`, err));
     await Promise.race([harvest, new Promise((resolve) => setTimeout(resolve, HARVEST_WAIT_MS))]);
+    // A harvest still going when the wait ends keeps running after the
+    // response instead of being frozen with the function.
+    afterResponse(() => harvest);
     // Then the deep read of what the account has done (bookings, deals,
     // campaigns), after the answer is sent.
     afterResponse(() => deepPullAfterConnect(id, provider, value));

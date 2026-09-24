@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 /**
  * Win-Back recovery gap 2 — durable SMS sequence sender for the
@@ -78,11 +79,13 @@ export const processWinBackSmsSequence = inngest.createFunction(
           .from(winBackEnrollments)
           .where(eq(winBackEnrollments.id, enrollmentId))
           .limit(1);
-        return row?.status === "active";
+        // A paused or deleted client sends nothing more, even mid-sequence.
+        const [client] = await db.select({ pausedAt: engagements.pausedAt, deletedAt: engagements.deletedAt }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+        return row?.status === "active" && Boolean(client) && !client.deletedAt && !isEngagementPaused(client);
       });
 
       if (!stillActive) {
-        return { sent, reason: "win-back enrollment no longer active (stopping)" };
+        return { sent, reason: "win-back enrollment no longer active, or the client was paused (stopping)" };
       }
 
       try {

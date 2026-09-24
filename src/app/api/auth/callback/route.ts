@@ -7,7 +7,7 @@ import { checkActiveMembership, isAdminEmail } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
 import { decryptOAuthState } from "@/lib/oauth-state";
-import { buildOAuthRedirectHtml } from "@/lib/oauth-redirect-html";
+import { buildOAuthRedirectHtml, safeRelativePath } from "@/lib/oauth-redirect-html";
 
 export async function GET(request: Request) {
   try {
@@ -87,7 +87,9 @@ export async function GET(request: Request) {
     // still used by middleware.ts for a session whose membership lapses
     // after the fact on a protected route, which is a different moment
     // than "just signed in for the first time."
-    const destination = membership.hasAccess ? redirectTo || "/home" : "/checkout";
+    // Checked again here: the state decrypts to whatever the login route
+    // put in it, and older states predate the stricter check.
+    const destination = membership.hasAccess ? safeRelativePath(redirectTo, "/home")! : "/checkout";
 
     // 6. Create the NextResponse object with the redirect HTML payload
     const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated. Redirecting..."), {

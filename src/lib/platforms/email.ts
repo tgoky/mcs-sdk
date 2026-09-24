@@ -15,6 +15,7 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { postToClientSlack } from "@/lib/slack-delivery";
 import { providerErrorReason } from "@/lib/provider-error";
+import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT } from "@/lib/outbound-urls";
 
 // ── Platform response shapes ────────────────────────────────────────────
 // Same rationale as the equivalent block in booking.ts: these cover only
@@ -862,7 +863,12 @@ export class ActiveCampaignClient {
   private tagIdCache = new Map<string, string>();
 
   constructor(private baseUrl: string, apiKey: string) {
-    // baseUrl format: https://ACCOUNT.api-us1.com/api/3
+    // baseUrl format: https://ACCOUNT.api-us1.com/api/3. Checked here too
+    // so an address saved before it was checked on save can't send the
+    // key and requests anywhere else.
+    const checked = activeCampaignApiBase(baseUrl);
+    if (!checked) throw new Error(`ActiveCampaign address "${baseUrl}" isn't an ActiveCampaign API address. ${ACTIVECAMPAIGN_URL_HINT}`);
+    this.baseUrl = checked;
     this.headers = {
       "Api-Token": apiKey,
       "Content-Type": "application/json",

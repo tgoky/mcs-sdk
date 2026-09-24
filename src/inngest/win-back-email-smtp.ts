@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { createDirectSendClient } from "@/lib/platforms/email";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 /**
  * Durable win-back email sender for the direct-send platform (email_platform
@@ -79,11 +80,13 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
           .from(winBackEnrollments)
           .where(eq(winBackEnrollments.id, enrollmentId))
           .limit(1);
-        return row?.status === "active";
+        // A paused or deleted client sends nothing more, even mid-sequence.
+        const [client] = await db.select({ pausedAt: engagements.pausedAt, deletedAt: engagements.deletedAt }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
+        return row?.status === "active" && Boolean(client) && !client.deletedAt && !isEngagementPaused(client);
       });
 
       if (!stillActive) {
-        return { sent, reason: "win-back enrollment no longer active (stopping)" };
+        return { sent, reason: "win-back enrollment no longer active, or the client was paused (stopping)" };
       }
 
       try {

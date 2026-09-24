@@ -3,6 +3,7 @@ import { activeAlerts, briefedCallsLog, auditRunsLog, engagements, type Engageme
 import { and, eq, gte, inArray, desc, isNull, lt, or } from "drizzle-orm";
 import { callClaude, MODEL } from "@/lib/llm";
 import { fetchWithTimeout } from "@/lib/http";
+import { slackWebhookUrl as isSlackWebhookUrl } from "@/lib/outbound-urls";
 
 /**
  * 6-Hour Active Alert Monitor.
@@ -219,7 +220,7 @@ Write a one-paragraph alert for the sales operator.`,
 
     outboundPromises.push(
       llmPromise.then(async () => {
-        if (slackWebhookUrl) {
+        if (slackWebhookUrl && isSlackWebhookUrl(slackWebhookUrl)) {
           // Block Kit — a colored/structured alert card reads far better
           // in a busy ops Slack channel than a single text line, and this
           // is the same rich-message format the OG SKILL.md specified for

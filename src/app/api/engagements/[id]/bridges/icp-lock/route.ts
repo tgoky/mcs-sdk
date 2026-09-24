@@ -14,6 +14,7 @@ import { splitFacts } from "@/lib/fact-suggestions";
 import { saveVoiceCapture } from "@/features/cold-open/server/voice-capture";
 import { saveDailySendSettings } from "@/features/cold-open/server/daily-send";
 import { applyResolvableFacts } from "@/lib/field-writeback";
+import { afterResponse } from "@/lib/after-response";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -221,8 +222,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await setSkillEnabledForEngagement(id, "icp-lock", true);
 
     if (input.productUrl) {
-      seedPrimaryDomainFromUrl(id, input.productUrl).catch((err) =>
-        console.error(`[bridges/icp-lock] domain seed failed for ${id}:`, err)
+      const seedUrl = input.productUrl;
+      afterResponse(() =>
+        seedPrimaryDomainFromUrl(id, seedUrl).catch((err) =>
+          console.error(`[bridges/icp-lock] domain seed failed for ${id}:`, err)
+        )
       );
     }
 

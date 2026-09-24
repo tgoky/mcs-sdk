@@ -22,16 +22,37 @@
 // "Redirect is not allowed for a preflight request" crash. A 200
 // same-origin HTML response that navigates via window.location instead is
 // immune to this.
+/** Only a path on this site: starts with one "/", no backslash (browsers
+ * read "/\\host" as "//host"), no control characters, and still on this
+ * origin once parsed. Anything else becomes the fallback. */
+export function safeRelativePath(raw: string | null | undefined, fallback?: string): string | undefined {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /[\u0000-\u001f\u007f]/.test(raw)) return fallback;
+  try {
+    const base = "https://app.invalid";
+    const url = new URL(raw, base);
+    if (url.origin !== base) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 export function buildOAuthRedirectHtml(destination: string, message: string): string {
+  // The destination goes into an attribute and a script, so it's escaped
+  // for each: HTML-escaped in the meta tag, and JSON with "<" escaped in
+  // the script so "</script>" can't end it early.
+  const inScript = JSON.stringify(destination).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
   return `<!DOCTYPE html>
 <html>
   <head>
-    <meta http-equiv="refresh" content="0;url=${destination}" />
+    <meta http-equiv="refresh" content="0;url=${escapeHtml(destination)}" />
   </head>
   <body style="background:#1f1a2e;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
     <script>
-      window.location.href = ${JSON.stringify(destination)};
+      window.location.href = ${inScript};
     </script>
   </body>
 </html>`;

@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/llm", () => ({ callClaudeWithRetry: vi.fn(), MODEL: { SYNTHESIS: "SYNTHESIS", FAST: "FAST" } }));
 vi.mock("@/lib/http", () => ({ fetchWithTimeout: vi.fn() }));
+// Page reads go through safeFetch (public addresses only); here it hands
+// straight to the same mocked fetch.
+vi.mock("@/lib/safe-fetch", async () => {
+  const { fetchWithTimeout } = await import("@/lib/http");
+  return { safeFetch: (url: string, init?: RequestInit) => fetchWithTimeout(url, init) };
+});
 vi.mock("@/features/pin-down/server/voice-scraper", () => ({ crawlSite: vi.fn() }));
 vi.mock("@/features/pin-down/server/design-scraper", () => ({
   designSignalFromHtml: vi.fn(() => ({ classTokens: [], colorMentions: ["#123456"], fontFamilyMentions: [], looksDark: false })),

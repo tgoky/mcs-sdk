@@ -14,6 +14,7 @@ import {
   type TechStack,
 } from "./site-signals";
 import { fetchWithTimeout } from "@/lib/http";
+import { safeFetch } from "@/lib/safe-fetch";
 
 /**
  * Pin-Down recovery gap 1 — smart pre-fill.
@@ -134,17 +135,8 @@ function stripHtmlForFallback(html: string): string {
 
 async function fetchRaw(url: string, timeoutMs = 4000): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetchWithTimeout(url, {
-      headers: {
-        "User-Agent": BROWSER_USER_AGENT,
-        Accept: "text/html",
-      },
-      signal: controller.signal,
-      redirect: "follow",
-    });
-    clearTimeout(t);
+    // A typed address: safeFetch keeps every hop on public addresses.
+    const res = await safeFetch(url, { headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html" } }, { timeoutMs });
     if (!res.ok) return null;
     return await res.text();
   } catch {

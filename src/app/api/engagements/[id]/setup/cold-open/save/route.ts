@@ -6,6 +6,7 @@ import { dispatchSkillRun } from "@/lib/skill-dispatch";
 import { COLD_OPEN_SKILL_IDS } from "@/lib/cold-open-skill-manifest";
 import { parseColdOpenSetup, saveColdOpenSetup } from "@/lib/cold-open-setup/save";
 import { authorizeProductSetup } from "../../showtime/access";
+import { afterResponse } from "@/lib/after-response";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -42,7 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     for (const skill of COLD_OPEN_SKILL_IDS) if (skill !== "icp-lock") await setSkillEnabledForEngagement(id, skill, chosen.has(skill));
 
     if (input.product.url) {
-      seedPrimaryDomainFromUrl(id, input.product.url).catch((err) => console.error(`[setup/cold-open/save] domain seed failed for ${id}:`, err));
+      const url = input.product.url;
+      afterResponse(() => seedPrimaryDomainFromUrl(id, url).catch((err) => console.error(`[setup/cold-open/save] domain seed failed for ${id}:`, err)));
     }
     const runId = await dispatchSkillRun(id, "icp-lock", access.buyer);
     return NextResponse.json({ ok: true, runId, warnings: result.warnings, sendingSaved: result.sendingSaved });

@@ -6,6 +6,7 @@ import { storeCredential, storeVaultCredential, linkEngagementToVault, vaultCred
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import crypto from "crypto";
+import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT } from "@/lib/outbound-urls";
 
 export const maxDuration = 30;
 
@@ -98,7 +99,11 @@ export async function POST(request: Request) {
       if (finalStack.email_platform === "activecampaign") {
         if (m.target_list_id) finalStack.target_list_id = m.target_list_id;
         if (m.recovery_list_id) finalStack.recovery_list_id = m.recovery_list_id;
-        if (m.base_url) finalStack.activecampaign_base_url = m.base_url;
+        if (m.base_url) {
+          const acBase = activeCampaignApiBase(m.base_url);
+          if (!acBase) return NextResponse.json({ error: ACTIVECAMPAIGN_URL_HINT }, { status: 400 });
+          finalStack.activecampaign_base_url = acBase;
+        }
       }
 
       if (finalStack.email_platform === "mailchimp" || finalStack.email_platform === "convertkit") {

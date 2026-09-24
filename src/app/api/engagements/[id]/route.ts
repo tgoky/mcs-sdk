@@ -9,6 +9,8 @@ import { isValidTimezone } from "@/lib/timezones";
 import { hasCredential, resolveCredential, syncMarkersForChosenPlatforms } from "@/lib/credentials";
 import { harvestTwilioA2PStatus } from "@/lib/paste-key-harvest";
 import { OPT_IN_GATED_ACTION_TYPES, type PendingActionType } from "@/lib/approval-gate";
+import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT, slackWebhookUrl } from "@/lib/outbound-urls";
+import { afterResponse } from "@/lib/after-response";
 
 // Only the actions an operator can opt into reviewing; the rest are always
 // reviewed (see OPT_IN_GATED_ACTIONS).
@@ -432,6 +434,15 @@ export async function PATCH(
         return NextResponse.json({ error: `${field} must be a string.` }, { status: 400 });
       }
     }
+    // Addresses the server later calls are held to their one real host.
+    if (typeof incoming.activecampaign_base_url === "string" && incoming.activecampaign_base_url.trim()) {
+      const acBase = activeCampaignApiBase(incoming.activecampaign_base_url);
+      if (!acBase) return NextResponse.json({ error: ACTIVECAMPAIGN_URL_HINT }, { status: 400 });
+      incoming.activecampaign_base_url = acBase;
+    }
+    if (typeof incoming.slack_webhook_url === "string" && incoming.slack_webhook_url.trim() && !slackWebhookUrl(incoming.slack_webhook_url)) {
+      return NextResponse.json({ error: "Use a Slack incoming webhook address, starting https://hooks.slack.com/." }, { status: 400 });
+    }
 
     const currentStack = (existing.stack as EngagementStack | null) ?? ({} as EngagementStack);
     const nextStack: EngagementStack = {
@@ -495,9 +506,11 @@ export async function PATCH(
     // re-check it when they're saved here.
     const twilioMeta = incoming.sms_platform_meta as { twilio_account_sid?: unknown; twilio_messaging_service_sid?: unknown } | undefined;
     if (nextStack.sms_platform === "twilio" && (twilioMeta?.twilio_account_sid || twilioMeta?.twilio_messaging_service_sid) && (await hasCredential(id, "twilio"))) {
-      resolveCredential(id, "twilio")
-        .then((token) => harvestTwilioA2PStatus(id, token))
-        .catch((err) => console.warn(`[engagements/[id] PATCH] Twilio A2P check failed for ${id}:`, err));
+      afterResponse(() =>
+        resolveCredential(id, "twilio")
+          .then((token) => harvestTwilioA2PStatus(id, token))
+          .catch((err) => console.warn(`[engagements/[id] PATCH] Twilio A2P check failed for ${id}:`, err))
+      );
     }
 
     return NextResponse.json({ ok: true, stack: nextStack });
