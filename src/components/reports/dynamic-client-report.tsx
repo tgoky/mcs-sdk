@@ -71,22 +71,22 @@ export function DynamicClientReport({
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="space-y-1 min-w-0">
+        <div className="space-y-1.5 min-w-0">
           {offerName && (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                <span className="text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                   Offer
                 </span>
                 {trafficTemp && (
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono text-xs capitalize">
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono text-sm capitalize">
                     {trafficTemp} traffic
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-3 flex-wrap">
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{offerName}</h2>
-                {offerPrice && <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono">${offerPrice}</span>}
+                <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{offerName}</h2>
+                {offerPrice && <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 font-mono">${offerPrice}</span>}
               </div>
             </>
           )}
