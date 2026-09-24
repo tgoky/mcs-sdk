@@ -67,20 +67,20 @@ export function RunPinDownPieceButton({
 
   return (
     <div className="space-y-2 w-full">
-      <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">{inputLabel}</label>
+      <label className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">{inputLabel}</label>
       <div className="flex items-center gap-2">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={inputPlaceholder}
           disabled={state === "running"}
-          className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+          className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
         />
         <button
           type="button"
           onClick={trigger}
           disabled={state === "running" || !value.trim()}
-          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
         >
           {state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
           {buttonLabel}
@@ -89,7 +89,7 @@ export function RunPinDownPieceButton({
 
       {message && (
         <p
-          className={`text-[11px] font-mono font-semibold px-1 py-0.5 rounded-sm flex items-center justify-between ${
+          className={`text-[13px] font-mono font-semibold px-1 py-0.5 rounded-sm flex items-center justify-between ${
             state === "error" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
           }`}
         >

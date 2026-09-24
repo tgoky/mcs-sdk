@@ -172,7 +172,7 @@ export function WinBackRevenueSection({
     <div className="space-y-4">
       {/* ── HEADER WITH ASANA-STYLE PERIOD SELECTOR DROPDOWN ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+        <h2 className="text-sm font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
           <DollarSign className="w-3.5 h-3.5 text-[#424d77] dark:text-[#c5b7ea]" /> 
           Win-Back Revenue &amp; Milestone Breakdown
         </h2>
@@ -182,7 +182,7 @@ export function WinBackRevenueSection({
           <button
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="hover-lift press-settle shadow-elevation-1 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <Calendar size={13} className="text-zinc-500" />
             <span>{selectedPeriod.label} ({selectedPeriod.sublabel})</span>
@@ -192,7 +192,7 @@ export function WinBackRevenueSection({
           {/* Screenshot 1 Popup Styling */}
           {dropdownOpen && (
             <div className="absolute right-0 mt-1.5 w-72 no-ambient-glow surface-glass-3 rounded-2xl z-50 p-1.5 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
-              <div className="px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <div className="px-2.5 py-1.5 text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Select Reporting Period
               </div>
               {periods.map((p) => {
@@ -205,7 +205,7 @@ export function WinBackRevenueSection({
                       setSelectedPeriod(p);
                       setDropdownOpen(false);
                     }}
-                    className={`hover-lift press-settle w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
+                    className={`hover-lift press-settle w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-sm transition-colors cursor-pointer ${
                       isSelected
                         ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold"
                         : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
@@ -217,12 +217,12 @@ export function WinBackRevenueSection({
                       </div>
                       <div className="min-w-0">
                         <span className="block font-medium truncate">{p.label}</span>
-                        <span className="block text-[10px] text-zinc-400 font-mono truncate">{p.sublabel}</span>
+                        <span className="block text-xs text-zinc-400 font-mono truncate">{p.sublabel}</span>
                       </div>
                     </div>
 
                     {p.badge && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium shrink-0">
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium shrink-0">
                         {p.badge}
                       </span>
                     )}
@@ -238,21 +238,21 @@ export function WinBackRevenueSection({
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1 p-2">
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
               Recovered Deals
             </p>
             <div className="flex items-baseline gap-2">
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                 {recoveredCount}
               </p>
-              <span className="text-xs font-mono text-[#424d77] dark:text-[#c5b7ea] font-medium">
+              <span className="text-sm font-mono text-[#424d77] dark:text-[#c5b7ea] font-medium">
                 {recoveredCount > 0 ? "Active pipeline" : "No recoveries yet"}
               </span>
             </div>
           </div>
 
           <div className="space-y-1 p-2 sm:border-l border-zinc-100 dark:border-zinc-800/60">
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
               Revenue Attributed
             </p>
             <p className="text-2xl font-bold text-[#424d77] dark:text-[#c5b7ea] tabular-nums">
@@ -261,7 +261,7 @@ export function WinBackRevenueSection({
           </div>
 
           <div className="space-y-1 p-2 sm:border-l border-zinc-100 dark:border-zinc-800/60">
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono uppercase tracking-wider">
               Avg / Recovery
             </p>
             <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
@@ -276,11 +276,11 @@ export function WinBackRevenueSection({
            empty week. Same information, no empty scaffolding. ── */}
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+          <span className="text-[13px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Weekly Recovery Trend: {selectedPeriod.label}
           </span>
           {recoveredCount === 0 && (
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">No recoveries yet this period</span>
+            <span className="text-[13px] text-zinc-400 dark:text-zinc-500">No recoveries yet this period</span>
           )}
         </div>
         {/* Fix: every week's count/revenue used to live only in a native
@@ -292,7 +292,7 @@ export function WinBackRevenueSection({
         <div className="flex items-end gap-1.5 h-20">
           {weeklyBuckets.map((wk) => (
             <div key={wk.key} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${wk.label}: ${wk.count} recovered${offerPrice > 0 ? ` · $${wk.revenue.toLocaleString()}` : ""}`}>
-              <span className="text-[9px] font-mono font-bold text-zinc-600 dark:text-zinc-400 h-3 tabular-nums">
+              <span className="text-[11px] font-mono font-bold text-zinc-600 dark:text-zinc-400 h-4 tabular-nums">
                 {wk.count > 0 ? wk.count : ""}
               </span>
               <div className="w-full h-12 rounded-t-sm bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden flex items-end">
@@ -303,7 +303,7 @@ export function WinBackRevenueSection({
                   />
                 )}
               </div>
-              <span className="text-[9px] font-mono text-zinc-400 h-3 truncate w-full text-center">{wk.shortLabel}</span>
+              <span className="text-[11px] font-mono text-zinc-400 h-4 truncate w-full text-center">{wk.shortLabel}</span>
               {offerPrice > 0 && wk.count > 0 && (
                 <span className="text-[8.5px] font-mono text-[#424d77] dark:text-[#c5b7ea] h-3">
                   ${wk.revenue.toLocaleString()}
@@ -318,16 +318,16 @@ export function WinBackRevenueSection({
            one honest empty state instead of stacked per-week placeholders. ── */}
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/80">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
+          <span className="text-[13px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-bold">
             Recovered Deals: {selectedPeriod.label}
           </span>
-          <span className="text-[11px] font-mono text-zinc-400">{sortedDeals.length} total</span>
+          <span className="text-[13px] font-mono text-zinc-400">{sortedDeals.length} total</span>
         </div>
 
         {sortedDeals.length === 0 ? (
           <div className="flex flex-col items-center gap-1 py-10 px-6 text-center">
-            <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">No recoveries yet in {selectedPeriod.label}</p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs">
+            <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">No recoveries yet in {selectedPeriod.label}</p>
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 max-w-xs">
               A deal shows up here the moment a prospect enrolled in the recovery cadence rebooks their call.
             </p>
           </div>
@@ -340,19 +340,19 @@ export function WinBackRevenueSection({
                 onClick={() => setSelectedDeal(d)}
                 className="hover-lift press-settle w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 text-xs font-bold flex items-center justify-center shrink-0">
                   {getInitials(d.prospectName, d.prospectEmail)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{d.prospectName ?? d.prospectEmail}</p>
-                  <p className="text-[10.5px] text-zinc-400 font-mono truncate">{d.prospectEmail}</p>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{d.prospectName ?? d.prospectEmail}</p>
+                  <p className="text-[13px] text-zinc-400 font-mono truncate">{d.prospectEmail}</p>
                 </div>
                 {offerPrice > 0 && (
-                  <span className="text-xs font-mono font-bold text-[#424d77] dark:text-[#c5b7ea] shrink-0">
+                  <span className="text-sm font-mono font-bold text-[#424d77] dark:text-[#c5b7ea] shrink-0">
                     +${offerPrice.toLocaleString()}
                   </span>
                 )}
-                <span className="text-[10.5px] font-mono text-zinc-400 shrink-0 w-14 text-right">
+                <span className="text-[13px] font-mono text-zinc-400 shrink-0 w-14 text-right">
                   {new Date(d.rebookedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </span>
               </button>
@@ -389,32 +389,32 @@ function RecoveredDealDrawer({
             <SheetHeader className="font-sans">
               <StatusPill tone="success" className="w-fit">Recovered</StatusPill>
               <SheetTitle className="mt-2 text-lg font-bold font-sans text-zinc-900 dark:text-white">{deal.prospectName ?? deal.prospectEmail}</SheetTitle>
-              <SheetDescription className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
+              <SheetDescription className="flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400 font-sans">
                 Rebooked {new Date(deal.rebookedAt).toLocaleString(undefined, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
               </SheetDescription>
             </SheetHeader>
             <SheetBody className="space-y-4 font-sans pt-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 font-sans">
+              <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 font-sans">
                 <Mail size={13} className="text-zinc-500 dark:text-zinc-500 shrink-0" />
                 <span className="truncate">{deal.prospectEmail}</span>
               </div>
 
               <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl p-3 space-y-2">
                 {offerPrice > 0 && (
-                  <div className="flex items-center justify-between text-xs font-sans">
+                  <div className="flex items-center justify-between text-sm font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400">Revenue attributed</span>
                     <span className="font-mono font-bold text-[#424d77] dark:text-[#c5b7ea]">${offerPrice.toLocaleString()}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                <div className="flex items-center justify-between text-sm font-sans pt-1">
                   <span className="text-zinc-600 dark:text-zinc-400">Enrolled in cadence</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{new Date(deal.enrolledAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span>
                 </div>
-                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                <div className="flex items-center justify-between text-sm font-sans pt-1">
                   <span className="text-zinc-600 dark:text-zinc-400">Recovery window</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{deal.recoveryWindowDays} days</span>
                 </div>
-                <div className="flex items-center justify-between text-xs font-sans pt-1">
+                <div className="flex items-center justify-between text-sm font-sans pt-1">
                   <span className="text-zinc-600 dark:text-zinc-400">Days to recover</span>
                   <span className="font-mono text-zinc-900 dark:text-white">
                     {Math.max(0, Math.round((new Date(deal.rebookedAt).getTime() - new Date(deal.enrolledAt).getTime()) / (24 * 60 * 60 * 1000)))} days
@@ -429,7 +429,7 @@ function RecoveredDealDrawer({
                     onClick={() => setShowRunActivity((p) => !p)}
                     className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white dark:hover:bg-zinc-900 transition-colors"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                       Run activity
                     </span>
@@ -440,7 +440,7 @@ function RecoveredDealDrawer({
                       <RunActivityPanel runId={deal.runId} />
                       <a
                         href={`/dashboard/runs/${deal.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
                       >
                         <span>Open the full run page</span>
                         <ExternalLink size={10} />

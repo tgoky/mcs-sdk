@@ -223,7 +223,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs font-bold text-zinc-900 dark:text-white px-1 min-w-[100px] text-center">
+            <span className="text-sm font-bold text-zinc-900 dark:text-white px-1 min-w-[100px] text-center">
               {monthName} {year}
             </span>
             <button
@@ -236,7 +236,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={handleTodayClick}
-              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-0.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer ml-0.5"
             >
               Today
             </button>
@@ -248,7 +248,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search audits..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
           </div>
 
@@ -265,7 +265,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 onClick={toggle}
                 aria-expanded={open}
                 disabled={!selected}
-                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Clock size={13} className="text-zinc-400 shrink-0" />
                 {selected ? (
@@ -281,7 +281,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
           >
             {(closeMenu) => (
               <div className="flex flex-col max-h-[70vh]">
-                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1.5 border-b border-zinc-200 dark:border-zinc-800 text-[11px] shrink-0">
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1.5 border-b border-zinc-200 dark:border-zinc-800 text-[13px] shrink-0">
                   {(["all", "weekly", "monthly"] as AuditScopeFilter[]).map((scope) => (
                     <button
                       key={scope}
@@ -302,7 +302,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                 {monthWeeksGrouped.length === 0 && !loading ? (
                   <div className="flex flex-col items-center gap-2 py-10 text-zinc-400 dark:text-zinc-600">
                     <CalendarX2 size={20} />
-                    <span className="text-xs px-4 text-center">
+                    <span className="text-sm px-4 text-center">
                       No {scopeFilter === "all" ? "" : `${scopeFilter} `}audits recorded in {monthName} {year}.
                     </span>
                   </div>
@@ -310,7 +310,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                   <div className="overflow-y-auto divide-y divide-zinc-200/80 dark:divide-zinc-800/60">
                     {monthWeeksGrouped.map(({ weekNum, audits }) => (
                       <div key={weekNum} className="space-y-0">
-                        <div className="flex items-center justify-between px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                        <div className="flex items-center justify-between px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                           <span>Week {weekNum}</span>
                           <span>{audits.length} run{audits.length === 1 ? "" : "s"}</span>
                         </div>
@@ -334,23 +334,23 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                                 )}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
+                                  <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
                                     {formatDayHeader(dateKey(new Date(item.createdAt)))} · {timeBadge}
                                   </span>
                                   <StatusPill
                                     tone={item.overallSeverity === "none" ? "success" : toneFromSeverity(item.overallSeverity)}
-                                    className="shrink-0 capitalize text-[10px]"
+                                    className="shrink-0 capitalize text-xs"
                                   >
                                     {item.overallSeverity === "none" ? "Clean" : item.overallSeverity}
                                   </StatusPill>
                                 </div>
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                  <span className="truncate text-sm font-bold text-zinc-900 dark:text-white">
                                     {auditRunTypeLabel(item.runType)}
                                   </span>
                                   {isManual && <Zap size={10} className="text-amber-500 shrink-0" aria-label="Manual" />}
                                 </div>
-                                <span className="flex items-center gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-500 font-mono">
+                                <span className="flex items-center gap-2.5 text-[13px] text-zinc-500 dark:text-zinc-500 font-mono">
                                   <span className="inline-flex items-center gap-1">
                                     <AlertCircle size={10} className="shrink-0" />
                                     {item.topIssueCount} issue{item.topIssueCount === 1 ? "" : "s"}
@@ -378,7 +378,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -386,13 +386,13 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300">{error}</div>
       )}
 
       {/* Next Scheduled Audits — one compact line, not two hero tiles for
           metadata you check once and move on from. */}
       {!loading && scheduled.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-sm text-zinc-500 dark:text-zinc-400">
           {scheduled.map((s) => (
             <span key={s.auditType} className="flex items-center gap-1.5">
               <CalendarClock size={12} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
@@ -409,15 +409,15 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
       {/* Active Alerts — rare and urgent, stays full-width and prominent */}
       {!loading && alerts.length > 0 && (
         <div className="rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/20 p-3.5 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
+          <div className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
             <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
             <span>{alerts.length} active funnel alert{alerts.length === 1 ? "" : "s"}</span>
           </div>
           <div className="space-y-1">
             {alerts.map((a) => (
-              <div key={a.id} className="flex items-center justify-between text-xs text-rose-950 dark:text-rose-200">
+              <div key={a.id} className="flex items-center justify-between text-sm text-rose-950 dark:text-rose-200">
                 <span className="font-bold">{a.metricName}</span>
-                <span className="font-mono text-[11px]">
+                <span className="font-mono text-[13px]">
                   {a.comparison} {a.threshold}
                 </span>
               </div>
@@ -438,7 +438,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
             <div className="flex justify-end">
               <a
                 href={`/dashboard/runs/${selected.runId}`}
-                className="inline-flex items-center gap-1 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium shrink-0"
+                className="inline-flex items-center gap-1 text-[13px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium shrink-0"
               >
                 <span>Open full page</span>
                 <ArrowUpRight size={12} />
@@ -452,7 +452,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
                     <Loader2 size={16} className="animate-spin" />
                   </div>
                 )}
-                {detailError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{detailError}</p>}
+                {detailError && <p className="text-[13px] text-rose-600 dark:text-rose-400">{detailError}</p>}
                 {!detailLoading && !detailError && detail && "audit" in detail && (
                   <LeakMapView detail={detail} embedded history={history} />
                 )}
@@ -462,7 +462,7 @@ export function LeakMapSchedule({ engagementId }: { engagementId: string }) {
         ) : (
           <div className="py-12 text-center text-zinc-500 space-y-2">
             <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-            <p className="text-xs">
+            <p className="text-sm">
               {history.length === 0 ? "No audits recorded yet." : `No audits recorded in ${monthName} ${year}.`}
             </p>
           </div>

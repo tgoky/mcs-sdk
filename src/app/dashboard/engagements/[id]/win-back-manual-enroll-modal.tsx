@@ -81,24 +81,24 @@ export function WinBackManualEnrollModal({
         {step === "done" ? (
           <div className="space-y-3 py-2 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">{successMessage}</p>
+            <p className="text-[15px] font-semibold text-zinc-900 dark:text-white">{successMessage}</p>
             <button
               type="button"
               onClick={onClose}
-              className="hover-lift press-settle shadow-elevation-1 mt-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer"
+              className="hover-lift press-settle shadow-elevation-1 mt-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 cursor-pointer"
             >
               Done
             </button>
           </div>
         ) : (
           <>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
               For a prospect who cancelled or no-showed outside a connected booking webhook, or whose recovery webhook failed. Adds them to the
               client&apos;s actual configured recovery list/workflow. A real action, not a simulation.
             </p>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">Prospect email</label>
+              <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 block">Prospect email</label>
               <div className="relative">
                 <Mail size={13} className="absolute left-2.5 top-2.5 text-zinc-400" />
                 <input
@@ -108,12 +108,12 @@ export function WinBackManualEnrollModal({
                     if (step !== "input") resetToInput();
                   }}
                   placeholder="jane@prospect.com"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
                   disabled={step === "previewing" || step === "submitting"}
                 />
               </div>
 
-              <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block pt-1">Prospect name (optional)</label>
+              <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 block pt-1">Prospect name (optional)</label>
               <div className="relative">
                 <User size={13} className="absolute left-2.5 top-2.5 text-zinc-400" />
                 <input
@@ -123,14 +123,14 @@ export function WinBackManualEnrollModal({
                     if (step === "previewed") resetToInput();
                   }}
                   placeholder="Jane Doe"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
                   disabled={step === "previewing" || step === "submitting"}
                 />
               </div>
             </div>
 
             {error && (
-              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+              <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300 flex items-start gap-2">
                 <XIcon size={13} className="mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -138,10 +138,10 @@ export function WinBackManualEnrollModal({
 
             {(step === "previewed" || step === "submitting") && previewActions.length > 0 && (
               <div className="space-y-2 surface-glass-1 rounded-xl p-3">
-                <p className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen. Nothing has been sent yet</p>
+                <p className="text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500">This is what would happen. Nothing has been sent yet</p>
                 <ul className="space-y-1.5">
                   {previewActions.map((a, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
                       <span>{a}</span>
                     </li>
@@ -154,7 +154,7 @@ export function WinBackManualEnrollModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="hover-lift press-settle rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                className="hover-lift press-settle rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                 disabled={step === "previewing" || step === "submitting"}
               >
                 Cancel
@@ -165,7 +165,7 @@ export function WinBackManualEnrollModal({
                   type="button"
                   onClick={confirmEnroll}
                   disabled={step === "submitting"}
-                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {step === "submitting" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                   Confirm enrollment
@@ -175,7 +175,7 @@ export function WinBackManualEnrollModal({
                   type="button"
                   onClick={runPreview}
                   disabled={!emailValid || step === "previewing"}
-                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {step === "previewing" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                   Preview

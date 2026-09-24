@@ -93,15 +93,15 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Re-audit
         </button>
       </div>
 
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
       {queuedMessage && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {queuedMessage}
         </div>
       )}
@@ -119,17 +119,17 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
             <Section title="Duplicate subscriptions" icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}>
               {report.duplicateGroups.map((group) => (
                 <div key={group.groupKey} className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-2">
-                  <p className="text-xs text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
                     <Copy className="inline w-3 h-3 mr-1 -mt-0.5" />
                     {group.whopWebhookIds.length} subscriptions point at <span className="font-mono">{group.url}</span> for{" "}
                     <span className="font-mono">{group.events.join(", ")}</span> : every matching event fires this receiver {group.whopWebhookIds.length}x.
                   </p>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">{group.whopWebhookIds.join(", ")}</p>
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400 font-mono">{group.whopWebhookIds.join(", ")}</p>
                   <button
                     type="button"
                     onClick={() => queueDedupe(group.groupKey)}
                     disabled={busyKey === group.groupKey}
-                    className="text-xs font-bold text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-lg px-3 py-1.5 disabled:opacity-50"
+                    className="text-sm font-bold text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-lg px-3 py-1.5 disabled:opacity-50"
                   >
                     {busyKey === group.groupKey ? "Queuing…" : "Queue dedupe (keeps healthiest, removes the rest)"}
                   </button>
@@ -142,12 +142,12 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
             <Section title="Unpinned subscriptions" icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}>
               {report.unpinned.map((whopWebhookId) => (
                 <div key={whopWebhookId} className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2">
-                  <span className="text-xs font-mono">{whopWebhookId}</span>
+                  <span className="text-sm font-mono">{whopWebhookId}</span>
                   <button
                     type="button"
                     onClick={() => queuePin(whopWebhookId)}
                     disabled={busyKey === whopWebhookId}
-                    className="text-xs font-bold text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-lg px-3 py-1.5 disabled:opacity-50"
+                    className="text-sm font-bold text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-lg px-3 py-1.5 disabled:opacity-50"
                   >
                     {busyKey === whopWebhookId ? "Queuing…" : "Queue pin"}
                   </button>
@@ -158,18 +158,18 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
 
           {report.unverifiable.length > 0 && (
             <Section title="Unverifiable envelopes (v2/v5)" icon={<AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 These carry an api_version of v2 or v5 and lack Standard Webhooks signatures. They cannot be HMAC-verified. The agent
                 will never create one; these were found on the existing fleet.
               </p>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">{report.unverifiable.join(", ")}</p>
+              <p className="text-[13px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">{report.unverifiable.join(", ")}</p>
             </Section>
           )}
 
           {report.alreadyDisabled.length > 0 && (
             <Section title="Already disabled" icon={<AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}>
               {report.alreadyDisabled.map((d) => (
-                <p key={d.whopWebhookId} className="text-xs text-zinc-600 dark:text-zinc-400">
+                <p key={d.whopWebhookId} className="text-sm text-zinc-600 dark:text-zinc-400">
                   <span className="font-mono">{d.whopWebhookId}</span> : {d.disabledReason ?? "no reason recorded"}. Not re-enabled
                   automatically; use the receiver health workspace once it detects a passing probe.
                 </p>
@@ -178,7 +178,7 @@ export function WebhookAuditConsole({ engagementId: id }: { engagementId: string
           )}
 
           {report.unpinned.length === 0 && report.duplicateGroups.length === 0 && report.alreadyDisabled.length === 0 && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Every subscription is pinned, healthy, and free of duplicates.
             </div>
           )}
@@ -193,7 +193,7 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
       <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
-      <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500 mt-0.5">{label}</p>
+      <p className="text-xs font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-500 mt-0.5">{label}</p>
     </div>
   );
 }
@@ -201,7 +201,7 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h2 className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
+      <h2 className="flex items-center gap-1.5 text-sm font-bold text-zinc-900 dark:text-zinc-100">
         {icon} {title}
       </h2>
       <div className="space-y-2">{children}</div>

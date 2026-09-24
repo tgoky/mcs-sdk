@@ -241,7 +241,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
+            <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
               {monthName} {year}
             </span>
             <button
@@ -254,7 +254,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={handleTodayClick}
-              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -266,7 +266,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name..."
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
         </div>
@@ -274,7 +274,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
         {/* PUSHED TO EXTREME RIGHT: UNCOLORED TEXT COUNTER + SYNC BUTTON */}
         <div className="flex items-center gap-3 font-sans">
           {!loading && (
-            <span className="text-xs font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+            <span className="text-sm font-mono font-semibold text-zinc-600 dark:text-zinc-400">
               {activeCount} active in recovery
             </span>
           )}
@@ -283,7 +283,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -291,7 +291,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           <button
             type="button"
             onClick={() => setShowManualEnroll(true)}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
             title="Manually enroll a prospect who cancelled outside a connected webhook"
           >
             <UserPlus size={13} />
@@ -301,7 +301,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* SMART SPLIT-PANE RECOVERY FEED */}
@@ -311,14 +311,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 font-sans">
             <div className="flex items-center gap-1.5">
               <CalendarDays size={14} className="text-zinc-500" />
-              <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+              <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
                 {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               {listScope === "week" && (
-                <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                <div className="flex items-center gap-1 font-mono text-sm text-zinc-500">
                   <button
                     type="button"
                     onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
@@ -330,7 +330,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                   <button
                     type="button"
                     onClick={handleTodayClick}
-                    className="hover-lift press-settle text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                    className="hover-lift press-settle text-[13px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                   >
                     Today
                   </button>
@@ -345,7 +345,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               )}
 
-              <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+              <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[13px] font-sans">
                 <button
                   type="button"
                   onClick={() => setListScope("week")}
@@ -374,7 +374,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           {listDaysToRender.length === 0 && !loading ? (
             <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
               <CalendarX2 size={22} />
-              <span className="text-xs">No Win-Back enrollments on file.</span>
+              <span className="text-sm">No Win-Back enrollments on file.</span>
             </div>
           ) : (
             <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
@@ -384,7 +384,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 return (
                   <div key={dateStr} className="space-y-0 font-sans">
                     {/* Sticky Day Header */}
-                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                    <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500">
                       <span>{formatDayHeader(dateStr)}</span>
                       <span className={cn("font-normal", calls.length > 0 ? "text-zinc-700 dark:text-zinc-300 font-bold" : "text-zinc-400")}>
                         {calls.length} enrollment{calls.length === 1 ? "" : "s"}
@@ -416,23 +416,23 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                               )}
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#aab8d8] dark:bg-[#c5b7ea] px-1.5 py-0.5 rounded shrink-0">
+                                <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-950 bg-[#aab8d8] dark:bg-[#c5b7ea] px-1.5 py-0.5 rounded shrink-0">
                                   <Clock size={9} />
                                   {enrollmentTime}
                                 </span>
 
                                 <div className="min-w-0 space-y-0.5">
-                                  <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                  <span className="truncate text-sm font-bold text-zinc-900 dark:text-white block font-sans">
                                     {item.prospectName ?? item.prospectEmail}
                                   </span>
-                                  <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                  <span className="text-[13px] text-zinc-500 font-mono block truncate">
                                     {item.prospectEmail}
                                   </span>
                                 </div>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[9.5px] font-mono text-zinc-600 dark:text-zinc-400 font-bold">
+                                <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 font-bold">
                                   {item.touchesSent}/{item.touchesTotal} Touches
                                 </span>
 
@@ -451,14 +451,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                             setSelectedId(null);
                           }}
                           className={cn(
-                            "hover-lift press-settle w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                            "hover-lift press-settle w-full px-4 py-2.5 text-left text-sm font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
                             isSelectedDay
                               ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
                               : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
                           )}
                         >
                           <span>No recovery enrollments</span>
-                          <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
+                          <span className="text-xs text-zinc-400 dark:text-zinc-600">0 / 0</span>
                         </button>
                       )}
                     </div>
@@ -476,7 +476,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
                 {/* MOVED STATUS TEXT TO THE RIGHT NEXT TO SQUISHY SKILL BADGE, NO BACKGROUND FILL */}
                 <div className="flex items-center justify-between font-sans flex-wrap gap-1">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
+                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold">
                     Prospect Recovery
                   </span>
                   <div className="flex items-center gap-2">
@@ -489,7 +489,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
                 <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
-                <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                   <div className="flex items-center gap-2">
                     <Mail size={12} className="text-zinc-500 shrink-0" />
                     <span className="truncate">{selected.prospectEmail}</span>
@@ -501,7 +501,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
                 </div>
               </div>
 
-              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
+              <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-sm font-sans">
                 <div className="flex items-center justify-between font-sans">
                   <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Touches Sent</span>
                   <span className="font-mono text-zinc-900 dark:text-white">{selected.touchesSent} / {selected.touchesTotal}</span>
@@ -531,20 +531,20 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
               </div>
 
               {selected.freshRescheduleLink && (
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
-                  <span className="text-[10.5px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-sm font-sans">
+                  <span className="text-[13px] font-mono text-zinc-500 uppercase block font-semibold flex items-center gap-1.5">
                     <Link2 size={12} /> Single-use Reschedule Link
                   </span>
                   <div className="flex items-center gap-2">
                     <input
                       readOnly
                       value={selected.freshRescheduleLink}
-                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 py-1 px-2 font-mono text-[11px] text-zinc-700 dark:text-zinc-300 focus:outline-none"
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 py-1 px-2 font-mono text-[13px] text-zinc-700 dark:text-zinc-300 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => handleCopyLink(selected.freshRescheduleLink!)}
-                      className="flex items-center gap-1 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#aab8d8] dark:bg-[#c5b7ea] text-zinc-950 px-2 py-1 text-[11px] hover:opacity-90 cursor-pointer font-sans font-bold"
+                      className="flex items-center gap-1 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#aab8d8] dark:bg-[#c5b7ea] text-zinc-950 px-2 py-1 text-[13px] hover:opacity-90 cursor-pointer font-sans font-bold"
                     >
                       {copiedLink ? <Check size={12} className="text-emerald-950" /> : <Copy size={12} />}
                       <span>{copiedLink ? "Copied" : "Copy"}</span>
@@ -555,13 +555,13 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
               {/* CLEAN RUN ACTIVITY PANEL IN LIGHT MODE - NO DARK BOX OVERFLOW */}
               {selected.runId && (
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md text-zinc-900 dark:text-zinc-100 overflow-hidden text-xs font-sans">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md text-zinc-900 dark:text-zinc-100 overflow-hidden text-sm font-sans">
                   <button
                     type="button"
                     onClick={() => setShowRunActivity((p) => !p)}
                     className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                    <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                       <SquishySkillBadge skill="win-back" size={14} enabled={true} />
                       Run activity
                     </span>
@@ -570,14 +570,14 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
 
                   {showRunActivity && (
                     <div className={cn(
-                      "px-3 pb-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/60 font-sans text-xs rounded-b-xl transition-colors",
+                      "px-3 pb-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/60 font-sans text-sm rounded-b-xl transition-colors",
                       "bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100",
                       "[html:not(.dark)_&_*]:!bg-zinc-100/90 [html:not(.dark)_&_*]:!text-zinc-900 [html:not(.dark)_&_*]:!border-zinc-200"
                     )}>
                       <RunActivityPanel runId={selected.runId} />
                       <a
                         href={`/dashboard/runs/${selected.runId}`}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors font-medium"
                       >
                         <span>Open full run page</span>
                         <ExternalLink size={10} />
@@ -590,7 +590,7 @@ export function WinBackPipeline({ engagementId }: { engagementId: string }) {
           ) : (
             <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
               <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-              <p className="text-xs font-sans">
+              <p className="text-sm font-sans">
                 {selectedDate ? (
                   <>
                     <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">

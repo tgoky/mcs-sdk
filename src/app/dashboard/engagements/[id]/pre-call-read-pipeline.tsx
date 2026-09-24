@@ -299,7 +299,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
+            <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
               {monthName} {year}
             </span>
             <button
@@ -312,7 +312,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             <button
               type="button"
               onClick={handleTodayClick}
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -324,7 +324,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name or email..."
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -332,13 +332,13 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             type="button"
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
 
           {!loading && (
-            <span className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 font-semibold px-1">
+            <span className="flex items-center gap-1.5 text-[13px] font-mono text-zinc-700 dark:text-zinc-300 font-semibold px-1">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
                 <PhoneCall size={10} className="fill-current" />
               </span>
@@ -348,7 +348,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
         </div>
 
         {/* Theme-aware view switcher (Month, Day View, List) */}
-        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-sm font-sans">
           {([
             ["month", CalendarIcon, "Month"],
             ["day", Clock, "Day View"],
@@ -373,7 +373,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
       </div>
 
       {error && (
-        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* 1. MONTH VIEW */}
@@ -384,7 +384,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               same pattern as master-roster-calendar.tsx's month view. */}
           <div className="overflow-x-auto">
           <div className="min-w-[630px]">
-          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
             ))}
@@ -417,7 +417,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 >
                   <div className="flex items-start justify-between gap-1 w-full">
                     <span className={cn(
-                      "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0",
+                      "flex h-6 w-6 items-center justify-center rounded-full font-mono text-[13px] font-semibold shrink-0",
                       isToday
                         ? "bg-emerald-500 text-zinc-950 font-bold"
                         : isPast
@@ -431,7 +431,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                       {metric && metric.totalCalls > 0 && (
                         <div className="relative">
                           <SquishySkillBadge skill="pre-call-read" size={16} enabled={true} />
-                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-sky-500 text-[8px] font-bold text-zinc-950 font-mono">
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-zinc-950 font-mono">
                             {metric.totalCalls}
                           </span>
                         </div>
@@ -446,16 +446,16 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                           <PhoneCall size={10} className="fill-current" />
                         </span>
                         <div>
-                          <span className="text-[11px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
+                          <span className="text-[13px] font-bold block leading-none text-pink-950 dark:text-pink-200 font-sans">
                             {metric.totalCalls} call{metric.totalCalls === 1 ? "" : "s"}
                           </span>
-                          <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
+                          <span className="text-[11px] font-mono mt-0.5 block font-semibold text-pink-800 dark:text-pink-300/90">
                             {metric.briefDelivered}/{metric.totalCalls} briefed
                           </span>
                         </div>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono italic block">No calls</span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-600 font-mono italic block">No calls</span>
                     )}
                   </div>
                 </button>
@@ -480,12 +480,12 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+                <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">
                   {selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                 </h3>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              <div className="flex items-center gap-1.5 font-mono text-[13px]">
                 <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400 font-semibold">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
                     <PhoneCall size={10} className="fill-current" />
@@ -493,7 +493,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   {selectedDayEntries.length} call{selectedDayEntries.length === 1 ? "" : "s"}
                 </span>
                 {selectedDayEntries.filter((e) => e.status === "brief_delivered").length > 0 && (
-                  <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border-0">
+                  <span className="text-emerald-900 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded text-xs font-bold border-0">
                     {selectedDayEntries.filter((e) => e.status === "brief_delivered").length} briefed
                   </span>
                 )}
@@ -512,7 +512,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     ref={isEarliestHour ? firstMeetingRef : null}
                     className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans"
                   >
-                    <span className="w-14 shrink-0 font-mono text-[11px] text-zinc-500 text-right pt-0.5">
+                    <span className="w-14 shrink-0 font-mono text-[13px] text-zinc-500 text-right pt-0.5">
                       {hour.toString().padStart(2, "0")}:00
                     </span>
                     <div className="flex-1 space-y-1.5 font-sans">
@@ -532,13 +532,13 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                           >
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
-                                <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{entry.prospectName ?? "Unnamed"}</span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                <span className="font-bold text-zinc-900 dark:text-white text-sm font-sans">{entry.prospectName ?? "Unnamed"}</span>
+                                <span className="inline-flex items-center gap-1 text-xs font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
                                   <PhoneCall size={9} className="fill-current text-rose-950" />
                                   {timeStr(entry.callTime)}
                                 </span>
                               </div>
-                              <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{entry.prospectEmail}</p>
+                              <p className="text-[13px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{entry.prospectEmail}</p>
 
                               <div className="flex flex-wrap gap-1 pt-1 font-sans">
                                 <StatusPill tone={STATUS_META[entry.status].tone}>
@@ -573,11 +573,11 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           <div className="lg:col-span-5 space-y-3 font-sans">
             {/* MINI CALENDAR NAVIGATOR */}
             <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 p-3 space-y-2 shadow-lg font-sans">
-              <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
-              <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
+              <span className="text-[13px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
+              <div className="grid grid-cols-7 text-center text-[11px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
               </div>
-              <div className="grid grid-cols-7 text-center text-xs gap-1 font-sans">
+              <div className="grid grid-cols-7 text-center text-sm gap-1 font-sans">
                 {gridDays.map(({ date, isCurrentMonth }, idx) => {
                   const isSelected = dateKey(date) === selectedDayKey;
                   return (
@@ -586,7 +586,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                       type="button"
                       onClick={() => handleUpdateSelectedDate(date)}
                       className={cn(
-                        "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
+                        "h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-xs transition-colors cursor-pointer font-sans",
                         isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
                       )}
                     >
@@ -603,14 +603,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 <>
                   <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
                     <div className="flex items-center justify-between font-sans flex-wrap gap-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
+                      <span className="text-xs font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
                         <Building2 size={12} /> {selectedEntry.bookingPlatform ?? "Calendar"}
                       </span>
                       {selectedEntry.prospectEmail && (
                         <button
                           type="button"
                           onClick={() => handleCopyEmail(selectedEntry.prospectEmail!)}
-                          className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                          className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[13px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                         >
                           {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                           <span>Copy Email</span>
@@ -620,7 +620,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
 
                     <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedEntry.prospectName ?? "Unnamed Prospect"}</h4>
 
-                    <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                    <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                       {selectedEntry.prospectEmail && (
                         <div className="flex items-center gap-2">
                           <Mail size={12} className="text-zinc-500 shrink-0" />
@@ -650,7 +650,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     )}
                   </div>
 
-                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-sm font-sans">
                     <div className="flex items-center justify-between font-sans">
                       <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                       <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
@@ -682,22 +682,22 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   </div>
 
                   {selectedEntry.briefText ? (
-                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
-                      <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
+                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-sm font-sans">
+                      <span className="text-[13px] font-mono text-zinc-500 uppercase block">Brief Content</span>
                       <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
                     </div>
                   ) : (
-                    <p className="text-zinc-500 italic text-[11px] font-sans">No brief text on file for this call.</p>
+                    <p className="text-zinc-500 italic text-[13px] font-sans">No brief text on file for this call.</p>
                   )}
 
                   {selectedEntry.runId && (
-                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-sm font-sans">
                       <button
                         type="button"
                         onClick={() => setShowRunActivity((p) => !p)}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                       >
-                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                           <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                           Run activity
                         </span>
@@ -708,7 +708,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                           <RunActivityPanel runId={selectedEntry.runId} />
                           <a
                             href={`/dashboard/runs/${selectedEntry.runId}`}
-                            className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                            className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                           >
                             <span>Open full research run</span>
                             <ExternalLink size={10} />
@@ -721,7 +721,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                   <Clock size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                  <p className="text-xs font-sans">No call selected or found for this date.</p>
+                  <p className="text-sm font-sans">No call selected or found for this date.</p>
                 </div>
               )}
             </div>
@@ -738,14 +738,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
-                <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
                   {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
                 {listScope === "week" && (
-                  <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                  <div className="flex items-center gap-1 font-mono text-sm text-zinc-500">
                     <button
                       type="button"
                       onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
@@ -757,7 +757,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     <button
                       type="button"
                       onClick={handleTodayClick}
-                      className="text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                      className="text-[13px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                     >
                       Today
                     </button>
@@ -772,7 +772,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   </div>
                 )}
 
-                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[13px] font-sans">
                   <button
                     type="button"
                     onClick={() => setListScope("week")}
@@ -801,7 +801,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             {listDaysToRender.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">No calls on file.</span>
+                <span className="text-sm">No calls on file.</span>
               </div>
             ) : (
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 max-h-[580px] overflow-y-auto">
@@ -811,7 +811,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   return (
                     <div key={dateStr} className="space-y-0 font-sans">
                       {/* Sticky Day Header */}
-                      <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                      <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500">
                         <span className="flex items-center gap-1.5">
                           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
                             <PhoneCall size={9} className="fill-current" />
@@ -848,17 +848,17 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                  <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
                                     <PhoneCall size={9} className="fill-current text-rose-950" />
                                     {appointmentHour}
                                   </span>
 
                                   <div className="min-w-0 space-y-0.5">
-                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                    <span className="truncate text-sm font-bold text-zinc-900 dark:text-white block font-sans">
                                       {entry.prospectName ?? entry.prospectEmail}
                                     </span>
                                     {entry.prospectEmail && (
-                                      <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                      <span className="text-[13px] text-zinc-500 font-mono block truncate">
                                         {entry.prospectEmail}
                                       </span>
                                     )}
@@ -895,7 +895,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                               setSelectedEntryId(null);
                             }}
                             className={cn(
-                              "w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                              "w-full px-4 py-2.5 text-left text-sm font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
                               isSelectedDay
                                 ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
                                 : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
@@ -907,7 +907,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                               </span>
                               No calls scheduled
                             </span>
-                            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
+                            <span className="text-xs text-zinc-400 dark:text-zinc-600">0 / 0</span>
                           </button>
                         )}
                       </div>
@@ -921,7 +921,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     <button
                       type="button"
                       onClick={() => setShowUpcomingInMonth((p) => !p)}
-                      className="flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
+                      className="flex w-full items-center justify-between px-4 py-2 text-[13px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
                     >
                       <span>Upcoming Calls in {monthName} ({monthDaysSmart.future.reduce((acc, d) => acc + d.calls.length, 0)})</span>
                       <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
@@ -931,7 +931,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
                         {monthDaysSmart.future.map(({ dateStr, calls }) => (
                           <div key={dateStr} className="space-y-0 font-sans">
-                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
+                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
                               <span className="flex items-center gap-1.5">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 shrink-0">
                                   <PhoneCall size={9} className="fill-current" />
@@ -952,11 +952,11 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                                   className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
-                                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+                                    <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
                                       <PhoneCall size={9} className="fill-current text-rose-950" />
                                       {formatTimeBadge(entry.callTime)}
                                     </span>
-                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                    <span className="truncate text-sm font-bold text-zinc-900 dark:text-white">
                                       {entry.prospectName ?? entry.prospectEmail}
                                     </span>
                                   </div>
@@ -982,14 +982,14 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
               <>
                 <div className="space-y-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 font-sans">
                   <div className="flex items-center justify-between font-sans flex-wrap gap-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
+                    <span className="text-xs font-mono uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 font-sans">
                       <Building2 size={12} /> {selectedEntry.bookingPlatform ?? "Calendar"}
                     </span>
                     {selectedEntry.prospectEmail && (
                       <button
                         type="button"
                         onClick={() => handleCopyEmail(selectedEntry.prospectEmail!)}
-                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[13px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                       >
                         {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                         <span>Copy Email</span>
@@ -999,7 +999,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
 
                   <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selectedEntry.prospectName ?? "Unnamed Prospect"}</h4>
 
-                  <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                  <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                     {selectedEntry.prospectEmail && (
                       <div className="flex items-center gap-2">
                         <Mail size={12} className="text-zinc-500 shrink-0" />
@@ -1029,7 +1029,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                   )}
                 </div>
 
-                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-xs font-sans">
+                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-2 text-sm font-sans">
                   <div className="flex items-center justify-between font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Delivered via</span>
                     <span className="font-mono text-zinc-900 dark:text-white capitalize">{selectedEntry.destinationDelivered ? briefDestinationLabel(selectedEntry.destinationDelivered) : "Slack"}</span>
@@ -1061,22 +1061,22 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                 </div>
 
                 {selectedEntry.briefText ? (
-                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-xs font-sans">
-                    <span className="text-[10.5px] font-mono text-zinc-500 uppercase block">Brief Content</span>
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent p-3 space-y-1.5 text-sm font-sans">
+                    <span className="text-[13px] font-mono text-zinc-500 uppercase block">Brief Content</span>
                     <p className="text-zinc-800 dark:text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap max-h-[160px] overflow-y-auto text-[11.5px]">{selectedEntry.briefText}</p>
                   </div>
                 ) : (
-                  <p className="text-zinc-500 italic text-[11px] font-sans">No brief text on file for this call.</p>
+                  <p className="text-zinc-500 italic text-[13px] font-sans">No brief text on file for this call.</p>
                 )}
 
                 {selectedEntry.runId && (
-                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-xs font-sans">
+                  <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent overflow-hidden text-sm font-sans">
                     <button
                       type="button"
                       onClick={() => setShowRunActivity((p) => !p)}
                       className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                     >
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                      <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                         <SquishySkillBadge skill="pre-call-read" size={14} enabled={true} />
                         Run activity
                       </span>
@@ -1087,7 +1087,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                         <RunActivityPanel runId={selectedEntry.runId} />
                         <a
                           href={`/dashboard/runs/${selectedEntry.runId}`}
-                          className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                          className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                         >
                           <span>Open full research run</span>
                           <ExternalLink size={10} />
@@ -1100,7 +1100,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
             ) : (
               <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                 <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                <p className="text-xs font-sans">
+                <p className="text-sm font-sans">
                   {selectedDate ? (
                     <>
                       <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">

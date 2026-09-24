@@ -57,7 +57,7 @@ export default async function SkillPage({
               <h1 className="text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
                 {page.title} for {engagement.buyer}
               </h1>
-              {page.subtitle && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{page.subtitle}</p>}
+              {page.subtitle && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{page.subtitle}</p>}
             </div>
           </div>
 

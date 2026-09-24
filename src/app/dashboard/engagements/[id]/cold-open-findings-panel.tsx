@@ -142,7 +142,7 @@ function PhaseProgress({ phaseState }: { phaseState: Record<ColdOpenPhaseKey, Co
       {PHASE_ORDER.map((key) => {
         const state = phaseState[key] ?? "not_started";
         return (
-          <span key={key} className="flex items-center gap-1.5 text-[11px] font-mono">
+          <span key={key} className="flex items-center gap-1.5 text-[13px] font-mono">
             <span
               className={cn(
                 "h-1.5 w-1.5 rounded-[2px] shrink-0",
@@ -278,10 +278,10 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
   const selectedReply = useMemo(() => filteredReplies.find((r) => r.id === selectedReplyId) ?? filteredReplies[0] ?? null, [filteredReplies, selectedReplyId]);
 
   if (loading) {
-    return <p className="text-xs text-zinc-500 font-mono py-8 text-center">Loading Cold Open data…</p>;
+    return <p className="text-sm text-zinc-500 font-mono py-8 text-center">Loading Cold Open data…</p>;
   }
   if (error || !data) {
-    return <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">{error}</div>;
+    return <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300">{error}</div>;
   }
 
   const config = data.config;
@@ -298,7 +298,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
         <button
           type="button"
           onClick={close}
-          className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 text-sm font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
         >
           <X className="w-3.5 h-3.5" /> Back to Cold Open
         </button>
@@ -313,7 +313,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
       {config ? (
         <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-3">
           <PhaseProgress phaseState={config.phaseState} />
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 border-t border-zinc-200 dark:border-zinc-800 pt-2.5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 border-t border-zinc-200 dark:border-zinc-800 pt-2.5">
             <span>
               ICPs: <strong className="text-zinc-700 dark:text-zinc-300">{config.icps.length || "none configured"}</strong>
             </span>
@@ -336,8 +336,8 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
             {config.lastRunAt && <span>Last run: {formatEntryTime(config.lastRunAt)}</span>}
           </div>
           {config.lastRunSummary && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Last run:</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Last run:</span>
               <span>Fetched {config.lastRunSummary.fetched}</span>
               <span>Kept {config.lastRunSummary.kept}</span>
               <span className="text-[#424d77] dark:text-[#c5b7ea] font-semibold">Pushed {config.lastRunSummary.pushed}</span>
@@ -355,8 +355,8 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               schedule, distinct from "last run" above (one run's own
               fetch/kept/push numbers) and from the full-history Sends/
               Replies tabs below (everything on file, no window). */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 border-t border-zinc-200 dark:border-zinc-800 pt-2.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Last 7 days:</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 border-t border-zinc-200 dark:border-zinc-800 pt-2.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Last 7 days:</span>
             <span className="text-[#424d77] dark:text-[#c5b7ea] font-semibold">Pushed {last7Days.leadsByStatus.pushed ?? 0}</span>
             <span>Held {last7Days.leadsByStatus.held ?? 0}</span>
             <span>Duplicate {last7Days.leadsByStatus.duplicate ?? 0}</span>
@@ -382,11 +382,11 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder={tab === "sends" ? "Search leads…" : "Search replies…"}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px]">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[13px]">
             <button
               type="button"
               onClick={() => setTab("sends")}
@@ -416,7 +416,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               <button
                 type="button"
                 onClick={toggle}
-                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+                className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
               >
                 <Settings2 size={13} /> Configure
               </button>
@@ -441,7 +441,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -450,7 +450,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
 
       {tab === "sends" ? (
         <>
-          <div className="flex items-center gap-1 overflow-x-auto text-[11px]">
+          <div className="flex items-center gap-1 overflow-x-auto text-[13px]">
             {(["all", "pushed", "dry_run", "held", "duplicate", "skipped_dead", "skipped_filtered", "error", "discarded"] as const).map((s) => (
               <button
                 key={s}
@@ -469,8 +469,8 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
           <div className="space-y-5">
             <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
-                <span className="text-xs font-bold text-zinc-900 dark:text-white">Leads</span>
-                <span className="text-[10.5px] font-mono text-zinc-500">{filteredLeads.length} shown</span>
+                <span className="text-sm font-bold text-zinc-900 dark:text-white">Leads</span>
+                <span className="text-[13px] font-mono text-zinc-500">{filteredLeads.length} shown</span>
               </div>
 
               {filteredLeads.length === 0 ? (
@@ -492,14 +492,14 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{leadName(l)}</span>
+                            <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{leadName(l)}</span>
                             <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                           </div>
-                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate">
                             {l.companyName} {l.icp ? `· ${l.icp}` : ""} · {l.campaignId}
                           </p>
                         </div>
-                        <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                        <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
                           <Clock size={9} />
                           {formatEntryTime(l.pushedAt ?? l.createdAt)}
                         </span>
@@ -514,18 +514,18 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
                   <div>
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white">{leadName(selectedLead)}</h4>
-                    <span className="text-[10.5px] font-mono text-zinc-500">{selectedLead.email} · {selectedLead.domain}</span>
+                    <h4 className="text-[15px] font-bold text-zinc-900 dark:text-white">{leadName(selectedLead)}</h4>
+                    <span className="text-[13px] font-mono text-zinc-500">{selectedLead.email} · {selectedLead.domain}</span>
                   </div>
                   <StatusPill tone={LEAD_STATUS_META[selectedLead.status].tone}>{LEAD_STATUS_META[selectedLead.status].label}</StatusPill>
                 </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   {selectedLead.title ? `${selectedLead.title} at ` : ""}
                   {selectedLead.companyName}
                   {selectedLead.source ? ` · sourced via ${selectedLead.source}` : ""}
                 </p>
                 {selectedLead.statusDetail != null && (
-                  <pre className="whitespace-pre-wrap break-all rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3 text-[10.5px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-mono">
+                  <pre className="whitespace-pre-wrap break-all rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-mono">
                     {typeof selectedLead.statusDetail === "string" ? selectedLead.statusDetail : JSON.stringify(selectedLead.statusDetail, null, 2)}
                   </pre>
                 )}
@@ -535,7 +535,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                       type="button"
                       onClick={() => actOnHeldLead(selectedLead.id, "approve")}
                       disabled={busyLeadId === selectedLead.id}
-                      className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-40 cursor-pointer transition-colors"
+                      className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-transparent px-2.5 py-1.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-40 cursor-pointer transition-colors"
                     >
                       {busyLeadId === selectedLead.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                       Approve &amp; send
@@ -544,21 +544,21 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                       type="button"
                       onClick={() => actOnHeldLead(selectedLead.id, "discard")}
                       disabled={busyLeadId === selectedLead.id}
-                      className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer transition-colors"
+                      className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-2.5 py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer transition-colors"
                     >
                       <X size={13} />
                       Discard
                     </button>
                   </div>
                 )}
-                {actionError && <p className="text-xs font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {actionError}</p>}
+                {actionError && <p className="text-sm font-mono font-semibold text-rose-600 dark:text-rose-400">⚠ {actionError}</p>}
               </div>
             )}
           </div>
         </>
       ) : (
         <>
-          <div className="flex items-center gap-1 overflow-x-auto text-[11px]">
+          <div className="flex items-center gap-1 overflow-x-auto text-[13px]">
             {(["all", "interested", "objection", "not_now", "not_a_fit", "auto_reply", "unsubscribe", "unclassified"] as const).map((d) => (
               <button
                 key={d}
@@ -577,8 +577,8 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
           <div className="space-y-5">
             <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
-                <span className="text-xs font-bold text-zinc-900 dark:text-white">Replies</span>
-                <span className="text-[10.5px] font-mono text-zinc-500">{filteredReplies.length} shown</span>
+                <span className="text-sm font-bold text-zinc-900 dark:text-white">Replies</span>
+                <span className="text-[13px] font-mono text-zinc-500">{filteredReplies.length} shown</span>
               </div>
 
               {filteredReplies.length === 0 ? (
@@ -600,13 +600,13 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{r.leadEmail}</span>
+                            <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{r.leadEmail}</span>
                             <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                             {r.routedToQueue && !r.queueResolvedAt && <StatusPill tone="info">Routed to Queue</StatusPill>}
                           </div>
-                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{r.rawBody}</p>
+                          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate">{r.rawBody}</p>
                         </div>
-                        <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                        <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
                           <Clock size={9} />
                           {formatEntryTime(r.classifiedAt)}
                         </span>
@@ -621,21 +621,21 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
               <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
                   <div>
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white">{selectedReply.leadEmail}</h4>
-                    <span className="text-[10.5px] font-mono text-zinc-500">
+                    <h4 className="text-[15px] font-bold text-zinc-900 dark:text-white">{selectedReply.leadEmail}</h4>
+                    <span className="text-[13px] font-mono text-zinc-500">
                       {selectedReply.campaignId ?? "no campaign on file"} · classified via {selectedReply.classificationSource}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusPill tone={REPLY_DISPOSITION_META[selectedReply.disposition].tone}>{REPLY_DISPOSITION_META[selectedReply.disposition].label}</StatusPill>
                     {selectedReply.routedToQueue && !selectedReply.queueResolvedAt && (
-                      <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
+                      <a href="/dashboard/queue" className="flex items-center gap-1 text-[13px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                         View in Queue <ExternalLink size={10} />
                       </a>
                     )}
                   </div>
                 </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap">{selectedReply.rawBody}</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap">{selectedReply.rawBody}</p>
               </div>
             )}
           </div>

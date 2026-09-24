@@ -62,8 +62,8 @@ export function WinBackCadencePreview({
       <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-5 font-sans">
         <div className="flex items-start gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
+            <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
+            <p className="text-[13px] text-zinc-500 dark:text-zinc-400 font-sans mt-1 max-w-md">
               No cadence has been generated yet. Win-Back builds this the first time its sequence runs for this
               engagement. Run it now to generate the emails and texts every recovered prospect will receive.
             </p>
@@ -72,13 +72,13 @@ export function WinBackCadencePreview({
                 type="button"
                 onClick={handleGenerate}
                 disabled={generating}
-                className="hover-lift press-settle shadow-elevation-1 w-full flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="hover-lift press-settle shadow-elevation-1 w-full flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 {generating ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
                 {generating ? "Generating…" : "Generate cadence now"}
               </button>
               {generateError && (
-                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">{generateError}</p>
+                <p className="text-[13px] font-semibold text-rose-600 dark:text-rose-400">{generateError}</p>
               )}
             </div>
           </div>
@@ -96,12 +96,12 @@ export function WinBackCadencePreview({
     <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg overflow-hidden font-sans">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 px-5 py-3">
         <div>
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+          <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">Recovery Cadence</h3>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
             What every prospect who enters win-back actually receives, in order.
           </p>
         </div>
-        <span className="text-[10.5px] font-mono font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">
+        <span className="text-[13px] font-mono font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">
           {assetMap.windowDays}-day window
         </span>
       </div>
@@ -126,8 +126,8 @@ export function WinBackCadencePreview({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10.5px] font-mono font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">{dayLabel(t.offsetDays)}</span>
-                    <span className="truncate text-xs font-semibold text-zinc-900 dark:text-white font-sans">
+                    <span className="text-[13px] font-mono font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">{dayLabel(t.offsetDays)}</span>
+                    <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white font-sans">
                       {t.type === "email" ? (t.subject || "Email") : "Text message"}
                     </span>
                   </div>
@@ -136,7 +136,7 @@ export function WinBackCadencePreview({
               </button>
               {expanded && (
                 <div className="px-5 pb-4 pl-[3.25rem] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
-                  <p className="text-xs text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3">
+                  <p className="text-sm text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3">
                     {t.body}
                   </p>
                 </div>
@@ -145,7 +145,7 @@ export function WinBackCadencePreview({
           );
         })}
         {touches.length === 0 && (
-          <div className="px-5 py-8 text-center text-[11px] text-zinc-400 dark:text-zinc-600 font-sans">No touches configured.</div>
+          <div className="px-5 py-8 text-center text-[13px] text-zinc-400 dark:text-zinc-600 font-sans">No touches configured.</div>
         )}
       </div>
     </div>

@@ -151,7 +151,7 @@ export type ConversationIntelligenceState = {
 // layout standing apart from the other three.
 function SquareLabel({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+    <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-zinc-500">
       <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${color}`} aria-hidden="true" />
       {children}
     </span>
@@ -212,14 +212,14 @@ function DeliverableRow({
               <span
                 className={
                   isOpen
-                    ? "text-sm font-bold text-zinc-900 dark:text-white truncate"
-                    : "text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 transition-colors truncate"
+                    ? "text-[15px] font-bold text-zinc-900 dark:text-white truncate"
+                    : "text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 transition-colors truncate"
                 }
               >
                 {title}
               </span>
             </div>
-            <p className={isOpen ? "text-xs text-zinc-600 dark:text-zinc-400 truncate font-medium" : "text-xs text-zinc-500 dark:text-zinc-400 truncate"}>
+            <p className={isOpen ? "text-sm text-zinc-600 dark:text-zinc-400 truncate font-medium" : "text-sm text-zinc-500 dark:text-zinc-400 truncate"}>
               {subtitle}
             </p>
           </div>
@@ -322,26 +322,26 @@ export function DeliverablesPanel({
     <div className="w-full space-y-6 font-sans">
       {/* CALL INTELLIGENCE STATUS HEADER */}
       {conversationIntelligence?.enabled ? (
-        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
+        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-sm">
           <div className="flex items-center gap-3">
             <Radio size={16} className="text-emerald-500 dark:text-emerald-400 animate-pulse shrink-0" />
             <div>
               <span className="font-semibold text-zinc-900 dark:text-zinc-200 block">
                 Call Intelligence Active
               </span>
-              <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">
+              <span className="text-zinc-600 dark:text-zinc-400 text-[13px]">
                 {conversationIntelligence.lastProcessedAt
                   ? `Last call synced ${new Date(conversationIntelligence.lastProcessedAt).toLocaleDateString()}. Auto-updating objection briefs.`
                   : "Listening for upcoming calls and auto-mining new objections."}
               </span>
             </div>
           </div>
-          <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/20 px-2.5 py-1 rounded-full font-medium shrink-0 hidden sm:inline-block">
+          <span className="text-xs font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/20 px-2.5 py-1 rounded-full font-medium shrink-0 hidden sm:inline-block">
             Sync Active
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-xs">
+        <div className="flex items-center justify-between p-3.5 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-sm">
           <div className="flex items-center gap-3">
             <div className="p-1.5 rounded-lg bg-zinc-200 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 shrink-0">
               <Radio size={16} />
@@ -350,14 +350,14 @@ export function DeliverablesPanel({
               <span className="font-semibold text-zinc-900 dark:text-zinc-200 block">
                 Call Intelligence Off
               </span>
-              <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">
+              <span className="text-zinc-600 dark:text-zinc-400 text-[13px]">
                 Connect your call provider in Stack Settings to automatically update briefs from live prospect calls.
               </span>
             </div>
           </div>
           <a
             href={`/dashboard/engagements/${engagementId}?fixSection=conversation_intelligence`}
-            className="text-[11px] font-mono font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white bg-zinc-200/80 dark:bg-zinc-900 hover:bg-zinc-300 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 px-3 py-1.5 rounded-lg transition-colors shrink-0"
+            className="text-[13px] font-mono font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white bg-zinc-200/80 dark:bg-zinc-900 hover:bg-zinc-300 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 px-3 py-1.5 rounded-lg transition-colors shrink-0"
           >
             Connect Provider
           </a>
@@ -383,12 +383,12 @@ export function DeliverablesPanel({
               : "Neutral default tone profile applied"
           }
         >
-          <div className="space-y-4 pt-1 text-xs">
+          <div className="space-y-4 pt-1 text-sm">
             {!isAiExtracted && (
               <div className="rounded-xl border border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 p-3.5 space-y-1.5">
-                <p className="text-xs font-bold text-amber-900 dark:text-amber-200">{fallbackHeadline}</p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">{fallbackDetail}</p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-200">{fallbackHeadline}</p>
+                <p className="text-[13px] text-amber-800 dark:text-amber-300/90 leading-relaxed">{fallbackDetail}</p>
+                <p className="text-[13px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
                   To fix: make sure key pages are reachable or paste a writing sample during onboarding, then re-run setup.
                 </p>
               </div>
@@ -407,27 +407,27 @@ export function DeliverablesPanel({
 
             {discoveryPrefill && (
               <div className="space-y-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Domain Discovery ({discoveryPrefill.domain})
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {discoveryPrefill.suggestedBuyerName && (
-                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
                       Name: {discoveryPrefill.suggestedBuyerName}
                     </span>
                   )}
                   {discoveryPrefill.suggestedOfferName && (
-                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
                       Offer: {discoveryPrefill.suggestedOfferName}
                     </span>
                   )}
                   {discoveryPrefill.suggestedIcp && (
-                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
                       ICP: {discoveryPrefill.suggestedIcp}
                     </span>
                   )}
                   {discoveryPrefill.detectedBookingPlatform && (
-                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md">
                       Booking: {discoveryPrefill.detectedBookingPlatform}
                     </span>
                   )}
@@ -436,7 +436,7 @@ export function DeliverablesPanel({
                 {discoveryPrefill.notes.length > 0 && (
                   <ul className="space-y-1 pt-1 pl-1">
                     {discoveryPrefill.notes.map((note, i) => (
-                      <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px] leading-relaxed flex items-start gap-1.5">
+                      <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px] leading-relaxed flex items-start gap-1.5">
                         <span className="text-zinc-400">•</span>
                         <span>{note}</span>
                       </li>
@@ -448,7 +448,7 @@ export function DeliverablesPanel({
 
             {isAiExtracted && brandVoiceProfile?.tone && (
               <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Tone Spectrum
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -458,7 +458,7 @@ export function DeliverablesPanel({
                     const pct = ((clamped - 1) / 4) * 100;
                     return (
                       <div key={key} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
-                        <div className="flex justify-between text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        <div className="flex justify-between text-[13px] font-medium text-zinc-600 dark:text-zinc-400">
                           <span>{axis?.left ?? key}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-bold">{val.score}/5</span>
                           <span>{axis?.right ?? ""}</span>
@@ -469,7 +469,7 @@ export function DeliverablesPanel({
                             style={{ left: `calc(${pct}% - 5px)` }}
                           />
                         </div>
-                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-tight">{val.note}</p>
+                        <p className="text-[13px] text-zinc-600 dark:text-zinc-400 leading-tight">{val.note}</p>
                       </div>
                     );
                   })}
@@ -485,12 +485,12 @@ export function DeliverablesPanel({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 {!!brandVoiceProfile?.vocabulary?.signature?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                    <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Signature Vocabulary
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.vocabulary!.signature!.map((w, i) => (
-                        <span key={i} className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md">
+                        <span key={i} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md">
                           {w}
                         </span>
                       ))}
@@ -500,12 +500,12 @@ export function DeliverablesPanel({
 
                 {!!brandVoiceProfile?.vocabulary?.brand_terms?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                    <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Brand Terms
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.vocabulary!.brand_terms!.map((w, i) => (
-                        <span key={i} className="text-xs font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md">
+                        <span key={i} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-[#f8f7fa] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md">
                           {w}
                         </span>
                       ))}
@@ -515,12 +515,12 @@ export function DeliverablesPanel({
 
                 {!!brandVoiceProfile?.banned_phrases?.length && (
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                    <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                       Banned Phrases
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {brandVoiceProfile.banned_phrases.map((b, i) => (
-                        <span key={i} className="text-xs font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 px-2 py-0.5 rounded-md line-through">
+                        <span key={i} className="text-sm font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 px-2 py-0.5 rounded-md line-through">
                           {b.phrase}
                         </span>
                       ))}
@@ -532,17 +532,17 @@ export function DeliverablesPanel({
 
             {voiceScrapeArtifacts?.sources && (
               <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                   Crawled Sources ({voiceScrapeArtifacts.sources.length})
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {voiceScrapeArtifacts.sources.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
+                    <div key={i} className="flex items-center justify-between px-3 py-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-sm">
                       <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[80%]" title={s.url}>
                         <strong className="font-semibold">{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</strong>
                         {s.url ? `: ${s.url}` : ""}
                       </span>
-                      <span className="text-zinc-500 font-mono text-[11px]">{s.wordCount}w</span>
+                      <span className="text-zinc-500 font-mono text-[13px]">{s.wordCount}w</span>
                     </div>
                   ))}
                 </div>
@@ -556,14 +556,14 @@ export function DeliverablesPanel({
             here too since that's where these briefs actually live. */}
         {briefs.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
               Generated once during onboarding. Regenerate to refresh from the current brand voice and offer details.
             </p>
             <button
               type="button"
               onClick={() => handleRegenerate("briefs")}
               disabled={regeneratingBriefs}
-              className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {regeneratingBriefs ? "Regenerating…" : "Regenerate"}
             </button>
@@ -571,7 +571,7 @@ export function DeliverablesPanel({
         )}
         {regenerateMessage?.kind === "briefs" && (
           <p
-            className={`px-3 pb-2 text-[11px] font-semibold ${
+            className={`px-3 pb-2 text-[13px] font-semibold ${
               regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
             }`}
           >
@@ -599,10 +599,10 @@ export function DeliverablesPanel({
               title={PILLAR_LABELS[b.pillar] ?? b.pillar}
               subtitle={`Hook: "${b.hook}"`}
             >
-              <div className="space-y-4 text-xs font-sans pt-1">
+              <div className="space-y-4 text-sm font-sans pt-1">
                 <div className="space-y-1.5">
                   <SquareLabel color="bg-amber-400">Scroll-Stopper Hook (First 3 Seconds)</SquareLabel>
-                  <div className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">
+                  <div className="text-[15px] font-bold text-zinc-900 dark:text-white leading-snug">
                     &ldquo;{b.hook}&rdquo;
                   </div>
                 </div>
@@ -629,7 +629,7 @@ export function DeliverablesPanel({
                 {b.cta && (
                   <div className="space-y-1 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                     <SquareLabel color="bg-rose-400">Call to Action (CTA)</SquareLabel>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{b.cta}</p>
+                    <p className="text-[15px] font-bold text-zinc-900 dark:text-white">{b.cta}</p>
                   </div>
                 )}
               </div>
@@ -653,25 +653,25 @@ export function DeliverablesPanel({
                 : "Confirmation video scripts ready"
             }
           >
-            <div className="space-y-5 pt-2 text-xs">
+            <div className="space-y-5 pt-2 text-sm">
               {/* Regenerate control — same /regenerate/scripts endpoint
                   client-details-drawer.tsx already calls. */}
               <div className="flex items-center justify-between gap-3 pb-1">
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
                   Regenerate from the current brand voice, offer, call questions, and casting choice.
                 </p>
                 <button
                   type="button"
                   onClick={() => handleRegenerate("scripts")}
                   disabled={regeneratingScripts}
-                  className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  className="hover-lift press-settle shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 >
                   {regeneratingScripts ? "Regenerating…" : "Regenerate"}
                 </button>
               </div>
               {regenerateMessage?.kind === "scripts" && (
                 <p
-                  className={`text-[11px] font-semibold -mt-3 ${
+                  className={`text-[13px] font-semibold -mt-3 ${
                     regenerateMessage.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                   }`}
                 >
@@ -682,21 +682,21 @@ export function DeliverablesPanel({
               {pinDownScriptPack.heroScript && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between pb-1 border-b border-zinc-200 dark:border-zinc-800">
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{pinDownScriptPack.heroScript.title}</span>
-                    <span className="text-zinc-500 font-mono text-[11px]">~{Math.round(pinDownScriptPack.heroScript.targetLengthSeconds / 60)} min</span>
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-[15px]">{pinDownScriptPack.heroScript.title}</span>
+                    <span className="text-zinc-500 font-mono text-[13px]">~{Math.round(pinDownScriptPack.heroScript.targetLengthSeconds / 60)} min</span>
                   </div>
                   <div className="space-y-2">
                     {pinDownScriptPack.heroScript.chapters.map((c, i) => (
                       <div key={i} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[11px]">{c.timestampLabel}</span>
+                          <span className="text-zinc-700 dark:text-zinc-300 font-mono font-bold text-[13px]">{c.timestampLabel}</span>
                           <span className="text-zinc-900 dark:text-zinc-100 font-semibold">{c.beat}</span>
                         </div>
                         <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">{c.script}</p>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono pt-1">
+                  <p className="text-[13px] text-zinc-600 dark:text-zinc-400 font-mono pt-1">
                     <strong className="text-zinc-900 dark:text-zinc-100">Recording Prompt:</strong> {pinDownScriptPack.heroScript.recordingPrompt}
                   </p>
                 </div>
@@ -704,7 +704,7 @@ export function DeliverablesPanel({
 
               {!!pinDownScriptPack.breakoutScripts?.length && (
                 <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                     Breakout Q&amp;A Scripts ({pinDownScriptPack.breakoutScripts.length})
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -712,13 +712,13 @@ export function DeliverablesPanel({
                       <div key={s.id} className="p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{s.title}</span>
-                          <span className="text-[11px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
+                          <span className="text-[13px] font-mono text-zinc-500">~{s.targetLengthSeconds}s</span>
                         </div>
                         {s.sourceQuestion && (
-                          <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 italic">From: &quot;{s.sourceQuestion}&quot;</p>
+                          <p className="text-[13px] font-mono text-zinc-600 dark:text-zinc-400 italic">From: &quot;{s.sourceQuestion}&quot;</p>
                         )}
                         <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">{s.script}</p>
-                        <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80">
+                        <p className="text-[13px] text-zinc-600 dark:text-zinc-400 font-mono pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80">
                           <strong>Prompt:</strong> {s.recordingPrompt}
                         </p>
                       </div>
@@ -729,7 +729,7 @@ export function DeliverablesPanel({
 
               {pinDownScriptPack.recordingChecklist && (
                 <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold block">
+                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold block">
                     Recording Logistics Checklist
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -739,7 +739,7 @@ export function DeliverablesPanel({
                       </span>
                       <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.equipment.map((it, i) => (
-                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
@@ -750,7 +750,7 @@ export function DeliverablesPanel({
                       </span>
                       <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.environment.map((it, i) => (
-                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
@@ -761,7 +761,7 @@ export function DeliverablesPanel({
                       </span>
                       <ul className="space-y-1.5">
                         {pinDownScriptPack.recordingChecklist.wardrobeAndFraming.map((it, i) => (
-                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">· {it}</li>
+                          <li key={i} className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px]">· {it}</li>
                         ))}
                       </ul>
                     </div>
@@ -784,9 +784,9 @@ export function DeliverablesPanel({
             title="Existing Confirmation Page Audit"
             subtitle={`Audited ${pinDownPageAudit.auditedUrl}`}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-sm">
               <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-xs font-mono tracking-wider flex items-center gap-1">
                   <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" /> Strengths
                 </span>
                 <ul className="space-y-1.5">
@@ -797,7 +797,7 @@ export function DeliverablesPanel({
               </div>
 
               <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider flex items-center gap-1">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-xs font-mono tracking-wider flex items-center gap-1">
                   <AlertCircle size={12} className="text-rose-600 dark:text-rose-400" /> Weaknesses
                 </span>
                 <ul className="space-y-1.5">
@@ -808,7 +808,7 @@ export function DeliverablesPanel({
               </div>
 
               <div className="space-y-1.5 p-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg">
-                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-xs font-mono tracking-wider block">
                   v1 Improvements
                 </span>
                 <ul className="space-y-1.5">
@@ -820,8 +820,8 @@ export function DeliverablesPanel({
             </div>
 
             {pinDownPageAudit.competitorComparison && pinDownPageAudit.competitorComparison.notes.length > 0 && (
-              <div className="space-y-1.5 p-3 mt-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-xs">
-                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[10px] font-mono tracking-wider block">
+              <div className="space-y-1.5 p-3 mt-3 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg text-sm">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-xs font-mono tracking-wider block">
                   Vs. {pinDownPageAudit.competitorComparison.url}
                 </span>
                 <ul className="space-y-1.5">
@@ -846,7 +846,7 @@ export function DeliverablesPanel({
             title="Existing Confirmation Page Audit"
             subtitle="Not run yet"
           >
-            <div className="space-y-3 pt-1 text-xs">
+            <div className="space-y-3 pt-1 text-sm">
               <p className="text-zinc-600 dark:text-zinc-400">
                 Reviews an existing confirmation page against what a well-built one should include (hero video, what-to-expect, breakout content,
                 social proof, reschedule path) and notes concrete gaps. Doesn&apos;t build or deploy a new page, only audits one that already exists.
