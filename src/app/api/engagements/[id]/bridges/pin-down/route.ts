@@ -375,7 +375,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Pin-Down builds the confirmation page; nothing to run when it's off.
-    const runId = pinDownOn ? await dispatchSkillRun(id, "pin-down", engagementRow.buyer) : undefined;
+    // Show Rate Setup's own settings send runPinDown: false when nothing
+    // the full run sets up changed, and rebuild only the pieces the person
+    // chose (the page, the scripts, the ad briefs) instead.
+    const runId = pinDownOn && body.runPinDown !== false ? await dispatchSkillRun(id, "pin-down", engagementRow.buyer) : undefined;
 
     return NextResponse.json({ ok: true, runId });
   } catch (error: unknown) {

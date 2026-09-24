@@ -126,6 +126,17 @@ export interface PinDownExtras {
   topCallQuestions: string[];
   topObjections: string[];
   brandVoice: string;
+  /** existingProof: the testimonials the page actually shows. The crawl
+   * only fills this when it's empty (field-writeback.ts). */
+  testimonials: PinDownTestimonial[];
+}
+
+export interface PinDownTestimonial {
+  name: string;
+  role: string;
+  company?: string;
+  quote: string;
+  sourceUrl?: string;
 }
 
 /** One line of activation progress, streamed as NDJSON. */

@@ -79,6 +79,7 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       confirmationPageTemplate: engagements.confirmationPageTemplate,
       confirmationPageAnimationsEnabled: engagements.confirmationPageAnimationsEnabled,
       heroVideoUrl: engagements.heroVideoUrl,
+      existingProof: engagements.existingProof,
       prospectMeets: engagements.prospectMeets,
       topCallQuestions: engagements.topCallQuestions,
       topObjections: engagements.topObjections,
@@ -279,6 +280,7 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       topCallQuestions: row.topCallQuestions ?? [],
       topObjections: row.topObjections ?? [],
       brandVoice: row.rawVoiceCorpus ?? "",
+      testimonials: row.existingProof?.testimonials ?? [],
     },
   };
 }

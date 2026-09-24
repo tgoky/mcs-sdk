@@ -33,7 +33,6 @@ import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
 import { getMissingRequiredFields, type MissingField } from "@/lib/worker-config-completeness";
-import { getClientFacts } from "@/lib/client-facts";
 import { WORKER_REGISTRY } from "@/lib/worker-registry";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
@@ -74,19 +73,6 @@ export default async function EngagementDetailPage({
     );
 
   if (!engagement) notFound();
-
-  // Phase 3: surface client_facts suggestions the Pin-Down offer form has
-  // no UI for today (offerName/offerIcp from the crawl, offerVertical from
-  // a connected account, trafficTemperature/castingChoice from Jev) as
-  // InferredFieldBadge props — same pattern as icp-lock's productName/
-  // productUrl badges. A "rejected" fact means the client already dismissed
-  // that suggestion once, so it's left out rather than re-surfaced.
-  const clientFacts = await getClientFacts(engagement.engagementId);
-  function suggestedString(key: string): string | undefined {
-    const fact = clientFacts[key];
-    if (!fact || fact.status === "rejected") return undefined;
-    return typeof fact.value === "string" ? fact.value : undefined;
-  }
 
   const credentialRows = await db
     .select({ provider: credentialsRefs.provider, vaultId: credentialsRefs.vaultId })
@@ -330,27 +316,8 @@ export default async function EngagementDetailPage({
                   initialRequireApproval={requireApproval}
                   initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
                   clientDetails={{
-                    offerDetails: engagement.offerDetails ?? null,
-                    topCallQuestions: engagement.topCallQuestions ?? null,
-                    topObjections: engagement.topObjections ?? null,
-                    prospectMeets: engagement.prospectMeets,
-                    castingChoice: engagement.castingChoice,
-                    rawVoiceCorpus: engagement.rawVoiceCorpus,
-                    existingProof: engagement.existingProof ?? null,
-                    confirmationPageTemplate: engagement.confirmationPageTemplate,
-                    heroVideoUrl: engagement.heroVideoUrl,
-                    confirmationPageAnimationsEnabled: engagement.confirmationPageAnimationsEnabled,
                     queuePinWindowHours: engagement.queuePinWindowHours,
                     notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
-                    hasAdCreativeBriefs: Boolean(engagement.adCreativeBriefs),
-                    hasScriptPack: Boolean(engagement.pinDownScriptPack),
-                    suggestedOfferName: suggestedString("offerName"),
-                    suggestedOfferPrice: suggestedString("offerPrice"),
-                    suggestedOfferVertical: suggestedString("offerVertical"),
-                    suggestedOfferIcp: suggestedString("offerIcp"),
-                    suggestedTrafficTemperature: suggestedString("trafficTemperature"),
-                    suggestedCastingChoice: suggestedString("castingChoice"),
-                    suggestedRawVoiceCorpus: suggestedString("rawVoiceCorpus"),
                   }}
                 />
               </div>

@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 vi.mock("@/components/toast/toast-provider", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/tours/tour-provider", () => ({ useTour: () => ({ start: vi.fn() }) }));
 
-import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
+import { ShowtimeSetup, rebuildPlan } from "@/components/product-setup/showtime-setup";
 
 const v = (value: string | null): SetupValue => ({ value, tier: "done", source: "saved", sourceDetail: null, evidence: null, confidence: null });
 
@@ -47,6 +47,7 @@ function state(configured: boolean): ShowtimeSetupState {
       topCallQuestions: ["How long does it take?"],
       topObjections: [],
       brandVoice: "Plain and direct.",
+      testimonials: [{ name: "Ada", role: "Founder", quote: "It paid for itself." }],
     },
   };
 }
@@ -69,7 +70,7 @@ describe("Show Rate Setup settings", () => {
     render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
     await screen.findByText("The offer");
     for (const heading of ["The page", "Scripts and briefs", "Tools"]) expect(screen.getByText(heading)).toBeInTheDocument();
-    for (const label of ["Design", "Personal intro", "Animations", "Who runs the calls", "Questions on calls", "Objections", "Brand voice", "Price"]) {
+    for (const label of ["Design", "Personal intro", "Animations", "Who runs the calls", "Prospects' questions", "Objections", "Testimonials", "Brand voice", "Price"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByText("The Golden Ticket")).toBeInTheDocument();
@@ -79,19 +80,37 @@ describe("Show Rate Setup settings", () => {
     expect(screen.queryByText("The Slack webhook")).not.toBeInTheDocument();
   });
 
-  it("saves without touching which skills are on, and sends only the extras that changed", async () => {
+  it("saves without touching which skills are on, sends only the extras that changed, and rebuilds only the page", async () => {
     const calls = mockFetch(true);
     render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
     await screen.findByText("The offer");
     fireEvent.click(screen.getByRole("switch", { name: "Sections fade in as the page loads" }));
+    // An animations change rebuilds the page and leaves the scripts alone.
+    expect(screen.getByRole("switch", { name: "Rebuild and republish the confirmation page" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("switch", { name: "Rewrite the video scripts and ad briefs" })).toHaveAttribute("aria-checked", "false");
     fireEvent.click(screen.getByRole("button", { name: "Save for now" }));
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/bridges/pin-down"))).toBe(true));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/pin-down/run-piece"))).toBe(true));
     const patch = calls.find((c) => c.url.endsWith("/details"));
     expect(patch?.method).toBe("PATCH");
     expect(patch?.body).toEqual({ confirmationPageAnimationsEnabled: true });
     const post = calls.find((c) => c.url.endsWith("/bridges/pin-down"))!;
     expect(post.body).not.toHaveProperty("skills");
+    expect(post.body).toMatchObject({ runPinDown: false });
     expect(calls.indexOf(patch!)).toBeLessThan(calls.indexOf(post));
+    expect(calls.find((c) => c.url.endsWith("/pin-down/run-piece"))?.body).toEqual({ piece: "confirmation_page" });
+    expect(calls.some((c) => c.url.includes("/regenerate/"))).toBe(false);
+  });
+
+  it("rebuilds nothing when the person switches the rebuild off", async () => {
+    const calls = mockFetch(true);
+    render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
+    await screen.findByText("The offer");
+    fireEvent.click(screen.getByRole("switch", { name: "Sections fade in as the page loads" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Rebuild and republish the confirmation page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save for now" }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/bridges/pin-down"))).toBe(true));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.some((c) => c.url.endsWith("/pin-down/run-piece") || c.url.includes("/regenerate/"))).toBe(false);
   });
 
   it("is still the full setup, switches and all, before Showtime has been set up", async () => {
@@ -99,5 +118,21 @@ describe("Show Rate Setup settings", () => {
     render(<ShowtimeSetup engagementId="e1" onCancel={() => {}} focus="pin-down" />);
     await screen.findByText("What should Showtime do?");
     expect(screen.queryByText("Scripts and briefs")).not.toBeInTheDocument();
+  });
+});
+
+describe("rebuildPlan", () => {
+  const plan = (...keys: string[]) => rebuildPlan(new Set(keys));
+  it("runs Pin-Down in full only when a connection changed", () => {
+    expect(plan("platform.hosting").full).toBe(true);
+    expect(plan("pick.vercel_project_name").full).toBe(true);
+    expect(plan("salesCall").full).toBe(true);
+    expect(plan("offer.offerPrice", "extra.template").full).toBe(false);
+  });
+  it("rebuilds what each change feeds", () => {
+    expect(plan("extra.template")).toEqual({ full: false, page: true, content: false });
+    expect(plan("extra.topObjections")).toEqual({ full: false, page: false, content: true });
+    expect(plan("offer.offerName")).toEqual({ full: false, page: true, content: true });
+    expect(plan()).toEqual({ full: false, page: false, content: false });
   });
 });

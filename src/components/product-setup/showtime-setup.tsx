@@ -28,7 +28,7 @@ import { useTour } from "@/components/tours/tour-provider";
 import { VERTICALS, verticalLabel } from "@/lib/verticals";
 import { CRM_NOTE_PLATFORMS, SHOWTIME_TOOL_GROUPS, findShowtimeTool, type ToolGroupId } from "@/lib/showtime-setup/catalog";
 import { PICK_PURPOSE, showtimePickTargets } from "@/lib/showtime-setup/picks";
-import type { ActivationStep, PickSlot, PinDownExtras, SetupValue, ShowtimeSetupState, TrustTier } from "@/lib/showtime-setup/types";
+import type { ActivationStep, PickSlot, PinDownExtras, PinDownTestimonial, SetupValue, ShowtimeSetupState, TrustTier } from "@/lib/showtime-setup/types";
 import { TEMPLATE_IDS, TEMPLATE_META, DEFAULT_TEMPLATE, type TemplateId } from "@/features/pin-down/server/templates/types";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList, FactToken, TextEditor } from "./fact-token";
@@ -265,7 +265,16 @@ export function ShowtimeSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
-  const touch = (key: string) => touched.current.add(key);
+  // What's been changed on this screen, as state (touched is a ref, for the
+  // loader) so the rebuild choices can follow it.
+  const [changed, setChanged] = useState<ReadonlySet<string>>(new Set());
+  const [rebuildPageChoice, setRebuildPageChoice] = useState<boolean | null>(null);
+  const [rewriteChoice, setRewriteChoice] = useState<boolean | null>(null);
+  const markChanged = (key: string) => setChanged((c) => (c.has(key) ? c : new Set(c).add(key)));
+  const touch = (key: string) => {
+    touched.current.add(key);
+    markChanged(key);
+  };
   const update = (fn: (d: Draft) => Draft, key: string) => {
     touch(key);
     setDraft((d) => (d ? fn(d) : d));
@@ -290,6 +299,7 @@ export function ShowtimeSetup({
   const setSalesCall = (id: string) => update((d) => ({ ...d, salesCallEventId: id }), "salesCall");
   const setExtra = <K extends keyof PinDownExtras>(k: K, v: PinDownExtras[K]) => {
     touchedExtras.current.add(k);
+    markChanged(`extra.${k}`);
     setExtras((e) => (e ? { ...e, [k]: v } : e));
   };
   const toggleSkill = (id: string, on: boolean) =>
@@ -395,6 +405,14 @@ export function ShowtimeSetup({
     (skills.length > 0 || Boolean(data?.configured)) &&
     (!needs.offer || Boolean(draft?.offer.trafficTemperature && (draft.domain || data?.website.domain)));
 
+  // What a settings save rebuilds. A changed connection (a tool, where the
+  // page is published, the sales-call event) needs the full Pin-Down run,
+  // which is what wires those up. Anything else rebuilds only what it
+  // feeds, and only if the person leaves that switched on.
+  const plan = rebuildPlan(changed);
+  const rebuildPage = rebuildPageChoice ?? plan.page;
+  const rewriteContent = rewriteChoice ?? plan.content;
+
   /** The touched extras, through the route the client details drawer uses. */
   async function savePinDownExtras() {
     if (!extras || touchedExtras.current.size === 0) return;
@@ -407,6 +425,7 @@ export function ShowtimeSetup({
     if (t.has("topCallQuestions")) patch.topCallQuestions = extras.topCallQuestions;
     if (t.has("topObjections")) patch.topObjections = extras.topObjections;
     if (t.has("brandVoice")) patch.rawVoiceCorpus = extras.brandVoice;
+    if (t.has("testimonials")) patch.existingProof = { testimonials: extras.testimonials };
     const res = await fetch(`/api/engagements/${engagementId}/details`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -414,6 +433,37 @@ export function ShowtimeSetup({
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
+  }
+
+  /** The pieces chosen after a settings save, each through the same route
+   * as its own button elsewhere. A piece that doesn't exist yet (no scripts
+   * generated) is skipped rather than reported as a failure. */
+  async function rebuildPieces(choice: { page: boolean; content: boolean }): Promise<{ runId?: string; done: string[]; errors: string[] }> {
+    const out: { runId?: string; done: string[]; errors: string[] } = { done: [], errors: [] };
+    const call = async (path: string, init: RequestInit) => {
+      const res = await fetch(`/api/engagements/${engagementId}/${path}`, { method: "POST", ...init });
+      return { res, json: await res.json().catch(() => ({})) };
+    };
+    if (choice.page) {
+      const { res, json } = await call("pin-down/run-piece", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ piece: "confirmation_page" }) });
+      if (res.ok) {
+        out.runId = json.runId;
+        out.done.push("the page");
+      } else out.errors.push(`Saved, but the page couldn't be rebuilt: ${json.error ?? "something went wrong."}`);
+    }
+    if (choice.content) {
+      let any = false;
+      for (const [path, what] of [
+        ["regenerate/scripts", "video scripts"],
+        ["regenerate/ad-creative-briefs", "ad briefs"],
+      ] as const) {
+        const { res, json } = await call(path, {});
+        if (res.ok) any = true;
+        else if (res.status !== 409) out.errors.push(`Saved, but the ${what} couldn't be rewritten: ${json.error ?? "something went wrong."}`);
+      }
+      if (any) out.done.push("the scripts and briefs");
+    }
+    return out;
   }
 
   async function save() {
@@ -448,6 +498,7 @@ export function ShowtimeSetup({
     // settings, this list would switch every other Showtime skill to
     // whatever the screen last loaded.
     if (!focused) body.skills = skills;
+    else body.runPinDown = plan.full;
     if (draft.salesCallEventId) body.salesCallEventId = draft.salesCallEventId;
     if (data.existingPage.url) {
       body.existingConfirmationPageReuse = draft.keepPage;
@@ -468,11 +519,23 @@ export function ShowtimeSetup({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
+      let runId: string | undefined = json.runId;
+      const rebuilt: string[] = [];
+      if (focused && !plan.full) {
+        const pieces = await rebuildPieces({ page: rebuildPage, content: rewriteContent });
+        runId = pieces.runId;
+        rebuilt.push(...pieces.done);
+        for (const err of pieces.errors) toast.error(err);
+      }
       toast.success(
         focused
-          ? blockers.length === 0
-            ? "Show Rate Setup saved. The page is being rebuilt."
-            : `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before the page can be built.`
+          ? blockers.length > 0
+            ? `Saved. ${blockers.length} thing${blockers.length === 1 ? "" : "s"} left before the page can be built.`
+            : plan.full
+              ? "Show Rate Setup saved. Setting it up again with the new connections."
+              : rebuilt.length
+                ? `Show Rate Setup saved. Rebuilding ${rebuilt.join(" and ")}.`
+                : "Show Rate Setup saved. Nothing was rebuilt."
           : skills.length === 0
           ? `Showtime is off for ${data.buyer}.`
           : blockers.length === 0
@@ -481,9 +544,12 @@ export function ShowtimeSetup({
       );
       touched.current.clear();
       touchedExtras.current.clear();
+      setChanged(new Set());
+      setRebuildPageChoice(null);
+      setRewriteChoice(null);
       router.refresh();
       if (!focused && skills.length > 0) startTour("showtime");
-      if (onSaved) onSaved({ runId: json.runId });
+      if (onSaved) onSaved({ runId });
       else await load();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Couldn't save.");
@@ -633,6 +699,17 @@ export function ShowtimeSetup({
             <SaveBar
               blockers={blockers}
               skillCount={focused ? 1 : skills.length}
+              extra={
+                focused && changed.size > 0 ? (
+                  <RebuildChoices
+                    full={plan.full}
+                    page={rebuildPage}
+                    content={rewriteContent}
+                    onPage={setRebuildPageChoice}
+                    onContent={setRewriteChoice}
+                  />
+                ) : null
+              }
               configured={data.configured}
               saving={saving}
               canSave={canSaveAtAll}
@@ -1299,6 +1376,67 @@ function HostingTarget({
 
 // ── Show Rate Setup's own settings ─────────────────────────────────────
 
+/** The page's testimonials: edit, remove, add, or start from the ones read
+ * off the website. The page shows an entry only with a name, a role and a
+ * quote (content-model.ts), so that's what's asked for. */
+function TestimonialsEditor({
+  initial,
+  fromSite,
+  domain,
+  onSave,
+}: {
+  initial: PinDownTestimonial[];
+  fromSite: ShowtimeSetupState["siteReading"]["testimonials"];
+  domain: string;
+  onSave: (list: PinDownTestimonial[]) => void;
+}) {
+  const [list, setList] = useState<PinDownTestimonial[]>(initial);
+  const field =
+    "w-full rounded-lg border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40";
+  const set = (i: number, k: keyof PinDownTestimonial, v: string) => setList((l) => l.map((t, j) => (j === i ? { ...t, [k]: v } : t)));
+  const usable = fromSite.filter((t) => t.quote && t.name && (t.role || t.company));
+  return (
+    <div className="space-y-3">
+      {list.length === 0 && usable.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setList(usable.slice(0, 6).map((t) => ({ name: t.name!, role: (t.role || t.company)!, company: t.company, quote: t.quote })))}
+          className="w-full rounded-lg border border-dashed px-3 py-2 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent-dim)] cursor-pointer"
+        >
+          Use the {usable.length} from {domain || "your site"}
+        </button>
+      )}
+      <div className="max-h-[50vh] space-y-3 overflow-y-auto">
+        {list.map((t, i) => (
+          <div key={i} className="space-y-1.5 rounded-lg border p-2.5">
+            <div className="flex gap-1.5">
+              <input className={field} placeholder="Name" value={t.name} onChange={(e) => set(i, "name", e.target.value)} />
+              <input className={field} placeholder="Role" value={t.role} onChange={(e) => set(i, "role", e.target.value)} />
+            </div>
+            <textarea className={cn(field, "resize-none")} rows={2} placeholder="What they said" value={t.quote} onChange={(e) => set(i, "quote", e.target.value)} />
+            <button type="button" onClick={() => setList((l) => l.filter((_, j) => j !== i))} className="text-xs text-[var(--text-muted)] hover:text-[var(--error)] cursor-pointer">
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setList((l) => [...l, { name: "", role: "", quote: "" }])}
+          className="text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+        >
+          + Add one
+        </button>
+        <Button size="sm" onClick={() => onSave(list.map((t) => ({ ...t, name: t.name.trim(), role: t.role.trim(), quote: t.quote.trim() })).filter((t) => t.name && t.role && t.quote))}>
+          Save
+        </Button>
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">The page shows up to three. Each needs a name, a role and a quote.</p>
+    </div>
+  );
+}
+
 /** A labelled settings row: the name of the setting, then its value. */
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1386,6 +1524,8 @@ function PinDownSettings({
       title,
       <TextEditor
         multiline
+        rows={6}
+        enterSaves={false}
         initial={extras[key].join("\n")}
         placeholder={placeholder}
         onSave={(v) => (setExtra(key, v.split("\n").map((x) => x.trim()).filter(Boolean)), close())}
@@ -1396,7 +1536,6 @@ function PinDownSettings({
   const eventTypes = data.accountRead.eventTypes;
   const salesCall = eventTypes.find((e) => e.id === draft.salesCallEventId) ?? null;
   const keepingOwn = Boolean(data.existingPage.url && draft.keepPage);
-  const { testimonials, faqs } = data.siteReading;
 
   return (
     <div className="space-y-7 pb-4">
@@ -1459,31 +1598,21 @@ function PinDownSettings({
             <SettingRow label="Animations">
               <ToggleSetting on={extras.animations} onChange={(v) => setExtra("animations", v)} label="Sections fade in as the page loads" />
             </SettingRow>
-            {(testimonials.length > 0 || faqs.length > 0) && (
-              <SettingRow label="From your site">
-                {testimonials.length > 0 && (
-                  <SiteListToken
-                    tokenKey="site.testimonials"
-                    tokenProps={tokenProps}
-                    label={`${testimonials.length} testimonial${testimonials.length === 1 ? "" : "s"}`}
-                    title="Testimonials from your site"
-                    source={`Copied word for word from ${domain}.`}
-                    items={testimonials.map((x) => ({ primary: `“${x.quote}”`, secondary: [x.name, x.role, x.company].filter(Boolean).join(", ") }))}
-                  />
-                )}
-                {testimonials.length > 0 && faqs.length > 0 ? " and " : ""}
-                {faqs.length > 0 && (
-                  <SiteListToken
-                    tokenKey="site.faqs"
-                    tokenProps={tokenProps}
-                    label={`${faqs.length} question${faqs.length === 1 ? "" : "s"}`}
-                    title="Questions from your FAQ"
-                    source={`Your own FAQ on ${domain}, shown to bookers before the call.`}
-                    items={faqs.map((f) => ({ primary: f.question, secondary: f.answer }))}
-                  />
-                )}
-              </SettingRow>
-            )}
+            <SettingRow label="Testimonials">
+              {saved(
+                "extra.testimonials",
+                extras.testimonials.length ? `${extras.testimonials.length} testimonial${extras.testimonials.length === 1 ? "" : "s"}` : null,
+                "none yet",
+                "Testimonials on the page",
+                <TestimonialsEditor
+                  initial={extras.testimonials}
+                  fromSite={data.siteReading.testimonials}
+                  domain={domain}
+                  onSave={(list) => (setExtra("testimonials", list), close())}
+                />,
+                460
+              )}
+            </SettingRow>
             <SettingRow label="Preview">
               <PagePreview
                 open={openKey === "preview"}
@@ -1518,7 +1647,7 @@ function PinDownSettings({
             <TextEditor initial={extras.prospectMeets} placeholder="e.g. the founder, or a closer named Sam" onSave={(v) => (setExtra("prospectMeets", v.trim()), close())} />
           )}
         </SettingRow>
-        <SettingRow label="Questions on calls">{list("topCallQuestions", "question", "Questions prospects ask on calls", "One per line")}</SettingRow>
+        <SettingRow label="Prospects' questions">{list("topCallQuestions", "question", "Questions prospects ask on calls", "One per line")}</SettingRow>
         <SettingRow label="Objections">{list("topObjections", "objection", "What makes prospects hesitate", "One per line")}</SettingRow>
         <SettingRow label="Brand voice">
           {saved(
@@ -1526,7 +1655,7 @@ function PinDownSettings({
             extras.brandVoice ? `${extras.brandVoice.trim().split(/\s+/).length.toLocaleString()} words on file` : null,
             "none yet",
             "How the brand sounds",
-            <TextEditor multiline initial={extras.brandVoice} placeholder={`Copy that sounds like ${data.buyer}`} onSave={(v) => (setExtra("brandVoice", v), close())} />,
+            <TextEditor multiline rows={10} enterSaves={false} initial={extras.brandVoice} placeholder={`Copy that sounds like ${data.buyer}`} onSave={(v) => (setExtra("brandVoice", v), close())} />,
             440
           )}
         </SettingRow>
@@ -1921,7 +2050,52 @@ function findBlockers(data: ShowtimeSetupState, d: Draft, needs: CombinedNeeds):
   return out;
 }
 
+// Keys (see touch/setExtra) whose change the full Pin-Down run has to
+// apply: it's what wires the booking tool and publishes to the host.
+const FULL_RUN_KEY = /^(platform\.|pick\.|keepPage$|salesCall$)/;
+// What each rebuildable piece is written from.
+const PAGE_KEYS = /^(offer\.|extra\.(template|animations|personalizedIntro|testimonials|topCallQuestions)$)/;
+const CONTENT_KEYS = /^(offer\.|extra\.(prospectMeets|topCallQuestions|topObjections|brandVoice|testimonials)$)/;
+
+export function rebuildPlan(changed: ReadonlySet<string>): { full: boolean; page: boolean; content: boolean } {
+  const keys = [...changed];
+  return {
+    full: keys.some((k) => FULL_RUN_KEY.test(k)),
+    page: keys.some((k) => PAGE_KEYS.test(k)),
+    content: keys.some((k) => CONTENT_KEYS.test(k)),
+  };
+}
+
+function RebuildChoices({
+  full,
+  page,
+  content,
+  onPage,
+  onContent,
+}: {
+  full: boolean;
+  page: boolean;
+  content: boolean;
+  onPage: (v: boolean) => void;
+  onContent: (v: boolean) => void;
+}) {
+  if (full) {
+    return (
+      <p className="mb-2.5 text-[13px] text-[var(--text-muted)]">
+        A connection changed, so saving sets Show Rate Setup up again: the page, scripts and briefs are all rebuilt.
+      </p>
+    );
+  }
+  return (
+    <div className="mb-2.5 space-y-1.5">
+      <ToggleSetting on={page} onChange={onPage} label="Rebuild and republish the confirmation page" />
+      <ToggleSetting on={content} onChange={onContent} label="Rewrite the video scripts and ad briefs" />
+    </div>
+  );
+}
+
 function SaveBar({
+  extra,
   blockers,
   skillCount,
   configured,
@@ -1943,10 +2117,13 @@ function SaveBar({
   onCancel: () => void;
   cancelLabel: string;
   onBlocker: (b: Blocker) => void;
+  /** Above the bar's own row: Show Rate Setup's rebuild choices. */
+  extra?: React.ReactNode;
 }) {
   const ready = blockers.length === 0 && (skillCount > 0 || configured);
   return (
     <div className="sticky bottom-0 z-20 mt-2 border-t bg-background/95 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)]">
+      {extra}
       <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
         <div className="min-w-0 flex-1">
           {error ? (

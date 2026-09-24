@@ -135,10 +135,16 @@ export function TextEditor({
   onSave,
   saveLabel = "Save",
   footer,
+  rows = 3,
+  enterSaves = true,
 }: {
   initial: string;
   placeholder?: string;
   multiline?: boolean;
+  rows?: number;
+  /** False for text that's written a line at a time (a list, a passage):
+   * Enter starts a new line and only the button saves. */
+  enterSaves?: boolean;
   onSave: (value: string) => void;
   saveLabel?: string;
   footer?: ReactNode;
@@ -157,13 +163,13 @@ export function TextEditor({
       {multiline ? (
         <textarea
           autoFocus
-          rows={3}
+          rows={rows}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
           className={cn(field, "resize-none py-2 leading-relaxed")}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (enterSaves && e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               onSave(value.trim());
             }
