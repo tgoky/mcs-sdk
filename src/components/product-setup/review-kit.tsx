@@ -152,7 +152,7 @@ export function Tick({ on }: { on: boolean }) {
 /** The thing being set up, at a glance. */
 export function ReviewCard({ mark, eyebrow, title, pills, children }: { mark: ReactNode; eyebrow: string; title: ReactNode; pills?: ReactNode; children?: ReactNode }) {
   return (
-    <header className="rounded-2xl bg-black/[0.025] p-5 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06] @xl:p-6">
+    <header className="px-1 @xl:px-0">
       <div className="flex items-start gap-4">
         {mark}
         <div className="min-w-0 flex-1">
@@ -203,7 +203,7 @@ export function Todos({ items }: { items: TodoItem[] }) {
   return (
     <section className="space-y-3">
       <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{ready ? "Ready" : "Left to do"}</h2>
-      <ul className="rounded-2xl bg-black/[0.025] px-4 py-1 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
+      <ul className="px-1 divide-y divide-[var(--border)]">
         {items.map((t) => (
           <li key={t.key} className="flex items-center gap-3 py-3">
             <span

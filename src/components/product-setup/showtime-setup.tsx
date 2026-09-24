@@ -982,7 +982,13 @@ function Review({
   };
 
   return (
-    <div className="mx-auto max-w-3xl pb-28">
+    // pb-40 reserves real room below the last section for the sticky
+    // SaveBar underneath (a sibling, not nested here — see its own
+    // render site) — pb-28 wasn't enough once the bar grows past one
+    // line (a wrapped "Still needed: …" list, or Show Rate Setup's own
+    // rebuild-choice toggles above it), so the bar visibly overlapped
+    // whatever content settled at the bottom of the scroll.
+    <div className="mx-auto w-full max-w-5xl pb-40">
       <div className="min-w-0 space-y-10">
         <header className="flex items-start gap-4">
           <ShowtimeMark size={40} />
@@ -1499,7 +1505,7 @@ function SettingsGroup({ title, children }: { title: string; children: React.Rea
   return (
     <section className="space-y-2">
       <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{title}</h2>
-      <div className="rounded-2xl bg-black/[0.025] px-4 py-1 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06] @md:px-5">{children}</div>
+      <div className="px-1 @md:px-0 divide-y divide-[var(--border)]">{children}</div>
     </section>
   );
 }
@@ -1580,14 +1586,18 @@ function PinDownSettings({
   const keepingOwn = Boolean(data.existingPage.url && draft.keepPage);
 
   return (
-    <div className="space-y-6 pb-4">
+    // pb-28: same reserve-for-the-sticky-SaveBar reasoning as Review's
+    // own wrapper above — this settings-only view renders inside a
+    // narrower panel, but the bar underneath it can still grow past one
+    // line.
+    <div className="space-y-6 pb-28">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
         <p className="text-[13px] text-[var(--text-muted)]">{domain ? `Read from ${domain}` : `${data.buyer}'s confirmation page`}</p>
         <a
           href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
-          className="text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
-          Full Showtime setup →
+          Full Showtime setup <ArrowRight className="w-3 h-3" />
         </a>
       </div>
 
@@ -2257,7 +2267,7 @@ function SaveBar({
 
 function SetupSkeleton() {
   return (
-    <div className="mx-auto max-w-2xl animate-pulse space-y-8 py-10" role="status" aria-label="Loading setup">
+    <div className="mx-auto w-full max-w-5xl animate-pulse space-y-8 py-10" role="status" aria-label="Loading setup">
       <div className="space-y-3">
         <div className="h-3 w-20 rounded-full bg-[var(--accent-dim)]" />
         <div className="h-8 w-80 max-w-full rounded-lg bg-[var(--accent-dim)]" />

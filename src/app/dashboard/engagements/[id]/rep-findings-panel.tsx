@@ -198,8 +198,8 @@ function RunResultBanner({ result }: { result: TriggerResult }) {
     <p className={cn("text-[13px] font-mono font-semibold flex items-center justify-between gap-2", result.error ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
       <span>{result.error ?? result.message}</span>
       {result.runId && (
-        <a href={`/dashboard/runs/${result.runId}`} className="underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold shrink-0">
-          View run →
+        <a href={`/dashboard/runs/${result.runId}`} className="inline-flex items-center gap-1 underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold shrink-0">
+          View run <ArrowRight className="w-3 h-3" />
         </a>
       )}
     </p>

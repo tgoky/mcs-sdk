@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Hash,
   ArrowRight,
+  ArrowLeft,
   ArrowUpRight,
   Clock,
   Ban,
@@ -875,16 +876,16 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
             <button
               onClick={() => setPage(Math.max(0, clampedPage - 1))}
               disabled={clampedPage === 0}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
-              ← Prev
+              <ArrowLeft className="w-2.5 h-2.5" /> Prev
             </button>
             <button
               onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}
               disabled={clampedPage >= pageCount - 1}
-              className="px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
-              Next →
+              Next <ArrowRight className="w-2.5 h-2.5" />
             </button>
           </div>
         </div>

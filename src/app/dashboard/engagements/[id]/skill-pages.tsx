@@ -10,6 +10,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/db";
 import { engagements, conversationIntelligenceSessions } from "@/models/schema";
 import { desc, eq } from "drizzle-orm";
@@ -199,8 +200,8 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
     subtitle: (
       <>
         Every finding, review, and mention on file for this client: AI engines, Trustpilot, Reddit, and X.{" "}
-        <Link href="/dashboard/reputation-manager/incidents" className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
-          Manage declared incidents →
+        <Link href="/dashboard/reputation-manager/incidents" className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
+          Manage declared incidents <ArrowRight className="w-3 h-3" />
         </Link>
       </>
     ),

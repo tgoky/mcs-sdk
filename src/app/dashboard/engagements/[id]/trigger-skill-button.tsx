@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { useToast } from "@/components/toast/toast-provider";
 
 /**
@@ -78,9 +79,9 @@ export function TriggerSkillButton({
           {runId && (
             <a
               href={`/dashboard/runs/${runId}`}
-              className="underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 font-bold ml-auto transition-colors"
+              className="inline-flex items-center gap-1 underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 font-bold ml-auto transition-colors"
             >
-              View run →
+              View run <ArrowRight className="w-3 h-3" />
             </a>
           )}
         </p>

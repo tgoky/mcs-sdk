@@ -12,6 +12,8 @@ import {
   Clock,
   Maximize2,
   ArrowUpRight,
+  ArrowLeft,
+  ArrowRight,
   Ban,
   RotateCcw,
   PauseCircle,
@@ -577,16 +579,16 @@ export function PreCallReadModuleView({
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={clampedPage === 0}
-                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                 >
-                  ← Prev
+                  <ArrowLeft className="w-3 h-3" /> Prev
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                   disabled={clampedPage >= pageCount - 1}
-                  className="px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                 >
-                  Next →
+                  Next <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </div>

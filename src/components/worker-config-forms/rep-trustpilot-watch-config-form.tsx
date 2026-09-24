@@ -8,6 +8,7 @@
 // This calls the exact same trigger function chat does.
 
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { InputField } from "@/app/dashboard/engagements/new/form-fields";
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -85,8 +86,8 @@ export function RepTrustpilotWatchConfigForm({
         <p className="text-xs font-mono font-semibold flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
           ✓ {message}
           {runId && (
-            <a href={`/dashboard/runs/${runId}`} className="underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
-              View run →
+            <a href={`/dashboard/runs/${runId}`} className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
+              View run <ArrowRight className="w-3 h-3" />
             </a>
           )}
         </p>

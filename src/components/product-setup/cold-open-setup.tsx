@@ -379,7 +379,7 @@ export function ColdOpenSetup({
   const toolRow = <ToolRow data={data} actions={toolActions} />;
 
   return (
-    <div ref={topRef} className="@container mx-auto w-full max-w-3xl px-1 pb-4">
+    <div ref={topRef} className="@container mx-auto w-full max-w-5xl px-1 pb-4">
       {phase === "review" ? (
         <>
           <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} />
@@ -861,7 +861,7 @@ function Review({
   return (
     <div className="space-y-9">
       {/* The campaign at a glance */}
-      <header className="rounded-2xl bg-black/[0.025] p-5 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06] @xl:p-6">
+      <header className="px-1 @xl:px-0">
         <div className="flex items-start gap-4">
           <ColdOpenMark size={40} />
           <div className="min-w-0 flex-1">
@@ -897,7 +897,7 @@ function Review({
       {/* Left to do */}
       <section className="space-y-3">
         <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{ready ? "Ready" : "Left to do"}</h2>
-        <ul className="rounded-2xl bg-black/[0.025] px-4 py-1 ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
+        <ul className="px-1 divide-y divide-[var(--border)]">
           {todos.map((t) => (
             <li key={t.key} className="flex items-center gap-3 py-3">
               <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", t.done ? "bg-[var(--ink)] text-[var(--ink-foreground)]" : "ring-1 ring-inset ring-[var(--text-muted)]/50")}>
@@ -1096,7 +1096,7 @@ function SequenceWriter({ onAdd, onCancel }: { onAdd: (t: { subject: string; bod
   const ready = Object.values(t).every((v) => v.trim());
   const area = cn(inputCls, "resize-y py-2 leading-relaxed");
   return (
-    <div className="space-y-2.5 rounded-xl bg-black/[0.025] p-3 dark:bg-white/[0.035]">
+    <div className="space-y-2.5 rounded-xl border border-[var(--border)] p-3">
       <Labeled label="Subject">
         <input autoFocus value={t.subject} onChange={up("subject")} className={cn(inputCls, "h-9")} />
       </Labeled>

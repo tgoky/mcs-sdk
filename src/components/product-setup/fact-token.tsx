@@ -9,7 +9,7 @@
 //            app uses for what AI filled in
 //   ask    - a dashed gap asking for the one thing we couldn't find
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { TrustTier } from "@/lib/fact-trust";
 import { Button } from "@/components/ui/button";
 import { AnchoredCard } from "./anchored-card";
@@ -42,15 +42,29 @@ export function FactToken({
   const empty = !display;
   const shownTier: TrustTier = empty ? "ask" : tier;
 
+  // A blocker link elsewhere on the page (the save bar's "Still needed: …")
+  // opens this token by flipping `open` without ever moving the page —
+  // if the token sits above the fold the user clicked something and
+  // watched nothing happen. Scrolling it into view on open, once, is
+  // what actually resolves "confused, keeps clicking."
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (open) anchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [open]);
+
   return (
     <AnchoredCard
       open={open}
       onOpenChange={onOpenChange}
       label={title}
       width={width}
-      anchor={(props) => (
+      anchor={({ ref, ...props }) => (
         <button
           type="button"
+          ref={(node) => {
+            anchorRef.current = node;
+            ref(node);
+          }}
           {...props}
           className={cn(
             "inline rounded-md -my-0.5 py-0.5 text-left align-baseline transition-colors cursor-pointer outline-none",

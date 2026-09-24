@@ -11,24 +11,26 @@
 // built since then: real Install/Uninstall at the Worker level. Status/
 // Categories filtering is a SegmentedTabs row above the list (not a
 // sidebar) so the skill list itself gets the page's full width. Configure
-// swaps only that one skill's own row for its config form, in its exact
-// slot in the list — every other row stays put, gallery and sequence
-// above never move, so clicking Configure doesn't reflow the page or
-// read as a navigation.
+// opens as a floating dropdown (SkillConfigureMenu, the same one every
+// individual skill page already uses) anchored to that row's own gear
+// icon — it used to swap the whole row for the form inline, which hid
+// "Skill Execution Guidelines" (the rest of the list) behind it; a
+// dropdown never covers the list it opened from.
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Search, Download, Trash2, Loader2, X } from "lucide-react";
-import { WORKER_CATEGORY_LIST, WORKER_REGISTRY, workerSettingsFormId, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+import { ChevronLeft, Search, Download, Trash2, Loader2 } from "lucide-react";
+import { WORKER_CATEGORY_LIST, workerSettingsFormId, type WorkerCategory, type WorkerDefinition } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
-import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
-import { WorkerCard } from "@/components/library/worker-card";
+import { hasWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { WorkerCard, WORKER_CARD_ICON_BUTTON_CLASS } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
 import { SkillSequence } from "@/components/library/skill-sequence";
 import { SegmentedTabs } from "@/components/segmented-tabs";
+import { SkillConfigureMenu } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
 import { useToast } from "@/components/toast/toast-provider";
 
 export function ProductDetailClient({
@@ -76,7 +78,6 @@ export function ProductDetailClient({
   const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "not_enabled">("all");
   const [selectedCategory, setSelectedCategory] = useState<WorkerCategory | "all">("all");
@@ -108,10 +109,6 @@ export function ProductDetailClient({
 
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
-      // The skill currently being configured stays visible in the list even
-      // if it wouldn't otherwise pass the active filters — its row is mid-
-      // edit, not something that should vanish out from under the user.
-      if (w.id === expandedWorker) return true;
       if (statusFilter === "enabled" && !enabledSet.has(w.id)) return false;
       if (statusFilter === "not_enabled" && enabledSet.has(w.id)) return false;
       if (selectedCategory !== "all" && w.category !== selectedCategory) return false;
@@ -119,7 +116,7 @@ export function ProductDetailClient({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workers, statusFilter, selectedCategory, searchQuery, enabledWorkerIds, expandedWorker]);
+  }, [workers, statusFilter, selectedCategory, searchQuery, enabledWorkerIds]);
 
   async function toggleInstalled() {
     setPending(true);
@@ -135,18 +132,6 @@ export function ProductDetailClient({
     } finally {
       setPending(false);
     }
-  }
-
-  function renderConfigForm(worker: WorkerDefinition) {
-    const formId = workerSettingsFormId(worker.id);
-    if (!engagementId || !formId) return null;
-    const close = () => setExpandedWorker(null);
-    return renderWorkerConfigForm(formId, {
-      engagementId,
-      onClose: close,
-      onSaved: (result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : close()),
-      cancelLabel: "Close",
-    });
   }
 
   return (
@@ -282,66 +267,34 @@ export function ProductDetailClient({
           </div>
         ) : (
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" data-tour="product-skill-list">
-            {/* Configure swaps only that one skill's own row for its config
-                form, in the exact same slot in the list — every other row
-                stays put, so clicking Configure never reflows the page or
-                loses the user's scroll position the way swapping the whole
-                list for a single form used to. */}
-            {filteredWorkers.map((worker, i) => (
-              <Fragment key={worker.id}>
-                {expandedWorker === worker.id && engagementId ? (
-                  <div className="py-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {worker.name}</h3>
-                        <SettingsSource workerId={worker.id} />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedWorker(null)}
-                        className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" /> Close
-                      </button>
-                    </div>
-                    {renderConfigForm(worker)}
-                  </div>
-                ) : (
-                  <WorkerCard
-                    variant="row"
-                    index={i + 1}
-                    worker={worker}
-                    enabled={enabledSet.has(worker.id)}
-                    engagementId={engagementId}
-                    buyerName={buyerName}
-                    stats={statsById.get(worker.id)}
-                    isConfiguring={false}
-                    playbook={SKILL_PLAYBOOKS[worker.id]}
-                    onToggleConfigure={
-                      engagementId && hasWorkerConfigForm(workerSettingsFormId(worker.id) ?? "") ? () => setExpandedWorker(worker.id) : undefined
-                    }
-                    productOnboarded={productOnboarded}
-                    productOnboardingSkipDismissed={productOnboardingSkipDismissed}
-                    completeness={completenessByWorkerId[worker.id]}
-                  />
-                )}
-              </Fragment>
-            ))}
+            {filteredWorkers.map((worker, i) => {
+              const formId = workerSettingsFormId(worker.id);
+              const canConfigure = Boolean(engagementId && formId && hasWorkerConfigForm(formId));
+              return (
+                <WorkerCard
+                  key={worker.id}
+                  variant="row"
+                  index={i + 1}
+                  worker={worker}
+                  enabled={enabledSet.has(worker.id)}
+                  engagementId={engagementId}
+                  buyerName={buyerName}
+                  stats={statsById.get(worker.id)}
+                  playbook={SKILL_PLAYBOOKS[worker.id]}
+                  configureMenu={
+                    canConfigure && engagementId && formId ? (
+                      <SkillConfigureMenu skillId={formId} engagementId={engagementId} triggerClassName={WORKER_CARD_ICON_BUTTON_CLASS} iconSize={16} />
+                    ) : undefined
+                  }
+                  productOnboarded={productOnboarded}
+                  productOnboardingSkipDismissed={productOnboardingSkipDismissed}
+                  completeness={completenessByWorkerId[worker.id]}
+                />
+              );
+            })}
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/** Under the inline Configure heading, for a skill whose settings are its
- * product's setup form rather than a form of its own. */
-function SettingsSource({ workerId }: { workerId: WorkerId }) {
-  const formId = workerSettingsFormId(workerId);
-  if (!formId || formId === workerId) return null;
-  return (
-    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-      {WORKER_REGISTRY[workerId].name} is set up in {WORKER_REGISTRY[formId].name}, along with the rest of this product.
-    </p>
   );
 }

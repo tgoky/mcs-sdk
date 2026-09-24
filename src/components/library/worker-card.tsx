@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Settings, X, AlertTriangle, ArrowRight } from "lucide-react";
@@ -31,6 +31,17 @@ const PRODUCT_ACCENT: Record<WorkerDefinition["productId"], string> = {
   "whop-agent": "border-sky-200 dark:border-sky-900/70",
 };
 
+// Icon-only, circular — the exact same shape every individual skill page
+// (skills/[workerId]/page.tsx) already uses for its own back button: w-8
+// h-8, rounded-full, a subtle border and fill. No text label — matching
+// that convention means matching its restraint too, not adding a label
+// those pages don't have either. Exported so a caller building its own
+// Configure control for this row (the Library's product page, whose
+// SkillConfigureMenu dropdown replaces this card's default one — see
+// `configureMenu`) can match it exactly instead of drifting.
+export const WORKER_CARD_ICON_BUTTON_CLASS =
+  "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0";
+
 /**
  * One worker, one card or row — enabled or not, for exactly one client
  * (whichever engagement the Library page resolved as this workspace's
@@ -58,6 +69,7 @@ export function WorkerCard({
   stats,
   isConfiguring = false,
   onToggleConfigure,
+  configureMenu,
   variant = "card",
   playbook,
   index,
@@ -84,6 +96,12 @@ export function WorkerCard({
    * its product's setup form; see workerSettingsFormId) for a real
    * engagement. Absent, the gear links to workerSettingsHref instead. */
   onToggleConfigure?: () => void;
+  /** Renders in place of this card's own Configure control entirely —
+   * for a caller (the Library's product page) that wants Configure to
+   * open as a real floating dropdown (SkillConfigureMenu) instead of
+   * this card's default inline-expand/link behavior. Takes priority over
+   * both onToggleConfigure and the plain-Link fallback when present. */
+  configureMenu?: ReactNode;
   variant?: "card" | "row";
   /** Real, previously-shipped per-skill copy — only Showtime's 5 skills
    * have one today (see skill-playbooks.ts). Ignored in "card" variant. */
@@ -191,18 +209,14 @@ export function WorkerCard({
     enable();
   }
 
-  // Icon-only, circular — the exact same shape every individual skill
-  // page (skills/[workerId]/page.tsx) already uses for its own back
-  // button: w-8 h-8, rounded-full, a subtle border and fill. No text
-  // label — matching that convention means matching its restraint too,
-  // not adding a label those pages don't have either.
-  const configureAnalyticsClass =
-    "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0";
+  const configureAnalyticsClass = WORKER_CARD_ICON_BUTTON_CLASS;
   const iconSize = "w-4 h-4";
 
   const actionControls = enabled ? (
     <>
-      {canConfigureInline ? (
+      {configureMenu ? (
+        configureMenu
+      ) : canConfigureInline ? (
         <button
           type="button"
           onClick={onToggleConfigure}

@@ -29,6 +29,8 @@ export function SkillConfigureMenu({
   engagementId,
   pileOnInitial,
   defaultOpen = false,
+  triggerClassName,
+  iconSize = 17,
 }: {
   skillId: ConfigurableSkillId;
   engagementId: string;
@@ -40,6 +42,13 @@ export function SkillConfigureMenu({
   /** Open on arrival: the page was reached from a settings link
    * (?configure=1, see workerSettingsHref), not from the skill itself. */
   defaultOpen?: boolean;
+  /** Overrides the trigger button's own styling — for a caller (the
+   * Library's product page) whose row already has a matching icon-button
+   * style for its other actions (Analytics, the "..." menu) that this
+   * gear should sit flush beside instead of looking like a different
+   * control. Defaults to this menu's own look everywhere else. */
+  triggerClassName?: string;
+  iconSize?: number;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -56,9 +65,12 @@ export function SkillConfigureMenu({
           aria-expanded={open}
           aria-label="Configure"
           title="Configure"
-          className="hover-lift press-settle flex items-center justify-center rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 w-8 h-8 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+          className={
+            triggerClassName ??
+            "hover-lift press-settle flex items-center justify-center rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 w-8 h-8 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+          }
         >
-          <Settings size={17} />
+          <Settings size={iconSize} />
         </button>
       )}
     >
