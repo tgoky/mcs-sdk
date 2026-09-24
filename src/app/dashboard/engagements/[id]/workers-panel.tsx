@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
-import { type ModuleStatus, phaseLabel } from "@/lib/copy";
+import { type ModuleStatus } from "@/lib/copy";
 import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { type MissingField } from "@/lib/worker-config-completeness-shared";
@@ -69,16 +69,6 @@ function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: 
   if (s === "failed") return "failed";
   if (s === "running" || s === "in_progress") return "running";
   return "not_run";
-}
-
-function PhaseTag({ phase, status }: { phase: string | null; status: string }) {
-  const label = phaseLabel(phase);
-  const isRunning = status.toLowerCase() === "running";
-  return (
-    <span className={`text-[11px] font-mono tracking-tight ${isRunning ? "text-sky-600 dark:text-sky-400 italic font-semibold" : "text-zinc-500 dark:text-zinc-400"}`}>
-      {label}
-    </span>
-  );
 }
 
 export function WorkersPanel({
@@ -325,37 +315,29 @@ export function WorkersPanel({
                   </button>
                 </div>
 
-                <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
-                  {isEnabled && latestRun ? (
-                    <div className="space-y-0.5 text-xs">
-                      <div className="flex items-center justify-between font-mono text-[10.5px]">
-                        <PhaseTag phase={latestRun.phase} status={latestRun.status} />
-                        <Link
-                          href={`/dashboard/runs/${latestRun.id}`}
-                          className="text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center gap-0.5"
-                        >
-                          View <ArrowRight className="w-2.5 h-2.5" />
-                        </Link>
+                {(latestRun || isNeedsSetup) && (
+                  <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
+                    {isEnabled && latestRun ? (
+                      <div className="space-y-0.5 text-xs">
+                        {latestRun.status.toLowerCase() === "failed" && latestRun.errorMessage && (
+                          <p className="text-[10.5px] text-rose-600 dark:text-rose-400/90 leading-snug font-mono break-all line-clamp-1">{latestRun.errorMessage}</p>
+                        )}
+                        <div className="flex items-center justify-end font-mono text-[10.5px]">
+                          <Link
+                            href={`/dashboard/runs/${latestRun.id}`}
+                            className="text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center gap-0.5"
+                          >
+                            View <ArrowRight className="w-2.5 h-2.5" />
+                          </Link>
+                        </div>
                       </div>
-                      {latestRun.status.toLowerCase() === "failed" && latestRun.errorMessage && (
-                        <p className="text-[10.5px] text-rose-600 dark:text-rose-400/90 leading-snug font-mono break-all line-clamp-1">{latestRun.errorMessage}</p>
-                      )}
-                      {isPausedActive && (
-                        <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">Paused with the client.</p>
-                      )}
-                    </div>
-                  ) : isPausedActive ? (
-                    <p className="text-[10.5px] text-amber-600 dark:text-amber-400 italic font-mono">On hold. Client paused.</p>
-                  ) : isNeedsSetup ? (
-                    <p className="text-[10.5px] text-orange-600 dark:text-orange-400 leading-snug font-mono line-clamp-1">
-                      Missing: {missingFields.map((f) => f.label).join(", ")}
-                    </p>
-                  ) : isEnabled ? (
-                    <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic font-mono">No executions yet.</p>
-                  ) : (
-                    <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 italic font-mono">Turned off.</p>
-                  )}
-                </div>
+                    ) : isNeedsSetup ? (
+                      <p className="text-[10.5px] text-orange-600 dark:text-orange-400 leading-snug font-mono line-clamp-1">
+                        Missing: {missingFields.map((f) => f.label).join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2 space-y-1.5">

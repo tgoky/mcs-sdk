@@ -63,15 +63,15 @@ export function RepAuditLogPanel({ events }: { events: RepAuditEventRow[] }) {
     <div className="w-full space-y-3 font-sans">
       <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-zinc-200/80 dark:border-zinc-800/60">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Audit Log</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
+          <h2 className="text-sm font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Audit Log</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
             Every detection, draft, approval, and action recorded for this client. Most recent first.
           </p>
         </div>
       </div>
 
       {events.length === 0 ? (
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 italic font-mono py-2">No events recorded yet.</p>
+        <p className="text-sm text-zinc-400 dark:text-zinc-500 italic font-mono py-2">No events recorded yet.</p>
       ) : (
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
           {events.map((row) => {
@@ -80,16 +80,16 @@ export function RepAuditLogPanel({ events }: { events: RepAuditEventRow[] }) {
             const Icon = SourceIcon ?? EventIcon;
             const excerpt = eventExcerpt(row);
             return (
-              <div key={row.id} className="flex items-start gap-2.5 py-2">
-                <Icon className="w-3.5 h-3.5 mt-0.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+              <div key={row.id} className="flex items-start gap-2.5 py-2.5">
+                <Icon className="w-4 h-4 mt-0.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{eventSummary(row)}</p>
-                    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 shrink-0">
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">{eventSummary(row)}</p>
+                    <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 shrink-0">
                       {new Date(row.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                     </span>
                   </div>
-                  {excerpt && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-1 font-mono">{excerpt}</p>}
+                  {excerpt && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-1 font-mono">{excerpt}</p>}
                 </div>
               </div>
             );

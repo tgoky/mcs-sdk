@@ -22,8 +22,6 @@ import { StatChip } from "@/components/library/stat-chip";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 
-const INSIDE_BADGE_LIMIT = 5;
-
 export function ProductCard({
   productId,
   name,
@@ -82,19 +80,19 @@ export function ProductCard({
   }
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
-      <Link href={`/dashboard/library/${productId}`} className="space-y-3 block">
+    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-3.5 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+      <Link href={`/dashboard/library/${productId}`} className="space-y-2.5 block">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
+          <div className="flex items-start gap-2.5 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={image}
               alt={name}
-              className="w-12 h-12 shrink-0 object-contain group-hover:scale-105 transition-transform"
+              className="w-10 h-10 shrink-0 object-contain group-hover:scale-105 transition-transform"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                   {name}
                 </h2>
                 {installed && (
@@ -104,7 +102,7 @@ export function ProductCard({
                 )}
               </div>
               <p className="text-xs font-mono text-zinc-500 dark:text-zinc-400 font-medium">By {HOME_COPY.footerNote}</p>
-              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-1.5 max-w-md line-clamp-2">{description}</p>
+              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-1 max-w-md line-clamp-2">{description}</p>
             </div>
           </div>
           <ArrowUpRight
@@ -113,7 +111,7 @@ export function ProductCard({
           />
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
           <StatChip label="Skills on" value={`${enabledCount}/${skillIds.length}`} />
           <StatChip label="Runs (7d)" value={String(runsInWindow)} />
           <StatChip
@@ -123,25 +121,23 @@ export function ProductCard({
           />
         </div>
 
-        <div className="flex items-center gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
-          {/* A few badges and a count, not every skill: a 15-badge row
-              ran off the card. The full list is on the worker's page and
-              in the tooltip. */}
-          <div className="flex items-center -space-x-1.5 shrink-0">
-            {skillIds.slice(0, INSIDE_BADGE_LIMIT).map((id) => (
-              <div key={id} className="ring-2 ring-white dark:ring-zinc-900 rounded-full">
+        <div className="flex items-center gap-2 pt-1.5 border-t border-zinc-200 dark:border-zinc-800/80">
+          {/* Every skill this worker bundles, not a truncated preview —
+              wraps instead of running off the card. */}
+          <div className="flex items-center flex-wrap gap-1" title={skillNames}>
+            {skillIds.map((id) => (
+              <div key={id} className="rounded-full">
                 <AnySkillBadge skill={id} size={18} />
               </div>
             ))}
           </div>
-          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate" title={skillNames}>
+          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 shrink-0 ml-auto">
             {skillIds.length} skill{skillIds.length === 1 ? "" : "s"}
-            {skillIds.length > INSIDE_BADGE_LIMIT ? ` · ${skillIds.length - INSIDE_BADGE_LIMIT} more inside` : ""}
           </span>
         </div>
       </Link>
 
-      <div className="flex items-center gap-2 pt-3 mt-0.5">
+      <div className="flex items-center gap-2 pt-2 mt-0.5">
         <button
           type="button"
           onClick={toggleInstalled}

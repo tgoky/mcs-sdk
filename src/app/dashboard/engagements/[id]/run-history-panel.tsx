@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, XCircle, Loader2, AlertCircle, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, XCircle, Loader2, AlertCircle, MinusCircle, Calendar } from "lucide-react";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { phaseLabel, runStatusLabel, runStatusColor } from "@/lib/copy";
@@ -38,6 +38,10 @@ function RunStatusIcon({ status }: { status: string }) {
   if (s === "success" || s === "completed") return <CheckCircle2 className="w-4 h-4 text-status-success shrink-0" />;
   if (s === "failed" || s === "error") return <XCircle className="w-4 h-4 text-status-error shrink-0" />;
   if (s === "running" || s === "in_progress") return <Loader2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500 animate-spin shrink-0" />;
+  // A run that already finished but did nothing (skipped/cancelled/timed
+  // out) is over, not pending — a spinner or a generic alert glyph both
+  // misread as "something's still happening" or "something's wrong."
+  if (s === "skipped" || s === "cancelled" || s === "timed_out") return <MinusCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
   return <AlertCircle className="w-4 h-4 text-zinc-400 dark:text-zinc-600 shrink-0" />;
 }
 

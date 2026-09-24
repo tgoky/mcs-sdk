@@ -63,7 +63,14 @@ export function ActionMenu({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") close();
     }
-    function onScrollOrResize() {
+    function onScrollOrResize(e: Event) {
+      // Capture-phase scroll listener sees every scroll in the document,
+      // including the menu panel's own `overflow-y-auto` content — a
+      // longer menu (more items than fit in max-h-[70vh]) closed itself
+      // the instant the user tried to scroll it. Only a scroll of
+      // something outside the panel (the page underneath, whose anchor
+      // may have moved) should dismiss the menu.
+      if (e.target instanceof Node && panelRef.current?.contains(e.target)) return;
       close();
     }
 

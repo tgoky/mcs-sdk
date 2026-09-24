@@ -96,10 +96,10 @@ function Section({
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
+          <h2 className="text-sm font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-mono">
             {title}
           </h2>
-          {caption && <p className="text-[11px] text-zinc-400 dark:text-zinc-600 mt-0.5">{caption}</p>}
+          {caption && <p className="text-sm text-zinc-400 dark:text-zinc-600 mt-0.5">{caption}</p>}
         </div>
         {right}
       </div>
@@ -116,7 +116,7 @@ function Card({ children, className = "" }: { children: ReactNode; className?: s
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-zinc-500 dark:text-zinc-500 px-4 py-7 text-center leading-relaxed">{children}</p>;
+  return <p className="text-[15px] text-zinc-500 dark:text-zinc-500 px-4 py-7 text-center leading-relaxed">{children}</p>;
 }
 
 /** Daily stacked-volume chart for the last N days, plain HTML/CSS (no SVG)
@@ -172,7 +172,7 @@ function DailyActivityChart({
 
 function Legend({ swatch, label }: { swatch: string; label: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs">
+    <div className="flex items-center gap-1.5 text-sm">
       <span className={`w-2 h-2 rounded-full shrink-0 ${swatch}`} />
       <span className="text-zinc-500 dark:text-zinc-500">{label}</span>
     </div>
@@ -487,11 +487,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             <Section title="How outcomes get resolved" caption={`Last ${LOOKBACK_DAYS} days`}>
               <div className="grid grid-cols-1 gap-3">
                 <Card className="p-4 space-y-3">
-                  <p className="text-xs font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
+                  <p className="text-sm font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Time to human decision</p>
                   {decidedActions.length === 0 && resolvedBlockers.length === 0 ? (
                     <EmptyState>Nothing has been decided or resolved yet in this window.</EmptyState>
                   ) : (
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-2 text-[15px]">
                       <div className="flex items-center justify-between">
                         <span className="text-zinc-500 dark:text-zinc-500">Pending actions (approve/reject)</span>
                         <span className="font-mono text-zinc-800 dark:text-zinc-200">
@@ -509,13 +509,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                       {(actionTypeMedians.size > 0 || blockerTypeMedians.size > 0) && (
                         <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
                           {[...actionTypeMedians.entries()].map(([type, arr]) => (
-                            <div key={`a-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                            <div key={`a-${type}`} className="flex items-center justify-between gap-3 text-sm">
                               <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{ACTION_TYPE_LABELS[type] ?? type}</span>
                               <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
                             </div>
                           ))}
                           {[...blockerTypeMedians.entries()].map(([type, arr]) => (
-                            <div key={`b-${type}`} className="flex items-center justify-between gap-3 text-xs">
+                            <div key={`b-${type}`} className="flex items-center justify-between gap-3 text-sm">
                               <span className="text-zinc-500 dark:text-zinc-400 min-w-0 truncate" title={type}>{BLOCKER_TYPE_LABELS[type] ?? type}</span>
                               <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0">{fmtDuration(median(arr) ?? 0)} median ({arr.length})</span>
                             </div>

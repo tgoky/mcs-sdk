@@ -39,7 +39,7 @@ vi.mock("@/components/skill-consoles/bridge-manager-console", () => ({
 import { loadOwnedEngagement } from "@/app/dashboard/engagements/[id]/owned-engagement";
 import { SKILL_PAGES } from "@/app/dashboard/engagements/[id]/skill-pages";
 import SkillPage from "@/app/dashboard/engagements/[id]/skills/[skillId]/page";
-import { WORKER_IDS, SKILLS_CONFIGURED_ON_OWN_PAGE, workerPrimaryHref, workerSettingsHref } from "@/lib/worker-registry";
+import { WORKER_IDS, SKILLS_CONFIGURED_ON_OWN_PAGE, workerPrimaryHref } from "@/lib/worker-registry";
 
 const props = (skillId: string, query: Record<string, string> = {}) => ({
   params: Promise.resolve({ id: "e1", skillId }),
@@ -108,10 +108,16 @@ describe("skill page", () => {
     expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "true");
   });
 
-  it("opens Pile-On's Configure menu from the Library's settings link", () => {
+  it("opens Pile-On's Configure menu on arrival via ?configure=1", () => {
+    // Pile-On now also has a real config form in config-form-registry.tsx
+    // (PileOnConfigForm, fully self-loading), so the Library's own
+    // settings gear configures it in place there instead of linking here
+    // — workerSettingsHref("pile-on", ...) returns null now. The page's
+    // own ?configure=1 arrival convention still works independently of
+    // that (a direct/bookmarked link, or SkillConfigureMenu's own
+    // pre-fetched values here), so it's still covered directly.
     const engagement = { engagementId: "e1", buyer: "Acme", stack: null } as never;
-    const query = Object.fromEntries(new URL(workerSettingsHref("pile-on", "e1")!, "http://x").searchParams);
-    const { unmount } = render(<>{SKILL_PAGES["pile-on"].headerAction!({ engagement, searchParams: query })}</>);
+    const { unmount } = render(<>{SKILL_PAGES["pile-on"].headerAction!({ engagement, searchParams: { configure: "1" } })}</>);
     expect(screen.getByTestId("configure")).toHaveTextContent("pile-on");
     expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "true");
     unmount();
@@ -119,10 +125,8 @@ describe("skill page", () => {
     expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "false");
   });
 
-  it("only sends settings links to pages that have a Configure menu", () => {
-    for (const id of SKILLS_CONFIGURED_ON_OWN_PAGE) {
-      expect(SKILL_PAGES[id]?.headerAction, id).toBeTypeOf("function");
-    }
+  it("has no skills left that only send settings links to their own page (SKILLS_CONFIGURED_ON_OWN_PAGE is empty now that Pile-On has a real inline form)", () => {
+    expect(SKILLS_CONFIGURED_ON_OWN_PAGE).toEqual([]);
   });
 
   it("uses the breadcrumb override and shows no Configure menu where the body is the form", async () => {

@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { PRODUCTS_WITH_SKILL_SETTINGS, WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
 import { WORKERS_WITH_CONFIG_FORM, hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
+import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { WhopSetup } from "@/components/product-setup/whop-setup";
@@ -13,8 +14,15 @@ const element = (id: Parameters<typeof renderWorkerConfigForm>[0], h: Parameters
   renderWorkerConfigForm(id, h) as ReactElement<AnyProps>;
 
 describe("config form lookup", () => {
-  it("has a form for exactly the workers with a Configure panel, and for every skill of a product whose setup opens per skill", () => {
-    const withPanel = WORKER_IDS.filter((id) => WORKER_REGISTRY[id].hasHingesPanel || PRODUCTS_WITH_SKILL_SETTINGS.includes(WORKER_REGISTRY[id].productId)).sort();
+  it("has a form for exactly the workers with a Configure panel, every skill of a product whose setup opens per skill, and Pile-On", () => {
+    // Pile-On has no "hinges panel" (worker.hasHingesPanel is false,
+    // skill-manifest.ts) but still gets a real config form here
+    // (PileOnConfigForm, which fully self-loads its own current values —
+    // see its own header) so every surface that renders a worker's
+    // settings through this registry (the Library's product page among
+    // them) can configure it in place instead of falling back to a
+    // full-page navigation for lack of a registry entry.
+    const withPanel = WORKER_IDS.filter((id) => WORKER_REGISTRY[id].hasHingesPanel || PRODUCTS_WITH_SKILL_SETTINGS.includes(WORKER_REGISTRY[id].productId) || id === "pile-on").sort();
     expect([...WORKERS_WITH_CONFIG_FORM].sort()).toEqual(withPanel);
   });
 
@@ -24,10 +32,21 @@ describe("config form lookup", () => {
     }
   });
 
-  it("reports unknown and form-less workers as having none", () => {
+  it("reports an unknown worker as having none, but Pile-On as having a real one", () => {
     expect(hasWorkerConfigForm("not-a-worker")).toBe(false);
-    expect(hasWorkerConfigForm("pile-on")).toBe(false);
-    expect(renderWorkerConfigForm("pile-on", { engagementId: "e1", onClose: () => {} })).toBeNull();
+    expect(hasWorkerConfigForm("pile-on")).toBe(true);
+    expect(renderWorkerConfigForm("pile-on", { engagementId: "e1", onClose: () => {} })).not.toBeNull();
+  });
+
+  it("defaults Pile-On's config form to its own self-loaded values and wires cancel/save", () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    const el = element("pile-on", { engagementId: "e1", onClose, onSaved });
+    expect(el.type).toBe(PileOnConfigForm);
+    expect(el.props.engagementId).toBe("e1");
+    expect(el.props.onCancel).toBe(onClose);
+    el.props.onSaved?.();
+    expect(onSaved).toHaveBeenCalledWith({});
   });
 
   it("wires a simple form's cancel and label", () => {

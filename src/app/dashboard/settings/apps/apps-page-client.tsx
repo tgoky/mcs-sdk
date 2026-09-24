@@ -292,10 +292,10 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
   return (
     <div className="max-w-6xl space-y-6 font-sans">
       <div>
-        <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+        <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
           Apps
         </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+        <p className="text-[15px] mt-1" style={{ color: "var(--text-muted)" }}>
           Connect the platforms your clients use once here. Every engagement can reuse what&apos;s saved, instead of
           pasting the same key per client.
         </p>
@@ -371,7 +371,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
           {Object.entries(grouped).map(([group, platforms]) => (
             <div key={group} className="space-y-3">
               {activeCategory === null && (
-                <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                <h2 className="text-sm font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   {group}
                 </h2>
               )}
@@ -393,14 +393,14 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                         <PlatformLogo provider={platform.provider} size={40} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                            <p className="text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                               {platform.label}
                             </p>
                             {isConnected && (
                               <CheckCircle2 size={13} className="shrink-0" style={{ color: "rgb(21,128,61)" }} />
                             )}
                           </div>
-                          <p className="text-xs mt-0.5 leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
+                          <p className="text-sm mt-0.5 leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
                             {platform.description}
                           </p>
                         </div>
@@ -412,7 +412,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                         className="flex items-center justify-between gap-2 pt-3 mt-auto"
                         style={{ borderTop: "1px solid var(--border)" }}
                       >
-                        <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                           {isConnected ? `${saved.length} saved` : "Not connected"}
                         </span>
                         {platform.composioManaged ? (
@@ -420,7 +420,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                             type="button"
                             onClick={() => connect(platform.provider)}
                             disabled={connecting === platform.provider}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
+                            className="text-sm font-semibold px-3 py-1.5 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
                             style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
                           >
                             {connecting === platform.provider ? "Connecting…" : "Connect"}
@@ -429,7 +429,7 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                           <button
                             type="button"
                             onClick={() => setAddKeyFor(platform)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+                            className="text-sm font-semibold px-3 py-1.5 rounded-md cursor-pointer transition-colors"
                             style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
                           >
                             Add key
@@ -446,11 +446,11 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
       </div>
 
       <div className="space-y-2 pt-2">
-        <h2 className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <h2 className="text-sm font-mono font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
           Saved credentials
         </h2>
         {items.length === 0 ? (
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Nothing saved yet. Connect or add a key above.
           </p>
         ) : (
@@ -551,10 +551,10 @@ function VaultRow({ item, onChanged }: { item: VaultItem; onChanged: () => void 
     <div className="px-4 py-3 space-y-2" style={{ borderBottom: "1px solid var(--border)" }}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
+          <p className="text-[15px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
             {item.label}
           </p>
-          <p className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>
+          <p className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
             {item.provider} · {item.isComposioManaged ? "via Composio" : "manual key"} ·{" "}
             {item.healthStatus === "invalid" ? (
               <span style={{ color: "rgb(185,28,28)" }}>needs attention</span>

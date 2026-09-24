@@ -20,8 +20,8 @@ import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
 
-/** Any worker with a config form (config-form-registry.tsx), plus Pile-On,
- * whose small form takes its current values from the page. */
+/** Any worker with a config form (config-form-registry.tsx) — Pile-On
+ * included, now that its form is registered there too. */
 export type ConfigurableSkillId = WorkerId;
 
 export function SkillConfigureMenu({

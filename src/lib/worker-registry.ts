@@ -1412,11 +1412,15 @@ export function workerOwnPageHref(workerId: WorkerId, engagementId: string): str
 }
 
 /**
- * Skills with no inline config form whose settings live in their own
- * page's Configure menu instead (skill-pages.tsx). Pile-On's form takes its
- * current values from the page, so it only exists there.
+ * Skills with no inline config form, whose settings would otherwise have
+ * nowhere to open except their own page's Configure menu (skill-pages.tsx).
+ * Empty now that Pile-On has a real registered form (PileOnConfigForm,
+ * config-form-registry.tsx) that fully self-loads its own current values —
+ * it no longer needs a page to source them from, so its settings gear can
+ * open in place anywhere a worker's settings render, the Library included,
+ * instead of always navigating to its own page first.
  */
-export const SKILLS_CONFIGURED_ON_OWN_PAGE: WorkerId[] = ["pile-on"];
+export const SKILLS_CONFIGURED_ON_OWN_PAGE: WorkerId[] = [];
 
 /**
  * Where a settings gear for this skill goes when its settings aren't a form
@@ -1436,13 +1440,14 @@ export const PRODUCTS_WITH_SKILL_SETTINGS: ProductId[] = ["cold-open", "reputati
 
 /**
  * Whose config form holds this skill's settings. A skill with its own
- * form (hasHingesPanel), or of a product in PRODUCTS_WITH_SKILL_SETTINGS,
- * owns them; every other skill is set up by its product's setup, so its
- * settings are that form. Null for Pile-On, whose settings only exist on
- * its own page (see SKILLS_CONFIGURED_ON_OWN_PAGE).
+ * form (hasHingesPanel), of a product in PRODUCTS_WITH_SKILL_SETTINGS, or
+ * Pile-On (whose settings are its own form too, just not gated behind
+ * hasHingesPanel — see config-form-registry.tsx) owns them; every other
+ * skill is set up by its product's setup, so its settings are that form.
  */
 export function workerSettingsFormId(workerId: WorkerId): WorkerId | null {
   if (SKILLS_CONFIGURED_ON_OWN_PAGE.includes(workerId)) return null;
+  if (workerId === "pile-on") return "pile-on";
   const worker = WORKER_REGISTRY[workerId];
   return worker.hasHingesPanel || PRODUCTS_WITH_SKILL_SETTINGS.includes(worker.productId) ? workerId : PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
 }

@@ -158,12 +158,12 @@ function SkillStatBlock({ stat, maxTotal }: { stat: SkillStat; maxTotal: number 
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-1.5">
-        <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{stat.name}</span>
-        <span className="text-[9.5px] font-mono uppercase text-zinc-400 dark:text-zinc-600">{stat.productLabel}</span>
+        <span className="text-[15px] font-semibold text-zinc-800 dark:text-zinc-200">{stat.name}</span>
+        <span className="text-xs font-mono uppercase text-zinc-400 dark:text-zinc-600">{stat.productLabel}</span>
       </div>
 
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">
+        <div className="flex items-center justify-between text-xs font-mono text-zinc-400 dark:text-zinc-600">
           <span>Volume share</span>
           <span>
             {stat.total} run{stat.total !== 1 ? "s" : ""} ({stat.volumeSharePct}%)
@@ -173,7 +173,7 @@ function SkillStatBlock({ stat, maxTotal }: { stat: SkillStat; maxTotal: number 
       </div>
 
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-[10.5px] font-mono text-zinc-400 dark:text-zinc-600">
+        <div className="flex items-center justify-between text-xs font-mono text-zinc-400 dark:text-zinc-600">
           <span>Success rate</span>
           <span>{stat.resolved > 0 ? `${stat.rate}% of ${stat.resolved}` : "no resolved runs"}</span>
         </div>
@@ -186,11 +186,11 @@ function SkillStatBlock({ stat, maxTotal }: { stat: SkillStat; maxTotal: number 
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-sm">
         <span className="text-zinc-500 dark:text-zinc-500">Avg cost</span>
         <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.total > 0 ? fmtCents(stat.avgCostCents) : "No runs"}</span>
       </div>
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-sm">
         <span className="text-zinc-500 dark:text-zinc-500">Avg duration</span>
         <span className="font-mono text-zinc-700 dark:text-zinc-300">{stat.avgDurationMs !== null ? fmtDuration(stat.avgDurationMs) : "No runs"}</span>
       </div>

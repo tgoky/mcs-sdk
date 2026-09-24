@@ -35,6 +35,7 @@ describe("runStatusLabel", () => {
     ["success", "Done"],
     ["failed", "Failed"],
     ["running", "In progress"],
+    ["skipped", "Skipped"],
     ["cancelled", "Cancelled"],
     ["timed_out", "Timed out"],
   ])("maps %s -> %s", (status, expected) => {
@@ -46,17 +47,31 @@ describe("runStatusLabel", () => {
     expect(runStatusLabel("Failed")).toBe("Failed");
   });
 
-  it("falls back to 'In progress' for null/undefined/unknown status", () => {
+  it("falls back to 'In progress' when there's no status yet", () => {
     expect(runStatusLabel(null)).toBe("In progress");
     expect(runStatusLabel(undefined)).toBe("In progress");
-    expect(runStatusLabel("some_new_backend_status")).toBe("In progress");
+  });
+
+  it("passes an unrecognized status through as-is, never mislabeling a finished run as 'In progress'", () => {
+    // Regression guard: a run that finished with a status this map hasn't
+    // learned yet (e.g. a new backend status) must not silently read as
+    // still running — that's exactly the bug where skipped runs (missing
+    // from this map before "skipped" was added) fell back to "In progress".
+    expect(runStatusLabel("some_new_backend_status")).toBe("some_new_backend_status");
   });
 });
 
 describe("runStatusColor", () => {
-  it("returns the running color as the fallback for null/unknown status", () => {
+  it("returns the running color as the fallback for a genuinely absent status", () => {
     expect(runStatusColor(null)).toBe(runStatusColor("running"));
-    expect(runStatusColor("totally_unknown")).toBe(runStatusColor("running"));
+  });
+
+  it("falls back to the neutral 'skipped' color (not 'running') for an unrecognized status", () => {
+    // A run with some future/unrecognized status has already resolved to
+    // *something* — it must not read as still in progress (italic, blue)
+    // by default.
+    expect(runStatusColor("totally_unknown")).toBe(runStatusColor("skipped"));
+    expect(runStatusColor("totally_unknown")).not.toBe(runStatusColor("running"));
   });
 
   it("is case-insensitive and matches runStatusLabel's known statuses", () => {
@@ -76,9 +91,12 @@ describe("phaseLabel", () => {
   it("never leaks a raw internal phase codename to the screen", () => {
     // This is the specific regression this function exists to prevent —
     // an engineer adds a new phase to the backend and forgets to add a
-    // label here. It must degrade to a generic phrase, not the raw string.
+    // label here. It must degrade to a readable phrase, not the raw
+    // snake_case string, and it must not claim the run is "In progress":
+    // an unmapped phase can belong to a run that already finished
+    // (success, failed, or skipped) just as easily as one still running.
     const result = phaseLabel("some_new_backend_phase_nobody_documented");
-    expect(result).toBe("In progress");
+    expect(result).toBe("Some new backend phase nobody documented");
     expect(result).not.toContain("_");
   });
 

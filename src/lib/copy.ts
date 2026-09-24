@@ -89,6 +89,12 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   success: "Done",
   failed: "Failed",
   running: "In progress",
+  // A run finishRun() closed out early with status: "skipped" (nothing to
+  // do yet — no identity graph, module turned off, etc.) — it already
+  // finished, so it must never fall back to "In progress" (see the
+  // fallback bug this fixes: missing here, it silently mapped to
+  // RUN_STATUS_LABELS.running / .colors.running).
+  skipped: "Skipped",
   cancelled: "Cancelled",
   timed_out: "Timed out",
 };
@@ -97,6 +103,7 @@ export const RUN_STATUS_COLORS: Record<string, string> = {
   success: "text-status-success font-medium",
   failed: "text-status-error",
   running: "text-sky-600 dark:text-sky-400 italic",
+  skipped: "text-status-neutral",
   cancelled: "text-status-neutral",
   timed_out: "text-status-neutral",
 };
@@ -104,12 +111,12 @@ export const RUN_STATUS_COLORS: Record<string, string> = {
 /** Friendly run-status word for a raw status string, with a safe fallback. */
 export function runStatusLabel(status: string | null | undefined): string {
   if (!status) return "In progress";
-  return RUN_STATUS_LABELS[status.toLowerCase()] ?? "In progress";
+  return RUN_STATUS_LABELS[status.toLowerCase()] ?? status;
 }
 
 export function runStatusColor(status: string | null | undefined): string {
   if (!status) return RUN_STATUS_COLORS.running;
-  return RUN_STATUS_COLORS[status.toLowerCase()] ?? RUN_STATUS_COLORS.running;
+  return RUN_STATUS_COLORS[status.toLowerCase()] ?? RUN_STATUS_COLORS.skipped;
 }
 
 /**
@@ -128,13 +135,14 @@ export const RUN_STATUS_DOT_COLORS: Record<string, string> = {
   success: "bg-emerald-400",
   failed: "bg-rose-400",
   running: "bg-sky-400",
+  skipped: "bg-zinc-400",
   cancelled: "bg-zinc-400",
   timed_out: "bg-zinc-400",
 };
 
 export function runStatusDotColor(status: string | null | undefined): string {
   if (!status) return RUN_STATUS_DOT_COLORS.running;
-  return RUN_STATUS_DOT_COLORS[status.toLowerCase()] ?? RUN_STATUS_DOT_COLORS.running;
+  return RUN_STATUS_DOT_COLORS[status.toLowerCase()] ?? RUN_STATUS_DOT_COLORS.skipped;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,10 +247,23 @@ export const PHASE_LABELS: Record<string, string> = {
   skill_disabled: "Skipped: module turned off",
 };
 
+/** Turns an unmapped snake_case phase slug into a readable label — e.g.
+ * "trustpilot_watch" -> "Trustpilot watch". Used as phaseLabel's fallback
+ * instead of a hardcoded "In progress", which claimed a run was still
+ * running even for phases (mostly Reputation Manager's watch skills, which
+ * have no entries in PHASE_LABELS above) belonging to runs that had
+ * already finished — success, failed, or skipped. */
+function humanizePhase(phase: string): string {
+  return phase
+    .split("_")
+    .map((word, i) => (i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
 /** Friendly phase description for a raw phase string, with a safe fallback. */
 export function phaseLabel(phase: string | null | undefined): string {
   if (!phase) return "Getting started";
-  return PHASE_LABELS[phase] ?? "In progress";
+  return PHASE_LABELS[phase] ?? humanizePhase(phase);
 }
 
 // ---------------------------------------------------------------------------

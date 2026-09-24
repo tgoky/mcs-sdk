@@ -35,11 +35,11 @@ export function ShowRateByTemplateSection({ stats }: { stats: TemplateShowRateSt
     <div className="p-4 space-y-3">
       {withData.map((s) => (
         <div key={s.template} className="space-y-1">
-          <div className="flex items-center justify-between gap-3 text-sm">
+          <div className="flex items-center justify-between gap-3 text-[15px]">
             <span className="text-zinc-700 dark:text-zinc-300">{s.name}</span>
             <span className="font-mono text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 shrink-0">
               {s.showRatePct !== null ? `${s.showRatePct}%` : "No data"}
-              <span className="text-zinc-400 dark:text-zinc-600 text-xs">({s.sampleSize})</span>
+              <span className="text-zinc-400 dark:text-zinc-600 text-sm">({s.sampleSize})</span>
               {s.sampleSize < LOW_SAMPLE_THRESHOLD && (
                 <span className="text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400" title={`Only ${s.sampleSize} resolved call${s.sampleSize !== 1 ? "s" : ""}. Too few to read much into yet.`}>
                   thin sample

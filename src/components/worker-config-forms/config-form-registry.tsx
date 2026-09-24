@@ -18,6 +18,7 @@ import type { WorkerId } from "@/lib/worker-registry";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { WinBackConfigForm } from "./win-back-config-form";
 import { PreCallReadConfigForm } from "./pre-call-read-config-form";
+import { PileOnConfigForm } from "./pile-on-config-form";
 import { LeakMapConfigForm } from "./leak-map-config-form";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
@@ -88,6 +89,23 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // Showtime's setup covers every Showtime skill from the website and the
   // connected tools; Pin-Down is the worker it lives under.
   "pin-down": (h) => <ShowtimeSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} focus={h.mode === "setup" ? undefined : "pin-down"} />,
+  // PileOnConfigForm always re-fetches its own current values on mount
+  // (see its own useEffect) — these two "initial" props are only the
+  // pre-fetch default, so a generic caller with nothing better to pass
+  // (this registry's ConfigFormHandlers carries no pile-on-specific data)
+  // can safely default them to "none" without the form ever showing a
+  // wrong saved value. SkillConfigureMenu still passes real prefetched
+  // values directly to PileOnConfigForm where it already has them, purely
+  // to skip that fetch's flash; both paths land on the same form.
+  "pile-on": (h) => (
+    <PileOnConfigForm
+      engagementId={h.engagementId}
+      initialSmsPlatform="none"
+      initialAdDataPlatform="none"
+      onCancel={h.onClose}
+      onSaved={() => h.onSaved?.({})}
+    />
+  ),
   "win-back": simple(WinBackConfigForm),
   "pre-call-read": simple(PreCallReadConfigForm),
   "leak-map": simple(LeakMapConfigForm),
@@ -98,8 +116,7 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   ...Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, focused(WhopSetup, "whop-connect", id)])),
 };
 
-/** Workers with a self-loading config form. (Pile-On's small form takes
- * its current values from the page instead — see SkillConfigureMenu.) */
+/** Workers with a self-loading config form. */
 export const WORKERS_WITH_CONFIG_FORM = Object.keys(FORMS) as WorkerId[];
 
 export function hasWorkerConfigForm(workerId: string): workerId is WorkerId {

@@ -9,7 +9,7 @@
 // real history instead of overwritten on the next click.
 
 import { useState } from "react";
-import { Zap, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { VerboseTime } from "@/components/relative-time";
 
 interface AccountReview {
@@ -54,7 +54,7 @@ export function AccountAdvisorPanel({
           disabled={loading}
           className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-sm font-semibold text-white dark:text-zinc-900 transition-colors cursor-pointer"
         >
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+          {loading && <Loader2 size={13} className="animate-spin" />}
           {loading ? "Reviewing…" : "Generate account review"}
         </button>
       </div>
