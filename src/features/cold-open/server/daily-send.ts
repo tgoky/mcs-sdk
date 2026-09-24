@@ -31,6 +31,7 @@ import { assembleCopyForLead } from "./copy-engine";
 import { createEspAdapter } from "./esp/factory";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
+import { isValidTimezone } from "@/lib/timezones";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -46,6 +47,10 @@ export async function saveDailySendSettings(engagementId: string, input: DailySe
   }
   if (!Number.isInteger(input.localHour) || input.localHour < 0 || input.localHour > 23) {
     return { error: "localHour must be an integer between 0 and 23." };
+  }
+  // A typo here used to fall back to UTC silently, sending at the wrong hour.
+  if (input.timezone && !isValidTimezone(input.timezone)) {
+    return { error: `"${input.timezone}" isn't a time zone we recognize. Use one like America/New_York.` };
   }
   await upsertColdOpenConfig(engagementId, {
     dailySendSettings: { volume: input.volume, localHour: input.localHour, timezone: input.timezone, copyMode: input.copyMode, liveSendEnabled: input.liveSendEnabled },

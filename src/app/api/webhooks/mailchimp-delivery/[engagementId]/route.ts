@@ -34,6 +34,7 @@ import { eq } from "drizzle-orm";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
+import { webhookTokenGate } from "@/lib/webhook-gate";
 
 export const runtime = "nodejs";
 
@@ -62,9 +63,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
       console.warn(`[mailchimp-delivery] Rejected webhook with invalid/missing secret for engagement ${engagementId}.`);
       return NextResponse.json({ error: "Invalid secret" }, { status: 401 });
     }
+  } else {
+    // No secret of its own: the address's token has to be right.
+    const gate = webhookTokenGate(engagementId, req.url, "Mailchimp bounce and complaint feed");
+    if (gate) return gate;
   }
-  // No secret configured yet — same "log and continue" posture every
-  // other route in this file takes for optional verification.
 
   const contentType = req.headers.get("content-type") ?? "";
   let fields: Record<string, string>;

@@ -6,8 +6,23 @@ import { exchangeCode, getWhopUser } from "@/lib/whop";
 import { checkActiveMembership, isAdminEmail } from "@/lib/whop-access";
 import { db } from "@/lib/db";
 import { users } from "@/models/schema";
-import { decryptOAuthState } from "@/lib/oauth-state";
+import crypto from "crypto";
+import { decryptOAuthState, OAUTH_NONCE_COOKIE, OAUTH_STATE_MAX_AGE_MS } from "@/lib/oauth-state";
 import { buildOAuthRedirectHtml, safeRelativePath } from "@/lib/oauth-redirect-html";
+
+function readCookie(header: string | null, name: string): string | null {
+  for (const part of (header ?? "").split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return decodeURIComponent(v.join("="));
+  }
+  return null;
+}
+
+function sameString(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 export async function GET(request: Request) {
   try {
@@ -45,6 +60,21 @@ export async function GET(request: Request) {
       );
     }
 
+    // The login must have started in this browser, recently: the state's
+    // nonce has to match the cookie the login route set here (otherwise an
+    // attacker's own login could be finished in someone else's browser,
+    // signing them in as the attacker).
+    const cookieNonce = readCookie(request.headers.get("cookie"), OAUTH_NONCE_COOKIE);
+    const fresh = typeof stateData.issuedAt === "number" && Date.now() - stateData.issuedAt < OAUTH_STATE_MAX_AGE_MS;
+    if (!stateData.nonce || !cookieNonce || !fresh || !sameString(stateData.nonce, cookieNonce)) {
+      // A page with a link, not an automatic restart: a browser that never
+      // keeps the cookie would otherwise loop.
+      return new NextResponse(
+        `<!DOCTYPE html><html><body style="background:#1f1a2e;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p>That sign-in didn't start in this browser, or took too long. <a href="/api/auth/login" style="color:#fff">Sign in again</a></p></body></html>`,
+        { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } }
+      );
+    }
+
     const { codeVerifier, redirectTo } = stateData;
 
     // 2. Exchange authorization code for tokens
@@ -61,7 +91,7 @@ export async function GET(request: Request) {
       : await checkActiveMembership(whopUserId);
 
     // 5. Upsert user record
-    await db
+    const [userRow] = await db
       .insert(users)
       .values({
         whopUserId,
@@ -75,7 +105,8 @@ export async function GET(request: Request) {
           subscriptionStatus: membership.status,
           updatedAt: new Date(),
         },
-      });
+      })
+      .returning({ sessionVersion: users.sessionVersion });
 
     // No active membership after a real OAuth round trip means this person
     // just proved who they are but hasn't paid — send them straight to
@@ -109,9 +140,12 @@ export async function GET(request: Request) {
     session.subscriptionStatus = membership.status;
     session.subscriptionVerifiedAt = Date.now();
     session.refreshToken = tokens.refresh_token;
+    session.sessionVersion = userRow?.sessionVersion ?? 0;
 
     // Mutates response.cookies directly on the outgoing NextResponse instance
     await session.save();
+    // The login is used up.
+    response.headers.append("Set-Cookie", `${OAUTH_NONCE_COOKIE}=; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
 
     return response;
   } catch (err: any) {

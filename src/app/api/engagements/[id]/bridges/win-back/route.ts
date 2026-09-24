@@ -4,6 +4,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { webhookUrl } from "@/lib/webhook-url-token";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -23,7 +24,7 @@ export const revalidate = 0;
  * detour here required. SKILL_MANIFEST["win-back"].runOnSetup stays
  * false for exactly this reason.
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session?.whopUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -62,8 +63,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     autoPausedAt: row.stack?.win_back_auto_paused_at ?? null,
     autoPausedReason: row.stack?.win_back_auto_paused_reason ?? null,
     activecampaignWebhookSignatureHeader: row.stack?.activecampaign_webhook_signature_header ?? "",
+    // The addresses the client's own tools call, each with this client's
+    // token (lib/webhook-url-token.ts). Built here, on this site's origin.
+    replyCatcherUrl: webhookUrl(new URL(req.url).origin, "inbound-reply", id),
+    deliveryWebhookUrl: DELIVERY_WEBHOOK_PATHS[row.stack?.email_platform ?? ""] ? webhookUrl(new URL(req.url).origin, DELIVERY_WEBHOOK_PATHS[row.stack!.email_platform!], id) : null,
   });
 }
+
+const DELIVERY_WEBHOOK_PATHS: Record<string, string> = {
+  klaviyo: "klaviyo-delivery",
+  activecampaign: "activecampaign-delivery",
+  mailchimp: "mailchimp-delivery",
+  convertkit: "convertkit-delivery",
+};
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

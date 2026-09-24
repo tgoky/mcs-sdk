@@ -121,6 +121,9 @@ export type NotificationType =
   // "both real consumers use array membership checks" note above: safe to
   // add without an exhaustive-switch break.
   | "whop_webhook_health"
+  // A client's tool still calls a webhook address given out before it
+  // carried a token; see lib/webhook-url-token.ts.
+  | "webhook_url_update"
   // Phase 6 — Win-Back's bounce/complaint-rate auto-pause
   // (esp-delivery-monitor.ts). Not reused from an existing type: this is
   // a deliverability/reputation-of-the-sending-domain alert, distinct in

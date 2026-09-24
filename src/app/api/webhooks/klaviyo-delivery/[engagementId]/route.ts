@@ -37,6 +37,7 @@ import { eq } from "drizzle-orm";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
+import { webhookTokenGate } from "@/lib/webhook-gate";
 
 export const runtime = "nodejs";
 
@@ -89,11 +90,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
       console.warn(`[klaviyo-delivery] Rejected webhook with missing/invalid signature for engagement ${engagementId}.`);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
+  } else {
+    // No signature of its own: the address's token has to be right.
+    const gate = webhookTokenGate(engagementId, req.url, "Klaviyo bounce and complaint feed");
+    if (gate) return gate;
   }
-  // No secret configured yet — same "log and continue" posture the
-  // HubSpot route takes when HUBSPOT_APP_CLIENT_SECRET is unset, not a
-  // silent full bypass: the operator sets klaviyo_webhook_secret via
-  // /api/credentials once they've registered the webhook in Klaviyo.
 
   let payload: unknown;
   try {

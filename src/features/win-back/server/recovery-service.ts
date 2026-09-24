@@ -10,6 +10,7 @@ import {
   type RecoveryWindowDays,
 } from "./cadence-builder";
 import type { GetStepTools, Inngest } from "inngest";
+import { webhookUrl } from "@/lib/webhook-url-token";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -128,7 +129,7 @@ export async function generateRecoveryCadence(
         await logStep(runId, { phase: "reply_detection_setup", status: "failed", detail: e.message });
       }
     } else if (stack.inbound_reply_mode === "forwarding") {
-      const catcherUrl = `${appUrl}/api/webhooks/inbound-reply/${tenant.engagementId}`;
+      const catcherUrl = webhookUrl(appUrl, "inbound-reply", tenant.engagementId);
       await db
         .update(engagements)
         .set({ stack: { ...stack, inbound_reply_catcher_address: catcherUrl } })

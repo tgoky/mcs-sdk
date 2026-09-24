@@ -407,6 +407,13 @@
       "when": 1790234768281,
       "tag": "0057_rep_web_findings_and_google_listing",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790235767609,
+      "tag": "0058_users_session_version",
+      "breakpoints": true
     }
   ]
 }

@@ -49,6 +49,8 @@ export function WinBackConfigForm({
   const [rescheduleMode, setRescheduleMode] = useState<"fresh_link" | "time_slots">("time_slots");
   const [recoveredFromNoShowTaggingEnabled, setRecoveredFromNoShowTaggingEnabled] = useState(true);
   const [inboundReplyMode, setInboundReplyMode] = useState<"native" | "forwarding" | "none">("none");
+  const [replyCatcherUrl, setReplyCatcherUrl] = useState("");
+  const [deliveryWebhookUrl, setDeliveryWebhookUrl] = useState("");
   const [hubspotPortalId, setHubspotPortalId] = useState("");
   // Auto-derived from HubSpot's own account-info API (see the
   // hubspot-portal route) instead of asking the operator to hand-copy it
@@ -91,6 +93,8 @@ export function WinBackConfigForm({
         setAutoPausedAt(data.autoPausedAt ?? null);
         setAutoPausedReason(data.autoPausedReason ?? null);
         setActivecampaignWebhookSignatureHeader(data.activecampaignWebhookSignatureHeader ?? "");
+        setReplyCatcherUrl(data.replyCatcherUrl ?? "");
+        setDeliveryWebhookUrl(data.deliveryWebhookUrl ?? "");
       } catch (e: unknown) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -288,8 +292,10 @@ export function WinBackConfigForm({
               className="rounded-lg p-3 text-xs shadow-xs font-mono font-medium"
               style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
             >
-              A unique catcher URL generates once this is saved. Point your client&apos;s Postmark/SendGrid inbound-parse
-              bridge (or a forwarding rule through one) at it.
+              Point your client&apos;s Postmark/SendGrid inbound-parse bridge (or a forwarding rule through one) at this
+              address. It&apos;s unique to this client; if the bridge still has an older address without{" "}
+              <code>?token=</code>, replace it with this one.
+              {replyCatcherUrl && <div className="mt-2 break-all select-all">{replyCatcherUrl}</div>}
             </div>
           )}
         </div>
@@ -314,7 +320,7 @@ export function WinBackConfigForm({
             className="rounded-lg p-2 text-[11px] font-mono break-all"
             style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
           >
-            {`${typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/${DELIVERY_WEBHOOK_PATH[emailPlatform]}/${engagementId}`}
+            {deliveryWebhookUrl || "Save once to get this client's address."}
           </div>
           {emailPlatform === "activecampaign" && (
             <InputField
@@ -327,9 +333,9 @@ export function WinBackConfigForm({
           )}
           {emailPlatform === "mailchimp" && (
             <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              Mailchimp has no signature header. The secret goes directly in the URL. Pick your own secret value
-              first, append <code>?secret=&lt;that value&gt;</code> to the URL above before pasting it into Mailchimp,
-              then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
+              Mailchimp has no signature header, so the address above already carries this client&apos;s token. To add
+              your own secret as well, append <code>&amp;secret=&lt;your value&gt;</code> before pasting it into
+              Mailchimp, then enter that same value below (it&apos;s never shown again after saving, so keep a copy).
             </p>
           )}
           {DELIVERY_WEBHOOK_SECRET_PROVIDER[emailPlatform] && (

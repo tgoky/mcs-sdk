@@ -29,6 +29,7 @@ import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, T
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { cn } from "@/lib/utils";
+import { allTimezones, COMMON_TIMEZONES, isValidTimezone } from "@/lib/timezones";
 
 // ── Skills ─────────────────────────────────────────────────────────────
 
@@ -1028,7 +1029,16 @@ function ScheduleEditor({ value, onSave }: { value: { volume: number; localHour:
         </Labeled>
       </div>
       <Labeled label="Time zone">
-        <input value={v.timezone} onChange={(e) => setV((x) => ({ ...x, timezone: e.target.value }))} placeholder="e.g. America/New_York" className={cn(inputCls, "h-10")} />
+        {/* A list, not a text box: a typo used to send at the UTC hour. */}
+        <select value={v.timezone} onChange={(e) => setV((x) => ({ ...x, timezone: e.target.value }))} className={cn(inputCls, "h-10")}>
+          <option value="">The client&apos;s time zone</option>
+          {v.timezone && !isValidTimezone(v.timezone) && <option value={v.timezone}>{v.timezone} (not recognized)</option>}
+          {[...COMMON_TIMEZONES.map((z) => z.value), ...allTimezones().filter((z) => !COMMON_TIMEZONES.some((c) => c.value === z))].map((z) => (
+            <option key={z} value={z}>
+              {z.replace(/_/g, " ")}
+            </option>
+          ))}
+        </select>
       </Labeled>
       <div className="flex justify-end">
         <Button type="submit" size="sm">

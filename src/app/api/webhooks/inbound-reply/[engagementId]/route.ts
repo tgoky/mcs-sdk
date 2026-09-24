@@ -7,6 +7,9 @@ import { inngest, inboundReplyReceived } from "@/lib/inngest";
 import { looksLikeBounceNotification, extractBouncedRecipient } from "@/features/win-back/server/smtp-bounce-classifier";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
+import { checkWebhookToken } from "@/lib/webhook-url-token";
+import { noticeLegacyWebhookAddress } from "@/lib/webhook-legacy-notice";
+import { afterResponse } from "@/lib/after-response";
 
 /**
  * Win-Back recovery gap 6 — forwarding path. The operator sets up an
@@ -38,6 +41,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     return NextResponse.json({ success: true, ignored: true });
   }
 
+  // The engagement id is guessable, so the address carries a per-client
+  // token (lib/webhook-url-token.ts). An address given out before the
+  // token still delivers replies until the grace date, so a real reply
+  // isn't lost, but it can't report bounces, which pause sending.
+  const token = checkWebhookToken(engagementId, req.url);
+  if (token === "rejected") {
+    return NextResponse.json({ error: "This webhook address isn't valid. Copy the current one from Win-Back's settings." }, { status: 401 });
+  }
+  if (token === "legacy") afterResponse(() => noticeLegacyWebhookAddress(engagementId, "reply forwarding"));
+
   const contentType = req.headers.get("content-type") ?? "";
   let body: any;
   try {
@@ -64,6 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
   // bridge is a genuine reply candidate, not this app's own bounce
   // traffic, so the classifier is deliberately not run for them.
   if (stack.email_platform === "smtp" && looksLikeBounceNotification(normalized.fromEmail, normalized.subject ?? "", normalized.textBody ?? "")) {
+    if (token !== "valid") return NextResponse.json({ success: true, ignored: "Bounces need the current address. Copy it from Win-Back's settings." });
     await recordDeliveryEvent(engagementId, "smtp", "bounced", extractBouncedRecipient(normalized.textBody ?? ""), new Date());
     await checkAndApplyAutoPause(engagementId);
     return NextResponse.json({ success: true, classified: "bounce" });

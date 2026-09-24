@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { engagements, pendingActions, type EngagementStack } from "@/models/schema";
+import { engagements, pendingActions } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { OUTCOME_BUTTON_LABEL } from "@/lib/platforms/email";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 import { decidePendingAction } from "@/lib/approval-gate";
+import { getSigningSecret } from "@/lib/signing-secrets";
 
 /**
  * Tier 4 #27 — Slack interactive brief buttons, plus (this round) Queue
@@ -57,7 +58,7 @@ async function verifyEngagementSlackSignature(
     .from(engagements)
     .where(eq(engagements.engagementId, engagementId))
     .limit(1);
-  const signingSecret = (engagement?.stack as EngagementStack | null)?.slack_signing_secret;
+  const signingSecret = engagement ? await getSigningSecret(engagementId, "slack") : null;
   return Boolean(signingSecret) && verifySlackSignature(signingSecret!, timestamp, rawBody, receivedSignature);
 }
 

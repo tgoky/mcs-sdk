@@ -37,6 +37,7 @@ import { eq } from "drizzle-orm";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
+import { webhookTokenGate } from "@/lib/webhook-gate";
 
 export const runtime = "nodejs";
 
@@ -61,10 +62,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
       console.warn(`[activecampaign-delivery] Rejected webhook with invalid signature for engagement ${engagementId}.`);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
+  } else {
+    // No signature of its own: the address's token has to be right.
+    const gate = webhookTokenGate(engagementId, req.url, "ActiveCampaign bounce feed");
+    if (gate) return gate;
   }
-  // No header name / secret configured yet — same "log and continue"
-  // posture every other route in this file takes for optional
-  // verification.
 
   const contentType = req.headers.get("content-type") ?? "";
   let fields: Record<string, unknown>;

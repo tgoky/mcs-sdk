@@ -11,6 +11,7 @@ import { harvestTwilioA2PStatus } from "@/lib/paste-key-harvest";
 import { OPT_IN_GATED_ACTION_TYPES, type PendingActionType } from "@/lib/approval-gate";
 import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT, slackWebhookUrl } from "@/lib/outbound-urls";
 import { afterResponse } from "@/lib/after-response";
+import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
 
 // Only the actions an operator can opt into reviewing; the rest are always
 // reviewed (see OPT_IN_GATED_ACTIONS).
@@ -388,6 +389,10 @@ export async function PATCH(
         }
       }
     }
+    // Recall's signing secret goes to the vault (lib/signing-secrets.ts),
+    // never into the stack. Blank means "keep the saved one".
+    const typedRecallSecret = typeof incoming.conversation_intelligence_meta?.recall_webhook_signing_secret === "string" ? incoming.conversation_intelligence_meta.recall_webhook_signing_secret.trim() : "";
+    if (incoming.conversation_intelligence_meta) delete incoming.conversation_intelligence_meta.recall_webhook_signing_secret;
     if (incoming.booking_platform_meta !== undefined && typeof incoming.booking_platform_meta !== "object") {
       return NextResponse.json({ error: "booking_platform_meta must be an object." }, { status: 400 });
     }
@@ -487,7 +492,7 @@ export async function PATCH(
 
     await db
       .update(engagements)
-      .set({ stack: nextStack, updatedAt: new Date() })
+      .set({ stack: await withRecallSecretInVault(id, nextStack, typedRecallSecret), updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
 
     // A key saved before its platform was picked is marked connected now
@@ -587,4 +592,15 @@ export async function DELETE(
     console.error("[engagements/[id] DELETE]", err);
     return NextResponse.json({ error: "Failed to delete engagement." }, { status: 500 });
   }
+}
+
+/** Moves an old plaintext Recall secret into the vault (or saves a newly
+ * typed one there), and returns the stack without it. */
+async function withRecallSecretInVault(engagementId: string, stack: EngagementStack, typed: string): Promise<EngagementStack> {
+  await getSigningSecret(engagementId, "recall");
+  if (typed) await setSigningSecret(engagementId, "recall", typed);
+  if (!stack.conversation_intelligence_meta?.recall_webhook_signing_secret && !typed) return stack;
+  const meta = { ...stack.conversation_intelligence_meta };
+  delete meta.recall_webhook_signing_secret;
+  return { ...stack, conversation_intelligence_meta: meta, ...(typed ? { recall_webhook_signing_secret_set: true } : {}) };
 }

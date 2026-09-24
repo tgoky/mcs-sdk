@@ -16,11 +16,9 @@
 //     name) but surfaced NO signature-verification header at all for
 //     v3 — the older API appears to predate that feature.
 //   - Given that, this route deliberately does NOT claim a signature
-//     scheme it can't confirm exists. The engagement-scoped URL itself
-//     is the only access control, same posture this exact codebase
-//     already takes for the inbound-reply forwarding bridge
-//     (src/app/api/webhooks/inbound-reply/[engagementId]/route.ts) — an
-//     unguessable per-engagement URL, not a cryptographic signature.
+//     scheme it can't confirm exists. The address's per-client token
+//     (lib/webhook-url-token.ts) is the access control; the engagement
+//     id alone is guessable and visible in URLs.
 //   - Exact v3 event names for bounce/complaint are UNVERIFIED (v4's
 //     `subscriber.subscriber_bounce` / `subscriber.subscriber_complain`
 //     may not exist under those names in v3). Matched defensively on
@@ -36,6 +34,7 @@ import { engagements, webhookEvents, type EngagementStack } from "@/models/schem
 import { eq } from "drizzle-orm";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
+import { webhookTokenGate } from "@/lib/webhook-gate";
 
 export const runtime = "nodejs";
 
@@ -47,6 +46,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
 
   const stack = tenant.stack as EngagementStack | null;
   if (stack?.email_platform !== "convertkit") return NextResponse.json({ success: true, ignored: true });
+
+  // ConvertKit signs nothing, so the address's token is the only check.
+  const gate = webhookTokenGate(engagementId, req.url, "ConvertKit bounce and complaint feed");
+  if (gate) return gate;
 
   const rawBody = await req.text();
   let payload: Record<string, unknown>;

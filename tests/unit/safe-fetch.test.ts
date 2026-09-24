@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Each hop's request, as safeFetch makes it (the socket-level address check
+// is covered in safe-fetch-pinned.test.ts).
+const hop = vi.fn();
+vi.mock("@/lib/pinned-request", () => ({ pinnedRequest: (...args: unknown[]) => hop(...args), UnreachableAddressError: class extends Error {} }));
+
 vi.mock("dns/promises", () => {
   const lookup = vi.fn();
   return { lookup, default: { lookup } };
@@ -60,26 +65,23 @@ describe("safeFetch", () => {
 
   it("checks every redirect hop, so a redirect into the internal network is refused", async () => {
     resolvesTo("93.184.216.34");
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: "http://127.0.0.1/admin" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    hop.mockResolvedValue(new Response(null, { status: 302, headers: { location: "http://127.0.0.1/admin" } }));
     await expect(safeFetch("https://example.com")).rejects.toBeInstanceOf(UnsafeUrlError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(hop).toHaveBeenCalledTimes(1);
   });
 
   it("follows a public redirect and returns the final response", async () => {
     resolvesTo("93.184.216.34");
-    const fetchMock = vi
-      .fn()
+    hop
       .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: "https://www.example.com/" } }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
     expect((await safeFetch("https://example.com")).status).toBe(200);
-    expect(String(fetchMock.mock.calls[1][0])).toBe("https://www.example.com/");
+    expect(String(hop.mock.calls[1][0])).toBe("https://www.example.com/");
   });
 
   it("stops after maxRedirects", async () => {
     resolvesTo("93.184.216.34");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://example.com/again" } })));
+    hop.mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://example.com/again" } }));
     await expect(safeFetch("https://example.com", {}, { maxRedirects: 0 })).rejects.toThrow("Too many redirects");
   });
 });

@@ -2,6 +2,10 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
+// Production always has SESSION_SECRET (sign-in needs it); derived values
+// like webhook address tokens (lib/webhook-url-token.ts) need one here too.
+process.env.SESSION_SECRET ??= "test-session-secret-at-least-32-characters-long";
+
 // Unmount React trees between tests so effects/timers from one test never
 // leak into the next — directly relevant to this app, since half the
 // dashboard is polling components with intervals and AbortControllers.

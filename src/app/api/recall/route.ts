@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { verifyRecallWebhookSignature, RECALL_NO_SHOW_SUB_CODES } from "@/lib/platforms/conversation-intelligence";
 import { inngest, conversationIntelligenceProcess } from "@/lib/inngest";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
+import { getSigningSecret } from "@/lib/signing-secrets";
 
 /**
  * Tier 4 #24 — conversation intelligence hooks (Recall.ai).
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
     .where(eq(engagements.engagementId, session.engagementId))
     .limit(1);
   const stack = engagement?.stack as EngagementStack | null;
-  const signingSecret = stack?.conversation_intelligence_meta?.recall_webhook_signing_secret;
+  const signingSecret = stack ? await getSigningSecret(session.engagementId, "recall") : null;
 
   if (!signingSecret || !verifyRecallWebhookSignature(signingSecret, svixId, svixTimestamp, rawBody, svixSignature)) {
     return NextResponse.json({ error: "Signature verification failed." }, { status: 401 });

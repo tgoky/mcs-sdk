@@ -9,8 +9,22 @@ function deriveKey(secret: string): Buffer {
   return crypto.createHash("sha256").update(secret).digest();
 }
 
+export interface OAuthStateData {
+  codeVerifier: string;
+  redirectTo?: string;
+  /** Also set as a cookie on the browser that started the login; the
+   * callback requires both to match, so a login started elsewhere can't
+   * be finished in this browser (login CSRF). */
+  nonce?: string;
+  /** When the login started (ms). States older than OAUTH_STATE_MAX_AGE_MS are refused. */
+  issuedAt?: number;
+}
+
+export const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+export const OAUTH_NONCE_COOKIE = "mudd_oauth_nonce";
+
 export function encryptOAuthState(
-  data: { codeVerifier: string; redirectTo?: string },
+  data: OAuthStateData,
   secret: string
 ): string {
   const key = deriveKey(secret);
@@ -32,7 +46,7 @@ export function encryptOAuthState(
 export function decryptOAuthState(
   encrypted: string,
   secret: string
-): { codeVerifier: string; redirectTo?: string } | null {
+): OAuthStateData | null {
   try {
     const key = deriveKey(secret);
     const combined = Buffer.from(encrypted, "base64url");

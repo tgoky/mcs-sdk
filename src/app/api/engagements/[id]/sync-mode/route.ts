@@ -6,6 +6,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import crypto from "crypto";
 import { buildWebhookReceiverUrl } from "@/lib/booking-sync-status";
+import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -101,6 +102,11 @@ export async function PATCH(
     }
 
     const nextStack: EngagementStack = { ...stack };
+    // The signing secret lives in the vault (lib/signing-secrets.ts); read
+    // it from there, moving an old plaintext one over, and never write it
+    // back into the stack below.
+    let signingSecret = await getSigningSecret(id, "booking_webhook");
+    delete nextStack.webhook_signing_secret;
 
     if (mode === "webhook") {
       // Generate a signing secret if this engagement somehow doesn't have
@@ -108,8 +114,10 @@ export async function PATCH(
       // — see onboarding-service.ts). Never overwrite an existing secret:
       // the buyer may have already pasted the current one into their
       // platform's workflow.
-      if (!nextStack.webhook_signing_secret) {
-        nextStack.webhook_signing_secret = crypto.randomBytes(32).toString("hex");
+      if (!signingSecret) {
+        signingSecret = crypto.randomBytes(32).toString("hex");
+        await setSigningSecret(id, "booking_webhook", signingSecret);
+        nextStack.webhook_signing_secret_set = true;
       }
       nextStack.webhook_receiver_mode = "webhook";
     } else if (mode === "polling") {
@@ -163,7 +171,7 @@ export async function PATCH(
       // fine to keep returning it on every call here (the settings UI
       // masks it behind a reveal toggle the same way credential values are
       // masked elsewhere in this app).
-      signingSecret: nextStack.webhook_signing_secret ?? null,
+      signingSecret: signingSecret ?? null,
       dismissed: Boolean(nextStack.webhook_receiver_setup_dismissed),
     });
   } catch (err) {

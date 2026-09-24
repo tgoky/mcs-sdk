@@ -14,6 +14,7 @@ vi.mock("@/models/schema", () => ({ engagements: { __name: "engagements", stack:
 vi.mock("drizzle-orm", () => ({ eq: () => ({}) }));
 vi.mock("@/lib/platforms/email", () => ({ OUTCOME_BUTTON_LABEL: {} }));
 vi.mock("@/features/pre-call-read/server/outcome-resolution", () => ({ resolveCallOutcome: vi.fn() }));
+vi.mock("@/lib/signing-secrets", () => ({ getSigningSecret: async (engagementId: string) => (engagementId === "eng_a" ? "secret-of-client-a" : null) }));
 vi.mock("@/lib/approval-gate", () => ({ decidePendingAction: (...a: unknown[]) => decide(...(a as [])) }));
 
 import { POST } from "@/app/api/slack/interactions/route";

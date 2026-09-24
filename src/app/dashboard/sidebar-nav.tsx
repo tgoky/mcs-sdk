@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { engagements, credentialsRefs, skillRuns } from "@/models/schema";
 import { getQueueActionableCount } from "@/lib/queue";
 import { getActiveWorkspace } from "@/lib/workspace";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, notInArray } from "drizzle-orm";
+import { SIGNING_SECRET_PROVIDERS } from "@/lib/signing-secrets";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 
 const DASHBOARD_ICON = (
@@ -79,7 +80,10 @@ export async function SidebarNav({ whopUserId }: { whopUserId: string }) {
       .where(
         and(
           eq(engagements.whopUserId, whopUserId),
-          eq(engagements.workspaceId, activeWorkspace.workspaceId)
+          eq(engagements.workspaceId, activeWorkspace.workspaceId),
+          // Webhook signing secrets are stored alongside keys but aren't
+          // connections to count.
+          notInArray(credentialsRefs.provider, SIGNING_SECRET_PROVIDERS)
         )
       ),
 

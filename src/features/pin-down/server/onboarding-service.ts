@@ -21,6 +21,7 @@ import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
 import crypto from "crypto";
+import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -866,14 +867,17 @@ export async function runPinDownOnboarding(
           const signingKey = isObjectResult ? (subscriptionResult as any).signingKey : null;
 
           if (subId) {
+            // Signing secrets are kept in the vault (lib/signing-secrets.ts).
+            if (signingKey) await setSigningSecret(engagementId, "booking_webhook", signingKey as string);
+            const stackWithoutSecret = withoutPlaintextSecret(finalStack);
             await db
               .update(engagements)
               .set({
-                stack: { 
-                  ...finalStack, 
-                  webhook_subscription_id: subId as string, 
-                  ...(signingKey ? { webhook_signing_secret: signingKey as string } : {}),
-                  webhook_receiver_mode: "webhook" 
+                stack: {
+                  ...stackWithoutSecret,
+                  webhook_subscription_id: subId as string,
+                  ...(signingKey ? { webhook_signing_secret_set: true } : {}),
+                  webhook_receiver_mode: "webhook",
                 },
                 updatedAt: new Date(),
               })
@@ -893,17 +897,17 @@ export async function runPinDownOnboarding(
             // Booking Sync can show the receiver URL + secret + setup
             // instructions immediately, with no second onboarding pass
             // required to "unlock" manual webhook mode.
-            const signingSecret =
-              finalStack.webhook_signing_secret ?? crypto.randomBytes(32).toString("hex");
+            await ensureBookingWebhookSecret(engagementId);
+            const stackWithoutSecret = withoutPlaintextSecret(finalStack);
             await db
               .update(engagements)
               .set({
                 stack: {
-                  ...finalStack,
+                  ...stackWithoutSecret,
                   webhook_receiver_mode: "polling",
                   webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 25,
                   webhook_receiver_last_polled_at: new Date().toISOString(),
-                  webhook_signing_secret: signingSecret,
+                  webhook_signing_secret_set: true,
                 },
                 updatedAt: new Date(),
               })
@@ -913,17 +917,17 @@ export async function runPinDownOnboarding(
           }
         } catch (e: any) {
           console.error(`[pin-down onboarding] Webhook registration failed: ${e.message}`);
-          const signingSecret =
-            finalStack.webhook_signing_secret ?? crypto.randomBytes(32).toString("hex");
+          await ensureBookingWebhookSecret(engagementId);
+          const stackWithoutSecret = withoutPlaintextSecret(finalStack);
           await db
             .update(engagements)
             .set({
               stack: {
-                ...finalStack,
+                ...stackWithoutSecret,
                 webhook_receiver_mode: "polling",
                 webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 25,
                 webhook_receiver_last_polled_at: new Date().toISOString(),
-                webhook_signing_secret: signingSecret,
+                webhook_signing_secret_set: true,
               },
               updatedAt: new Date(),
             })
@@ -1036,4 +1040,17 @@ async function readCachedDesignSignal(engagementId: string, domain: string): Pro
   if (!fact || !fact.value || typeof fact.value !== "object") return null;
   if (bareHost(fact.sourceDetail) !== bareHost(domain)) return null;
   return fact.value as Awaited<ReturnType<typeof scrapeDesignSignal>>;
+}
+
+/** A booking webhook signing secret in the vault: the existing one (moved
+ * out of the stack if it was still there), or a new one. */
+async function ensureBookingWebhookSecret(engagementId: string): Promise<void> {
+  if (await getSigningSecret(engagementId, "booking_webhook")) return;
+  await setSigningSecret(engagementId, "booking_webhook", crypto.randomBytes(32).toString("hex"));
+}
+
+function withoutPlaintextSecret<T extends { webhook_signing_secret?: string }>(stack: T): T {
+  const copy = { ...stack };
+  delete copy.webhook_signing_secret;
+  return copy;
 }

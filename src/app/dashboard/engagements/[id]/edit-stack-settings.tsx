@@ -558,9 +558,10 @@ export function EditStackSettings({
 
   const [recallRegion, setRecallRegion] = useState(initialStack?.conversation_intelligence_meta?.recall_region ?? "");
   const [recallBotName, setRecallBotName] = useState(initialStack?.conversation_intelligence_meta?.recall_bot_name ?? "");
-  const [recallSigningSecret, setRecallSigningSecret] = useState(
-    initialStack?.conversation_intelligence_meta?.recall_webhook_signing_secret ?? ""
-  );
+  // The secret itself stays in the vault; the field is only for pasting a
+  // new one, and says when one is already saved.
+  const [recallSigningSecret, setRecallSigningSecret] = useState("");
+  const recallSecretSaved = Boolean(initialStack?.recall_webhook_signing_secret_set || initialStack?.conversation_intelligence_meta?.recall_webhook_signing_secret);
 
   const [meta, setMeta] = useState<Record<string, string>>(() => {
     const seeded: Record<string, string> = {};
@@ -1168,7 +1169,7 @@ export function EditStackSettings({
                   type="password"
                   value={recallSigningSecret}
                   onChange={(e) => setRecallSigningSecret(e.target.value)}
-                  placeholder="whsec_..."
+                  placeholder={recallSecretSaved ? "Saved. Paste a new one to replace it." : "whsec_..."}
                   className="w-full text-xs font-mono px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-800 bg-background text-zinc-700 dark:text-zinc-300"
                 />
                 <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 leading-relaxed">

@@ -440,7 +440,7 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
           // verify a click came from Slack (see the interactions route) —
           // buttons with no way to verify their own callbacks would be
           // worse than no buttons at all.
-          stack.brief_landing_destination === "slack" && stack.slack_signing_secret
+          stack.brief_landing_destination === "slack" && (stack.slack_signing_secret || stack.slack_signing_secret_set)
             ? { engagementId: tenant.engagementId, bookingId: call.id, prospectEmail: call.email }
             : undefined,
           tenant.engagementId

@@ -349,6 +349,9 @@ export type EngagementStack = {
   // as "activecampaign_webhook_secret") — same split every other
   // platform/credential pair in this file already uses.
   activecampaign_webhook_signature_header?: string;
+  /** When the owner was told this client's tools still call a webhook
+   * address without its token (see lib/webhook-url-token.ts). Once only. */
+  webhook_url_legacy_notified_at?: string;
   // Phase 6 — HubSpot's legacy Email Events API is poll-only (no
   // bounce/complaint webhook exists, see esp-delivery-poll.ts). This is
   // the watermark the poller advances past each run so it never
@@ -451,6 +454,11 @@ export type EngagementStack = {
   // Webhook tracking
   webhook_subscription_id?: string; // Calendly/Cal.com subscription URI
   webhook_signing_secret?: string;
+  /** Set once a signing secret is stored in the vault (lib/signing-secrets.ts),
+   * so the UI can tell one exists without reading it. */
+  webhook_signing_secret_set?: boolean;
+  slack_signing_secret_set?: boolean;
+  recall_webhook_signing_secret_set?: boolean;
 
   // ── Cross-cutting recovery gap 22: explicit human-approval gates ───────
   // Per the transfer analysis section 8.2: "Every hard change or actual
@@ -589,6 +597,10 @@ export const users = pgTable("users", {
   whopUserId: text("whop_user_id").notNull().unique(),
   email: text("email"),
   subscriptionStatus: text("subscription_status").notNull().default("inactive"),
+  // Bumped on sign-out; a session cookie carrying an older value is no
+  // longer honored (middleware.ts rechecks it every few minutes), so
+  // signing out ends copies of the cookie too, not just this browser's.
+  sessionVersion: integer("session_version").notNull().default(0),
   // Executions sidebar unread-count fix — a run that starts and finishes
   // between glances used to leave the nav badge back at 0 with no trace
   // anything happened (the badge only ever showed the *currently running*

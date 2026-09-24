@@ -94,7 +94,12 @@ export const processWinBackSmsSequence = inngest.createFunction(
           await sendSmsForTenant(
             stack.sms_platform!,
             apiKey,
-            stack.sms_platform_meta,
+            {
+              ...stack.sms_platform_meta,
+              // The footer settings live on the stack itself, as Pile-On passes them.
+              sms_compliance_footer_variant: stack.sms_compliance_footer_variant,
+              sms_compliance_footer_custom: stack.sms_compliance_footer_custom,
+            },
             { email: prospectEmail, phone: prospectPhone },
             message.body,
             stack.sms_a2p_10dlc_status

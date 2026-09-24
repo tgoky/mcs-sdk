@@ -8,6 +8,8 @@ export type SessionData = {
   subscriptionStatus: string;
   subscriptionVerifiedAt: number;
   refreshToken?: string;
+  /** users.session_version when this session began; see middleware.ts. */
+  sessionVersion?: number;
 };
 
 // ← Added "export" here

@@ -158,7 +158,7 @@ export function computeBookingSyncStatus(
     pollIntervalMinutes: mode === "polling" ? pollIntervalMinutes : null,
     nextPollDueAt,
     webhookUrl,
-    hasSigningSecret: Boolean(stack?.webhook_signing_secret),
+    hasSigningSecret: Boolean(stack?.webhook_signing_secret || stack?.webhook_signing_secret_set),
     actionNeeded,
     dismissed,
   };

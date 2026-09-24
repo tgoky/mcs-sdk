@@ -7,12 +7,13 @@
 // first URL and for every redirect hop, which is followed by hand so each
 // hop is checked.
 //
-// Limit: the host is resolved once for the check and again by fetch itself,
-// so a DNS answer that changes between the two (rebinding) isn't caught.
-// That needs a pinned-IP agent; this closes the direct cases.
+// The connection itself is made through a lookup hook that checks the
+// addresses it's about to connect to, so a DNS answer that changes
+// between the check and the connection (rebinding) is refused too.
 
 import { lookup } from "dns/promises";
 import { isIP } from "net";
+import { pinnedRequest, UnreachableAddressError } from "@/lib/pinned-request";
 
 export class UnsafeUrlError extends Error {
   constructor(message: string) {
@@ -104,7 +105,9 @@ export async function safeFetch(
     let request: RequestInit = init;
     for (let hop = 0; ; hop++) {
       const url = await assertPublicUrl(current, { httpsOnly });
-      const res = await fetch(url, { ...request, redirect: "manual", signal: controller.signal });
+      const res = await pinnedRequest(url, request, controller.signal, (ip) => !isBlockedAddress(ip)).catch((err) => {
+        throw err instanceof UnreachableAddressError ? new UnsafeUrlError(err.message) : err;
+      });
       const location = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && location) {
         if (hop >= maxRedirects) throw new UnsafeUrlError("Too many redirects.");

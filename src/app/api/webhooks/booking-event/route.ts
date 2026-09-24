@@ -11,6 +11,8 @@ import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { inngest, bookingWebhookProcess } from "@/lib/inngest";
 import { isUniqueConstraintViolation } from "@/lib/db-errors";
 import crypto from "crypto";
+import { getSigningSecret } from "@/lib/signing-secrets";
+import { patchEngagementStack } from "@/lib/engagement-stack";
 
 // Reliability fix: this route now only does DB-only work (signature verify,
 // idempotency insert, rate-limit check, startRun, an Inngest event send) —
@@ -193,7 +195,7 @@ export async function POST(request: Request) {
 
     // ── 4. VERIFY SIGNATURE before touching any data ──
     const stack = tenant.stack as EngagementStack | null;
-    const signingSecret = stack?.webhook_signing_secret;
+    const signingSecret = await getSigningSecret(engagementId, "booking_webhook");
     const platform = stack?.booking_platform ?? "unsupported";
 
     if (!signingSecret) {
@@ -252,28 +254,20 @@ export async function POST(request: Request) {
       // Best-effort — surfaced in the Booking Sync status card so a buyer
       // sees *why* deliveries aren't registering instead of just silence.
       // Never let this write block or fail the actual rejection response.
-      await db
-        .update(engagements)
-        .set({
-          stack: { ...stack, webhook_last_error: `Signature check failed on ${new Date().toISOString()}. Check the header name/value configured in ${platform === "ghl_calendar" ? "your GHL workflow" : "OnceHub"} against Settings → Booking Sync.` },
-          updatedAt: new Date(),
-        })
-        .where(eq(engagements.engagementId, engagementId))
-        .catch((e) => console.error("[webhook] Failed to persist webhook_last_error (non-fatal):", e));
+      // Merged into the stored stack rather than written back from the copy
+      // read above, which could undo a concurrent change.
+      await patchEngagementStack(engagementId, {
+        webhook_last_error: `Signature check failed on ${new Date().toISOString()}. Check the header name/value configured in ${platform === "ghl_calendar" ? "your GHL workflow" : "OnceHub"} against Settings → Booking Sync.`,
+      }).catch((e) => console.error("[webhook] Failed to persist webhook_last_error (non-fatal):", e));
       return new Response("Invalid webhook signature", { status: 401 });
     }
 
     // Signature accepted — clear any previously recorded error and record
     // the delivery timestamp. Best-effort: never let this block the
     // actual enrollment path below.
-    await db
-      .update(engagements)
-      .set({
-        stack: { ...stack, webhook_last_received_at: new Date().toISOString(), webhook_last_error: undefined },
-        updatedAt: new Date(),
-      })
-      .where(eq(engagements.engagementId, engagementId))
-      .catch((e) => console.error("[webhook] Failed to persist webhook_last_received_at (non-fatal):", e));
+    await patchEngagementStack(engagementId, { webhook_last_received_at: new Date().toISOString(), webhook_last_error: undefined }).catch((e) =>
+      console.error("[webhook] Failed to persist webhook_last_received_at (non-fatal):", e)
+    );
 
     // ── 5. NOW parse the verified payload and process ──
     const payload = JSON.parse(rawBody);
