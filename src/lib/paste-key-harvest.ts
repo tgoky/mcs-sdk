@@ -70,18 +70,10 @@ const COLD_OPEN_SEND_PLATFORM_IDS: Record<string, string> = {
 // the way jev.ts or the Mailchimp harvester are. Read defensively for
 // exactly that reason.
 //
-// Deliberately NOT built here: calibrating whop_refund_dispute_rate_threshold/
-// whop_dispute_alert_threshold/whop_min_payment_sample_size from Whop's
-// Refunds/Disputes list endpoints. refund-dispute-velocity-service.ts
-// already computes refund_rate/dispute_rate/payment counts for this exact
-// purpose via a DIFFERENT Whop API surface — client.statsMetric's
-// pre-aggregated receipts/refunds:refund_rate etc. — which is what the
-// live monitor actually alerts against. Re-deriving the same numbers by
-// paginating raw Refunds/Disputes lists risks a rate that quietly
-// disagrees with Whop's own aggregation and with what the monitor already
-// trusts. If threshold calibration gets built, it should read from
-// statsMetric (the same source the monitor uses), not from these list
-// endpoints — a separate, more careful piece than this harvest.
+// Alert levels aren't calibrated here: Whop Agent's setup does that
+// (lib/whop-setup), counting refunds, disputes and dispute alerts from
+// Whop's lists against Stats API payments, the same way the live monitor
+// (refund-dispute-velocity-service.ts via risk-window.ts) counts them.
 export async function harvestWhopPlans(engagementId: string, apiKey: string, accountId: string): Promise<string[]> {
   // Every plan, cursor-paged the way Whop's official SDK does it (@whop/sdk:
   // GET /api/v1/plans?account_id&first&after, page_info.end_cursor /

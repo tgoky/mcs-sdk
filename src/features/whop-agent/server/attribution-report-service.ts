@@ -7,6 +7,7 @@
 import crypto from "crypto";
 import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
+import { formatMetricValue, lastFullWeek } from "@/lib/whop-agent/stats";
 
 interface WhopV2Membership {
   id: string;
@@ -55,12 +56,6 @@ function group(memberships: WhopV2Membership[], field: keyof WhopV2Membership): 
   return [...counts.entries()].map(([key, memberCount]) => ({ key, memberCount })).sort((a, b) => b.memberCount - a.memberCount);
 }
 
-function latestValue(response: { data: Array<[string, ...(number | string)[]]> } | null): number | null {
-  if (!response?.data?.length) return null;
-  const value = response.data[response.data.length - 1][1];
-  return typeof value === "number" ? value : Number(value);
-}
-
 async function buildAttributionReport(engagementId: string, runId: string): Promise<AttributionReport> {
   try {
     const client = await WhopAgentClient.forEngagement(engagementId);
@@ -88,9 +83,13 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
     const acquisitionDataObserved = memberships.some((m) => m.acquisition_data != null);
 
     await logStep(runId, { phase: "revenue_cross_check", status: "running" });
-    const grossRevenueRes = await client.statsMetric("receipts:gross_revenue", { granularity: "weekly" }).catch(() => null);
-    const statsGrossRevenue = latestValue(grossRevenueRes);
-    await logStep(runId, { phase: "revenue_cross_check", status: "success", detail: `Stats-engine gross revenue: ${statsGrossRevenue ?? "unavailable"}. Per-attribution-key revenue isn't exposed on this endpoint, so the cross-check compares presence, not amount. See this file's own note on WhopV2Membership.` });
+    const gross = await client.statsValue("grossRevenue", { ...lastFullWeek(new Date()), interval: "week" }).catch(() => null);
+    const statsGrossRevenue = gross?.value ?? null;
+    await logStep(runId, {
+      phase: "revenue_cross_check",
+      status: "success",
+      detail: `Gross revenue last week: ${statsGrossRevenue != null ? `${formatMetricValue(statsGrossRevenue, "currency", gross?.currency)} (Whop metric ${gross?.key})` : "unavailable"}. Per-attribution-key revenue isn't exposed on this endpoint, so the cross-check compares presence, not amount. See this file's own note on WhopV2Membership.`,
+    });
 
     const report: AttributionReport = {
       byPromoCode: group(memberships, "promo_code"),
@@ -104,7 +103,7 @@ async function buildAttributionReport(engagementId: string, runId: string): Prom
 
     await finishRun(runId, {
       summary: {
-        whatWasAttempted: ["Paginate v2 memberships", "Group by promo code / affiliate / checkout session", "Cross-check against stats engine"],
+        whatWasAttempted: ["Paginate v2 memberships", "Group by promo code / affiliate / checkout session", "Cross-check against Whop's stats"],
         whatWorked: shapeMismatch ? [] : [`${memberships.length} memberships across ${report.byPromoCode.length} promo codes, ${report.byAffiliate.length} affiliates`],
         whatFailed: shapeMismatch ? [shapeMismatch] : [],
         openItems: [

@@ -7,7 +7,8 @@ export interface WhopMetric {
   key: string;
   name: string;
   unit: string;
-  /** A count summed over the window, or a level's latest value. */
+  /** A count summed over the window, or a level's latest value. A
+   * percent is a fraction here (Whop's 1.6 means 1.6%, stored as 0.016). */
   value: number;
   days: number;
   currency: string | null;
@@ -66,11 +67,13 @@ export interface Snapshot {
 }
 
 export interface AlertProposal {
-  rateThreshold: number;
+  /** Fractions of payments over a rolling 7 days. */
+  refundRate: number;
+  disputeRate: number;
   alertThreshold: number;
   minSample: number;
   /** How each number was worked out, in plain words. */
-  why: { rate: string; alerts: string; sample: string };
+  why: { refund: string; dispute: string; alerts: string; sample: string };
   fromData: boolean;
 }
 

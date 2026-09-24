@@ -18,22 +18,83 @@ import { claimAlertFiring } from "@/lib/whop-agent/alert-cooldown";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { listConnectedEngagementIds } from "./receiver-health-service";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { readRiskWindow, riskRates, type RiskWindow } from "./risk-window";
 
-// Phase 6 — these were 4 bare hardcoded module-level consts with no
-// per-engagement override anywhere; the first 3 now have a real schema
-// slot (EngagementStack, schema.ts), same defaults preserved when unset.
-// RECONCILIATION_COOLDOWN_HOURS stays a hardcoded const on purpose — it's
-// an internal alert-spam guard, not a business threshold a buyer would
-// tune (see the schema field's own comment for the same reasoning).
-const DEFAULT_REFUND_DISPUTE_RATE_THRESHOLD = 0.08; // 8% over a rolling 7-day window per product
-const DEFAULT_DISPUTE_ALERT_THRESHOLD = 3; // per product per rolling 7-day window
-const DEFAULT_MIN_SAMPLE_SIZE = 10; // payments in the rolling window
+// Defaults when a client hasn't set their own (Whop Agent's setup proposes
+// levels from their last 90 days). Refunds and disputes get separate
+// levels: card networks put merchants into monitoring programs at around
+// 1% of transactions disputed, so a dispute rate far below the refund
+// level is already serious. RECONCILIATION_COOLDOWN_HOURS stays a const:
+// it's an alert-spam guard, not a business threshold.
+export const DEFAULT_REFUND_RATE_THRESHOLD = 0.08; // 8% of payments refunded over a rolling 7 days
+export const DEFAULT_DISPUTE_RATE_THRESHOLD = 0.0075; // 0.75% of payments disputed over a rolling 7 days
+export const DEFAULT_DISPUTE_ALERT_THRESHOLD = 3; // dispute alerts over a rolling 7 days
+export const DEFAULT_MIN_SAMPLE_SIZE = 10; // payments in the rolling window before a rate counts
 const RECONCILIATION_COOLDOWN_HOURS = 4;
+const WINDOW_DAYS = 7;
 
-function latestValue(response: { data: Array<[string, ...(number | string)[]]> } | null): number | null {
-  if (!response?.data?.length) return null;
-  const value = response.data[response.data.length - 1][1];
-  return typeof value === "number" ? value : Number(value);
+export interface VelocityThresholds {
+  refundRate: number;
+  disputeRate: number;
+  disputeAlerts: number;
+  minSample: number;
+}
+
+export function thresholdsFrom(stack: Partial<EngagementStack> | null): VelocityThresholds {
+  return {
+    refundRate: stack?.refund_dispute_rate_threshold ?? DEFAULT_REFUND_RATE_THRESHOLD,
+    disputeRate: stack?.dispute_rate_threshold ?? DEFAULT_DISPUTE_RATE_THRESHOLD,
+    disputeAlerts: stack?.dispute_alert_threshold ?? DEFAULT_DISPUTE_ALERT_THRESHOLD,
+    minSample: stack?.min_payment_sample_size ?? DEFAULT_MIN_SAMPLE_SIZE,
+  };
+}
+
+export interface VelocityAlert {
+  metric: "refund_rate" | "dispute_rate" | "dispute_alerts";
+  threshold: number;
+  severity: "warning" | "critical";
+  title: string;
+  body: string;
+}
+
+const pct = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 2 : 1)}%`;
+
+/** Which alerts a window's counts cross. Rates need `minSample` payments
+ * (a couple of refunds on four payments is noise); the dispute-alert
+ * count is absolute and always checked. */
+export function evaluateVelocity(risk: Pick<RiskWindow, "payments" | "refunds" | "disputes" | "disputeAlerts">, t: VelocityThresholds): VelocityAlert[] {
+  const out: VelocityAlert[] = [];
+  const { refundRate, disputeRate } = riskRates(risk);
+  const enough = risk.payments != null && risk.payments >= t.minSample;
+  if (enough && refundRate !== null && refundRate >= t.refundRate) {
+    out.push({
+      metric: "refund_rate",
+      threshold: t.refundRate,
+      severity: "warning",
+      title: "Refund velocity above threshold",
+      body: `${pct(refundRate)} of payments refunded over the last ${WINDOW_DAYS} days (${risk.refunds!.count} refunds on ${risk.payments} payments; your level is ${pct(t.refundRate)}).`,
+    });
+  }
+  if (enough && disputeRate !== null && disputeRate >= t.disputeRate) {
+    out.push({
+      metric: "dispute_rate",
+      threshold: t.disputeRate,
+      severity: "critical",
+      title: "Dispute rate above threshold",
+      body: `${pct(disputeRate)} of payments disputed over the last ${WINDOW_DAYS} days (${risk.disputes} disputes on ${risk.payments} payments; your level is ${pct(t.disputeRate)}). Card networks start monitoring merchants at around 1%.`,
+    });
+  }
+  const alerts = risk.disputeAlerts?.count ?? null;
+  if (alerts !== null && alerts >= t.disputeAlerts) {
+    out.push({
+      metric: "dispute_alerts",
+      threshold: t.disputeAlerts,
+      severity: "critical",
+      title: "Dispute-alert velocity above threshold",
+      body: `${alerts}${risk.disputeAlerts?.more ? "+" : ""} dispute alerts in the last ${WINDOW_DAYS} days (your level is ${t.disputeAlerts}). Each can carry a fee.`,
+    });
+  }
+  return out;
 }
 
 async function alertOperator(engagementId: string, title: string, body: string, severity: "warning" | "critical"): Promise<void> {
@@ -56,14 +117,11 @@ async function alertOperator(engagementId: string, title: string, body: string, 
 }
 
 /**
- * One engagement's reconciliation pass. Checks account-wide refund rate,
- * dispute rate, and dispute-alert count against the thresholds — Section
- * 5.7 scopes thresholds "per product," which needs the `breakdowns`
- * parameter on each metric; that's the same per-product breakdown gap
- * flagged in Portfolio Rollup's own summary, not re-solved here. This
- * checks the account-wide rate as a conservative first pass: an account
- * crossing 8% overall is worth flagging even before it's broken down by
- * product.
+ * One engagement's reconciliation pass over the last 7 days: refunds,
+ * disputes and dispute alerts counted from Whop's lists, against the
+ * payments in the same window (risk-window.ts), each checked against its
+ * own level. Section 5.7 scopes thresholds "per product"; this checks the
+ * account as a whole, which is worth flagging before any per-product split.
  */
 export async function reconcileRefundDisputeVelocity(engagementId: string): Promise<void> {
   if (!(await isSkillEnabledForEngagement(engagementId, "whop-refund-dispute-velocity"))) return;
@@ -76,58 +134,14 @@ export async function reconcileRefundDisputeVelocity(engagementId: string): Prom
     .from(engagements)
     .where(eq(engagements.engagementId, engagementId))
     .limit(1);
-  const stack = (tenant?.stack as EngagementStack | null) ?? null;
-  const refundDisputeRateThreshold = stack?.refund_dispute_rate_threshold ?? DEFAULT_REFUND_DISPUTE_RATE_THRESHOLD;
-  const disputeAlertThreshold = stack?.dispute_alert_threshold ?? DEFAULT_DISPUTE_ALERT_THRESHOLD;
-  const minSampleSize = stack?.min_payment_sample_size ?? DEFAULT_MIN_SAMPLE_SIZE;
+  const thresholds = thresholdsFrom((tenant?.stack as EngagementStack | null) ?? null);
 
-  const [refundRateRes, disputeRateRes, disputeAlertsRes, paymentsRes] = await Promise.all([
-    client.statsMetric("receipts/refunds:refund_rate", { granularity: "weekly" }).catch(() => null),
-    client.statsMetric("receipts/disputes:dispute_rate", { granularity: "weekly" }).catch(() => null),
-    client.statsMetric("dispute_alerts:dispute_alerts", { granularity: "weekly" }).catch(() => null),
-    client.statsMetric("receipts:successful_payments", { granularity: "weekly" }).catch(() => null),
-  ]);
-
-  const paymentCount = latestValue(paymentsRes);
-  if (paymentCount === null || paymentCount < minSampleSize) {
-    // Section 5.7: "Minimum sample size before any percentage threshold
-    // evaluates: 10 payments in the rolling window. Two refunds on four
-    // payments is 50 percent and is noise." Dispute-alert count is an
-    // absolute threshold, not a rate, so it isn't gated by sample size —
-    // still evaluated below independent of this early return.
-  } else {
-    const refundRate = latestValue(refundRateRes);
-    if (refundRate !== null && refundRate >= refundDisputeRateThreshold) {
-      const source = `whop:refund-velocity:${engagementId}`;
-      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "refund_rate", threshold: String(refundDisputeRateThreshold), severity: "warning" })) {
-        await alertOperator(
-          engagementId,
-          "Refund velocity above threshold",
-          `Refund rate is ${(refundRate * 100).toFixed(1)}% over the last week (threshold ${(refundDisputeRateThreshold * 100).toFixed(0)}%, ${paymentCount} payments in window).`,
-          "warning"
-        );
-      }
-    }
-
-    const disputeRate = latestValue(disputeRateRes);
-    if (disputeRate !== null && disputeRate >= refundDisputeRateThreshold) {
-      const source = `whop:dispute-rate-velocity:${engagementId}`;
-      if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_rate", threshold: String(refundDisputeRateThreshold), severity: "critical" })) {
-        await alertOperator(engagementId, "Dispute velocity above threshold", `Dispute rate is ${(disputeRate * 100).toFixed(1)}% over the last week.`, "critical");
-      }
-    }
-  }
-
-  const disputeAlertCount = latestValue(disputeAlertsRes);
-  if (disputeAlertCount !== null && disputeAlertCount >= disputeAlertThreshold) {
-    const source = `whop:dispute-alert-velocity:${engagementId}`;
-    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: "dispute_alerts", threshold: String(disputeAlertThreshold), severity: "critical" })) {
-      await alertOperator(
-        engagementId,
-        "Dispute-alert velocity above threshold",
-        `${disputeAlertCount} dispute alerts in the last week (threshold ${disputeAlertThreshold}). Each can carry a fee_charged cost directly.`,
-        "critical"
-      );
+  const to = new Date();
+  const risk = await readRiskWindow(client, new Date(to.getTime() - WINDOW_DAYS * 86_400_000), to);
+  for (const alert of evaluateVelocity(risk, thresholds)) {
+    const source = `whop:${alert.metric.replace(/_/g, "-")}-velocity:${engagementId}`;
+    if (await claimAlertFiring({ source, cooldownHours: RECONCILIATION_COOLDOWN_HOURS, engagementId, metricName: alert.metric, threshold: String(alert.threshold), severity: alert.severity })) {
+      await alertOperator(engagementId, alert.title, alert.body, alert.severity);
     }
   }
 }

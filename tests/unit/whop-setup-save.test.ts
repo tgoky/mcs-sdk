@@ -23,7 +23,7 @@ import { saveWhopSetup, type WhopSetupInput } from "@/lib/whop-setup/save";
 const input = (over: Partial<WhopSetupInput> = {}): WhopSetupInput => ({
   skills: ["whop-dispute-response", "whop-weekly-ops-report"],
   saveOffer: null,
-  alerts: { rateThreshold: 0.06, alertThreshold: 2, minSample: 10 },
+  alerts: { refundRate: 0.06, disputeRate: 0.006, alertThreshold: 2, minSample: 10 },
   bridgeUrl: "",
   ...over,
 });
@@ -35,7 +35,7 @@ describe("saveWhopSetup", () => {
     const sync = vi.fn(async () => ({ whopWebhookId: "hook_1", action: "created" as const }));
     const r = await saveWhopSetup("e1", input(), sync);
     expect(r).toEqual({ ok: true, webhook: { action: "created", events: ["dispute.created", "dispute_alert.created"] } });
-    expect(patch.mock.calls[0][1]).toMatchObject({ refund_dispute_rate_threshold: 0.06, dispute_alert_threshold: 2, min_payment_sample_size: 10 });
+    expect(patch.mock.calls[0][1]).toMatchObject({ refund_dispute_rate_threshold: 0.06, dispute_rate_threshold: 0.006, dispute_alert_threshold: 2, min_payment_sample_size: 10 });
     // No offer: any saved one is cleared, never left half set.
     expect(patch.mock.calls[0][1]).toHaveProperty("whop_save_offer_discount_percentage", undefined);
     expect(enable).toHaveBeenCalledWith("e1", "whop-dispute-response", true);

@@ -311,7 +311,11 @@ export type EngagementStack = {
   // exist in the code. reconciliation_cooldown_hours is deliberately NOT
   // exposed here — it's an internal alert-spam guard, not a business
   // threshold a buyer would tune.
+  // Since the dispute rate got its own level (dispute_rate_threshold),
+  // this is the refund-rate level only; the name is kept so saved values
+  // carry over.
   refund_dispute_rate_threshold?: number; // default 0.08 (8%)
+  dispute_rate_threshold?: number; // default 0.0075 (0.75%): card networks monitor merchants at around 1%
   dispute_alert_threshold?: number; // default 3 (count per rolling 7-day window)
   min_payment_sample_size?: number; // default 10 (payments in the rolling window)
   // Phase 6 — Win-Back bounce/complaint monitoring with auto-pause. See

@@ -26,6 +26,7 @@
 
 import { AccountReader, type Raw } from "@/lib/account-intel/reader";
 import { whopApiUrl } from "@/lib/whop-agent/url";
+import { WHOP_METRICS, findMetric, statsQuery, summarizePoints, type WhopMetricId, type WhopStatsCatalogEntry } from "@/lib/whop-agent/stats";
 import type { WhopAccountRead, WhopMetric } from "./types";
 
 const PAGE = 100;
@@ -54,31 +55,28 @@ async function listAll(r: AccountReader, part: string, path: string, query: Reco
   return { items, more: true };
 }
 
-// Which catalog metric answers each question, by key or name.
-const METRIC_MATCH: { id: WhopMetric["id"]; test: RegExp; unit?: string }[] = [
-  { id: "mrr", test: /\bmrr\b|monthly[ _]recurring/i, unit: "currency" },
-  { id: "churn", test: /churn/i, unit: "percent" },
-  { id: "payments", test: /successful[ _]payments|payments[ _]count|^payments$/i, unit: "count" },
+// The metrics the setup reads, matched in the account's own stats catalog
+// the same way the workers do (lib/whop-agent/stats.ts).
+const SETUP_METRICS: { id: WhopMetric["id"]; metric: WhopMetricId; days: number; interval: "day" | "week" }[] = [
+  { id: "mrr", metric: "mrr", days: 30, interval: "day" },
+  { id: "churn", metric: "churnRate", days: 30, interval: "day" },
+  { id: "payments", metric: "successfulPayments", days: 90, interval: "week" },
 ];
 
 async function readMetrics(r: AccountReader, accountId: string, now: number): Promise<WhopMetric[]> {
   const catalog = await r.json<Raw>("revenue stats", whopApiUrl(`/v1/stats`));
-  const list: Raw[] = Array.isArray(catalog?.data) ? catalog.data : [];
+  const list: WhopStatsCatalogEntry[] = Array.isArray(catalog?.data) ? catalog.data : [];
   const out: WhopMetric[] = [];
-  for (const m of METRIC_MATCH) {
-    const hit = list.find((x) => (m.unit ? x.unit === m.unit : true) && (m.test.test(String(x.key ?? "")) || m.test.test(String(x.name ?? ""))));
-    if (!hit?.key) continue;
-    const days = m.id === "payments" ? 90 : 30;
-    const body = await r.json<Raw>(
-      "revenue stats",
-      whopApiUrl(`/v1/stats/${encodeURIComponent(hit.key)}${qs({ account_id: accountId, from: new Date(now - days * DAY).toISOString(), to: new Date(now).toISOString(), interval: days === 90 ? "week" : "day" })}`)
-    );
-    const points: Raw[] = Array.isArray(body?.data?.points) ? body.data.points : [];
-    const values = points.map((p) => p?.value).filter((v): v is number => typeof v === "number");
-    if (values.length === 0) continue;
-    // A count adds up over the window; a level (MRR, a rate) is its latest value.
-    const value = m.unit === "count" ? values.reduce((a, b) => a + b, 0) : values[values.length - 1];
-    out.push({ id: m.id, key: String(hit.key), name: String(hit.name ?? hit.key), unit: hit.unit, value, days, currency: body?.data?.currency ?? null });
+  for (const m of SETUP_METRICS) {
+    const want = WHOP_METRICS[m.metric];
+    const entry = findMetric(list, want);
+    if (!entry) continue;
+    const body = await r.json<Raw>("revenue stats", whopApiUrl(`/v1/stats/${encodeURIComponent(entry.key)}${qs(statsQuery(entry, accountId, new Date(now - m.days * DAY), new Date(now), m.interval))}`));
+    const points: { value: number | null }[] = Array.isArray(body?.data?.points) ? body.data.points : [];
+    // A percent comes back as a fraction, money as a decimal amount.
+    const value = summarizePoints(points, want);
+    if (value === null) continue;
+    out.push({ id: m.id, key: entry.key, name: entry.name, unit: entry.unit, value, days: m.days, currency: body?.data?.currency ?? null });
   }
   return out;
 }

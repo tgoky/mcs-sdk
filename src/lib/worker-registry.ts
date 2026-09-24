@@ -1033,21 +1033,27 @@ const WHOP_AGENT_CONFIG_FIELDS: Partial<Record<WhopAgentSkillId, WorkerConfigFie
   "whop-refund-dispute-velocity": [
     {
       key: "whop_refund_dispute_rate_threshold",
-      label: "Refund/dispute rate alert threshold",
+      label: "Refund rate alert level",
       kind: "ask",
-      description: "Phase 6 — found as a bare hardcoded const (REFUND_RATE_THRESHOLD = 0.08 in refund-dispute-velocity-service.ts) with NO storage slot anywhere, during the full 34-worker audit. Now a real stack column (refund_dispute_rate_threshold, schema.ts) with that exact default preserved. The service compares both refund rate AND dispute rate against this one value (no separate dispute-rate constant exists in the code) — this field honestly reflects that shared behavior. No UI collects it yet; does not block, hasHingesPanel stays false.",
+      description: "Stack column refund_dispute_rate_threshold (name kept so saved values carry over), default 8% of payments over a rolling 7 days. Refund rate only: disputes have their own level below. Collected by Whop Agent's setup, proposed from the client's own 90-day refund rate. Doesn't block.",
+    },
+    {
+      key: "whop_dispute_rate_threshold",
+      label: "Dispute rate alert level",
+      kind: "ask",
+      description: "Stack column dispute_rate_threshold, default 0.75% of payments over a rolling 7 days. Separate from refunds because card networks put merchants into monitoring programs at around 1% disputed. Collected by Whop Agent's setup, proposed from the client's own 90-day dispute rate. Doesn't block.",
     },
     {
       key: "whop_dispute_alert_threshold",
       label: "Dispute-alert count threshold",
       kind: "ask",
-      description: "Same finding as the rate threshold above — real stack column (dispute_alert_threshold), documented default (3 per rolling 7-day window), real code-level fallback. No UI collects it yet; does not block.",
+      description: "Stack column dispute_alert_threshold, default 3 per rolling 7 days. Collected by Whop Agent's setup, proposed from the client's own 90-day alert count. Doesn't block.",
     },
     {
       key: "whop_min_payment_sample_size",
       label: "Minimum payment sample size",
       kind: "ask",
-      description: "Same finding — real stack column (min_payment_sample_size), documented default (10 payments in the rolling window), real code-level fallback. No UI collects it yet; does not block. reconciliation_cooldown_hours (also previously hardcoded in the same file) is deliberately NOT given a field here — it's an internal alert-spam guard, not a business threshold a buyer would tune.",
+      description: "Stack column min_payment_sample_size, default 10 payments in the rolling window. Collected by Whop Agent's setup. Doesn't block. reconciliation_cooldown_hours (also previously hardcoded in the same file) is deliberately NOT given a field here — it's an internal alert-spam guard, not a business threshold a buyer would tune.",
     },
   ],
   "whop-bridge-manager": [

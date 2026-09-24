@@ -17,6 +17,7 @@ import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { recordWeeklySnapshot, getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
+import { WHOP_METRICS, formatMetricValue, lastFullWeek, type WhopMetricId } from "@/lib/whop-agent/stats";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -27,19 +28,13 @@ type StepTools = GetStepTools<Inngest.Any>;
 // breakdown needs the `breakdowns` param on a receipts metric (Section
 // 5.4's own table) — out of scope for this pass; flagged, not silently
 // omitted (see the summary's openItems below).
-const ROLLUP_METRICS = [
-  { key: "netRevenue", label: "Net revenue", resource: "receipts:gross_revenue", summable: true },
-  { key: "mrr", label: "MRR", resource: "mrr_history_records:monthly_recurring_revenue", summable: true },
-  { key: "arr", label: "ARR", resource: "mrr_history_records:annual_recurring_revenue", summable: true },
-  { key: "newSubscribers", label: "New subscribers", resource: "members:new_users", summable: true },
-  { key: "churnRate", label: "Churn rate", resource: "vw_member_statuses:churn_rate", summable: false },
-] as const;
-
-function latestValue(response: { data: Array<[string, ...(number | string)[]]> }): number | null {
-  if (!response.data?.length) return null;
-  const value = response.data[response.data.length - 1][1];
-  return typeof value === "number" ? value : Number(value);
-}
+const ROLLUP_METRICS: { key: WhopMetricId; label: string; summable: boolean }[] = [
+  { key: "netRevenue", label: "Net revenue", summable: true },
+  { key: "mrr", label: "MRR", summable: true },
+  { key: "arr", label: "ARR", summable: true },
+  { key: "newMembers", label: "New subscribers", summable: true },
+  { key: "churnRate", label: "Churn rate", summable: false },
+];
 
 interface AccountResult {
   workspaceId: string;
@@ -106,9 +101,10 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
       try {
         const client = await WhopAgentClient.forEngagement(account.engagementId);
         const metrics: Record<string, number | null> = {};
+        const window = lastFullWeek(new Date());
         for (const metric of ROLLUP_METRICS) {
-          const response = await runStep(`fetch-${account.workspaceId}-${metric.key}`, () => client.statsMetric(metric.resource, { granularity: "weekly" }));
-          metrics[metric.key] = latestValue(response);
+          const result = await runStep(`fetch-${account.workspaceId}-${metric.key}`, () => client.statsValue(metric.key, { ...window, interval: "week" }));
+          metrics[metric.key] = result?.value ?? null;
         }
         results.push({ workspaceId: account.workspaceId, workspaceName: account.workspaceName, engagementId: account.engagementId, metrics });
         await logStep(runId, { phase: `account_${account.workspaceId}`, status: "success" });
@@ -142,7 +138,8 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
       workerId: "whop-portfolio-rollup",
       label: metric.label,
       value: combined[metric.key],
-      displayValue: metric.key === "newSubscribers" ? String(combined[metric.key]) : `$${(combined[metric.key] / 100).toLocaleString()}`,
+      // Whop reports money as decimal amounts, not cents.
+      displayValue: formatMetricValue(combined[metric.key], WHOP_METRICS[metric.key].unit),
     }));
 
     const prior = await runStep("load-prior-portfolio-snapshot", () => getPriorSnapshot(runningEngagementId, weekStart));

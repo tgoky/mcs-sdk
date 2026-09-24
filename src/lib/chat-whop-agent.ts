@@ -41,6 +41,7 @@
 // for any of those three would be inventing a capability the app itself
 // doesn't have yet, not wiring chat to an existing one.
 
+import { formatMetricValue } from "@/lib/whop-agent/stats";
 import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
 import { patchEngagementStack } from "@/lib/engagement-stack";
 import { db } from "@/lib/db";
@@ -137,7 +138,7 @@ export async function assemblePurchaseCapPacketForEngagement(
     return {
       ok: true,
       message: `Purchase cap increase packet assembled. Sales: ${
-        packet.salesHistory.unavailable ? "unavailable" : `$${((packet.salesHistory.grossRevenueCents ?? 0) / 100).toFixed(2)} gross, ${packet.salesHistory.successfulPayments ?? 0} payments`
+        packet.salesHistory.unavailable ? "unavailable" : `${packet.salesHistory.grossRevenue != null ? formatMetricValue(packet.salesHistory.grossRevenue, "currency", packet.salesHistory.currency) : "n/a"} gross, ${packet.salesHistory.successfulPayments ?? "n/a"} payments over ${packet.salesHistory.days} days`
       }. Walkthrough: ${packet.walkthrough.join(" -> ")}. ${packet.reserveAlternativeNote}`,
     };
   } catch (e) {
@@ -172,7 +173,7 @@ export async function assemblePayoutHoldKitForEngagement(session: Session, engag
     const { packet } = await assemblePayoutHoldPacket(engagementId);
     return {
       ok: true,
-      message: `Payout hold kit assembled. Chargeback ratio (90d): ${packet.chargebackRatio90d ?? "unknown"}. Payout methods on file: ${packet.payoutMethods.length}. Drafted escalation:\n${packet.draftedEscalation}\n\nFollow-up checklist: ${packet.followUpChecklist.join(" | ")}`,
+      message: `Payout hold kit assembled. Chargeback ratio (90d): ${packet.chargebackRatio90d != null ? `${(packet.chargebackRatio90d * 100).toFixed(2)}%` : "unknown"}. Payout methods on file: ${packet.payoutMethods.length}. Drafted escalation:\n${packet.draftedEscalation}\n\nFollow-up checklist: ${packet.followUpChecklist.join(" | ")}`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

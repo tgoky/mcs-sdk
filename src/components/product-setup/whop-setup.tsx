@@ -61,7 +61,8 @@ interface Draft {
   message: string;
   tenure: string;
   cooldown: string;
-  ratePct: string;
+  refundPct: string;
+  disputePct: string;
   alerts: string;
   sample: string;
   bridgeUrl: string;
@@ -76,7 +77,8 @@ function draftFrom(s: WhopSetupState): Draft {
     message: s.saveOffer.message,
     tenure: str(s.saveOffer.minTenureDays),
     cooldown: str(s.saveOffer.cooldownDays),
-    ratePct: String(Math.round(s.alerts.rateThreshold * 1000) / 10),
+    refundPct: String(Math.round(s.alerts.refundRate * 1000) / 10),
+    disputePct: String(Math.round(s.alerts.disputeRate * 10000) / 100),
     alerts: String(s.alerts.alertThreshold),
     sample: String(s.alerts.minSample),
     bridgeUrl: s.bridge.url,
@@ -209,7 +211,7 @@ export function WhopSetup({
     const body = {
       skills,
       saveOffer: offerParts.every(Boolean) ? { discount: draft.discount, months: draft.months, message: draft.message, minTenureDays: draft.tenure, cooldownDays: draft.cooldown } : null,
-      alerts: { rateThreshold: Number(draft.ratePct) / 100, alertThreshold: Number(draft.alerts), minSample: Number(draft.sample) },
+      alerts: { refundRate: Number(draft.refundPct) / 100, disputeRate: Number(draft.disputePct) / 100, alertThreshold: Number(draft.alerts), minSample: Number(draft.sample) },
       bridgeUrl: draft.bridgeUrl,
     };
     try {
@@ -607,11 +609,17 @@ function Review({
       {skills.includes("whop-refund-dispute-velocity") && (
         <Section title="Refund and dispute alerts" hint={data.alerts.saved ? "Your saved levels." : data.alerts.fromData ? "Set from your last 90 days." : undefined}>
           <div className="space-y-4">
-            <Field label="Refund or dispute rate">
+            <Field label="Refund rate">
               <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                above <NumberInput value={draft.ratePct} onChange={(v) => set((d) => ({ ...d, ratePct: v }))} /> % in a week
+                above <NumberInput value={draft.refundPct} onChange={(v) => set((d) => ({ ...d, refundPct: v }))} /> % of payments in a week
               </div>
-              <Why>{data.alerts.why.rate}</Why>
+              <Why>{data.alerts.why.refund}</Why>
+            </Field>
+            <Field label="Dispute rate">
+              <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
+                above <NumberInput value={draft.disputePct} onChange={(v) => set((d) => ({ ...d, disputePct: v }))} /> % of payments in a week
+              </div>
+              <Why>{data.alerts.why.dispute}</Why>
             </Field>
             <Field label="Dispute alerts">
               <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">

@@ -1,6 +1,6 @@
 // src/features/whop-agent/server/weekly-ops-report-service.ts
 //
-// Playbook 5.4 — every reported number comes from the stats engine, no
+// Playbook 5.4 — every reported number comes from Whop's Stats API, no
 // client-side aggregation (Section 9.1). Reuses this app's existing
 // client_metric_snapshots table (clientMetricSnapshots/client-metric-
 // snapshots.ts) for prior-period comparison rather than inventing a
@@ -13,40 +13,13 @@ import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { recordWeeklySnapshot, getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
+import { WHOP_METRICS, formatMetricValue, lastFullWeek, type WhopMetricId } from "@/lib/whop-agent/stats";
 import type { GetStepTools, Inngest } from "inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
-type MetricFormat = "currency_cents" | "percent" | "count";
-
-// Section 5.4's own metric table, verbatim resource strings — Appendix A
-// is the full 26-metric catalog; this is the subset 5.4 actually reports.
-const REPORT_METRICS: Array<{ key: string; label: string; resource: string; format: MetricFormat }> = [
-  { key: "netRevenue", label: "Net revenue", resource: "receipts:gross_revenue", format: "currency_cents" },
-  { key: "mrr", label: "MRR", resource: "mrr_history_records:monthly_recurring_revenue", format: "currency_cents" },
-  { key: "arr", label: "ARR", resource: "mrr_history_records:annual_recurring_revenue", format: "currency_cents" },
-  { key: "churnRate", label: "Churn rate", resource: "vw_member_statuses:churn_rate", format: "percent" },
-  { key: "newSubscribers", label: "New subscribers", resource: "members:new_users", format: "count" },
-  { key: "newMemberships", label: "New memberships", resource: "memberships:new_memberships", format: "count" },
-  { key: "trialConversion", label: "Trial conversion rate", resource: "memberships:trial_conversion_rate", format: "percent" },
-  { key: "arpu", label: "Average revenue per user", resource: "receipts:average_revenue_per_user", format: "currency_cents" },
-  { key: "refundRate", label: "Refund rate", resource: "receipts/refunds:refund_rate", format: "percent" },
-  { key: "disputeRate", label: "Dispute rate", resource: "receipts/disputes:dispute_rate", format: "percent" },
-  { key: "processingFees", label: "Processing fees", resource: "receipt_fees:processing_fees", format: "currency_cents" },
-];
-
-function formatValue(value: number, format: MetricFormat): string {
-  if (format === "currency_cents") return `$${(value / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  if (format === "percent") return `${(value * 100).toFixed(1)}%`;
-  return value.toLocaleString();
-}
-
-function latestValue(response: { data: Array<[string, ...(number | string)[]]> }): number | null {
-  if (!response.data?.length) return null;
-  const lastRow = response.data[response.data.length - 1];
-  const value = lastRow[1];
-  return typeof value === "number" ? value : Number(value);
-}
+// Section 5.4's metric set, read from Whop's Stats API (see stats.ts).
+const REPORT_METRICS: WhopMetricId[] = ["netRevenue", "mrr", "arr", "churnRate", "newMembers", "newMemberships", "trialConversion", "arpu", "refundRate", "disputeRate", "processingFees"];
 
 /** Playbook 5.4's own executor — dispatched through the generic
  * whop-agent-skill-registry.ts execute path, same as any other worker's
@@ -68,32 +41,38 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
     const blocks: WorkerReportBlock[] = [];
     const failedMetrics: string[] = [];
 
-    for (const metric of REPORT_METRICS) {
-      await logStep(runId, { phase: `metric_${metric.key}`, status: "running" });
-      try {
-        const response = await runStep(`fetch-${metric.key}`, () => client.statsMetric(metric.resource, { granularity: "weekly" }));
-        const value = latestValue(response);
+    // Last full week, Monday to Sunday (UTC). Weekly points for rates.
+    const window = { ...lastFullWeek(new Date()), interval: "week" as const };
+    const unavailable: string[] = [];
 
+    for (const id of REPORT_METRICS) {
+      const label = WHOP_METRICS[id].label;
+      await logStep(runId, { phase: `metric_${id}`, status: "running" });
+      try {
+        const result = await runStep(`fetch-${id}`, () => client.statsValue(id, { from: window.from, to: window.to, interval: window.interval }));
+        if (!result) {
+          unavailable.push(label);
+          await logStep(runId, { phase: `metric_${id}`, status: "skipped", detail: "Whop's stats catalog for this account has no such metric." });
+          continue;
+        }
+        const value = result.value;
         await logStep(runId, {
-          phase: `metric_${metric.key}`,
+          phase: `metric_${id}`,
           status: value === null ? "skipped" : "success",
-          // Section 9.3: debug.sql stored alongside every computed metric —
-          // this run's own step log IS that audit trail, per this app's
-          // existing convention (skillRuns.steps is what Run History
-          // renders), not a second, separate audit table.
-          detail: value === null ? "No data points returned this week." : `${formatValue(value, metric.format)}: debug.sql: ${response.debug?.sql ?? "not returned by Whop"}`,
+          // Provenance: the exact Whop metric key each number came from.
+          detail: value === null ? `No data points returned last week (Whop metric ${result.key}).` : `${formatMetricValue(value, result.unit, result.currency)} from Whop metric ${result.key}.`,
         });
 
         if (value !== null) {
-          blocks.push({ workerId: "whop-weekly-ops-report", label: metric.label, value, displayValue: formatValue(value, metric.format) });
+          blocks.push({ workerId: "whop-weekly-ops-report", label, value, displayValue: formatMetricValue(value, result.unit, result.currency) });
         }
       } catch (err) {
         // Section 9's fail-open table: "A single metric query fails — the
         // rest of the report renders; the failed section is flagged
         // in-line rather than blocking the run."
         const message = err instanceof Error ? err.message : String(err);
-        failedMetrics.push(metric.label);
-        await logStep(runId, { phase: `metric_${metric.key}`, status: "failed", detail: message });
+        failedMetrics.push(label);
+        await logStep(runId, { phase: `metric_${id}`, status: "failed", detail: message });
       }
     }
 
@@ -114,10 +93,10 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
 
     await finishRun(runId, {
       summary: {
-        whatWasAttempted: [`Queried ${REPORT_METRICS.length} stats-engine metrics for the week of ${weekStart.toISOString().slice(0, 10)}`],
+        whatWasAttempted: [`Queried ${REPORT_METRICS.length} Whop stats metrics for ${window.from.toISOString().slice(0, 10)} to ${window.to.toISOString().slice(0, 10)}`],
         whatWorked: blocks.map((b) => `${b.label}: ${b.displayValue}`),
         whatFailed: failedMetrics.length ? failedMetrics.map((m) => `${m} (query failed, see step detail)`) : [],
-        openItems: prior ? [] : ["No prior-week snapshot yet. Deltas will start appearing next week."],
+        openItems: [...(unavailable.length ? [`Not offered by Whop's stats for this account: ${unavailable.join(", ")}`] : []), ...(prior ? [] : ["No prior-week snapshot yet. Deltas will start appearing next week."])],
         decisionsMade: deltas,
       },
     });

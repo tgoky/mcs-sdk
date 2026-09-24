@@ -27,6 +27,7 @@ import {
   ScopeViolationError,
 } from "./errors";
 import { WHOP_SCOPE_MAP, type WhopEndpoint } from "./scope-map";
+import { WHOP_METRICS, findMetric, statsQuery, summarizePoints, type WhopMetricId, type WhopMetricWant, type WhopStatsCatalogEntry } from "./stats";
 
 export { WHOP_API_BASE, whopApiUrl } from "./url";
 import { whopApiUrl } from "./url";
@@ -71,6 +72,10 @@ export interface WhopRequestOptions {
    * only by the pin-advancement read-back suite (Section 2.6) — every
    * ordinary call should rely on the connection's stored pin instead. */
   apiVersionDateOverride?: string;
+  /** A read of an area the connect probe never checked (refunds, the
+   * dispute summary). A 401/403 there means this key can't read that
+   * area, not that the key is dead, so it doesn't trip the breaker. */
+  optionalRead?: boolean;
 }
 
 function readByPath(obj: unknown, path: string): string | undefined {
@@ -237,6 +242,10 @@ export class WhopAgentClient {
         throw new WhopUnnamedAuthorizationError(res.status, { requestId, body });
       }
 
+      if ((res.status === 401 || res.status === 403) && opts.optionalRead) {
+        throw new WhopUnnamedAuthorizationError(res.status, { requestId, body });
+      }
+
       if (res.status === 401 || res.status === 403) {
         const credError = new WhopCredentialError(res.status, { requestId, body });
         await this.tripBreaker(credError.message);
@@ -258,33 +267,64 @@ export class WhopAgentClient {
   }
 
   /**
-   * Section 5.4's stats engine interface — `resource` is `<node>:<metric>`,
-   * not an account identifier (passing one returns `Unknown metric
-   * 'biz_...'`); the account is scoped separately by company_id, which
-   * this method always supplies from the connection's own accountId so no
-   * caller can accidentally omit it.
+   * How many records a cursor-paged v1 list holds, reading at most
+   * `maxPages` pages of 100 (@whop/sdk: first/after, page_info). `more`
+   * is true when the list goes on past that.
    */
-  async statsMetric(resource: string, opts: { granularity?: "daily" | "weekly" | "monthly"; from?: string; to?: string; breakdowns?: string } = {}): Promise<WhopStatsMetricResponse> {
+  async countList(endpoint: WhopEndpoint, path: string, query: WhopRequestOptions["query"], maxPages = 10, opts: Pick<WhopRequestOptions, "optionalRead"> = {}): Promise<{ count: number; more: boolean }> {
+    let count = 0;
+    let after: string | undefined;
+    for (let page = 0; page < maxPages; page++) {
+      const res = await this.request<{ data?: unknown[]; page_info?: { has_next_page?: boolean; end_cursor?: string | null } }>(endpoint, path, { query: { ...query, first: 100, after }, ...opts });
+      count += Array.isArray(res.data) ? res.data.length : 0;
+      if (!res.page_info?.has_next_page || !res.page_info.end_cursor) return { count, more: false };
+      after = res.page_info.end_cursor;
+    }
+    return { count, more: true };
+  }
+
+  private catalog: Promise<WhopStatsCatalogEntry[]> | null = null;
+
+  /** GET /stats: every metric this account can query. Read once per client. */
+  async statsCatalog(): Promise<WhopStatsCatalogEntry[]> {
+    this.catalog ??= this.request<{ data?: WhopStatsCatalogEntry[] }>("stats.list", "/v1/stats")
+      .then((r) => (Array.isArray(r.data) ? r.data : []))
+      .catch((err) => {
+        this.catalog = null;
+        throw err;
+      });
+    return this.catalog;
+  }
+
+  /**
+   * One metric over a window, from GET /stats/{metric} (see stats.ts).
+   * Always scoped to the connection's own account. Null when the account's
+   * catalog has no such metric; `value` is null when Whop returned no
+   * points with a value.
+   */
+  async statsValue(id: WhopMetricId, window: { from: Date; to: Date; interval?: "day" | "week" | "month" }): Promise<WhopStatsValue | null> {
     if (!this.connection.whopAccountId) {
       throw new Error("This connection has no Whop account id on file. Reconnect before querying stats.");
     }
-    return this.request<WhopStatsMetricResponse>("stats.metric", "/api/v1/stats/metric", {
-      query: {
-        resource,
-        company_id: this.connection.whopAccountId,
-        granularity: opts.granularity,
-        from: opts.from,
-        to: opts.to,
-        breakdowns: opts.breakdowns,
-      },
+    const want: WhopMetricWant = WHOP_METRICS[id];
+    const entry = findMetric(await this.statsCatalog(), want);
+    if (!entry) return null;
+    const res = await this.request<{ data?: { points?: { timestamp: number; value: number | null }[]; currency?: string | null } }>("stats.retrieve", `/v1/stats/${encodeURIComponent(entry.key)}`, {
+      query: statsQuery(entry, this.connection.whopAccountId, window.from, window.to, window.interval ?? "day"),
     });
+    const points = res.data?.points ?? [];
+    return { id, key: entry.key, name: entry.name, unit: entry.unit, value: summarizePoints(points, want), currency: res.data?.currency ?? null, points: points.length };
   }
 }
 
-export interface WhopStatsMetricResponse {
-  columns: string[];
-  data: Array<[string, ...(number | string)[]]>;
-  debug?: { engine?: string; request_id?: string; sql?: string };
-  node?: string;
-  pagination?: { next_cursor?: string };
+export interface WhopStatsValue {
+  id: WhopMetricId;
+  /** The catalog key Whop answered with, kept as provenance. */
+  key: string;
+  name: string;
+  unit: WhopStatsCatalogEntry["unit"];
+  /** A percent as a fraction, currency as a decimal amount. */
+  value: number | null;
+  currency: string | null;
+  points: number;
 }

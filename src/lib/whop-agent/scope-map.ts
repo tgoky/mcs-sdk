@@ -52,6 +52,8 @@ export type WhopEndpoint =
   | "disputes.get"
   | "disputes.evidence_submit"
   | "dispute_alerts.list"
+  | "disputes.summary"
+  | "refunds.list"
   | "course_students.list"
   | "course_lesson_interactions.list"
   | "social_accounts.list"
@@ -59,8 +61,8 @@ export type WhopEndpoint =
   | "media.get"
   | "ads.create"
   | "ads.update"
-  | "stats.describe"
-  | "stats.metric"
+  | "stats.list"
+  | "stats.retrieve"
   | "affiliates.list"
   | "identity_profiles.list"
   | "payout_methods.list"
@@ -112,6 +114,10 @@ export const WHOP_SCOPE_MAP: Record<WhopEndpoint, WhopEndpointScope> = {
   "disputes.get": { param: "none" }, // scoped by resource id in the path
   "disputes.evidence_submit": { param: "none" }, // elevated-scope call, scoped by dispute id in the path
   "dispute_alerts.list": { param: "none" },
+  // GET /disputes/summary and GET /refunds (@whop/sdk): account_id scoped.
+  // Refund records carry no account field to post-check.
+  "disputes.summary": { param: "account_id" },
+  "refunds.list": { param: "account_id" },
   "course_students.list": { param: "none" }, // scoped by course_id query param per Section 5.10, not account/company
   "course_lesson_interactions.list": { param: "none" }, // scoped by user_id/lesson_id/course_id, not account/company
 
@@ -121,9 +127,10 @@ export const WHOP_SCOPE_MAP: Record<WhopEndpoint, WhopEndpointScope> = {
   "ads.create": { param: "none" }, // scoped by product/plan ids in the body per Section 5.11
   "ads.update": { param: "none" }, // scoped by ad id in the path — the flip-to-active PATCH
 
-  "stats.describe": { param: "none" },
-  // Section 5.4: "The account is scoped separately by company_id or user_id."
-  "stats.metric": { param: "company_id" },
+  // GET /stats, the metric catalog: not per account.
+  "stats.list": { param: "none" },
+  // GET /stats/{metric}: scoped by account_id (@whop/sdk RetrieveStatsRequest).
+  "stats.retrieve": { param: "account_id" },
 
   "affiliates.list": { param: "none" },
   // Section 5.9: both confirmed 200 on a standard key, neither scoped by

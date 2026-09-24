@@ -6,6 +6,7 @@
 import crypto from "crypto";
 import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
+import { readRiskWindow, riskRates } from "./risk-window";
 
 interface WhopAccountHealth {
   required_actions?: string[];
@@ -103,10 +104,16 @@ export async function assemblePayoutHoldPacket(engagementId: string): Promise<{ 
     if (payoutMethodsRes) await logStep(runId, { phase: "payout_methods_read", status: "success", detail: `${payoutMethods.length} method(s) on file` });
 
     await logStep(runId, { phase: "dispute_history_read", status: "running" });
-    const disputeRateRes = await client.statsMetric("receipts/disputes:dispute_rate", { granularity: "weekly" }).catch(() => null);
-    const chargebackRatio90d = disputeRateRes?.data?.length ? Number(disputeRateRes.data[disputeRateRes.data.length - 1][1]) : null;
+    // A true 90-day ratio: disputes opened in the window over payments in it.
+    const to = new Date();
+    const risk = await readRiskWindow(client, new Date(to.getTime() - 90 * 86_400_000), to);
+    const chargebackRatio90d = riskRates(risk).disputeRate;
     if (chargebackRatio90d === null) gatheredManually.push("Chargeback ratio (90-day)");
-    await logStep(runId, { phase: "dispute_history_read", status: chargebackRatio90d === null ? "failed" : "success" });
+    await logStep(runId, {
+      phase: "dispute_history_read",
+      status: chargebackRatio90d === null ? "failed" : "success",
+      detail: chargebackRatio90d === null ? "Couldn't count both disputes and payments for the last 90 days." : `${risk.disputes} disputes on ${risk.payments} payments in 90 days (${(chargebackRatio90d * 100).toFixed(2)}%).`,
+    });
 
     const packet: PayoutHoldPacket = {
       accountHealth,

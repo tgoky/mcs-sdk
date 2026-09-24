@@ -55,33 +55,53 @@ export function snapshotOf(read: WhopAccountRead): Snapshot {
     refundRate: rate(read.refunds90d?.count),
     disputeRate: rate(read.disputes90d?.total),
     payments90d: payments,
-    // Stats percentages may be 0-1 or 0-100.
-    churn: churn == null ? null : churn > 1 ? churn / 100 : churn,
+    // Already a fraction: the reader converts Whop's percent (1.6 = 1.6%).
+    churn,
   };
 }
 
-export const DEFAULT_ALERTS = { rateThreshold: 0.08, alertThreshold: 3, minSample: 10 };
-const pctText = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
+// Same defaults as the monitor (refund-dispute-velocity-service.ts).
+export const DEFAULT_ALERTS = { refundRate: 0.08, disputeRate: 0.0075, alertThreshold: 3, minSample: 10 };
+/** Card networks put merchants into monitoring programs at around 1% of payments disputed. */
+const NETWORK_WATCH = 0.01;
+const pctText = (x: number) => `${(x * 100).toFixed(x < 0.1 ? (x < 0.01 ? 2 : 1) : 0)}%`;
+const round4 = (x: number) => Math.round(x * 10000) / 10000;
 
 /**
- * Alert levels from the client's own last 90 days. The velocity check
- * compares both refund and dispute rate to one threshold, so it starts
- * from the higher of the two: twice the usual rate and at least 3 points
- * above it, between 3% and 25%. Dispute alerts: twice a normal week's
- * count, at least 2. Without the data, Whop Agent's defaults stay.
+ * Alert levels from the client's own last 90 days, needing 30 payments to
+ * go on. Refunds: twice the usual rate and at least 3 points above it,
+ * between 3% and 25%. Disputes, which card networks watch from around 1%:
+ * twice the usual rate and at least a quarter point above it, but never
+ * above 0.75% while their usual rate is under that; a client already over
+ * it is alerted at a quarter above their usual rate, up to 2%, and told
+ * why. Dispute alerts: twice a normal week's count, at least 2. Without
+ * the data, the monitor's defaults stay.
  */
 export function proposeAlerts(s: Snapshot, read: WhopAccountRead): AlertProposal {
   const weeks = 90 / 7;
-  const base = Math.max(s.refundRate ?? -1, s.disputeRate ?? -1);
   const weeklyPayments = s.payments90d != null ? s.payments90d / weeks : null;
-  let rateThreshold = DEFAULT_ALERTS.rateThreshold;
-  let rateWhy = `Whop Agent's default. We couldn't count your payments to work out your usual rates.`;
-  if (base >= 0 && s.payments90d && s.payments90d >= 30) {
-    rateThreshold = Math.round(Math.min(0.25, Math.max(0.03, base * 2, base + 0.03)) * 100) / 100;
-    const which = s.refundRate != null && (s.disputeRate == null || s.refundRate >= s.disputeRate) ? `refund rate of ${pctText(s.refundRate)}` : `dispute rate of ${pctText(s.disputeRate!)}`;
-    rateWhy = `Your usual ${which} (${Math.round(s.payments90d)} payments in 90 days), doubled and at least 3 points higher.`;
-  } else if (s.payments90d != null && s.payments90d < 30) {
-    rateWhy = `Whop Agent's default. ${Math.round(s.payments90d)} payments in 90 days is too few to set it from your own rate.`;
+  const enough = s.payments90d != null && s.payments90d >= 30;
+  const tooFew = s.payments90d != null && !enough ? `${Math.round(s.payments90d)} payments in 90 days is too few to set it from your own rate.` : null;
+  const noCount = "We couldn't count your payments to work out your usual rate.";
+
+  let refundRate = DEFAULT_ALERTS.refundRate;
+  let refundWhy = `Whop Agent's default. ${tooFew ?? noCount}`;
+  if (enough && s.refundRate != null) {
+    refundRate = Math.round(Math.min(0.25, Math.max(0.03, s.refundRate * 2, s.refundRate + 0.03)) * 100) / 100;
+    refundWhy = `Your usual refund rate is ${pctText(s.refundRate)} (${Math.round(s.payments90d!)} payments in 90 days), doubled and at least 3 points higher.`;
+  }
+
+  let disputeRate = DEFAULT_ALERTS.disputeRate;
+  let disputeWhy = `Whop Agent's default, below the roughly 1% at which card networks start monitoring merchants. ${tooFew ?? noCount}`;
+  if (enough && s.disputeRate != null) {
+    const d = s.disputeRate;
+    if (d < DEFAULT_ALERTS.disputeRate) {
+      disputeRate = round4(Math.min(DEFAULT_ALERTS.disputeRate, Math.max(0.0025, d * 2, d + 0.0025)));
+      disputeWhy = `Your usual dispute rate is ${pctText(d)}. This is about double, and stays under 0.75% because card networks start monitoring merchants at around 1%.`;
+    } else {
+      disputeRate = round4(Math.min(0.02, d * 1.25));
+      disputeWhy = `Your usual dispute rate is already ${pctText(d)}, ${d >= NETWORK_WATCH ? "at or above" : "close to"} the roughly 1% at which card networks start monitoring merchants. This alerts when it climbs a quarter higher; bringing it down is worth doing now.`;
+    }
   }
 
   let alertThreshold = DEFAULT_ALERTS.alertThreshold;
@@ -98,7 +118,14 @@ export function proposeAlerts(s: Snapshot, read: WhopAccountRead): AlertProposal
       ? `You take about ${Math.round(weeklyPayments)} payments a week, so rate alerts only run in busier weeks. A handful of payments can't show a trend.`
       : `Rates are only checked once a week has at least this many payments.`;
 
-  return { rateThreshold, alertThreshold, minSample: DEFAULT_ALERTS.minSample, why: { rate: rateWhy, alerts: alertWhy, sample: sampleWhy }, fromData: rateThreshold !== DEFAULT_ALERTS.rateThreshold || alertThreshold !== DEFAULT_ALERTS.alertThreshold };
+  return {
+    refundRate,
+    disputeRate,
+    alertThreshold,
+    minSample: DEFAULT_ALERTS.minSample,
+    why: { refund: refundWhy, dispute: disputeWhy, alerts: alertWhy, sample: sampleWhy },
+    fromData: refundRate !== DEFAULT_ALERTS.refundRate || disputeRate !== DEFAULT_ALERTS.disputeRate || alertThreshold !== DEFAULT_ALERTS.alertThreshold,
+  };
 }
 
 /** Whop's own cancel discount, when every plan that offers one agrees.

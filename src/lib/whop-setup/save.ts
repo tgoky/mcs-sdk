@@ -16,7 +16,8 @@ import { eventsFor } from "./analyze";
 export interface WhopSetupInput {
   skills: string[];
   saveOffer: { discount: number; months: number; message: string; minTenureDays: number | null; cooldownDays: number | null } | null;
-  alerts: { rateThreshold: number; alertThreshold: number; minSample: number };
+  /** Refund and dispute levels are fractions of payments. */
+  alerts: { refundRate: number; disputeRate: number; alertThreshold: number; minSample: number };
   bridgeUrl: string;
 }
 
@@ -46,17 +47,19 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
   }
 
   const a = b.alerts ?? {};
-  const rateThreshold = Number(a.rateThreshold);
+  const refundRate = Number(a.refundRate);
+  const disputeRate = Number(a.disputeRate);
   const alertThreshold = Number(a.alertThreshold);
   const minSample = Number(a.minSample);
-  if (!Number.isFinite(rateThreshold) || rateThreshold < 0.01 || rateThreshold > 0.5) return { error: "The refund and dispute alert level must be between 1% and 50%." };
+  if (!Number.isFinite(refundRate) || refundRate < 0.01 || refundRate > 0.5) return { error: "The refund alert level must be between 1% and 50%." };
+  if (!Number.isFinite(disputeRate) || disputeRate < 0.001 || disputeRate > 0.05) return { error: "The dispute alert level must be between 0.1% and 5%." };
   if (!Number.isInteger(alertThreshold) || alertThreshold < 1 || alertThreshold > 100) return { error: "Dispute alerts must be a whole number from 1 to 100." };
   if (!Number.isInteger(minSample) || minSample < 1 || minSample > 1000) return { error: "Payments needed before a rate counts must be a whole number from 1 to 1,000." };
 
   return {
     skills: Array.isArray(b.skills) ? b.skills.filter((s: unknown): s is string => typeof s === "string" && (WHOP_AGENT_SKILL_IDS as string[]).includes(s)) : [],
     saveOffer,
-    alerts: { rateThreshold, alertThreshold, minSample },
+    alerts: { refundRate, disputeRate, alertThreshold, minSample },
     bridgeUrl: typeof b.bridgeUrl === "string" ? b.bridgeUrl.trim() : "",
   };
 }
@@ -83,7 +86,9 @@ export async function saveWhopSetup(engagementId: string, input: WhopSetupInput,
   }
 
   const patch: Partial<EngagementStack> = {
-    refund_dispute_rate_threshold: input.alerts.rateThreshold,
+    // refund_dispute_rate_threshold holds the refund level (name kept for saved values).
+    refund_dispute_rate_threshold: input.alerts.refundRate,
+    dispute_rate_threshold: input.alerts.disputeRate,
     dispute_alert_threshold: input.alerts.alertThreshold,
     min_payment_sample_size: input.alerts.minSample,
     whop_bridge_destination_url: bridgeUrl,

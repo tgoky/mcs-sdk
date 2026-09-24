@@ -46,12 +46,15 @@ export function buildWhopProposal(input: ProposalInput): Pick<WhopSetupState, "s
   };
 
   // ── Alerts ──
-  const proposed = read && snapshot ? proposeAlerts(snapshot, read) : { ...DEFAULT_ALERTS, why: { rate: "Whop Agent's default.", alerts: "Whop Agent's default.", sample: "Rates are only checked once a week has at least this many payments." }, fromData: false };
-  const savedAlerts = stack.refund_dispute_rate_threshold != null || stack.dispute_alert_threshold != null || stack.min_payment_sample_size != null;
+  const proposed = read && snapshot
+    ? proposeAlerts(snapshot, read)
+    : { ...DEFAULT_ALERTS, why: { refund: "Whop Agent's default.", dispute: "Whop Agent's default, below the roughly 1% at which card networks start monitoring merchants.", alerts: "Whop Agent's default.", sample: "Rates are only checked once a week has at least this many payments." }, fromData: false };
+  const savedAlerts = stack.refund_dispute_rate_threshold != null || stack.dispute_rate_threshold != null || stack.dispute_alert_threshold != null || stack.min_payment_sample_size != null;
   const alerts = savedAlerts
     ? {
         ...proposed,
-        rateThreshold: stack.refund_dispute_rate_threshold ?? proposed.rateThreshold,
+        refundRate: stack.refund_dispute_rate_threshold ?? proposed.refundRate,
+        disputeRate: stack.dispute_rate_threshold ?? proposed.disputeRate,
         alertThreshold: stack.dispute_alert_threshold ?? proposed.alertThreshold,
         minSample: stack.min_payment_sample_size ?? proposed.minSample,
         saved: true,

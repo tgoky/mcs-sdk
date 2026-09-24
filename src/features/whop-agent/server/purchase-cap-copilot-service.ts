@@ -25,17 +25,14 @@ export interface PurchaseCapPacketInput {
 }
 
 export interface PurchaseCapPacket {
-  salesHistory: { grossRevenueCents: number | null; successfulPayments: number | null; unavailable: boolean };
+  /** The last 90 days. Gross revenue is a decimal amount in `currency`. */
+  salesHistory: { grossRevenue: number | null; currency: string | null; successfulPayments: number | null; days: number; unavailable: boolean };
   accountHealth: WhopAccountHealth | null;
   walkthrough: string[];
   reserveAlternativeNote: string;
 }
 
-function latestValue(response: { data: Array<[string, ...(number | string)[]]> } | null): number | null {
-  if (!response?.data?.length) return null;
-  const value = response.data[response.data.length - 1][1];
-  return typeof value === "number" ? value : Number(value);
-}
+const SALES_HISTORY_DAYS = 90;
 
 const WALKTHROUGH_STEPS = [
   "Go to Whop Dashboard → Settings → Payments.",
@@ -63,16 +60,25 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
 
     await logStep(runId, { phase: "sales_history_pull", status: "running" });
     let grossRevenue: number | null = null;
+    let currency: string | null = null;
     let successfulPayments: number | null = null;
     let salesHistoryUnavailable = false;
     try {
-      const [revenueRes, paymentsRes] = await Promise.all([
-        runStep("fetch-gross-revenue", () => client.statsMetric("receipts:gross_revenue")),
-        runStep("fetch-successful-payments", () => client.statsMetric("receipts:successful_payments")),
+      const to = new Date();
+      const window = { from: new Date(to.getTime() - SALES_HISTORY_DAYS * 86_400_000), to, interval: "week" as const };
+      const [revenue, payments] = await Promise.all([
+        runStep("fetch-gross-revenue", () => client.statsValue("grossRevenue", window)),
+        runStep("fetch-successful-payments", () => client.statsValue("successfulPayments", window)),
       ]);
-      grossRevenue = latestValue(revenueRes);
-      successfulPayments = latestValue(paymentsRes);
-      await logStep(runId, { phase: "sales_history_pull", status: "success" });
+      grossRevenue = revenue?.value ?? null;
+      currency = revenue?.currency ?? null;
+      successfulPayments = payments?.value ?? null;
+      salesHistoryUnavailable = grossRevenue === null && successfulPayments === null;
+      await logStep(runId, {
+        phase: "sales_history_pull",
+        status: salesHistoryUnavailable ? "skipped" : "success",
+        detail: `Last ${SALES_HISTORY_DAYS} days from Whop metrics ${[revenue?.key, payments?.key].filter(Boolean).join(", ") || "(none offered for this account)"}.`,
+      });
     } catch (err) {
       // Fail-open: "Sales history query fails — Assemble the packet with
       // that section blank and flag the operator to fill it manually."
@@ -94,7 +100,7 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
     }
 
     const packet: PurchaseCapPacket = {
-      salesHistory: { grossRevenueCents: grossRevenue, successfulPayments, unavailable: salesHistoryUnavailable },
+      salesHistory: { grossRevenue, currency, successfulPayments, days: SALES_HISTORY_DAYS, unavailable: salesHistoryUnavailable },
       accountHealth,
       walkthrough: WALKTHROUGH_STEPS,
       reserveAlternativeNote:
@@ -103,7 +109,7 @@ export async function assemblePurchaseCapPacket(engagementId: string, input: Pur
 
     await finishRun(runId, {
       summary: {
-        whatWasAttempted: ["Pull sales history from the stats engine", "Read account-health signals", "Assemble application packet"],
+        whatWasAttempted: ["Pull 90 days of sales history from Whop's stats", "Read account-health signals", "Assemble application packet"],
         whatWorked: [
           salesHistoryUnavailable ? "Packet assembled with sales history flagged for manual entry" : `Gross revenue: ${grossRevenue ?? "n/a"}, successful payments: ${successfulPayments ?? "n/a"}`,
           accountHealth ? `Account status: ${accountHealth.status ?? "unknown"}` : "Account-health section omitted (read failed)",

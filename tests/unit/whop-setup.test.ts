@@ -104,14 +104,18 @@ describe("analysis", () => {
     expect(s.disputeRate).toBeCloseTo(0.003);
     expect(s.members).toBe(150);
     expect(s.mrr?.source).toBe("plans");
+    expect(snapshotOf(baseRead({ metrics: [{ id: "churn", key: "churn_rate", name: "Churn", unit: "percent", value: 0.008, days: 30, currency: null }] })).churn).toBe(0.008);
   });
 
   it("proposes alerts from the client's own rates and explains them", () => {
     const read = baseRead();
     const a = proposeAlerts(snapshotOf(read), read);
-    // max(3% x 2, 3% + 3 points) = 6%.
-    expect(a.rateThreshold).toBe(0.06);
-    expect(a.why.rate).toContain("refund rate of 3.0%");
+    // Refunds: max(3% x 2, 3% + 3 points) = 6%.
+    expect(a.refundRate).toBe(0.06);
+    expect(a.why.refund).toContain("refund rate is 3.0%");
+    // Disputes are separate: 3 on 1,000 payments = 0.3%, doubled = 0.6%, kept under 0.75%.
+    expect(a.disputeRate).toBe(0.006);
+    expect(a.why.dispute).toContain("0.30%");
     // 12 alerts in 90 days is about 0.9 a week; doubled and rounded up.
     expect(a.alertThreshold).toBe(2);
     expect(a.fromData).toBe(true);
@@ -119,12 +123,24 @@ describe("analysis", () => {
 
   it("keeps the defaults when payments can't be counted or are too few", () => {
     const noPayments = baseRead({ metrics: [] });
-    expect(proposeAlerts(snapshotOf(noPayments), noPayments).rateThreshold).toBe(0.08);
+    const none = proposeAlerts(snapshotOf(noPayments), noPayments);
+    expect([none.refundRate, none.disputeRate]).toEqual([0.08, 0.0075]);
     const few = baseRead({ metrics: [{ id: "payments", key: "p", name: "P", unit: "count", value: 20, days: 90, currency: null }] });
     const a = proposeAlerts(snapshotOf(few), few);
-    expect(a.rateThreshold).toBe(0.08);
-    expect(a.why.rate).toContain("20 payments in 90 days is too few");
+    expect(a.refundRate).toBe(0.08);
+    expect(a.disputeRate).toBe(0.0075);
+    expect(a.why.refund).toContain("20 payments in 90 days is too few");
     expect(a.why.sample).toContain("about 2 payments a week");
+  });
+
+  it("never lets a low dispute level drift up to the refund level, and warns a client already near 1%", () => {
+    const high = baseRead({ disputes90d: { total: 12, byStatus: null } });
+    const a = proposeAlerts(snapshotOf(high), high);
+    // 12 on 1,000 = 1.2%: alert a quarter higher, 1.5%, with a warning.
+    expect(a.disputeRate).toBe(0.015);
+    expect(a.why.dispute).toContain("already 1.2%, at or above");
+    const zero = baseRead({ disputes90d: { total: 0, byStatus: null } });
+    expect(proposeAlerts(snapshotOf(zero), zero).disputeRate).toBe(0.0025);
   });
 
   it("only reuses a cancel discount when the plans agree, and months only on monthly plans", () => {
@@ -167,7 +183,7 @@ describe("buildWhopProposal", () => {
   it("lets saved settings win", () => {
     const p = buildWhopProposal({ ...input, read: baseRead(), stack: { whop_save_offer_discount_percentage: 10, whop_save_offer_duration_months: 1, whop_save_offer_message: "Stay!", refund_dispute_rate_threshold: 0.12 } });
     expect(p.saveOffer).toMatchObject({ discount: 10, months: 1, message: "Stay!", source: null });
-    expect(p.alerts).toMatchObject({ rateThreshold: 0.12, alertThreshold: 2, saved: true });
+    expect(p.alerts).toMatchObject({ refundRate: 0.12, disputeRate: 0.006, alertThreshold: 2, saved: true });
   });
 
   it("names locked areas except the ones a standard key never has", () => {
@@ -182,7 +198,7 @@ describe("buildWhopProposal", () => {
 });
 
 describe("parseWhopSetup", () => {
-  const alerts = { rateThreshold: 0.06, alertThreshold: 2, minSample: 10 };
+  const alerts = { refundRate: 0.06, disputeRate: 0.006, alertThreshold: 2, minSample: 10 };
 
   it("takes a full save offer or none, never a partial one", () => {
     expect(parseWhopSetup({ skills: [], alerts, saveOffer: { discount: "30", months: "2", message: " Stay " } })).toMatchObject({ saveOffer: { discount: 30, months: 2, message: "Stay", minTenureDays: null } });
@@ -192,7 +208,8 @@ describe("parseWhopSetup", () => {
   });
 
   it("checks the alert levels and keeps only real worker ids", () => {
-    expect(parseWhopSetup({ skills: [], alerts: { ...alerts, rateThreshold: 0.9 } })).toHaveProperty("error");
+    expect(parseWhopSetup({ skills: [], alerts: { ...alerts, refundRate: 0.9 } })).toHaveProperty("error");
+    expect(parseWhopSetup({ skills: [], alerts: { ...alerts, disputeRate: 0.08 } })).toEqual({ error: "The dispute alert level must be between 0.1% and 5%." });
     const r = parseWhopSetup({ skills: ["whop-dispute-response", "nope"], alerts });
     expect(r).toMatchObject({ skills: ["whop-dispute-response"] });
   });
