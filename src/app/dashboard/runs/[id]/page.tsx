@@ -13,7 +13,6 @@ import {
   CircleAlert,
   Clock3,
   Copy,
-  FileText,
   Loader2,
   XCircle,
   Wrench,
@@ -224,13 +223,18 @@ function CopyRunId({ runId }: { runId: string }) {
           setTimeout(() => setCopied(false), 1500);
         }
       }}
-      className="flex items-center gap-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer hover-lift press-settle"
-      title={runId}
+      className="flex items-center gap-1.5 text-sm font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer hover-lift press-settle"
+      title={`${runId}. Copy it if you need to report a problem with this run.`}
     >
-      <span className="truncate max-w-[130px]">{runId}</span>
-      {copied ? <Check size={11} className="text-emerald-500 shrink-0" /> : <Copy size={11} className="shrink-0" />}
+      {copied ? <Check size={12} className="text-emerald-500 shrink-0" /> : <Copy size={12} className="shrink-0" />}
+      <span>{copied ? "Copied" : "Run ID"}</span>
     </button>
   );
+}
+
+const SUMMARY_KEYS = ["whatWasAttempted", "whatWorked", "whatFailed", "openItems", "decisionsMade"] as const;
+function summaryHasContent(summary: RunSummary): boolean {
+  return SUMMARY_KEYS.some((key) => (summary[key]?.length ?? 0) > 0);
 }
 
 function SummarySection({ summary }: { summary: RunSummary }) {
@@ -247,10 +251,6 @@ function SummarySection({ summary }: { summary: RunSummary }) {
 
   return (
     <section>
-      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <FileText className="h-4 w-4 text-zinc-500 dark:text-zinc-500" />
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
-      </div>
       <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/80">
         {visibleFields.map(({ key, label, emptyText, tone }) => {
           const items = summary[key] ?? [];
@@ -285,7 +285,9 @@ export default function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [showRunActivity, setShowRunActivity] = useState(true);
+  // null = not toggled yet: the steps start folded when a summary tells
+  // the story, and open when there's no summary to read instead.
+  const [showStepsChoice, setShowSteps] = useState<boolean | null>(null);
 
   const prevStatusRef = useRef<string | null>(null);
 
@@ -454,6 +456,14 @@ export default function RunDetailPage() {
           <span>{formatDiaryDateTime(run.startedAt)}</span>
           <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <RunStatusBadge status={run.status} />
+          {run.durationMs !== null && run.durationMs !== undefined && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-800">·</span>
+              <span title="How long this run took">{formatDuration(run.durationMs)}</span>
+            </>
+          )}
+          <span className="text-zinc-300 dark:text-zinc-800">·</span>
+          <CopyRunId runId={run.id} />
           {isRunning && <CancelRunButton runId={runId} onCancelled={() => fetchRun()} />}
         </div>
       </div>
@@ -537,67 +547,49 @@ export default function RunDetailPage() {
         )}
       </main>
 
-      {/* 4. RUN ACTIVITY — below deliverables, open by default, collapsible on demand.
-           Fix: this used to just restart with "Run started" and a step list with
-           no acknowledgment it's describing the same run as the summary above —
-           read as two disconnected reports bolted together. The caption below
-           frames it as "the log behind what you just saw," and the toggle label
-           now says what's actually gained by expanding it. */}
-      <section>
-        <button
-          type="button"
-          onClick={() => setShowRunActivity((p) => !p)}
-          className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none hover-lift press-settle"
-        >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
-          <span>{showRunActivity ? "Hide" : "Show"} the step-by-step log</span>
-          <span className="text-zinc-300 dark:text-zinc-800">·</span>
-          <span className="text-zinc-500 dark:text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
-        </button>
-        {!showRunActivity && (
-          <p className="mt-1 text-[13px] text-zinc-400 dark:text-zinc-600 pl-5">
-            The exact sequence of internal steps behind the summary above. It&apos;s useful if something looks off and you need the play-by-play.
-          </p>
-        )}
+      {/* 4. WHAT HAPPENED — the summary and the step log used to sit in
+           two columns behind one toggle, so the same run read as two
+           reports side by side. Now it's one column: the summary is the
+           story, always shown, and the steps underneath are the detail
+           behind it, one click away. Started/duration/run ID moved up into
+           the header, so there's no side column left. */}
+      {(() => {
+        const hasSummary = Boolean(run.summary) && summaryHasContent(run.summary!);
+        const showSteps = showStepsChoice ?? !hasSummary;
+        return (
+          <section className="space-y-3">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+              What happened
+            </h2>
 
-        {showRunActivity && (
-          <div className="mt-3 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
-            <section>
-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
-                <span className="text-[13px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
-              </div>
-              <div className="max-h-[75vh] overflow-y-auto pt-3">
-                {steps.length === 0 ? (
-                  <p className="text-sm text-zinc-500 dark:text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
-                ) : (
-                  <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
-                )}
-              </div>
-            </section>
+            {hasSummary && <SummarySection summary={run.summary!} />}
 
-            <aside className="space-y-5">
-              {run.summary && <SummarySection summary={run.summary} />}
-              <div className="text-sm space-y-2">
-                <span className="text-xs uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">Details</span>
-                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans pt-1">
-                  <span>Started</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">{formatDiaryDateTime(run.startedAt)}</span>
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowSteps(!showSteps)}
+                aria-expanded={showSteps}
+                className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none hover-lift press-settle"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showSteps ? "rotate-180" : ""}`} />
+                <span>{hasSummary ? "How it got there" : "Steps"}</span>
+                <span className="text-zinc-300 dark:text-zinc-800">·</span>
+                <span className="text-zinc-500 dark:text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
+              </button>
+
+              {showSteps && (
+                <div className="mt-3 max-h-[75vh] overflow-y-auto">
+                  {steps.length === 0 ? (
+                    <p className="text-sm text-zinc-500 dark:text-zinc-500 italic py-2">{copy.noStepsRecorded}</p>
+                  ) : (
+                    <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
+                  )}
                 </div>
-                <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans">
-                  <span>Duration</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">{formatDuration(run.durationMs)}</span>
-                </div>
-                <div className="flex justify-between items-center text-zinc-600 dark:text-zinc-400 font-sans gap-3">
-                  <span className="shrink-0">Run ID</span>
-                  <CopyRunId runId={run.id} />
-                </div>
-                <p className="text-xs text-zinc-700 dark:text-zinc-600 font-sans pt-1">Uniquely identifies this run. Copy it if you need to report a problem with it.</p>
-              </div>
-            </aside>
-          </div>
-        )}
-      </section>
+              )}
+            </div>
+          </section>
+        );
+      })()}
       </div>
     </div>
   );
