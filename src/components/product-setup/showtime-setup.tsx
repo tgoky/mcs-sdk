@@ -988,7 +988,7 @@ function Review({
     // line (a wrapped "Still needed: …" list, or Show Rate Setup's own
     // rebuild-choice toggles above it), so the bar visibly overlapped
     // whatever content settled at the bottom of the scroll.
-    <div className="mx-auto w-full max-w-5xl pb-40">
+    <div className="w-full pb-40">
       <div className="min-w-0 space-y-10">
         <header className="flex items-start gap-4">
           <ShowtimeMark size={40} />
@@ -2267,7 +2267,7 @@ function SaveBar({
 
 function SetupSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-5xl animate-pulse space-y-8 py-10" role="status" aria-label="Loading setup">
+    <div className="w-full animate-pulse space-y-8 py-10" role="status" aria-label="Loading setup">
       <div className="space-y-3">
         <div className="h-3 w-20 rounded-full bg-[var(--accent-dim)]" />
         <div className="h-8 w-80 max-w-full rounded-lg bg-[var(--accent-dim)]" />

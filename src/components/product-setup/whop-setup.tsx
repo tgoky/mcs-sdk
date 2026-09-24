@@ -278,7 +278,7 @@ export function WhopSetup({
   const toggleSkill = (id: string, v: boolean) => setSkills((s) => (v ? [...new Set([...s, id])] : s.filter((x) => x !== id)));
 
   return (
-    <div className="@container mx-auto w-full max-w-5xl px-1 pb-4">
+    <div className="@container w-full px-1 pb-4">
       {phase === "review" ? (
         <>
           <Review data={data} draft={draft} set={set} skills={skills} toggleSkill={toggleSkill} events={events} onReread={() => setPhase("welcome")} onQueueFix={queueFix} focus={settings ? focus : undefined} />

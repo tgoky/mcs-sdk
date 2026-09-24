@@ -379,7 +379,7 @@ export function ColdOpenSetup({
   const toolRow = <ToolRow data={data} actions={toolActions} />;
 
   return (
-    <div ref={topRef} className="@container mx-auto w-full max-w-5xl px-1 pb-4">
+    <div ref={topRef} className="@container w-full px-1 pb-4">
       {phase === "review" ? (
         <>
           <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} />
