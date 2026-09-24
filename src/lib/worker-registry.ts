@@ -1412,6 +1412,38 @@ export function workerOwnPageHref(workerId: WorkerId, engagementId: string): str
 }
 
 /**
+ * Skills with no inline config form whose settings live in their own
+ * page's Configure menu instead (skill-pages.tsx). Pile-On's form takes its
+ * current values from the page, so it only exists there.
+ */
+export const SKILLS_CONFIGURED_ON_OWN_PAGE: WorkerId[] = ["pile-on"];
+
+/**
+ * Where a settings gear for this skill goes when its settings aren't a form
+ * that can open in place: its own page with the Configure menu already open
+ * (?configure=1). Linking to the bare page landed on the same place as
+ * clicking the skill itself, with the settings still one more click away.
+ */
+export function workerSettingsHref(workerId: WorkerId, engagementId: string): string | null {
+  if (!SKILLS_CONFIGURED_ON_OWN_PAGE.includes(workerId)) return null;
+  return `/dashboard/engagements/${engagementId}/skills/${workerId}?configure=1`;
+}
+
+/**
+ * Whose config form holds this skill's settings. A skill with its own
+ * form (hasHingesPanel) owns them; every other skill is set up by its
+ * product's setup (Showtime, Reputation Manager, Cold Open or Whop setup,
+ * each of which lists and switches these skills), so its settings are that
+ * form. Null for Pile-On, whose settings only exist on its own page (see
+ * SKILLS_CONFIGURED_ON_OWN_PAGE).
+ */
+export function workerSettingsFormId(workerId: WorkerId): WorkerId | null {
+  if (SKILLS_CONFIGURED_ON_OWN_PAGE.includes(workerId)) return null;
+  const worker = WORKER_REGISTRY[workerId];
+  return worker.hasHingesPanel ? workerId : PRODUCT_ONBOARDING_WORKER_ID[worker.productId];
+}
+
+/**
  * The one worker per product whose completion IS that product's real
  * onboarding signal — see src/lib/product-onboarding.ts, which reads each
  * one's actual output (confirmationPageUrl, a repIdentityGraphs row, a

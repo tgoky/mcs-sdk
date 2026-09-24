@@ -20,10 +20,10 @@ import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Search, Download, Trash2, Loader2, X } from "lucide-react";
-import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+import { WORKER_CATEGORY_LIST, WORKER_REGISTRY, workerSettingsFormId, type WorkerCategory, type WorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
-import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { WorkerCard } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
@@ -138,9 +138,10 @@ export function ProductDetailClient({
   }
 
   function renderConfigForm(worker: WorkerDefinition) {
-    if (!engagementId) return null;
+    const formId = workerSettingsFormId(worker.id);
+    if (!engagementId || !formId) return null;
     const close = () => setExpandedWorker(null);
-    return renderWorkerConfigForm(worker.id, {
+    return renderWorkerConfigForm(formId, {
       engagementId,
       onClose: close,
       onSaved: (result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : close()),
@@ -291,7 +292,10 @@ export function ProductDetailClient({
                 {expandedWorker === worker.id && engagementId ? (
                   <div className="py-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {worker.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Configure {worker.name}</h3>
+                        <SettingsSource workerId={worker.id} />
+                      </div>
                       <button
                         type="button"
                         onClick={() => setExpandedWorker(null)}
@@ -314,7 +318,7 @@ export function ProductDetailClient({
                     isConfiguring={false}
                     playbook={SKILL_PLAYBOOKS[worker.id]}
                     onToggleConfigure={
-                      worker.hasHingesPanel && engagementId ? () => setExpandedWorker(worker.id) : undefined
+                      engagementId && hasWorkerConfigForm(workerSettingsFormId(worker.id) ?? "") ? () => setExpandedWorker(worker.id) : undefined
                     }
                     productOnboarded={productOnboarded}
                     productOnboardingSkipDismissed={productOnboardingSkipDismissed}
@@ -327,5 +331,17 @@ export function ProductDetailClient({
         )}
       </div>
     </div>
+  );
+}
+
+/** Under the inline Configure heading, for a skill whose settings are its
+ * product's setup form rather than a form of its own. */
+function SettingsSource({ workerId }: { workerId: WorkerId }) {
+  const formId = workerSettingsFormId(workerId);
+  if (!formId || formId === workerId) return null;
+  return (
+    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+      {WORKER_REGISTRY[workerId].name} is set up in {WORKER_REGISTRY[formId].name}, along with the rest of this product.
+    </p>
   );
 }

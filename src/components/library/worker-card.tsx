@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Settings, X, AlertTriangle, ArrowRight } from "lucide-react";
 import type { WorkerDefinition, WorkerId } from "@/lib/worker-registry";
-import { workerOwnPageHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { workerSettingsHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -80,9 +80,9 @@ export function WorkerCard({
    * which own that state and render the actual form — a card doesn't know
    * how to render any worker's form itself). */
   isConfiguring?: boolean;
-  /** Only present for a hasHingesPanel worker with a real engagement to
-   * configure — same gate configureHref used to decide whether to render
-   * a Link at all. */
+  /** Present when this worker's settings open in place (its own form, or
+   * its product's setup form; see workerSettingsFormId) for a real
+   * engagement. Absent, the gear links to workerSettingsHref instead. */
   onToggleConfigure?: () => void;
   variant?: "card" | "row";
   /** Real, previously-shipped per-skill copy — only Showtime's 5 skills
@@ -140,17 +140,15 @@ export function WorkerCard({
   // — Configure now expands the same form inline instead (accordion, in
   // the row variant), matching the same "don't navigate away just to see
   // a form" pattern WorkersPanel's own Configure button already uses.
-  const canConfigureInline = worker.hasHingesPanel && Boolean(engagementId) && Boolean(onToggleConfigure);
+  const canConfigureInline = Boolean(engagementId) && Boolean(onToggleConfigure);
   const isIncomplete = Boolean(completeness && completeness.activeCount < completeness.totalCount);
-  // A worker with no config form of its own opens its own page (its
-  // schedule, console or findings). The ones with no page at all (Rep
-  // Digest, Whop's reports and monitors) run entirely off their product's
-  // setup, so the gear goes there. It used to fall through to the bare
-  // client page, which said nothing about the skill that was clicked.
-  const plainConfigureHref =
-    !worker.hasHingesPanel && engagementId ? workerOwnPageHref(worker.id, engagementId) ?? onboardingBridgeHref : null;
-  const plainConfigureTitle =
-    !worker.hasHingesPanel && engagementId && !workerOwnPageHref(worker.id, engagementId) ? `Settings live in ${onboardingWorkerName}` : "Configure";
+  // Settings that can't open in place: Pile-On's live in its own page's
+  // Configure menu, so the gear opens the page with that menu already open.
+  // It used to link to the bare page (the same place clicking the skill
+  // goes), and for skills set up by their product, to a findings page or
+  // console with no settings on it at all.
+  const plainConfigureHref = engagementId ? workerSettingsHref(worker.id, engagementId) ?? onboardingBridgeHref : null;
+  const plainConfigureTitle = engagementId && !workerSettingsHref(worker.id, engagementId) ? `Settings live in ${onboardingWorkerName}` : "Configure";
   async function enable() {
     if (!engagementId) return;
     setPending(true);

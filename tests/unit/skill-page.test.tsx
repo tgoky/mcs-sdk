@@ -19,8 +19,8 @@ vi.mock("@/components/breadcrumbs/breadcrumb-context", () => ({
 vi.mock("@/app/dashboard/engagements/[id]/owned-engagement", () => ({ loadOwnedEngagement: vi.fn() }));
 // The panels the pages below render, stubbed to show what they were given.
 vi.mock("@/app/dashboard/engagements/[id]/skill-configure-menu", () => ({
-  SkillConfigureMenu: (p: { skillId: string; pileOnInitial?: object }) => (
-    <div data-testid="configure">
+  SkillConfigureMenu: (p: { skillId: string; pileOnInitial?: object; defaultOpen?: boolean }) => (
+    <div data-testid="configure" data-open={String(Boolean(p.defaultOpen))}>
       {p.skillId}
       {p.pileOnInitial ? JSON.stringify(p.pileOnInitial) : ""}
     </div>
@@ -39,7 +39,7 @@ vi.mock("@/components/skill-consoles/bridge-manager-console", () => ({
 import { loadOwnedEngagement } from "@/app/dashboard/engagements/[id]/owned-engagement";
 import { SKILL_PAGES } from "@/app/dashboard/engagements/[id]/skill-pages";
 import SkillPage from "@/app/dashboard/engagements/[id]/skills/[skillId]/page";
-import { WORKER_IDS, workerPrimaryHref } from "@/lib/worker-registry";
+import { WORKER_IDS, SKILLS_CONFIGURED_ON_OWN_PAGE, workerPrimaryHref, workerSettingsHref } from "@/lib/worker-registry";
 
 const props = (skillId: string, query: Record<string, string> = {}) => ({
   params: Promise.resolve({ id: "e1", skillId }),
@@ -98,6 +98,31 @@ describe("skill page", () => {
     unmount();
     render(await SkillPage(props("reputation-manager", { source: "bogus" })));
     expect(screen.getByTestId("body")).toHaveTextContent("source=null");
+  });
+
+  it("opens the Configure menu on arrival from a settings link, and only then", async () => {
+    const { unmount } = render(await SkillPage(props("leak-map")));
+    expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "false");
+    unmount();
+    render(await SkillPage(props("leak-map", { configure: "1" })));
+    expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "true");
+  });
+
+  it("opens Pile-On's Configure menu from the Library's settings link", () => {
+    const engagement = { engagementId: "e1", buyer: "Acme", stack: null } as never;
+    const query = Object.fromEntries(new URL(workerSettingsHref("pile-on", "e1")!, "http://x").searchParams);
+    const { unmount } = render(<>{SKILL_PAGES["pile-on"].headerAction!({ engagement, searchParams: query })}</>);
+    expect(screen.getByTestId("configure")).toHaveTextContent("pile-on");
+    expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "true");
+    unmount();
+    render(<>{SKILL_PAGES["pile-on"].headerAction!({ engagement, searchParams: {} })}</>);
+    expect(screen.getByTestId("configure")).toHaveAttribute("data-open", "false");
+  });
+
+  it("only sends settings links to pages that have a Configure menu", () => {
+    for (const id of SKILLS_CONFIGURED_ON_OWN_PAGE) {
+      expect(SKILL_PAGES[id]?.headerAction, id).toBeTypeOf("function");
+    }
   });
 
   it("uses the breadcrumb override and shows no Configure menu where the body is the form", async () => {

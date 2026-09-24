@@ -56,7 +56,13 @@ export function skillPageBackLink(engagementId: string, from: string | string[] 
   return { href: `/dashboard/engagements/${engagementId}`, label: "Back to client" };
 }
 
-const configure = (skillId: WorkerId) => (ctx: SkillPageContext) => <SkillConfigureMenu skillId={skillId} engagementId={ctx.engagement.engagementId} />;
+// ?configure=1 is how a settings link elsewhere (the Library's gear) lands
+// with the Configure menu already open, instead of on the page alone.
+const openOnArrival = (ctx: SkillPageContext) => ctx.searchParams.configure === "1";
+
+const configure = (skillId: WorkerId) => (ctx: SkillPageContext) => (
+  <SkillConfigureMenu skillId={skillId} engagementId={ctx.engagement.engagementId} defaultOpen={openOnArrival(ctx)} />
+);
 
 // ── Bodies that load data ─────────────────────────────────────────────
 
@@ -166,11 +172,12 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
     title: skillName("pile-on"),
     subtitle: "Every speed-to-lead sequence this client has ever run, not just today's calendar.",
     // Pile-On's small form takes its current values from the stack.
-    headerAction: ({ engagement }) => (
+    headerAction: (ctx) => (
       <SkillConfigureMenu
         skillId="pile-on"
-        engagementId={engagement.engagementId}
-        pileOnInitial={{ smsPlatform: engagement.stack?.sms_platform ?? "none", adDataPlatform: engagement.stack?.ad_data_platform ?? "none" }}
+        engagementId={ctx.engagement.engagementId}
+        pileOnInitial={{ smsPlatform: ctx.engagement.stack?.sms_platform ?? "none", adDataPlatform: ctx.engagement.stack?.ad_data_platform ?? "none" }}
+        defaultOpen={openOnArrival(ctx)}
       />
     ),
     body: (ctx) => <PileOnBody {...ctx} />,

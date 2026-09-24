@@ -26,15 +26,18 @@ export function FloatingPanel({
   children,
   align = "end",
   panelWidth = 480,
+  defaultOpen = false,
 }: {
   trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
   align?: "start" | "end";
   panelWidth?: number;
+  /** Start open, for a link that means "take me to these settings". */
+  defaultOpen?: boolean;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   function toggle() {

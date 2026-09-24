@@ -28,6 +28,7 @@ export function SkillConfigureMenu({
   skillId,
   engagementId,
   pileOnInitial,
+  defaultOpen = false,
 }: {
   skillId: ConfigurableSkillId;
   engagementId: string;
@@ -36,6 +37,9 @@ export function SkillConfigureMenu({
    * this menu, rather than behind a GET this form would otherwise have to
    * fetch itself the way the other skills' forms do. */
   pileOnInitial?: { smsPlatform: string; adDataPlatform: string };
+  /** Open on arrival: the page was reached from a settings link
+   * (?configure=1, see workerSettingsHref), not from the skill itself. */
+  defaultOpen?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -43,6 +47,7 @@ export function SkillConfigureMenu({
   return (
     <FloatingPanel
       align="end"
+      defaultOpen={defaultOpen}
       panelWidth={skillId === "pile-on" ? 340 : 560}
       trigger={({ toggle, open }) => (
         <button
