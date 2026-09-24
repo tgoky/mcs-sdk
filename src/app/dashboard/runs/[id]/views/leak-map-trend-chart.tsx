@@ -44,8 +44,8 @@ function ChartTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload as { fullDate: string; value: number | null; insufficientData?: boolean };
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs shadow-elevation-2">
-      <p className="font-mono text-zinc-500 dark:text-zinc-500 text-[10.5px]">{formatTooltipDate(point.fullDate)}</p>
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm shadow-elevation-2">
+      <p className="font-mono text-zinc-500 dark:text-zinc-500 text-[13px]">{formatTooltipDate(point.fullDate)}</p>
       <p className="font-bold text-zinc-900 dark:text-white">
         {point.value === null ? "No data" : point.value}
         {point.insufficientData && <span className="ml-1 font-normal text-amber-600 dark:text-amber-400">(below floor)</span>}
@@ -96,7 +96,7 @@ export function LeakMapTrendChart({ history }: { history: HistoryEntryLike[] }) 
     return (
       <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600">
         <TrendingUp size={22} />
-        <p className="text-xs text-center max-w-xs">
+        <p className="text-sm text-center max-w-xs">
           Not enough audits yet to chart a trend. Need at least 2 runs with the same metric before a line means anything.
         </p>
       </div>
@@ -116,7 +116,7 @@ export function LeakMapTrendChart({ history }: { history: HistoryEntryLike[] }) 
               type="button"
               onClick={toggle}
               aria-expanded={open}
-              className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="hover-lift press-settle flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <span className="truncate max-w-[160px]">{activeMetric}</span>
               <ChevronDown size={12} className="shrink-0 text-zinc-400" />
@@ -140,7 +140,7 @@ export function LeakMapTrendChart({ history }: { history: HistoryEntryLike[] }) 
           )}
         </ActionMenu>
         {latest?.value !== null && (
-          <p className="text-xs font-mono text-zinc-500 dark:text-zinc-500">
+          <p className="text-sm font-mono text-zinc-500 dark:text-zinc-500">
             Latest: <span className="font-bold text-zinc-900 dark:text-white">{latest.value}</span>
           </p>
         )}

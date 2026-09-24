@@ -197,11 +197,11 @@ function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border font-sans select-none shrink-0",
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-sm font-medium border font-sans select-none shrink-0",
         item.color
       )}
     >
-      <span className="text-[9px]">●</span>
+      <span className="text-[11px]">●</span>
       <span>{customLabel || item.label}</span>
     </span>
   );
@@ -292,11 +292,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* ----------------------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800">
         <div className="space-y-1 max-w-xl">
-          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 font-sans">{formattedDate}</p>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 font-sans">{formattedDate}</p>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
             Good afternoon, {buyerName}
           </h1>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans pt-1">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans pt-1">
             Your account setup is underway. Check out your live page, ad briefs, and brand voice below.
           </p>
 
@@ -306,7 +306,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 href={run.confirmationPageUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 text-zinc-950 px-3 py-1.5 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-white transition-colors font-sans"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 text-zinc-950 px-3 py-1.5 text-sm font-bold hover:bg-zinc-100 dark:hover:bg-white transition-colors font-sans"
               >
                 <span>View Live Page</span>
                 <ExternalLink size={12} />
@@ -337,7 +337,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
         {/* Conversational Sentence Summary Banner */}
         <div className="py-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans">
+          <p className="text-[15px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans">
             {buildSentenceSummary()}
           </p>
         </div>
@@ -349,8 +349,8 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <div className="flex items-center gap-3">
               <Globe size={16} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-zinc-900 dark:text-white font-sans">Confirmation Page VSL Deployment</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white font-sans">Confirmation Page VSL Deployment</p>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">
                   {isLive
                     ? `Published on ${hostingPlatformLabel(deployment?.deployedVia)}`
                     : isPasteReady
@@ -367,8 +367,8 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <div className="flex items-center gap-3">
               <Webhook size={16} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-zinc-900 dark:text-white font-sans">Platform Stack & Webhook Sync</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white font-sans">Platform Stack & Webhook Sync</p>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">
                   Booking: {bookingPlatformLabel(stack?.booking_platform)} · Mode: {isPolling ? "Auto-polling (5m window)" : (stack?.webhook_receiver_mode ?? "None")}
                 </p>
               </div>
@@ -381,8 +381,8 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <div className="flex items-center gap-3">
               <Palette size={16} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-zinc-900 dark:text-white font-sans">Brand Voice & Positioning Profile</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white font-sans">Brand Voice & Positioning Profile</p>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">
                   Formal/Casual: {voice?.tone?.formal_casual?.score ?? 3}/5 · Tokens: {voice?.vocabulary?.signature?.slice(0, 3).join(", ") || "None"}
                 </p>
               </div>
@@ -395,8 +395,8 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
             <div className="flex items-center gap-3">
               <Megaphone size={16} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs & Video Scripts</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white font-sans">Ad Creative Briefs & Video Scripts</p>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">
                   {briefs.length} Ad Briefs · 1 Hero VSL + {scriptPack?.breakoutScripts?.length ?? 0} Breakouts
                 </p>
               </div>
@@ -411,7 +411,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
       {/* ----------------------------------------------------------------- */}
       <div className="font-sans">
         <div className="flex items-center gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
-          <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+          <div className="h-8 w-8 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center font-bold text-sm shrink-0">
             {buyerName.slice(0, 2).toUpperCase()}
           </div>
           <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight font-sans">
@@ -420,7 +420,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
         </div>
 
         {/* Clean Sub-Tabs */}
-        <div className="flex items-center gap-6 border-b border-zinc-200/80 dark:border-zinc-800/80 pt-3 text-xs font-medium font-sans">
+        <div className="flex items-center gap-6 border-b border-zinc-200/80 dark:border-zinc-800/80 pt-3 text-sm font-medium font-sans">
           <button
             type="button"
             onClick={() => setActiveTab("briefs")}
@@ -496,7 +496,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                           {/* Sticky Note Badge */}
                           <div
                             className={cn(
-                              "w-10 h-10 rounded-xl border flex flex-col items-center justify-center font-mono font-bold text-[9px] shrink-0 shadow-2xs select-none",
+                              "w-10 h-10 rounded-xl border flex flex-col items-center justify-center font-mono font-bold text-[11px] shrink-0 shadow-2xs select-none",
                               color.noteBg,
                               color.border,
                               color.text
@@ -506,10 +506,10 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                           </div>
 
                           <div className="min-w-0">
-                            <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono">
+                            <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono">
                               {pillarTitle}
                             </h3>
-                            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-sans mt-0.5 leading-snug">
+                            <p className="text-[13px] text-zinc-600 dark:text-zinc-400 font-sans mt-0.5 leading-snug">
                               {subQuestion}
                             </p>
                           </div>
@@ -523,7 +523,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                               `brief-${brief.id}`
                             )
                           }
-                          className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shrink-0 hover-lift press-settle"
+                          className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer shrink-0 hover-lift press-settle"
                         >
                           {copiedKey === `brief-${brief.id}` ? (
                             <Check size={12} className="text-emerald-400" />
@@ -536,23 +536,23 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
                       {/* Hook & Angle Text Body */}
                       <div className="space-y-2 pt-1 font-sans border-t border-zinc-200/60 dark:border-zinc-800/60">
-                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans">
+                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans">
                           Hook: &quot;{cleanString(brief.hook)}&quot;
                         </p>
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
                           <strong className="text-zinc-700 dark:text-zinc-300 font-sans">Angle:</strong> {cleanString(brief.angle)}
                         </p>
                       </div>
                     </div>
 
                     {/* Bottom Metadata: Format & CTA */}
-                    <div className="pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 font-sans text-xs text-zinc-600 dark:text-zinc-400 flex flex-col gap-1">
+                    <div className="pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 font-sans text-sm text-zinc-600 dark:text-zinc-400 flex flex-col gap-1">
                       <p>
-                        <strong className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">Format:</strong>{" "}
+                        <strong className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px]">Format:</strong>{" "}
                         <span className="text-zinc-600 dark:text-zinc-400">{brief.suggestedFormat}</span>
                       </p>
                       <p>
-                        <strong className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">CTA:</strong>{" "}
+                        <strong className="text-zinc-700 dark:text-zinc-300 font-mono text-[13px]">CTA:</strong>{" "}
                         <span className="text-zinc-600 dark:text-zinc-400">{brief.cta}</span>
                       </p>
                     </div>
@@ -580,7 +580,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   {/* Hero Script */}
                   <div className="py-4 first:pt-1 space-y-3 font-sans">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase font-bold text-emerald-400">
+                      <span className="text-xs font-mono uppercase font-bold text-emerald-400">
                         Hero VSL Script ({scriptPack.heroScript.targetLengthSeconds}s target)
                       </span>
                       <button
@@ -591,7 +591,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                             "hero-script"
                           )
                         }
-                        className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer hover-lift press-settle"
+                        className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer hover-lift press-settle"
                       >
                         {copiedKey === "hero-script" ? (
                           <Check size={12} className="text-emerald-400" />
@@ -602,11 +602,11 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                       </button>
                     </div>
 
-                    <p className="text-xs font-bold text-zinc-900 dark:text-white">{scriptPack.heroScript.title}</p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{scriptPack.heroScript.title}</p>
                     <div className="space-y-3 pt-1">
                       {scriptPack.heroScript.chapters?.map((chap, i) => (
-                        <div key={i} className="text-xs text-zinc-700 dark:text-zinc-300 space-y-1">
-                          <p className="font-bold text-amber-400 text-[11px] font-mono">
+                        <div key={i} className="text-sm text-zinc-700 dark:text-zinc-300 space-y-1">
+                          <p className="font-bold text-amber-400 text-[13px] font-mono">
                             {chap.timestampLabel ? `${chap.timestampLabel} · ` : ""}
                             {chap.beat || (chap as any).title || `Chapter ${i + 1}`}
                           </p>
@@ -620,13 +620,13 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                   {scriptPack.breakoutScripts?.map((breakout) => (
                     <div key={breakout.id} className="py-4 space-y-2 font-sans">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase font-bold text-sky-400">
+                        <span className="text-xs font-mono uppercase font-bold text-sky-400">
                           Breakout Script: {breakout.title}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopy(breakout.script, `breakout-${breakout.id}`)}
-                          className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer hover-lift press-settle"
+                          className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer hover-lift press-settle"
                         >
                           {copiedKey === `breakout-${breakout.id}` ? (
                             <Check size={12} className="text-emerald-400" />
@@ -636,7 +636,7 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                           <span>{copiedKey === `breakout-${breakout.id}` ? "Copied" : "Copy Script"}</span>
                         </button>
                       </div>
-                      <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
                         {breakout.script}
                       </p>
                     </div>
@@ -658,13 +658,13 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
               {run.pasteReadyHtml ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400 font-sans">
                       Generated Confirmation VSL Code
                     </span>
                     <button
                       type="button"
                       onClick={() => handleCopy(run.pasteReadyHtml!, "page-html")}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer hover-lift press-settle"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer hover-lift press-settle"
                     >
                       {copiedKey === "page-html" ? (
                         <Check size={12} className="text-emerald-400" />
@@ -675,12 +675,12 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                     </button>
                   </div>
 
-                  <div className="max-h-64 overflow-auto p-4 font-mono text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  <div className="max-h-64 overflow-auto p-4 font-mono text-[13px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                     <pre className="whitespace-pre-wrap break-all">{run.pasteReadyHtml}</pre>
                   </div>
 
                   {run.pasteReadyInstructions && (
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed font-sans">
                       {run.pasteReadyInstructions}
                     </p>
                   )}
@@ -702,32 +702,32 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="p-3">
-                      <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Formal ↔ Casual</p>
+                      <p className="text-xs font-mono uppercase text-zinc-500 dark:text-zinc-500">Formal ↔ Casual</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.formal_casual.score}/5</p>
-                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
+                      <p className="text-[13px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.formal_casual.note}</p>
                     </div>
 
                     <div className="p-3">
-                      <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Technical ↔ Plain</p>
+                      <p className="text-xs font-mono uppercase text-zinc-500 dark:text-zinc-500">Technical ↔ Plain</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.technical_plain.score}/5</p>
-                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
+                      <p className="text-[13px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.technical_plain.note}</p>
                     </div>
 
                     <div className="p-3">
-                      <p className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Warm ↔ Neutral</p>
+                      <p className="text-xs font-mono uppercase text-zinc-500 dark:text-zinc-500">Warm ↔ Neutral</p>
                       <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{voice.tone.warm_neutral.score}/5</p>
-                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
+                      <p className="text-[13px] text-zinc-600 dark:text-zinc-400 mt-1">{voice.tone.warm_neutral.note}</p>
                     </div>
                   </div>
 
                   {voice.vocabulary.signature.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-2">Signature Words & Phrases</p>
+                      <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Signature Words & Phrases</p>
                       <div className="flex flex-wrap gap-1.5">
                         {voice.vocabulary.signature.map((token) => (
                           <span
                             key={token}
-                            className="rounded-md bg-white dark:bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800"
+                            className="rounded-md bg-white dark:bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800"
                           >
                             {token}
                           </span>
@@ -738,14 +738,14 @@ export function PinDownView({ detail }: { detail: PinDownDetail }) {
 
                   {voice.banned_phrases.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-rose-400 mb-2 flex items-center gap-1">
+                      <p className="text-sm font-bold text-rose-400 mb-2 flex items-center gap-1">
                         <AlertCircle size={12} /> Banned Phrases
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {voice.banned_phrases.map((b) => (
                           <span
                             key={b.phrase}
-                            className="rounded-md bg-rose-950/20 px-2 py-1 font-mono text-xs text-rose-300 border border-rose-900/40"
+                            className="rounded-md bg-rose-950/20 px-2 py-1 font-mono text-sm text-rose-300 border border-rose-900/40"
                           >
                             {b.phrase}
                           </span>

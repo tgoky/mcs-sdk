@@ -20,14 +20,14 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+      <p className="text-[13px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
         {mentions.length} new mention{mentions.length === 1 ? "" : "s"} · {mentions.filter((m) => m.flagged).length} flagged
       </p>
       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
       {mentions.map((m) => (
         <div key={m.id} className="py-3.5 first:pt-0">
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <div className="flex items-center gap-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-2 text-sm font-mono text-zinc-600 dark:text-zinc-400">
               <span className="font-bold">r/{m.subreddit}</span>
               {m.author && <span>· u/{m.author}</span>}
               <a href={m.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
@@ -39,8 +39,8 @@ export function RepRedditWatchView({ detail }: { detail: RepRedditWatchDetail })
               <SentimentPill sentiment={m.sentiment} />
             </div>
           </div>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{m.mentionText}</p>
-          {m.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{m.flagReason}</p>}
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{m.mentionText}</p>
+          {m.flagReason && <p className="text-[13px] text-rose-600 dark:text-rose-400 mt-1.5">{m.flagReason}</p>}
         </div>
       ))}
       </div>

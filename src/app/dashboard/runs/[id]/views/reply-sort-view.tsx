@@ -40,7 +40,7 @@ export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+      <p className="text-[13px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
         {replies.length} repl{replies.length === 1 ? "y" : "ies"} classified{routed > 0 ? ` · ${routed} routed to Queue` : ""}
       </p>
       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -49,18 +49,18 @@ export function ReplySortView({ detail }: { detail: ReplySortDetail }) {
           return (
             <div key={r.id} className="py-3 first:pt-0">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{r.leadEmail}</span>
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{r.leadEmail}</span>
                 <div className="flex items-center gap-1.5">
                   <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                   {r.routedToQueue && !r.queueResolvedAt && (
-                    <a href="/dashboard/queue" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
+                    <a href="/dashboard/queue" className="flex items-center gap-1 text-[13px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                       Queue <ExternalLink size={10} />
                     </a>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{r.rawBody}</p>
-              <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 mt-1">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{r.rawBody}</p>
+              <p className="text-xs font-mono text-zinc-400 dark:text-zinc-600 mt-1">
                 classified via {r.classificationSource}
                 {r.campaignId ? ` · ${r.campaignId}` : ""}
               </p>

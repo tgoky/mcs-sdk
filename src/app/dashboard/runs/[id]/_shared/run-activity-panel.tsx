@@ -79,7 +79,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
   }
 
   if (error || !run) {
-    return <p className="text-[11px] text-zinc-500 dark:text-zinc-500 italic font-sans">{error ?? "Run activity unavailable."}</p>;
+    return <p className="text-[13px] text-zinc-500 dark:text-zinc-500 italic font-sans">{error ?? "Run activity unavailable."}</p>;
   }
 
   const steps = run.steps ?? [];
@@ -89,12 +89,12 @@ export function RunActivityPanel({ runId }: { runId: string }) {
     <div className="space-y-3 font-sans">
       <div className="grid grid-cols-2 gap-2 text-center">
         <div className="py-2">
-          <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Status</span>
-          <span className="block text-[11px] font-semibold text-zinc-900 dark:text-white mt-0.5 truncate px-1">{runStatusLabel(run.status)}</span>
+          <span className="block text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Status</span>
+          <span className="block text-[13px] font-semibold text-zinc-900 dark:text-white mt-0.5 truncate px-1">{runStatusLabel(run.status)}</span>
         </div>
         <div className="py-2">
-          <span className="block text-[9px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Duration</span>
-          <span className="block text-[11px] font-mono font-semibold text-zinc-900 dark:text-white mt-0.5">{formatDuration(run.durationMs)}</span>
+          <span className="block text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Duration</span>
+          <span className="block text-[13px] font-mono font-semibold text-zinc-900 dark:text-white mt-0.5">{formatDuration(run.durationMs)}</span>
         </div>
       </div>
 
@@ -102,11 +102,11 @@ export function RunActivityPanel({ runId }: { runId: string }) {
         const diagnosis = classifyRunError(run.errorMessage);
         return (
           <div className="rounded-lg border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 px-2.5 py-1.5 font-sans">
-            <span className="block text-[10px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-0.5">{copy.errorSectionTitle}</span>
+            <span className="block text-xs font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-0.5">{copy.errorSectionTitle}</span>
             {diagnosis ? (
               <>
-                <p className="text-[11px] font-semibold text-rose-800 dark:text-rose-300">{diagnosis.title}</p>
-                <p className="text-[11px] text-rose-900/90 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                <p className="text-[13px] font-semibold text-rose-800 dark:text-rose-300">{diagnosis.title}</p>
+                <p className="text-[13px] text-rose-900/90 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
               </>
             ) : (
               // Not every failure fits the classifier's known patterns — rather
@@ -117,7 +117,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
               // who needs to — it reads fine for an end buyer but is a dead
               // end for the person running this dashboard. Point at the
               // fuller run-detail page instead of a shrug.
-              <p className="text-[11px] text-rose-900/90 dark:text-rose-300/90">
+              <p className="text-[13px] text-rose-900/90 dark:text-rose-300/90">
                 This run hit an error our system couldn&apos;t auto-diagnose. Open the full run for the exact error, or share this with your account contact if it keeps happening.
               </p>
             )}
@@ -130,7 +130,7 @@ export function RunActivityPanel({ runId }: { runId: string }) {
           <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
         </div>
       ) : (
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-500 italic font-sans">{copy.noStepsRecorded}</p>
+        <p className="text-[13px] text-zinc-500 dark:text-zinc-500 italic font-sans">{copy.noStepsRecorded}</p>
       )}
     </div>
   );

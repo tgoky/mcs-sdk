@@ -155,7 +155,7 @@ export function LeakMapView({
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search metric, issue, or report copy..."
-              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
           </div>
         )}
@@ -215,14 +215,14 @@ export function LeakMapView({
                   </p>
                 </div>
 
-                <p className="text-sm text-zinc-500 dark:text-zinc-500">
+                <p className="text-[15px] text-zinc-500 dark:text-zinc-500">
                   {auditRunTypeLabel(audit.runType)} · {issues.length} metric
                   {issues.length === 1 ? "" : "s"} evaluated
                   {filteredGaps.length > 0 && ` · ${filteredGaps.length} data gap${filteredGaps.length === 1 ? "" : "s"}`}
                 </p>
 
                 {(audit.alertsFired?.length ?? 0) > 0 && (
-                  <div className="flex items-center gap-1.5 rounded-md border border-rose-900/50 bg-rose-950/20 px-2 py-1 text-[11px] font-semibold text-rose-400 ml-auto">
+                  <div className="flex items-center gap-1.5 rounded-md border border-rose-900/50 bg-rose-950/20 px-2 py-1 text-[13px] font-semibold text-rose-400 ml-auto">
                     <AlertTriangle size={11} /> {audit.alertsFired!.length} alert
                     {audit.alertsFired!.length === 1 ? "" : "s"} fired
                   </div>
@@ -236,7 +236,7 @@ export function LeakMapView({
               {correlationFlags.length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-xl border border-orange-500/40 bg-transparent p-3">
                   {correlationFlags.map((flag, i) => (
-                    <p key={i} className="flex items-start gap-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
+                    <p key={i} className="flex items-start gap-2 text-sm leading-relaxed text-orange-800 dark:text-orange-300">
                       <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                       <span>{flag.message}</span>
                     </p>
@@ -245,13 +245,13 @@ export function LeakMapView({
               )}
 
               {filteredIssues.length === 0 && (
-                <p className="text-xs italic text-zinc-500 dark:text-zinc-500">No funnel metrics match your search filter.</p>
+                <p className="text-sm italic text-zinc-500 dark:text-zinc-500">No funnel metrics match your search filter.</p>
               )}
 
               {/* Needs attention — real findings only, full weight. */}
               {needsAttention.length > 0 && (
                 <div className="space-y-1.5">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
+                  <h3 className="text-[13px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
                     Needs attention ({needsAttention.length})
                   </h3>
                   <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
@@ -269,7 +269,7 @@ export function LeakMapView({
               {otherIssues.length > 0 &&
                 (needsAttention.length > 0 ? (
                   <details className="group">
-                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-bold uppercase tracking-wide text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
                       <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
                       {otherIssues.length} other metric{otherIssues.length === 1 ? "" : "s"} (healthy or not enough data)
                     </summary>
@@ -281,7 +281,7 @@ export function LeakMapView({
                   </details>
                 ) : (
                   <div className="space-y-1.5">
-                    <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
+                    <h3 className="text-[13px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
                       {issues.length} metric{issues.length === 1 ? "" : "s"} evaluated
                     </h3>
                     <div className="rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
@@ -297,14 +297,14 @@ export function LeakMapView({
                   report for attention. */}
               {filteredGaps.length > 0 && (
                 <details className="group">
-                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400 [&::-webkit-details-marker]:hidden">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400 [&::-webkit-details-marker]:hidden">
                     <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
                     <HelpCircle size={12} />
                     Data gaps ({filteredGaps.length})
                   </summary>
                   <ul className="mt-1.5 space-y-1.5 pl-5">
                     {filteredGaps.map((g, i) => (
-                      <li key={i} className="text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+                      <li key={i} className="text-[13px] leading-snug text-zinc-600 dark:text-zinc-400">
                         {humanizeGap(g)}
                       </li>
                     ))}
@@ -321,16 +321,16 @@ export function LeakMapView({
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Metrics Table</h2>
               </div>
               {filteredIssues.length === 0 ? (
-                <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic">
+                <div className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-500 italic">
                   {issues.length === 0
                     ? "No funnel issues detected in this audit. The current metrics are within normal range."
                     : "No funnel metrics match your search filter."}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 bg-white/50 dark:bg-zinc-900/50">
+                    <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-xs uppercase text-zinc-500 dark:text-zinc-500 bg-white/50 dark:bg-zinc-900/50">
                       <th className="px-4 py-2 font-semibold">Funnel Metric</th>
                       <th className="px-4 py-2 font-semibold">Prior Value</th>
                       <th className="px-4 py-2 font-semibold">Current Value</th>
@@ -402,7 +402,7 @@ export function LeakMapView({
                   <button
                     type="button"
                     onClick={handleCopyReport}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-xs font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-400 dark:hover:border-zinc-700 text-sm font-mono transition-all cursor-pointer shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                   >
                     {copiedReport ? (
                       <Check size={12} className="text-emerald-400" />
@@ -415,9 +415,9 @@ export function LeakMapView({
               </div>
 
               {audit.reportMarkdown ? (
-                <SimpleMarkdown text={audit.reportMarkdown} className="pt-2 text-xs text-zinc-700 dark:text-zinc-300" />
+                <SimpleMarkdown text={audit.reportMarkdown} className="pt-2 text-sm text-zinc-700 dark:text-zinc-300" />
               ) : (
-                <p className="pt-2 text-xs italic text-zinc-500 dark:text-zinc-500">
+                <p className="pt-2 text-sm italic text-zinc-500 dark:text-zinc-500">
                   No report text stored for this run. Check the Steps panel to confirm whether delivery (Resend/Slack) succeeded.
                 </p>
               )}
@@ -478,13 +478,13 @@ function IssueRow({ issue }: { issue: IssueType }) {
     <div className="p-3">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{issue.name}</p>
+        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{issue.name}</p>
         <StatusPill tone={tone}>{issue.insufficientData ? "insufficient data" : issue.severity}</StatusPill>
       </div>
 
       {/* One compact stats line instead of a 3-column number grid — same
           information, a fraction of the vertical space. */}
-      <p className="mt-1 text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5 flex-wrap">
+      <p className="mt-1 text-sm font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5 flex-wrap">
         <span>
           Current <span className="font-bold text-zinc-900 dark:text-white">{current}</span>
         </span>
@@ -499,7 +499,7 @@ function IssueRow({ issue }: { issue: IssueType }) {
       </p>
 
       {/* Assessment */}
-      <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400">
         {issue.insufficientData
           ? "Not enough data yet to call a trend for this metric. The sample is below the reliability floor, so this isn't confirmation of healthy performance, just an unknown."
           : issue.severity === "high"

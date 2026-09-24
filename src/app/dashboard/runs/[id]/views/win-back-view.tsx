@@ -223,7 +223,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
       {/* ----------------------------------------------------------------- */}
       <div
         className={cn(
-          "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs font-sans",
+          "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm font-sans",
           isConnected
             ? missingMeta
               ? "border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 text-amber-900 dark:text-amber-200"
@@ -252,7 +252,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                   : "New enrollments push to the CRM/ESP automatically, no approval step. Change this under Modify → Automation mode on the client page."
               }
               className={cn(
-                "shrink-0 text-[10.5px] font-mono font-semibold px-1.5 py-0.5 rounded-md border",
+                "shrink-0 text-[13px] font-mono font-semibold px-1.5 py-0.5 rounded-md border",
                 requiresApproval
                   ? "border-amber-300 dark:border-amber-800/60 text-amber-700 dark:text-amber-400"
                   : "border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400"
@@ -301,10 +301,10 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                     {enrollment.prospectName ?? "Unnamed prospect"}
                   </span>
                   {enrollment.prospectEmail && (
-                    <span className="font-mono text-xs text-zinc-500 dark:text-zinc-500">{enrollment.prospectEmail}</span>
+                    <span className="font-mono text-sm text-zinc-500 dark:text-zinc-500">{enrollment.prospectEmail}</span>
                   )}
                 </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-500 font-sans">
+                <p className="text-sm text-zinc-500 dark:text-zinc-500 font-sans">
                   Enrolled {formatDiaryDate(enrollment.enrolledAt)} · {recoveryWindowDays}-day window ends {formatDiaryDate(windowEnd)}
                 </p>
               </div>
@@ -317,7 +317,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                 <button
                   type="button"
                   onClick={handleManualStopCadence}
-                  className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+                  className="flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-[13px] font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 cursor-pointer transition-colors font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                   title="Stop the automated sequence. Use this if the prospect already rebooked elsewhere or replied directly"
                 >
                   <SquareX size={12} /> Stop Cadence
@@ -329,7 +329,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
                   href={enrollment.freshRescheduleLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-sans"
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-2.5 py-1.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-sans"
                 >
                   <Link2 size={11} /> Reschedule link
                 </a>
@@ -343,7 +343,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
               does to make sense of "Active in cadence." Spelled out in
               plain language, and made status-aware so it stays accurate
               once the cadence exits instead of always describing "active." */}
-          <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2.5 text-xs text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
+          <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2.5 text-sm text-zinc-600 dark:text-zinc-400 font-sans leading-relaxed">
             {manualExited || enrollment.status === "manual_override" ? (
               <>You stopped this sequence manually. No further messages will go out to this prospect.</>
             ) : enrollment.status === "rebooked" ? (
@@ -368,7 +368,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
         // this run generated the real 30-day cadence content, it's just
         // not tied to a specific prospect yet — that only happens once
         // someone actually enrolls. Said plainly instead.
-        <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-3.5 text-xs text-amber-950 dark:text-amber-200 font-sans">
+        <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/10 p-3.5 text-sm text-amber-950 dark:text-amber-200 font-sans">
           <Wand2 size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
             <strong className="font-semibold text-amber-800 dark:text-amber-300">This is real, generated content, not a mock.</strong>{" "}
@@ -386,7 +386,7 @@ export function WinBackView({ detail }: { detail: WinBackDetail }) {
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           placeholder="Search touchpoint copy or day..."
-          className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+          className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
         />
       </div>
 
@@ -508,16 +508,16 @@ function CadenceTimeline({
   return (
     <div className="font-sans">
       <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2.5 font-sans">
-        <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+        <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">
           {hasEnrollment ? "Recovery cadence" : "Standard cadence template"}
         </h3>
-        <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
+        <span className="flex items-center gap-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-500">
           <Clock3 size={11} /> {formatDiaryDate(enrolledAt)} to {formatDiaryDate(windowEnd)} ({windowDays}d)
         </span>
       </div>
 
       {touchpoints.length === 0 ? (
-        <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
+        <div className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-500 italic font-sans">
           No recovery cadence content has been generated for this client yet.
         </div>
       ) : (
@@ -558,8 +558,8 @@ function CadenceTimeline({
                       ) : (
                         <MessageSquare size={13} className="shrink-0 text-zinc-500 dark:text-zinc-500" />
                       )}
-                      <span className="truncate text-xs font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</span>
-                      <span className="font-mono text-[10.5px] text-zinc-500 dark:text-zinc-500 shrink-0">{formatDiaryDate(tp.date)}</span>
+                      <span className="truncate text-sm font-bold text-zinc-900 dark:text-white font-sans">{dayLabel(tp.offsetDays)}</span>
+                      <span className="font-mono text-[13px] text-zinc-500 dark:text-zinc-500 shrink-0">{formatDiaryDate(tp.date)}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <StatusPill tone={status.tone}>{status.label}</StatusPill>
@@ -571,10 +571,10 @@ function CadenceTimeline({
                     <div className="px-3 pb-3 pl-[1.9rem] space-y-3 font-sans">
                       {tp.offsetDays === 0 && dayZeroLog?.personalizedOpening && (
                         <div className="space-y-1.5 font-sans">
-                          <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                          <span className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400">
                             <Wand2 size={11} /> AI-personalized opening actually delivered
                           </span>
-                          <div className="rounded-lg border border-amber-300 dark:border-amber-900/40 bg-transparent p-3 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
+                          <div className="rounded-lg border border-amber-300 dark:border-amber-900/40 bg-transparent p-3 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 font-sans">
                             {dayZeroLog.personalizedOpening}
                           </div>
                         </div>
@@ -582,7 +582,7 @@ function CadenceTimeline({
 
                       <div className="space-y-2 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-transparent p-3">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                          <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                             {tp.offsetDays === 0 ? "Standard Message" : "Message Content"}
                           </span>
                           {editingKey !== tp.key && (
@@ -590,7 +590,7 @@ function CadenceTimeline({
                               <button
                                 type="button"
                                 onClick={() => startEditing(tp)}
-                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
+                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[13px] cursor-pointer transition-colors font-sans"
                               >
                                 <Pencil size={11} />
                                 Edit
@@ -598,7 +598,7 @@ function CadenceTimeline({
                               <button
                                 type="button"
                                 onClick={() => handleCopy(tp)}
-                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[10.5px] cursor-pointer transition-colors font-sans"
+                                className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-[13px] cursor-pointer transition-colors font-sans"
                               >
                                 {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
                                 {copied ? "Copied" : "Copy"}
@@ -614,23 +614,23 @@ function CadenceTimeline({
                                 value={draftSubject}
                                 onChange={(e) => setDraftSubject(e.target.value)}
                                 placeholder="Subject"
-                                className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans"
+                                className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm font-semibold text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans"
                               />
                             )}
                             <textarea
                               value={draftBody}
                               onChange={(e) => setDraftBody(e.target.value)}
                               rows={6}
-                              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans resize-y"
+                              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 focus:border-zinc-400 dark:focus:border-zinc-600 focus:outline-none font-sans resize-y"
                             />
-                            <p className="text-[10.5px] text-zinc-500 dark:text-zinc-500 font-sans">{editNote}</p>
-                            {saveError && <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 font-sans">⚠ {saveError}</p>}
+                            <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">{editNote}</p>
+                            {saveError && <p className="text-[13px] font-semibold text-rose-600 dark:text-rose-400 font-sans">⚠ {saveError}</p>}
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={cancelEditing}
                                 disabled={saving}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-[10.5px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-[13px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
                               >
                                 <X size={11} /> Cancel
                               </button>
@@ -638,7 +638,7 @@ function CadenceTimeline({
                                 type="button"
                                 onClick={() => saveEditing(tp)}
                                 disabled={saving}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 text-[10.5px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 text-[13px] font-semibold cursor-pointer transition-colors font-sans disabled:opacity-40"
                               >
                                 {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
                                 Save
@@ -647,14 +647,14 @@ function CadenceTimeline({
                           </div>
                         ) : (
                           <>
-                            {tp.subject && <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {tp.subject}</p>}
-                            <div className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">{tp.body}</div>
+                            {tp.subject && <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 font-sans">Subject: {tp.subject}</p>}
+                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans">{tp.body}</div>
                           </>
                         )}
                       </div>
 
                       {skipped && (
-                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-500 font-sans">
+                        <div className="flex items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-500 font-sans">
                           <AlertCircle size={13} className="text-zinc-600 dark:text-zinc-400 shrink-0" />
                           This touch was skipped. The prospect exited the cadence on Day {exitedOffsetDays! + 1}.
                         </div>
@@ -668,7 +668,7 @@ function CadenceTimeline({
         </div>
       )}
 
-      <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2 text-[10px] text-zinc-500 dark:text-zinc-500 font-sans">
+      <p className="border-t border-zinc-200 dark:border-zinc-800 pt-2 text-xs text-zinc-500 dark:text-zinc-500 font-sans">
         {deliveryNote}
       </p>
     </div>

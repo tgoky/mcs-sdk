@@ -49,7 +49,7 @@ export function DailySendView({ detail }: { detail: DailySendDetail }) {
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+      <p className="text-[13px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
         {leads.length} lead{leads.length === 1 ? "" : "s"} · {pushed} pushed
         {held > 0 ? ` · ${held} held` : ""}
         {errors > 0 ? ` · ${errors} error(s)` : ""}
@@ -60,14 +60,14 @@ export function DailySendView({ detail }: { detail: DailySendDetail }) {
           return (
             <div key={l.id} className="py-3 first:pt-0">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{leadName(l)}</span>
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{leadName(l)}</span>
                 <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {l.companyName} {l.icp ? `· ${l.icp}` : ""} · {l.campaignId}
               </p>
               {l.status === "error" && l.statusDetail != null && (
-                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-mono break-all">
+                <p className="text-[13px] text-rose-600 dark:text-rose-400 mt-1 font-mono break-all">
                   {typeof l.statusDetail === "string" ? l.statusDetail : JSON.stringify(l.statusDetail)}
                 </p>
               )}

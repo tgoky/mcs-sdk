@@ -31,12 +31,12 @@ function SummarySection({ icon: Icon, label, items, tone }: { icon: React.Elemen
       : "text-zinc-500 dark:text-zinc-400";
   return (
     <div className="space-y-2">
-      <span className={`flex items-center gap-1.5 text-[10.5px] font-mono font-bold uppercase tracking-wider ${toneClass}`}>
+      <span className={`flex items-center gap-1.5 text-[13px] font-mono font-bold uppercase tracking-wider ${toneClass}`}>
         <Icon size={13} /> {label}
       </span>
       <ul className="space-y-1.5 pl-1">
         {items.map((item, i) => (
-          <li key={i} className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+          <li key={i} className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
             {item}
           </li>
         ))}

@@ -45,24 +45,24 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-2">
             <ShieldAlert size={16} className="text-rose-600 dark:text-rose-400" />
-            <h2 className="text-sm font-bold text-rose-900 dark:text-rose-200">Incident declared</h2>
+            <h2 className="text-[15px] font-bold text-rose-900 dark:text-rose-200">Incident declared</h2>
           </div>
           <StatusPill tone={severityTone}>severity {incident.severityScore}/100</StatusPill>
         </div>
-        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{incident.summary}</p>
+        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{incident.summary}</p>
         {incident.signalClass && (
-          <p className="text-[11px] font-mono text-rose-700 dark:text-rose-400 mt-2">
+          <p className="text-[13px] font-mono text-rose-700 dark:text-rose-400 mt-2">
             Force-triggered: {incident.signalClass.replace(/_/g, " ")} (declared regardless of score)
           </p>
         )}
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-2">
+        <p className="text-[13px] text-zinc-500 dark:text-zinc-500 mt-2">
           Status: {incident.status} · Nothing has been published. This is a notification only.
         </p>
       </div>
 
       {incident.contributingFindings.length > 0 && (
         <div>
-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+          <h3 className="text-[13px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
             Contributing findings ({incident.contributingFindings.length})
           </h3>
           <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -71,18 +71,18 @@ export function RepCrisisResponseView({ detail }: { detail: RepCrisisResponseDet
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="inline-flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-[2.5px] shrink-0 ${SOURCE_SWATCH[f.source] ?? "bg-zinc-400"}`} aria-hidden="true" />
-                    <span className="text-[10px] font-mono font-bold uppercase text-zinc-600 dark:text-zinc-400">
+                    <span className="text-xs font-mono font-bold uppercase text-zinc-600 dark:text-zinc-400">
                       {SOURCE_LABEL[f.source] ?? f.source}
                     </span>
                   </span>
                   {f.compositeScore !== undefined && (
-                    <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">composite {f.compositeScore}</span>
+                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500">composite {f.compositeScore}</span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-700 dark:text-zinc-300">{f.excerpt}</p>
-                {f.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">{f.flagReason}</p>}
+                <p className="text-sm text-zinc-700 dark:text-zinc-300">{f.excerpt}</p>
+                {f.flagReason && <p className="text-[13px] text-rose-600 dark:text-rose-400 mt-1">{f.flagReason}</p>}
                 {(f.reach !== undefined || f.sentiment !== undefined || f.permanence !== undefined) && (
-                  <div className="flex gap-3 mt-1.5 text-[10px] font-mono text-zinc-500 dark:text-zinc-500">
+                  <div className="flex gap-3 mt-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-500">
                     {f.reach !== undefined && <span>reach {f.reach}/10</span>}
                     {f.sentiment !== undefined && <span>sentiment {f.sentiment}/10</span>}
                     {f.permanence !== undefined && <span>permanence {f.permanence}/10</span>}

@@ -281,13 +281,13 @@ export function PileOnView({
                 )}
               </div>
               {prospectEmail && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                   {prospectEmail}
                   {bookingId && <span className="text-zinc-400 dark:text-zinc-600"> · Booking #{bookingId}</span>}
                 </p>
               )}
               {!prospectEmail && bookingId && (
-                <p className="text-xs text-zinc-500 font-mono">
+                <p className="text-sm text-zinc-500 font-mono">
                   Booking #{bookingId}
                 </p>
               )}
@@ -300,7 +300,7 @@ export function PileOnView({
         </div>
 
         {/* ── 2. CONVERSATIONAL SUMMARY BANNER ── */}
-        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/80 pt-2.5">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/80 pt-2.5">
           {buildSentenceSummary()}
         </p>
 
@@ -313,10 +313,10 @@ export function PileOnView({
           <div className="flex items-start gap-2.5 rounded-lg border border-[#424d77]/25 dark:border-[#c5b7ea]/30 bg-[#424d77]/[0.04] dark:bg-[#c5b7ea]/10 px-3 py-2.5">
             <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-[#424d77] dark:text-[#c5b7ea]" />
             <div className="space-y-0.5">
-              <p className="text-xs font-bold text-[#424d77] dark:text-[#c5b7ea]">
+              <p className="text-sm font-bold text-[#424d77] dark:text-[#c5b7ea]">
                 Recovered a lost lead
               </p>
-              <p className="text-xs text-[#424d77]/80 dark:text-[#c5b7ea]/80 leading-relaxed">
+              <p className="text-sm text-[#424d77]/80 dark:text-[#c5b7ea]/80 leading-relaxed">
                 {prospectEmail ?? "This prospect"} had no-showed and was actively in the Win-Back sequence. This
                 booking pulled them out of it{" "}
                 {recoveredTaggerStep?.status === "success" ? (
@@ -333,7 +333,7 @@ export function PileOnView({
       </div>
 
       {/* ── 3. EXECUTION STEPS BREADCRUMBS ── */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm sm:text-[15px] font-medium text-zinc-500 dark:text-zinc-400">
         <span className="text-zinc-800 dark:text-zinc-200">
           Booking Received
         </span>
@@ -359,14 +359,14 @@ export function PileOnView({
       {/* ── 4. AI PERSONALIZATION CONTENT ── */}
       <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          <span className="text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             AI Personalization Content
           </span>
           {send?.personalizedIntro && (
             <button
               type="button"
               onClick={() => handleCopy(send.personalizedIntro!, "intro")}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors hover-lift press-settle"
+              className="flex items-center gap-1 text-[13px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors hover-lift press-settle"
             >
               {copiedKey === "intro" ? (
                 <Check size={11} className="text-emerald-500" />
@@ -379,14 +379,14 @@ export function PileOnView({
         </div>
 
         {send?.personalizedIntro ? (
-          <p className="whitespace-pre-wrap pl-3 border-l-2 border-amber-400 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+          <p className="whitespace-pre-wrap pl-3 border-l-2 border-amber-400 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
             {send.personalizedIntro}
           </p>
         ) : send?.error ? (
           (() => {
             const diagnosis = classifyRunError(send.error);
             return (
-              <div className="flex items-start gap-2 pl-3 border-l-2 border-rose-500 text-xs text-rose-500">
+              <div className="flex items-start gap-2 pl-3 border-l-2 border-rose-500 text-sm text-rose-500">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <div>
                   <span className="font-semibold block">
@@ -400,7 +400,7 @@ export function PileOnView({
             );
           })()
         ) : (
-          <p className="pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 text-xs italic text-zinc-400">
+          <p className="pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 text-sm italic text-zinc-400">
             Standard {emailPlatformLabel(run.stack?.email_platform)} sequence used. No AI-personalized intro generated.
           </p>
         )}
@@ -408,7 +408,7 @@ export function PileOnView({
 
       {/* ── 5. DISPATCH CHANNELS ── */}
       <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
-        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        <span className="text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           Dispatch Channels
         </span>
 
@@ -421,7 +421,7 @@ export function PileOnView({
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Icon size={15} className="text-zinc-400 shrink-0" />
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                       {ch.title}
                     </span>
                     <SquishySkillBadge
@@ -440,11 +440,11 @@ export function PileOnView({
                   </HighContrastBadge>
                 </div>
 
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {ch.subtitle}
                 </p>
 
-                <div className="grid grid-cols-[130px_1fr] gap-y-1 text-xs pt-1">
+                <div className="grid grid-cols-[130px_1fr] gap-y-1 text-sm pt-1">
                   <span className="text-zinc-400">Platform</span>
                   <span className="text-zinc-700 dark:text-zinc-300 font-medium">
                     {ch.platform || "Not configured"}
@@ -465,7 +465,7 @@ export function PileOnView({
                 </div>
 
                 {ch.step?.detail && ch.step.status === "failed" && (
-                  <div className="pt-1 text-xs text-rose-500">
+                  <div className="pt-1 text-sm text-rose-500">
                     {(() => {
                       const diagnosis = classifyRunError(ch.step.detail);
                       return diagnosis ? (
@@ -487,13 +487,13 @@ export function PileOnView({
                 {/* SMS Detailed History */}
                 {ch.type === "sms" && ch.messages && ch.messages.length > 0 && (
                   <div className="space-y-1 pt-2">
-                    <span className="text-[10px] font-mono uppercase text-zinc-400">
+                    <span className="text-xs font-mono uppercase text-zinc-400">
                       Messages ({ch.messages.length})
                     </span>
                     {ch.messages.map((m, i) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between text-xs py-1.5"
+                        className="flex items-center justify-between text-sm py-1.5"
                       >
                         <span className="font-medium text-zinc-700 dark:text-zinc-300">
                           Text #{i + 1} :{" "}

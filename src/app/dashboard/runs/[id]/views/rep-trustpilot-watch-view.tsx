@@ -30,7 +30,7 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
 
   return (
     <div className="flex flex-col gap-2 font-sans antialiased">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
+      <p className="text-[13px] text-zinc-500 dark:text-zinc-500 pb-1 border-b border-zinc-200 dark:border-zinc-800">
         {reviews.length} new review{reviews.length === 1 ? "" : "s"} · {reviews.filter((r) => r.flagged).length} flagged
       </p>
       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -39,15 +39,15 @@ export function RepTrustpilotWatchView({ detail }: { detail: RepTrustpilotWatchD
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2">
               <StarRating rating={r.rating} />
-              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{r.reviewerName ?? "Anonymous"}</span>
+              <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{r.reviewerName ?? "Anonymous"}</span>
             </div>
             <div className="flex items-center gap-2">
               <FlaggedPill flagged={r.flagged} reason={r.flagReason} />
               <SentimentPill sentiment={r.sentiment} />
             </div>
           </div>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{r.reviewText}</p>
-          {r.flagReason && <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1.5">{r.flagReason}</p>}
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{r.reviewText}</p>
+          {r.flagReason && <p className="text-[13px] text-rose-600 dark:text-rose-400 mt-1.5">{r.flagReason}</p>}
         </div>
       ))}
       </div>

@@ -69,11 +69,11 @@ export function ViewSwitcher({
             className={
               seamless
                 ? cn(
-                    "flex items-center gap-1.5 text-sm transition-colors cursor-pointer",
+                    "flex items-center gap-1.5 text-[15px] transition-colors cursor-pointer",
                     active ? "font-bold text-zinc-900 dark:text-white" : "font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                   )
                 : cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer hover-lift press-settle",
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors cursor-pointer hover-lift press-settle",
                     active ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-elevation-1" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                   )
             }

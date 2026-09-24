@@ -147,7 +147,7 @@ export function PreCallReadView({
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search prospect name..."
-            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-800 dark:text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-800 dark:text-zinc-200 font-sans placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
           />
         </div>
 
@@ -168,7 +168,7 @@ export function PreCallReadView({
       {/* ----------------------------------------------------------------- */}
       {mode === "calendar" && (
         <div key="calendar" className="run-view-content-enter flex flex-col gap-3 font-sans">
-          <div className="flex items-center gap-2.5 text-[11px] font-sans">
+          <div className="flex items-center gap-2.5 text-[13px] font-sans">
             <div className="h-3.5 w-1 shrink-0 rounded-full bg-emerald-500/80" />
             <span className="text-zinc-600 dark:text-zinc-400 font-semibold">{phaseLabel("roster_fetch")}</span>
             <span className="text-zinc-400 dark:text-zinc-700">·</span>
@@ -186,7 +186,7 @@ export function PreCallReadView({
           {callsByDay.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-14 text-zinc-700 dark:text-zinc-600 font-sans">
               <CalendarX size={22} />
-              <span className="text-xs">This run&apos;s window came back empty. Nothing to brief.</span>
+              <span className="text-sm">This run&apos;s window came back empty. Nothing to brief.</span>
             </div>
           ) : (
             callsByDay.map(([dayKeyStr, dayCalls]) => {
@@ -207,11 +207,11 @@ export function PreCallReadView({
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+                      <span className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">
                         {d.toLocaleDateString(undefined, { weekday: "long" })}
-                        {isToday && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400">Today</span>}
+                        {isToday && <span className="ml-2 text-xs font-bold uppercase tracking-wider text-emerald-400">Today</span>}
                       </span>
-                      <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
+                      <span className="text-[13px] font-mono text-zinc-500 dark:text-zinc-500">
                         {dayCalls.length} call{dayCalls.length === 1 ? "" : "s"} in this run&apos;s window
                       </span>
                     </div>
@@ -235,13 +235,13 @@ export function PreCallReadView({
       {mode === "list" && (
         <div key="list" className="run-view-content-enter font-sans">
           {callsByDay.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-500 italic font-sans">
+            <div className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-500 italic font-sans">
               No sales calls scheduled in this briefing window.
             </div>
           ) : (
             callsByDay.map(([day, dayCalls]) => (
               <div key={day}>
-                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
+                <div className="border-b border-t border-zinc-200 dark:border-zinc-800 py-1.5 text-[13px] font-bold uppercase tracking-wide text-zinc-600 dark:text-zinc-400 font-sans">
                   {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
                     weekday: "long",
                     month: "long",
@@ -249,9 +249,9 @@ export function PreCallReadView({
                   })}
                 </div>
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-xs font-sans">
+                <table className="w-full min-w-[560px] text-left text-sm font-sans">
                   <thead>
-                    <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-[10px] uppercase text-zinc-500 dark:text-zinc-500 font-sans">
+                    <tr className="border-b border-zinc-200/60 dark:border-zinc-800/60 text-xs uppercase text-zinc-500 dark:text-zinc-500 font-sans">
                       <th className="px-4 py-2 font-semibold">Prospect</th>
                       <th className="px-4 py-2 font-semibold">Call Time</th>
                       <th className="px-4 py-2 font-semibold">Identity</th>
@@ -289,7 +289,7 @@ export function PreCallReadView({
                                   e.stopPropagation();
                                   setExpandedId(isExpanded ? null : call.id);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1.5 text-[11px] font-bold text-white dark:text-zinc-950 hover:bg-zinc-700 dark:hover:bg-zinc-200 cursor-pointer font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+                                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1.5 text-[13px] font-bold text-white dark:text-zinc-950 hover:bg-zinc-700 dark:hover:bg-zinc-200 cursor-pointer font-sans shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
                               >
                                 {isExpanded ? "Hide" : "View"}
                                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -422,8 +422,8 @@ function CallCard({
       {/* Header: prospect, time, status — all visible with no click */}
       <div className="flex items-center justify-between gap-2 py-3 border-b border-zinc-100 dark:border-zinc-800">
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-zinc-900 dark:text-white">{call.prospectName ?? "Unnamed prospect"}</p>
-          <p className="mt-0.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-500">
+          <p className="truncate text-[15px] font-bold text-zinc-900 dark:text-white">{call.prospectName ?? "Unnamed prospect"}</p>
+          <p className="mt-0.5 text-[13px] font-mono text-zinc-500 dark:text-zinc-500">
             {timeStr(call.callTime)} on {new Date(call.callTime).toLocaleDateString()}
           </p>
         </div>
@@ -432,7 +432,7 @@ function CallCard({
           <button
             type="button"
             onClick={handleCopyText}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-semibold cursor-pointer transition-colors shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[13px] font-semibold cursor-pointer transition-colors shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
           >
             {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
             {copied ? "Copied" : "Copy"}
@@ -446,16 +446,16 @@ function CallCard({
             destination even when nothing had been delivered, so a call
             that failed to send still showed "Sent to: Slack message" as
             if it succeeded — the exact mismatch that broke trust. */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-2 gap-2 text-sm">
          <div className="space-y-0.5">
-            <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
+            <span className="block text-xs font-mono uppercase text-zinc-500 dark:text-zinc-500">Prospect identity</span>
             <div className="flex items-center gap-1.5">
               <p className="font-semibold text-zinc-800 dark:text-zinc-200">{matchLabel(call).text}</p>
               {call.personMatchTrace && (
                 <button
                   type="button"
                   onClick={() => setShowMatchDetail((v) => !v)}
-                  className="text-[10px] font-mono text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 underline decoration-dotted cursor-pointer"
+                  className="text-xs font-mono text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 underline decoration-dotted cursor-pointer"
                 >
                   {showMatchDetail ? "hide" : "why?"}
                 </button>
@@ -463,7 +463,7 @@ function CallCard({
             </div>
           </div>
  <div className="space-y-0.5">
-            <span className="block text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
+            <span className="block text-xs font-mono uppercase text-zinc-500 dark:text-zinc-500">Sent to</span>
             {call.briefDeliveredAt ? (
               <p className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
                 <DestIcon size={12} className="text-zinc-600 dark:text-zinc-400" />
@@ -476,7 +476,7 @@ function CallCard({
         </div>
 
         {showMatchDetail && call.personMatchTrace && (
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-2.5 text-[11px] font-mono space-y-1">
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-2.5 text-[13px] font-mono space-y-1">
             {MATCH_TRACE_SIGNALS.map(({ pointsKey, typeKey, label }) => {
               const points = call.personMatchTrace![pointsKey];
               const type = typeKey ? call.personMatchTrace![typeKey] : undefined;
@@ -504,12 +504,12 @@ function CallCard({
             fallback string that could disagree with the step timeline. */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Call Brief</span>
+            <span className="block text-xs font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Call Brief</span>
             {call.briefText && (
               <button
                 type="button"
                 onClick={() => setIsEditing((p) => !p)}
-                className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer hover-lift press-settle"
+                className="text-[13px] font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer hover-lift press-settle"
               >
                 {isEditing ? "Done editing" : "Edit brief text"}
               </button>
@@ -521,14 +521,14 @@ function CallCard({
               value={editableText}
               onChange={(e) => setEditableText(e.target.value)}
               rows={10}
-              className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
+              className="w-full p-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-500 leading-relaxed"
             />
           ) : editableText ? (
-           <div className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+           <div className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
               {editableText}
             </div>
           ) : (
-            <div className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <div className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               {status === "failed"
                 ? stepDetail
                   ? `Brief generation failed: ${stepDetail}`
@@ -538,7 +538,7 @@ function CallCard({
           )}
 
           {stepDetail && status === "brief_ready" && !call.briefDeliveredAt && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400">
+            <p className="text-[13px] text-amber-700 dark:text-amber-400">
               Brief generated but not sent: {stepDetail}
             </p>
           )}
@@ -546,14 +546,14 @@ function CallCard({
 
         {/* Log Call Outcome — filled buttons, no borders */}
         <div className="space-y-1.5 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-          <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Log Sales Call Outcome</span>
+          <span className="block text-xs font-mono uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Log Sales Call Outcome</span>
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => handleLogOutcome("showed")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-sm font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "showed"
                   ? "bg-emerald-500 text-zinc-950"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -568,7 +568,7 @@ function CallCard({
               onClick={() => handleLogOutcome("no_show")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-sm font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "no_show"
                   ? "bg-rose-500 text-white"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -583,7 +583,7 @@ function CallCard({
               onClick={() => handleLogOutcome("rescheduled")}
               disabled={outcomeSubmitting !== null}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
+                "flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-sm font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle",
                 loggedOutcome === "rescheduled"
                   ? "bg-amber-500 text-zinc-950"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -593,7 +593,7 @@ function CallCard({
               {outcomeSubmitting === "rescheduled" ? "Logging…" : "Rescheduled"}
             </button>
           </div>
-          {outcomeError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}
+          {outcomeError && <p className="text-[13px] text-rose-600 dark:text-rose-400">{outcomeError}</p>}
         </div>
 
         {/* Resend — only offered once there's something to send */}
@@ -603,7 +603,7 @@ function CallCard({
               type="button"
               onClick={handleResendToSlack}
               disabled={deliveryState === "sending"}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold text-xs hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shadow-elevation-1 hover:shadow-elevation-2 hover-lift press-settle"
             >
               {deliveryState === "sent" ? <Check size={13} /> : <Send size={13} />}
               {deliveryState === "sending"
@@ -613,7 +613,7 @@ function CallCard({
                   : "Send Brief to Slack"}
             </button>
             {deliveryState === "error" && deliveryError && (
-              <p className="text-[11px] text-rose-600 dark:text-rose-400 text-center">{deliveryError}</p>
+              <p className="text-[13px] text-rose-600 dark:text-rose-400 text-center">{deliveryError}</p>
             )}
           </div>
         )}

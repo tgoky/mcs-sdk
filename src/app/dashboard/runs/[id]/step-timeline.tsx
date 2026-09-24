@@ -176,23 +176,23 @@ export function StepTimeline({
 
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
                   {phaseLabel(step.phase)}
                 </p>
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${visual.className}`}>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${visual.className}`}>
                   {interrupted ? "Interrupted" : visual.label}
                 </span>
               </div>
 
               {(step.label || step.detail) && (
                 <div className="mt-1.5 space-y-1">
-                  {step.label && <p className="text-xs font-medium text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.label}</p>}
-                  {step.detail && <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.detail}</p>}
+                  {step.label && <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.label}</p>}
+                  {step.detail && <p className="text-sm leading-5 text-zinc-500 dark:text-zinc-500 dark:text-zinc-400">{step.detail}</p>}
                 </div>
               )}
             </div>
 
-            <div className="flex shrink-0 items-start gap-1.5 pt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">
+            <div className="flex shrink-0 items-start gap-1.5 pt-0.5 text-[13px] text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">
               {duration && <span>{duration}</span>}
               <span>{formatTime(step.startedAt)}</span>
             </div>
@@ -207,7 +207,7 @@ export function StepTimeline({
               <Minus className="h-3.5 w-3.5" />
             </span>
           </div>
-          <p className="pt-1 text-xs text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">{copy.nextStepCompiling}</p>
+          <p className="pt-1 text-sm text-zinc-600 dark:text-zinc-400 dark:text-zinc-500">{copy.nextStepCompiling}</p>
         </li>
       )}
     </ol>

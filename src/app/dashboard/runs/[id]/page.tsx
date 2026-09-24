@@ -101,7 +101,7 @@ function RunStatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${config.className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[13px] font-semibold tracking-wide ${config.className}`}>
       {config.icon}
       {runStatusLabel(status)}
     </span>
@@ -224,7 +224,7 @@ function CopyRunId({ runId }: { runId: string }) {
           setTimeout(() => setCopied(false), 1500);
         }
       }}
-      className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer hover-lift press-settle"
+      className="flex items-center gap-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer hover-lift press-settle"
       title={runId}
     >
       <span className="truncate max-w-[130px]">{runId}</span>
@@ -249,25 +249,25 @@ function SummarySection({ summary }: { summary: RunSummary }) {
     <section>
       <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
         <FileText className="h-4 w-4 text-zinc-500 dark:text-zinc-500" />
-        <h2 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{copy.summarySectionTitle}</h2>
       </div>
       <div className="divide-y divide-zinc-200/80 dark:divide-zinc-800/80">
         {visibleFields.map(({ key, label, emptyText, tone }) => {
           const items = summary[key] ?? [];
           return (
             <div key={key} className="py-2.5">
-              <p className={`text-[10px] font-bold uppercase tracking-wider ${tone}`}>{label}</p>
+              <p className={`text-xs font-bold uppercase tracking-wider ${tone}`}>{label}</p>
               {items.length > 0 ? (
                 <ul className="mt-1.5 space-y-1">
                   {items.map((item, index) => (
-                    <li key={index} className="flex gap-2 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+                    <li key={index} className="flex gap-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
                       <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                       <span>{item}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">{emptyText}</p>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">{emptyText}</p>
               )}
             </div>
           );
@@ -401,7 +401,7 @@ export default function RunDetailPage() {
         </Link>
         <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 px-6 py-10 text-center">
           <XCircle className="mx-auto mb-3 h-7 w-7 text-rose-500" />
-          <p className="text-sm font-semibold text-rose-300">{error ?? "Run trace not found"}</p>
+          <p className="text-[15px] font-semibold text-rose-300">{error ?? "Run trace not found"}</p>
         </div>
       </div>
     );
@@ -440,7 +440,7 @@ export default function RunDetailPage() {
           <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white truncate">
             {anySkillDisplayName(run.skillName)}
           </h1>
-          <span className="text-xs text-zinc-500 dark:text-zinc-500 hidden sm:inline">
+          <span className="text-sm text-zinc-500 dark:text-zinc-500 hidden sm:inline">
             {run.buyerName ? `(${run.buyerName})` : ""}
           </span>
         </div>
@@ -450,7 +450,7 @@ export default function RunDetailPage() {
             run." Diary-style date/time now sits immediately before the
             status, duration moved into the Details panel below where it's
             still available without competing for the most prominent spot. */}
-        <div className="flex items-center gap-3 shrink-0 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+        <div className="flex items-center gap-3 shrink-0 text-sm text-zinc-600 dark:text-zinc-400 font-mono">
           <span>{formatDiaryDateTime(run.startedAt)}</span>
           <span className="text-zinc-300 dark:text-zinc-800">·</span>
           <RunStatusBadge status={run.status} />
@@ -462,7 +462,7 @@ export default function RunDetailPage() {
       {isFailed && (() => {
         const diagnosis = classifyRunError(run.errorMessage);
         return (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3.5 py-2.5 text-xs text-rose-950 dark:text-rose-200 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3.5 py-2.5 text-sm text-rose-950 dark:text-rose-200 shadow-sm">
             <div className="flex items-start gap-2 min-w-0">
               <CircleAlert size={15} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div className="min-w-0 font-sans">
@@ -484,7 +484,7 @@ export default function RunDetailPage() {
                   // strictly more useful than silence.
                   <>
                     <span className="font-bold text-rose-800 dark:text-rose-300">This run failed with an error we haven&apos;t seen enough of yet to auto-diagnose.</span>
-                    <p className="text-rose-900/90 dark:text-rose-200/90 mt-0.5 font-mono text-[11px] break-words">{run.errorMessage}</p>
+                    <p className="text-rose-900/90 dark:text-rose-200/90 mt-0.5 font-mono text-[13px] break-words">{run.errorMessage}</p>
                     <p className="text-rose-900/70 dark:text-rose-200/70 mt-1">If this keeps happening, share the message above with your account contact.</p>
                   </>
                 ) : (
@@ -498,7 +498,7 @@ export default function RunDetailPage() {
             {run.engagementId && diagnosis && (
               <Link
                 href={`/dashboard/engagements/${run.engagementId}?fixSection=${diagnosis.section}#stack-settings`}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-colors shrink-0"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[13px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-colors shrink-0"
               >
                 <Wrench size={12} />
                 <span>Fix Settings</span>
@@ -509,14 +509,14 @@ export default function RunDetailPage() {
       })()}
 
       {isCancelled && (
-        <div className="flex items-center gap-2 border-l-2 border-zinc-300 dark:border-zinc-700 pl-3 py-1 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-2 border-l-2 border-zinc-300 dark:border-zinc-700 pl-3 py-1 text-sm text-zinc-600 dark:text-zinc-400">
           <Ban size={14} className="text-zinc-500 dark:text-zinc-500" />
           <span>This run was cancelled.</span>
         </div>
       )}
 
       {isTimedOut && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3.5 py-2 text-xs text-amber-300">
+        <div className="flex items-center gap-2 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3.5 py-2 text-sm text-amber-300">
           <Clock3 size={14} className="text-amber-400" />
           <span>This run took longer than expected and was stopped automatically.</span>
         </div>
@@ -531,7 +531,7 @@ export default function RunDetailPage() {
         ) : detail && detail.run.id === run.id ? (
           <SkillView detail={detail} steps={steps} onRefreshDetail={fetchDetail} />
         ) : (
-          <div className="px-6 py-10 text-center text-xs text-zinc-500 dark:text-zinc-500">
+          <div className="px-6 py-10 text-center text-sm text-zinc-500 dark:text-zinc-500">
             We don&apos;t have anything more to show for this run yet.
           </div>
         )}
@@ -547,7 +547,7 @@ export default function RunDetailPage() {
         <button
           type="button"
           onClick={() => setShowRunActivity((p) => !p)}
-          className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none hover-lift press-settle"
+          className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white cursor-pointer select-none hover-lift press-settle"
         >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showRunActivity ? "rotate-180" : ""}`} />
           <span>{showRunActivity ? "Hide" : "Show"} the step-by-step log</span>
@@ -555,7 +555,7 @@ export default function RunDetailPage() {
           <span className="text-zinc-500 dark:text-zinc-500">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
         </button>
         {!showRunActivity && (
-          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-600 pl-5">
+          <p className="mt-1 text-[13px] text-zinc-400 dark:text-zinc-600 pl-5">
             The exact sequence of internal steps behind the summary above. It&apos;s useful if something looks off and you need the play-by-play.
           </p>
         )}
@@ -564,12 +564,12 @@ export default function RunDetailPage() {
           <div className="mt-3 grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
             <section>
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
-                <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Step-by-step log</span>
+                <span className="text-[13px] font-mono text-zinc-500 dark:text-zinc-500">{steps.length} steps</span>
               </div>
               <div className="max-h-[75vh] overflow-y-auto pt-3">
                 {steps.length === 0 ? (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-500 italic text-center py-6">{copy.noStepsRecorded}</p>
                 ) : (
                   <StepTimeline steps={steps} isRunning={isRunning} runStatus={run.status} />
                 )}
@@ -578,8 +578,8 @@ export default function RunDetailPage() {
 
             <aside className="space-y-5">
               {run.summary && <SummarySection summary={run.summary} />}
-              <div className="text-xs space-y-2">
-                <span className="text-[10px] uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">Details</span>
+              <div className="text-sm space-y-2">
+                <span className="text-xs uppercase text-zinc-500 dark:text-zinc-500 block font-sans font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">Details</span>
                 <div className="flex justify-between text-zinc-600 dark:text-zinc-400 font-sans pt-1">
                   <span>Started</span>
                   <span className="text-zinc-800 dark:text-zinc-200">{formatDiaryDateTime(run.startedAt)}</span>
@@ -592,7 +592,7 @@ export default function RunDetailPage() {
                   <span className="shrink-0">Run ID</span>
                   <CopyRunId runId={run.id} />
                 </div>
-                <p className="text-[10px] text-zinc-700 dark:text-zinc-600 font-sans pt-1">Uniquely identifies this run. Copy it if you need to report a problem with it.</p>
+                <p className="text-xs text-zinc-700 dark:text-zinc-600 font-sans pt-1">Uniquely identifies this run. Copy it if you need to report a problem with it.</p>
               </div>
             </aside>
           </div>
