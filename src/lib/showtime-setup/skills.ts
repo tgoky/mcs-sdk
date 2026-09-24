@@ -39,7 +39,7 @@ export const SHOWTIME_SKILLS: ShowtimeSkill[] = [
   {
     id: "pile-on",
     blurb: "Warm-up emails and texts between booking and the call",
-    needs: { groups: ["booking", "email"], offer: false, website: false, picks: ["target_list_id"], choices: ["smsPlatform", "adDataPlatform"] },
+    needs: { groups: ["booking", "email"], offer: false, website: false, picks: ["target_list_id", "target_workflow_id"], choices: ["smsPlatform", "adDataPlatform"] },
   },
   {
     id: "pre-call-read",

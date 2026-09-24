@@ -8,11 +8,31 @@
 import type { ClientFact } from "@/lib/client-facts";
 import { hasCredential, listEngagementsUsingVaultCredential, listVaultCredentials } from "@/lib/credentials";
 import { factTier } from "@/lib/fact-trust";
+import type { EngagementStack } from "@/models/schema";
+import { ghlLocationIdOf, isGhlProvider, loadStack } from "@/lib/ghl-location";
 import type { SetupTool } from "./catalog";
 import type { ToolState } from "./types";
 
+/** The tool's one extra value as saved for this client (GoHighLevel's
+ * Location ID with the location's name, ActiveCampaign's account URL). One
+ * value per client, whichever product's setup asked for it. */
+export function toolExtra(t: SetupTool, stack: Partial<EngagementStack>, facts: Record<string, ClientFact>): ToolState["extra"] {
+  if (!t.extraField) return undefined;
+  if (isGhlProvider(t.provider)) {
+    const id = ghlLocationIdOf(stack);
+    const known = facts.ghlLocation?.value as { id?: string; name?: string } | undefined;
+    return { value: id, display: id && known?.id === id && known.name ? known.name : id };
+  }
+  if (t.provider === "activecampaign") {
+    const url = typeof stack.activecampaign_base_url === "string" && stack.activecampaign_base_url.trim() ? stack.activecampaign_base_url : null;
+    return { value: url, display: url };
+  }
+  return undefined;
+}
+
 export async function loadToolStates(engagementId: string, workspaceId: string, tools: SetupTool[], facts: Record<string, ClientFact>): Promise<ToolState[]> {
   const vault = await listVaultCredentials(workspaceId);
+  const stack = tools.some((t) => t.extraField) ? await loadStack(engagementId) : {};
   const out: ToolState[] = [];
   for (const t of tools) {
     const savedHere = vault.filter((v) => v.provider === t.provider);
@@ -35,6 +55,7 @@ export async function loadToolStates(engagementId: string, workspaceId: string, 
       seenOnSite: false,
       saved,
       accountCheck: check && typeof check.matches === "boolean" ? { matches: check.matches, probability: check.probability ?? 0 } : null,
+      extra: toolExtra(t, stack, facts),
     });
   }
   return out;

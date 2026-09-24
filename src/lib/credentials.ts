@@ -470,6 +470,16 @@ export async function resolveVaultCredentialValue(vaultId: string): Promise<stri
  * Checks whether a credential exists without throwing.
  * Use this for conditional platform support checks.
  */
+/** The saved (vault) connection this engagement uses for a provider, if it uses one. */
+export async function linkedVaultId(engagementId: string, provider: string): Promise<string | null> {
+  const [row] = await db
+    .select({ vaultId: credentialsRefs.vaultId })
+    .from(credentialsRefs)
+    .where(and(eq(credentialsRefs.engagementId, engagementId), eq(credentialsRefs.provider, provider)))
+    .limit(1);
+  return row?.vaultId ?? null;
+}
+
 export async function hasCredential(
   engagementId: string,
   provider: string

@@ -26,6 +26,8 @@ const LIST_RESOURCES: Record<string, { target?: string; recovery?: string }> = {
 export const PICK_PURPOSE: Record<PickSlot, string> = {
   target_list_id:
     "Pile-On adds every newly booked call to this list, so the lead gets the follow-up emails that keep them warm before the call.",
+  target_workflow_id:
+    "Pile-On adds every newly booked call to this workflow, so the lead gets the follow-up messages that keep them warm before the call.",
   recovery_list_id:
     "Win-Back adds anyone who misses their booked call to this list, so they get the rebooking and win-back sequence.",
   recovery_workflow_id: "Win-Back enrolls anyone who misses their booked call into this workflow, so they get the rebooking sequence.",
@@ -37,6 +39,8 @@ export function showtimePickTargets(opts: {
   emailPlatform: string | null;
   hostingPlatform: string | null;
   activecampaignBaseUrl?: string | null;
+  /** GoHighLevel can't be asked for its workflows without the Location ID. */
+  ghlLocationId?: string | null;
 }): PickTarget[] {
   const out: PickTarget[] = [];
   const email = opts.emailPlatform;
@@ -48,6 +52,11 @@ export function showtimePickTargets(opts: {
       if (r.target) out.push({ slot: "target_list_id", provider: email, resource: r.target, params, purpose: PICK_PURPOSE.target_list_id });
       if (r.recovery) out.push({ slot: "recovery_list_id", provider: email, resource: r.recovery, params, purpose: PICK_PURPOSE.recovery_list_id });
     }
+  }
+  if (email === "ghl" && opts.ghlLocationId) {
+    const params = { locationId: opts.ghlLocationId };
+    out.push({ slot: "target_workflow_id", provider: "ghl", resource: "ghl-workflows", params, purpose: PICK_PURPOSE.target_workflow_id });
+    out.push({ slot: "recovery_workflow_id", provider: "ghl", resource: "ghl-workflows", params, purpose: PICK_PURPOSE.recovery_workflow_id });
   }
   if (email === "hubspot") {
     out.push({ slot: "recovery_workflow_id", provider: "hubspot", resource: "hubspot-workflows", purpose: PICK_PURPOSE.recovery_workflow_id });

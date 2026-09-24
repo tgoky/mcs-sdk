@@ -26,6 +26,13 @@ describe("showtimePickTargets", () => {
     expect(withUrl[0].params).toEqual({ baseUrl: "https://a.api-us1.com/api/3" });
   });
 
+  it("asks GoHighLevel for Pile-On and Win-Back workflows once its Location ID is known", () => {
+    expect(showtimePickTargets({ emailPlatform: "ghl", hostingPlatform: null })).toEqual([]);
+    const withLocation = showtimePickTargets({ emailPlatform: "ghl", hostingPlatform: null, ghlLocationId: "ve9EPM428h8vShlRW1KT" });
+    expect(slots(withLocation)).toEqual(["target_workflow_id:ghl-workflows", "recovery_workflow_id:ghl-workflows"]);
+    expect(withLocation[0].params).toEqual({ locationId: "ve9EPM428h8vShlRW1KT" });
+  });
+
   it("asks which site or project to publish to for hosts with a publish API", () => {
     expect(slots(showtimePickTargets({ emailPlatform: null, hostingPlatform: "webflow" }))).toEqual(["webflow_site_id:webflow-sites"]);
     expect(slots(showtimePickTargets({ emailPlatform: null, hostingPlatform: "nextjs_vercel" }))).toEqual(["vercel_project_name:vercel-projects"]);

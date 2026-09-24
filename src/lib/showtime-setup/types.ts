@@ -39,9 +39,13 @@ export interface ToolState {
   /** Jev's answer to "does this connected account belong to the business
    * on the website?". Null when there wasn't enough to check. */
   accountCheck: { matches: boolean; probability: number } | null;
+  /** The tool's one extra value (GoHighLevel's Location ID, ActiveCampaign's
+   * account URL), when it has one: what's saved for this client, and a name
+   * to show for it. value null means it still needs asking. */
+  extra?: { value: string | null; display: string | null };
 }
 
-export type PickSlot = "target_list_id" | "recovery_list_id" | "recovery_workflow_id" | "webflow_site_id" | "vercel_project_name";
+export type PickSlot = "target_list_id" | "target_workflow_id" | "recovery_list_id" | "recovery_workflow_id" | "webflow_site_id" | "vercel_project_name";
 
 export interface PickState {
   slot: PickSlot;
@@ -149,6 +153,7 @@ export interface ActivationStep {
 
 export const PICK_SLOT_META: Record<PickSlot, { label: string; stackField: string }> = {
   target_list_id: { label: "Pile-On list", stackField: "target_list_id" },
+  target_workflow_id: { label: "Pile-On workflow", stackField: "target_workflow_id" },
   recovery_list_id: { label: "Win-Back list", stackField: "recovery_list_id" },
   recovery_workflow_id: { label: "Win-Back workflow", stackField: "recovery_workflow_id" },
   webflow_site_id: { label: "Webflow site", stackField: "hosting_platform_meta.webflow_site_id" },

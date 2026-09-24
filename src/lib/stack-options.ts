@@ -20,6 +20,7 @@ export const PROVIDER_BY_RESOURCE: Record<string, string> = {
   "activecampaign-lists": "activecampaign",
   "activecampaign-automations": "activecampaign",
   "hubspot-workflows": "hubspot",
+  "ghl-workflows": "ghl",
   "webflow-sites": "webflow",
   "webflow-collections": "webflow",
   "vercel-projects": "nextjs_vercel",
@@ -52,6 +53,23 @@ export async function fetchStackOptions(resource: string, credential: string, pa
       if (!res.ok) throw new Error(`HubSpot rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
       const data: { workflows?: Array<{ id: number; name?: string }> } = await res.json();
       return (data.workflows ?? []).map((w) => ({ id: String(w.id), name: w.name ?? "Unnamed Workflow" }));
+    }
+
+    case "ghl-workflows": {
+      const locationId = params.get("locationId")?.trim();
+      if (!locationId) throw new Error("Add the GoHighLevel Location ID first. It tells us which sub-account to ask.");
+      // Flat endpoint scoped by a locationId query parameter, not nested
+      // under /locations/{id} (see api/integrations/ghl/workflows/route.ts).
+      const res = await fetch(`https://services.leadconnectorhq.com/workflows/?locationId=${encodeURIComponent(locationId)}`, {
+        headers: { Authorization: `Bearer ${credential}`, Version: "2021-07-28", Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(`GoHighLevel rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+      const data: { workflows?: Array<{ id: string; name?: string; status?: string }> } = await res.json();
+      // A draft workflow accepts contacts but never runs; published ones first.
+      return (data.workflows ?? [])
+        .map((w) => ({ id: w.id, name: `${w.name ?? "Unnamed Workflow"}${w.status && w.status !== "published" ? ` (${w.status})` : ""}`, published: !w.status || w.status === "published" }))
+        .sort((a, b) => Number(b.published) - Number(a.published))
+        .map(({ id, name }) => ({ id, name }));
     }
 
     case "mailchimp-lists": {

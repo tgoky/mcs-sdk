@@ -254,6 +254,11 @@ export function RepSetup({
       return err;
     },
     choose: () => undefined,
+    setExtra: async (tool, extras) => {
+      const err = await post(connectPath, { provider: tool.provider, ...extras });
+      if (!err) await load().catch(() => undefined);
+      return err;
+    },
   };
 
   // ── Set it up ──

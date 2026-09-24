@@ -29,7 +29,7 @@ type PreviewResult =
 const REASON_COPY: Record<string, string> = {
   not_configured: "Not available. This only covers clients on HubSpot or GHL as their email/CRM platform.",
   no_credential: "Waiting on your HubSpot/GHL credential. Connect it in Update Credentials to see a live preview here.",
-  no_location_id: "Waiting on a GHL location id in the booking/email platform metadata.",
+  no_location_id: "Waiting on your GoHighLevel Location ID. Tap the GoHighLevel logo in setup and add it once; every skill reuses it.",
   fetch_failed: "Couldn't reach the CRM right now. This doesn't block saving, just try again in a bit.",
 };
 

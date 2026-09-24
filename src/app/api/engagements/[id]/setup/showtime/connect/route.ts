@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { afterResponse } from "@/lib/after-response";
 import {
+  hasCredential,
   linkEngagementToVault,
+  linkedVaultId,
+  listEngagementsUsingVaultCredential,
+  resolveCredential,
   storeVaultCredential,
   syncStackCredentialMarkers,
   unlinkEngagementFromVault,
@@ -9,7 +13,18 @@ import {
   resolveVaultCredentialValue,
   listVaultCredentials,
 } from "@/lib/credentials";
-import { harvestAccountMetadata, isHarvestableProvider } from "@/lib/account-harvest";
+import { harvestAccountMetadata, harvestGHLLocation, isHarvestableProvider } from "@/lib/account-harvest";
+import { upsertClientFact } from "@/lib/client-facts";
+import {
+  checkGhlLocation,
+  ghlLocationFromSharedToken,
+  ghlLocationIdOf,
+  ghlLocationPatch,
+  isGhlProvider,
+  loadStack,
+  otherGhlProvider,
+  parseGhlLocationId,
+} from "@/lib/ghl-location";
 import { harvestPasteKeyMetadata } from "@/lib/paste-key-harvest";
 import { deepPullAfterConnect } from "@/lib/account-intel";
 import { patchEngagementStack } from "@/lib/engagement-stack";
@@ -48,10 +63,21 @@ const HARVEST_WAIT_MS = 15_000;
  * Connects one Showtime tool for this client from the setup screen.
  *
  * Body, one of:
- *   { provider, value, activecampaignBaseUrl? }  paste a key: saved to the
- *       workspace's vault (so every other client can reuse it) and linked here
- *   { provider, vaultId }                        use a connection already saved
- *   { provider, disconnect: true }               stop using it for this client
+ *   { provider, value, <extra>? }   paste a key: saved to the workspace's
+ *       vault (so every other client can reuse it) and linked here
+ *   { provider, vaultId, <extra>? } use a connection already saved
+ *   { provider, <extra> }           add the tool's extra value to a
+ *       connection this client already has (after signing in, say)
+ *   { provider, disconnect: true }  stop using it for this client
+ * where <extra> is the tool's extraField: activecampaignBaseUrl, or
+ * ghlLocationId (the bare ID or a GoHighLevel address containing it).
+ *
+ * GoHighLevel's Location ID is checked against the token before anything is
+ * saved, and when it isn't typed, the one this client or another client on
+ * the same saved token already has is used. Once known it's saved where
+ * every skill reads it (ghl-location.ts), and the token is linked for both
+ * GoHighLevel sides, booking and email, so it's never asked twice. The
+ * answer says `needs: "ghlLocationId"` while it's still missing.
  *
  * Either connect path runs the provider's account pull before answering
  * (bounded, so a slow vendor can't hang the screen), then Jev's "is this the
@@ -68,11 +94,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     vaultId?: unknown;
     disconnect?: unknown;
     activecampaignBaseUrl?: unknown;
+    ghlLocationId?: unknown;
   };
   const provider = typeof body.provider === "string" ? body.provider : "";
   const tool = findSetupTool(provider);
   if (!tool || !tool.needsKey) {
     return NextResponse.json({ error: "That tool can't be connected here." }, { status: 400 });
+  }
+  const ghl = isGhlProvider(provider);
+  const acBaseUrl = typeof body.activecampaignBaseUrl === "string" && body.activecampaignBaseUrl.trim() ? body.activecampaignBaseUrl.trim().replace(/\/+$/, "") : null;
+  const typedLocationRaw = ghl && typeof body.ghlLocationId === "string" ? body.ghlLocationId.trim() : "";
+  const typedLocation = parseGhlLocationId(typedLocationRaw);
+  if (typedLocationRaw && !typedLocation) {
+    return NextResponse.json(
+      { error: "That doesn't look like a GoHighLevel Location ID. Paste the ID, or the address of any page inside the sub-account." },
+      { status: 400 }
+    );
   }
 
   try {
@@ -82,7 +119,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ ok: true });
     }
 
-    let vaultId: string;
+    // What's being connected: a pasted key, a saved connection, or (extra
+    // only) the connection this client already has.
+    let mode: "paste" | "saved" | "existing";
+    let vaultId: string | null;
     let value: string;
     let label: string;
 
@@ -90,10 +130,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (!(await vaultCredentialBelongsToTenant(body.vaultId, access.workspaceId))) {
         return NextResponse.json({ error: "That saved connection isn't in this workspace." }, { status: 404 });
       }
+      mode = "saved";
       vaultId = body.vaultId;
       value = await resolveVaultCredentialValue(vaultId);
       label = (await listVaultCredentials(access.workspaceId, provider)).find((v) => v.id === vaultId)?.label ?? "";
     } else if (typeof body.value === "string" && body.value.trim()) {
+      mode = "paste";
+      vaultId = null;
       value = body.value.trim();
       const check = KEY_CHECKS[provider];
       if (check) {
@@ -107,6 +150,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
       label = `${access.buyer} · ${tool.label}`;
+    } else if ((typedLocation || acBaseUrl) && (await hasCredential(id, provider))) {
+      mode = "existing";
+      vaultId = await linkedVaultId(id, provider);
+      value = await resolveCredential(id, provider);
+      label = vaultId ? ((await listVaultCredentials(access.workspaceId, provider)).find((v) => v.id === vaultId)?.label ?? "") : "";
+    } else {
+      return NextResponse.json({ error: "Paste a key, or pick a saved connection." }, { status: 400 });
+    }
+
+    // GoHighLevel: settle the Location ID before saving anything, so a key
+    // and an ID from two different sub-accounts are caught here.
+    let location: { id: string; name: string } | null = null;
+    if (ghl) {
+      const stack = await loadStack(id);
+      const others = vaultId ? (await listEngagementsUsingVaultCredential(vaultId)).filter((e) => e !== id) : [];
+      const candidate = typedLocation ?? ghlLocationIdOf(stack) ?? (await ghlLocationFromSharedToken(others));
+      if (candidate) {
+        const checked = await checkGhlLocation(value, candidate);
+        if (checked.ok) {
+          location = { id: checked.id, name: checked.name };
+        } else if (typedLocation) {
+          return NextResponse.json({ error: ghlLocationError(checked.status) }, { status: 400 });
+        } else {
+          console.warn(`[setup/showtime/connect] known GoHighLevel location ${candidate} didn't open with this key for ${id} [${checked.status}]`);
+        }
+      }
+    }
+
+    if (mode === "paste") {
       vaultId = await storeVaultCredential(
         access.workspaceId,
         access.whopUserId,
@@ -115,23 +187,54 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         `secrets://vault/${access.workspaceId}/${provider}/${Date.now()}`,
         value
       );
-    } else {
-      return NextResponse.json({ error: "Paste a key, or pick a saved connection." }, { status: 400 });
+    }
+    if (mode !== "existing" && vaultId) {
+      await linkEngagementToVault(id, provider, vaultId);
+      await syncStackCredentialMarkers(id, provider, true);
     }
 
-    await linkEngagementToVault(id, provider, vaultId);
-    await syncStackCredentialMarkers(id, provider, true);
+    if (provider === "activecampaign" && acBaseUrl) {
+      await patchEngagementStack(id, { activecampaign_base_url: acBaseUrl });
+    }
 
-    if (provider === "activecampaign" && typeof body.activecampaignBaseUrl === "string" && body.activecampaignBaseUrl.trim()) {
-      await patchEngagementStack(id, { activecampaign_base_url: body.activecampaignBaseUrl.trim().replace(/\/+$/, "") });
+    if (ghl) {
+      // One GoHighLevel token covers booking and email/CRM: link the other
+      // side too, unless this client already has its own there.
+      const other = otherGhlProvider(provider);
+      if (other && vaultId && !(await hasCredential(id, other))) {
+        await linkEngagementToVault(id, other, vaultId);
+        await syncStackCredentialMarkers(id, other, true);
+      }
+      if (location) {
+        const stack = await loadStack(id);
+        const previous = ghlLocationIdOf(stack);
+        const patch = ghlLocationPatch(stack, location.id);
+        // A different sub-account: ids picked in the old one mean nothing here.
+        if (previous && previous !== location.id) {
+          if (stack.booking_platform === "ghl_calendar" && patch.booking_platform_meta) delete patch.booking_platform_meta.calendar_id;
+          if (stack.email_platform === "ghl") Object.assign(patch, { target_workflow_id: undefined, recovery_workflow_id: undefined });
+        }
+        await patchEngagementStack(id, patch);
+        await upsertClientFact(id, "ghlLocation", location, {
+          source: "account",
+          sourceDetail: provider,
+          evidence: `GoHighLevel confirmed this key opens "${location.name}".`,
+        });
+      }
     }
 
     // The account pull writes what the account knows (timezone, name,
     // website, which platform). Waited on, within a bound, so the review
-    // reflects it on the next read.
-    const harvest = (isHarvestableProvider(provider) ? harvestAccountMetadata(id, provider, value) : harvestPasteKeyMetadata(id, provider, value)).catch(
-      (err) => console.error(`[setup/showtime/connect] harvest failed for ${provider}:`, err)
-    );
+    // reflects it on the next read. GoHighLevel's needs the location.
+    const harvest = (
+      ghl
+        ? location
+          ? harvestGHLLocation(id, value, location.id)
+          : Promise.resolve()
+        : isHarvestableProvider(provider)
+          ? harvestAccountMetadata(id, provider, value)
+          : harvestPasteKeyMetadata(id, provider, value)
+    ).catch((err) => console.error(`[setup/showtime/connect] harvest failed for ${provider}:`, err));
     await Promise.race([harvest, new Promise((resolve) => setTimeout(resolve, HARVEST_WAIT_MS))]);
     // Then the deep read of what the account has done (bookings, deals,
     // campaigns), after the answer is sent.
@@ -140,9 +243,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const domain = await getPrimaryDomainForEngagement(id);
     const accountCheck = await checkAccountMatches(id, domain, provider, label || null);
 
-    return NextResponse.json({ ok: true, vaultId, accountCheck });
+    return NextResponse.json({ ok: true, vaultId, accountCheck, location, ...(ghl && !location ? { needs: "ghlLocationId" } : {}) });
   } catch (err) {
     console.error(`[setup/showtime/connect] ${id} ${provider}:`, err);
     return NextResponse.json({ error: `Couldn't connect ${tool.label}. Try again.` }, { status: 500 });
   }
+}
+
+function ghlLocationError(status: number): string {
+  if (status === 401 || status === 403) {
+    return "This key can't open that location. Make the Private Integration inside the same sub-account as the Location ID, then try again.";
+  }
+  if (status === 400 || status === 404 || status === 422) {
+    return "GoHighLevel doesn't know that Location ID. Copy it from Settings → Business Profile in the sub-account.";
+  }
+  return "GoHighLevel didn't answer when we checked the Location ID. Try again in a moment.";
 }

@@ -281,6 +281,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // project Pin-Down publishes to. Only ids this screen offers are read.
     const autoPicks = readAutoPicks(body.autoPicks);
     if (autoPicks.target_list_id) updatedStack.target_list_id = autoPicks.target_list_id.id;
+    if (autoPicks.target_workflow_id) updatedStack.target_workflow_id = autoPicks.target_workflow_id.id;
     if (autoPicks.recovery_list_id) updatedStack.recovery_list_id = autoPicks.recovery_list_id.id;
     if (autoPicks.recovery_workflow_id) updatedStack.recovery_workflow_id = autoPicks.recovery_workflow_id.id;
     if (autoPicks.webflow_site_id || autoPicks.vercel_project_name) {

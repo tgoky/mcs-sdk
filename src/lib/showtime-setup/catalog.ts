@@ -23,11 +23,33 @@ export interface SetupTool<G extends SetupToolGroup = SetupToolGroup> {
   needsKey: boolean;
   keyPlaceholder?: string;
   keyHowTo?: string;
-  /** One extra value some platforms need beside the key. */
-  extraField?: { key: "activecampaignBaseUrl"; label: string; placeholder: string };
+  /** One extra value some platforms need beside the key. Asked once, next
+   * to the key, and kept for every skill (see ToolState.extra). */
+  extraField?: ExtraField;
   /** Shown in the tool's card when it has nothing to connect. */
   noKeyNote?: string;
 }
+
+export interface ExtraField {
+  key: "activecampaignBaseUrl" | "ghlLocationId";
+  label: string;
+  placeholder: string;
+  /** Where to find it in the tool. */
+  howTo: string;
+  /** Why it's asked, and which skills use it, in the user's words. */
+  why: string;
+  inputType: "url" | "text";
+}
+
+const GHL_LOCATION_FIELD: ExtraField = {
+  key: "ghlLocationId",
+  label: "Location ID",
+  placeholder: "Location ID, or paste your GoHighLevel address",
+  howTo: "GoHighLevel → Settings → Business Profile, or the part after /location/ in the address bar",
+  why:
+    "A GoHighLevel key opens one sub-account, and GoHighLevel needs its Location ID on every request. We check it once and every skill reuses it: reading your calendars and booked calls, and only if you switch them on, starting your warm-up and no-show workflows.",
+  inputType: "text",
+};
 
 const tool = <G extends SetupToolGroup>(t: Omit<SetupTool<G>, "composio" | "needsKey"> & { needsKey?: boolean }): SetupTool<G> => ({
   needsKey: true,
@@ -43,7 +65,14 @@ export const SHOWTIME_TOOL_GROUPS: { id: ToolGroupId; label: string; hint: strin
     tools: [
       tool({ provider: "calendly", label: "Calendly", group: "booking" }),
       tool({ provider: "cal_com", label: "Cal.com", group: "booking", keyPlaceholder: "cal_live_…", keyHowTo: "Cal.com → Settings → Developer → API Keys" }),
-      tool({ provider: "ghl_calendar", label: "GoHighLevel", group: "booking", keyPlaceholder: "Private Integration Token", keyHowTo: "GoHighLevel → Settings → Private Integrations" }),
+      tool({
+        provider: "ghl_calendar",
+        label: "GoHighLevel",
+        group: "booking",
+        keyPlaceholder: "Private Integration Token",
+        keyHowTo: "GoHighLevel → Settings → Private Integrations",
+        extraField: GHL_LOCATION_FIELD,
+      }),
       tool({ provider: "oncehub", label: "OnceHub", group: "booking", keyPlaceholder: "API key", keyHowTo: "OnceHub → Admin → Integrations → API keys" }),
     ],
   },
@@ -55,14 +84,28 @@ export const SHOWTIME_TOOL_GROUPS: { id: ToolGroupId; label: string; hint: strin
       tool({ provider: "hubspot", label: "HubSpot", group: "email", keyPlaceholder: "Private app access token", keyHowTo: "HubSpot → Settings → Integrations → Private Apps" }),
       tool({ provider: "klaviyo", label: "Klaviyo", group: "email", keyPlaceholder: "pk_…", keyHowTo: "Klaviyo → Settings → API keys → Create private key" }),
       tool({ provider: "mailchimp", label: "Mailchimp", group: "email", keyPlaceholder: "…-us21", keyHowTo: "Mailchimp → Profile → Extras → API keys" }),
-      tool({ provider: "ghl", label: "GoHighLevel", group: "email", keyPlaceholder: "Private Integration Token", keyHowTo: "GoHighLevel → Settings → Private Integrations" }),
+      tool({
+        provider: "ghl",
+        label: "GoHighLevel",
+        group: "email",
+        keyPlaceholder: "Private Integration Token",
+        keyHowTo: "GoHighLevel → Settings → Private Integrations",
+        extraField: GHL_LOCATION_FIELD,
+      }),
       tool({
         provider: "activecampaign",
         label: "ActiveCampaign",
         group: "email",
         keyPlaceholder: "API key",
         keyHowTo: "ActiveCampaign → Settings → Developer",
-        extraField: { key: "activecampaignBaseUrl", label: "Account URL", placeholder: "https://youraccount.api-us1.com/api/3" },
+        extraField: {
+          key: "activecampaignBaseUrl",
+          label: "Account URL",
+          placeholder: "https://youraccount.api-us1.com/api/3",
+          howTo: "ActiveCampaign → Settings → Developer, the URL above your key",
+          why: "ActiveCampaign gives every account its own address, and the key only works there. We use it to read your lists and automations, and to add booked or missed calls to them for the skills you switch on.",
+          inputType: "url",
+        },
       }),
       tool({ provider: "convertkit", label: "Kit", group: "email", keyPlaceholder: "API secret", keyHowTo: "Kit → Settings → Advanced → API" }),
       tool({ provider: "smtp", label: "SMTP", group: "email", keyPlaceholder: "smtp://user:pass@host:587", keyHowTo: "Your mail server's details as one connection string" }),

@@ -351,6 +351,16 @@ export function ShowtimeSetup({
       return null;
     },
     choose: (tool) => setPlatform(showtimeGroup(tool), tool.provider),
+    setExtra: async (tool, extras) => {
+      const err = await post(`/api/engagements/${engagementId}/setup/showtime/connect`, { provider: tool.provider, ...extras });
+      if (err) return err;
+      // A new Location ID or account URL rewires the tool, like a new
+      // connection: the save's full Pin-Down run has to apply it.
+      markChanged(`platform.${showtimeGroup(tool)}`);
+      toast.success(`${tool.label} ${tool.extraField?.label ?? "details"} saved.`);
+      await load().catch(() => undefined);
+      return null;
+    },
   };
 
   // ── Activate ──
@@ -473,10 +483,14 @@ export function ShowtimeSetup({
     // Only ids picked from the tools chosen right now: a list picked from
     // Klaviyo means nothing once email moves to HubSpot.
     const current = new Map(
-      showtimePickTargets({ emailPlatform: draft.platforms.email, hostingPlatform: draft.platforms.hosting, activecampaignBaseUrl: "known" }).map((t) => [t.slot, t.resource])
+      showtimePickTargets({ emailPlatform: draft.platforms.email, hostingPlatform: draft.platforms.hosting, activecampaignBaseUrl: "known", ghlLocationId: "known" }).map((t) => [t.slot, t.resource])
     );
+    // And only for skills switched on: picks for the others stay as
+    // suggestions, ready (not re-asked) when a skill is switched on later.
     const autoPicks = Object.fromEntries(
-      Object.entries(draft.picks).filter(([slot, v]) => v && current.get(slot as PickSlot) === data.picks[slot as PickSlot]?.resource)
+      Object.entries(draft.picks).filter(
+        ([slot, v]) => v && needs.picks.has(slot as PickSlot) && current.get(slot as PickSlot) === data.picks[slot as PickSlot]?.resource
+      )
     ) as Record<string, Pick>;
     const body: Record<string, unknown> = {
       buyerDomain: draft.domain || data.website.domain,
@@ -1109,6 +1123,12 @@ function Review({
                       , from the{" "}
                       <PickToken slot="target_list_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which list?" />
                       {" "}list
+                    </>
+                  ) : pick("target_workflow_id") ? (
+                    <>
+                      , through the{" "}
+                      <PickToken slot="target_workflow_id" data={data} draft={draft} setPick={setPick} tokenProps={tokenProps} engagementId={engagementId} placeholder="which workflow?" />
+                      {" "}workflow
                     </>
                   ) : null}
                   . Text reminders are{" "}
@@ -1902,9 +1922,9 @@ function PickToken({
   const tier: TrustTier = value && value.id === state.value?.id && state.tier !== "done" ? state.tier : value ? "done" : "ask";
   const source =
     value && state.source === "jev" && value.id === state.value?.id
-      ? `Picked by matching your lists to this offer${state.confidence != null ? `, ${state.confidence}% sure` : ""}.`
+      ? `Picked by matching what's in your account to this offer${state.confidence != null ? `, ${state.confidence}% sure` : ""}.`
       : state.noneFit
-        ? "None of the lists in your account looked right, so we didn't guess."
+        ? "Nothing in your account looked right, so we didn't guess."
         : null;
   return (
     <FactToken {...tp} display={value?.name ?? null} placeholder={placeholder} tier={tier} title={PICK_PURPOSE[slot]} source={source} width={340}>
@@ -2042,6 +2062,15 @@ function findBlockers(data: ShowtimeSetupState, d: Draft, needs: CombinedNeeds):
   };
   const GROUP_LABEL: Record<ToolGroupId, string> = { booking: "A booking tool", email: "An email tool", hosting: "Where the page is hosted" };
   for (const g of GROUPS) if (needs.groups.has(g) && !linked(g)) out.push({ key: g, label: GROUP_LABEL[g], group: g });
+  // Connected, but missing the one extra value it can't work without.
+  for (const g of GROUPS) {
+    if (!(needs.groups.has(g) || needs.optionalGroups.has(g)) || !linked(g)) continue;
+    const t = data.tools.find((x) => x.provider === d.platforms[g] && x.group === g);
+    const tool = t && findShowtimeTool(t.provider, g);
+    if (tool?.extraField && t?.extra && !t.extra.value && !out.some((b) => b.key === `extra-${tool.provider}`)) {
+      out.push({ key: `extra-${tool.provider}`, label: `The ${tool.label} ${tool.extraField.label}`, group: g });
+    }
+  }
   if (needs.choices.has("briefLandingDestination")) {
     if (!d.choices.briefLandingDestination) out.push({ key: "brief", label: "Where briefs land", openKey: "choice.briefLandingDestination" });
     else if (d.choices.briefLandingDestination === "slack" && !d.slackWebhookUrl.trim())

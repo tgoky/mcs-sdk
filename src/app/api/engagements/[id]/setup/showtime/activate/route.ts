@@ -15,6 +15,7 @@ import { checkAccountMatches, checkSite, matchSavedConnection, pickShowtimeIds }
 import { PICK_SLOT_META, type ActivationStep, type PickSlot } from "@/lib/showtime-setup/types";
 import { INTEL_PROVIDERS, runAccountIntel, runAccountReadings } from "@/lib/account-intel";
 import { intelSteps } from "@/lib/showtime-setup/intel-steps";
+import { ghlLocationIdOf, isGhlProvider, loadStack } from "@/lib/ghl-location";
 import { authorizeShowtimeSetup } from "../access";
 
 export const runtime = "nodejs";
@@ -138,9 +139,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const saved = vault.filter((v) => v.provider === t.provider);
           if (saved.length > 1) await matchSavedConnection(id, host || null, t.provider, saved);
         }
+        let ghlAsked = false;
         for (const t of SHOWTIME_TOOLS) {
           if (!t.needsKey || !(await hasCredential(id, t.provider))) continue;
           const label = vault.find((v) => v.provider === t.provider)?.label ?? null;
+          if (isGhlProvider(t.provider) && !ghlLocationIdOf(await loadStack(id))) {
+            if (!ghlAsked) {
+              ghlAsked = true;
+              step({
+                id: "account-ghl-location",
+                label: "GoHighLevel needs its Location ID",
+                status: "failed",
+                detail: "Tap the GoHighLevel logo and add it once. Every skill reads your calendars and workflows through it.",
+              });
+            }
+            continue;
+          }
           const check = await checkAccountMatches(id, host || null, t.provider, label);
           if (check && !check.matches) {
             step({ id: `account-${t.provider}`, label: `${t.label} may be a different business's account`, status: "failed", detail: "Check it's the right account before turning Showtime on." });
@@ -185,14 +199,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           emailPlatform: await chosen("email", stack.email_platform, "emailPlatform"),
           hostingPlatform: await chosen("hosting", stack.hosting_platform, "hostingPlatform"),
           activecampaignBaseUrl: stack.activecampaign_base_url ?? null,
+          ghlLocationId: ghlLocationIdOf(stack),
         }).filter((t) => {
-          // Already set in config: nothing to pick.
+          // Already set in config: nothing to pick. Skills switched off get
+          // their picks too, so switching one on later finds them ready
+          // instead of asking again; only the ones switched on are saved.
           const meta = (stack.hosting_platform_meta ?? {}) as Record<string, unknown>;
           const current = t.slot === "webflow_site_id" || t.slot === "vercel_project_name" ? meta[t.slot] : (stack as Record<string, unknown>)[t.slot];
-          return !current && needs.picks.has(t.slot);
+          return !current;
         });
         const picks = await pickShowtimeIds(id, host || null, targets);
         for (const p of picks) {
+          // Ready for a skill that's off: nothing to show until it's on.
+          if (!needs.picks.has(p.slot as PickSlot)) continue;
           const label = PICK_SLOT_META[p.slot as PickSlot]?.label ?? p.slot;
           step(
             p.picked

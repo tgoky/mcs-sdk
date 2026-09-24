@@ -17,6 +17,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { getClientFact, getClientFacts, upsertClientFact } from "@/lib/client-facts";
 import { seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
+import { ghlLocationIdOf } from "@/lib/ghl-location";
 import { pullCalCom, pullCalendly, pullOnceHub } from "./booking";
 import { pullActiveCampaign, pullGhl, pullHubSpot, pullKit, pullKlaviyo, pullMailchimp } from "./crm";
 import { INTEL_FACT_PREFIX, type AccountIntel } from "./types";
@@ -40,10 +41,7 @@ async function loadStack(engagementId: string): Promise<Partial<EngagementStack>
   return ((row?.stack as Partial<EngagementStack> | null) ?? {}) as Partial<EngagementStack>;
 }
 
-function ghlLocationId(stack: Partial<EngagementStack>): string | null {
-  const meta = stack as { email_platform_meta?: { location_id?: string } };
-  return stack.booking_platform_meta?.location_id || meta.email_platform_meta?.location_id || stack.sms_platform_meta?.ghl_location_id || null;
-}
+const ghlLocationId = ghlLocationIdOf;
 
 export async function pullAccountIntel(engagementId: string, provider: IntelProvider, credential: string): Promise<AccountIntel | null> {
   switch (provider) {

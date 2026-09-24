@@ -9,12 +9,15 @@
 //   - saved elsewhere in the workspace: one click to reuse (Jev marks the
 //     one that looks like this client's), or connect another account;
 //   - nothing yet: "Sign in with X" when Composio supports it, with "Use an
-//     API key instead" underneath; otherwise just the key field.
+//     API key instead" underneath; otherwise just the key field;
+//   - a tool that needs one more value beside the key (GoHighLevel's
+//     Location ID, ActiveCampaign's account URL): asked next to the key with
+//     why it's needed, or on its own once connected, and shown when known.
 // Clicking away or Escape shrinks it back into the circle.
 
 import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, KeyRound, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, KeyRound, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlatformLogo } from "@/components/platform-logo";
 import type { SetupTool } from "@/lib/showtime-setup/catalog";
@@ -29,6 +32,14 @@ export interface ToolActions {
   disconnect: (tool: SetupTool) => Promise<string | null>;
   /** Pick a tool that has nothing to connect (Any website, Lovable). */
   choose: (tool: SetupTool) => void;
+  /** Save the tool's extra value on the connection this client already has.
+   * Screens without it don't ask for the extra value once connected. */
+  setExtra?: (tool: SetupTool, extras: Record<string, string>) => Promise<string | null>;
+}
+
+/** Connected, but still missing the one extra value the tool needs. */
+function missingExtra(tool: SetupTool, state: ToolState | undefined, actions: ToolActions): boolean {
+  return Boolean(tool.extraField && actions.setExtra && state?.linked && state.extra && !state.extra.value);
 }
 
 export function ToolAvatar({
@@ -51,6 +62,7 @@ export function ToolAvatar({
   const linked = Boolean(state?.linked);
   const on = selected && (linked || !tool.needsKey);
   const mismatch = linked && state?.accountCheck && !state.accountCheck.matches;
+  const needsExtra = missingExtra(tool, state, actions);
 
   return (
     <AnchoredCard
@@ -94,10 +106,11 @@ export function ToolAvatar({
                   transition={{ type: "spring", stiffness: 600, damping: 20 }}
                   className={cn(
                     "absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-background",
-                    mismatch ? "bg-[var(--error)] text-white" : "bg-[var(--ink)] text-[var(--ink-foreground)]"
+                    mismatch || needsExtra ? "bg-[var(--error)] text-white" : "bg-[var(--ink)] text-[var(--ink-foreground)]"
                   )}
+                  title={needsExtra ? `Needs its ${tool.extraField?.label}` : undefined}
                 >
-                  {mismatch ? <AlertTriangle className="h-2.5 w-2.5" strokeWidth={3} /> : <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
+                  {mismatch || needsExtra ? <AlertTriangle className="h-2.5 w-2.5" strokeWidth={3} /> : <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -172,6 +185,10 @@ function ToolCard({
         </p>
       )}
 
+      {linked && tool.extraField && state?.extra && actions.setExtra && mode === "main" && (
+        <ExtraSection tool={tool} extra={state.extra} busy={busy} onRun={run} actions={actions} />
+      )}
+
       {!tool.needsKey ? (
         <div className="space-y-3 px-4 pb-4">
           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">{tool.noKeyNote}</p>
@@ -228,7 +245,9 @@ function ToolCard({
                   <li key={s.vaultId}>
                     <button
                       type="button"
-                      onClick={() => run(s.vaultId, () => actions.useSaved(tool, s.vaultId))}
+                      // Stays open when the extra value may still be needed,
+                      // so it can be asked right here (or shown, once found).
+                      onClick={() => run(s.vaultId, () => actions.useSaved(tool, s.vaultId), !(tool.extraField && actions.setExtra && !state?.extra?.value))}
                       disabled={busy !== null}
                       className="group/row flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--accent-dim)] disabled:opacity-60 cursor-pointer"
                     >
@@ -274,7 +293,15 @@ function ToolCard({
           {error && <p className="px-4 pb-2 text-xs text-[var(--error)]">{error}</p>}
         </div>
       ) : (
-        <ConnectForm tool={tool} busy={busy} error={error} onRun={run} actions={actions} onBack={linked || saved.length > 0 ? () => setMode("main") : undefined} />
+        <ConnectForm
+          tool={tool}
+          knownExtra={state?.extra?.value ?? null}
+          busy={busy}
+          error={error}
+          onRun={run}
+          actions={actions}
+          onBack={linked || saved.length > 0 ? () => setMode("main") : undefined}
+        />
       )}
     </div>
   );
@@ -287,8 +314,80 @@ const TOOL_GROUP_BLURB: Record<SetupTool["group"], string> = {
   sending: "Sends your cold email",
 };
 
+/** The extra value on a connected tool: shown when known, asked when not. */
+function ExtraSection({
+  tool,
+  extra,
+  busy,
+  onRun,
+  actions,
+}: {
+  tool: SetupTool;
+  extra: NonNullable<ToolState["extra"]>;
+  busy: string | null;
+  onRun: (key: string, fn: () => Promise<string | null>, closeAfter?: boolean) => Promise<void>;
+  actions: ToolActions;
+}) {
+  const field = tool.extraField!;
+  const [editing, setEditing] = useState(!extra.value);
+  const [value, setValue] = useState("");
+
+  if (!editing && extra.value) {
+    return (
+      <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2 text-xs">
+        <span className="text-[var(--text-muted)]">{field.label}</span>
+        <span className="min-w-0 flex-1 truncate font-medium text-[var(--text-primary)]" title={extra.value}>
+          {extra.display ?? extra.value}
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center gap-1 font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+        >
+          <Pencil className="h-3 w-3" /> Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="mx-4 mb-3 space-y-2 rounded-lg border px-3 py-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) onRun("extra", () => actions.setExtra!(tool, { [field.key]: value.trim() }));
+      }}
+    >
+      <p className="text-xs font-medium text-[var(--text-primary)]">{extra.value ? `Change the ${field.label}` : `One more thing: the ${field.label}`}</p>
+      <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">{field.why}</p>
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          type={field.inputType}
+          spellCheck={false}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={field.placeholder}
+          aria-label={field.label}
+          className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3 text-[13px] outline-none transition-shadow placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40"
+        />
+        <Button type="submit" size="sm" className="h-9" disabled={busy !== null || !value.trim()}>
+          {busy === "extra" ? <Loader2 className="animate-spin" /> : "Save"}
+        </Button>
+      </div>
+      <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">Find it in {field.howTo}.</p>
+      {extra.value && (
+        <button type="button" onClick={() => setEditing(false)} className="text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+          Keep {extra.display ?? extra.value}
+        </button>
+      )}
+    </form>
+  );
+}
+
 function ConnectForm({
   tool,
+  knownExtra,
   busy,
   error,
   onRun,
@@ -296,6 +395,8 @@ function ConnectForm({
   onBack,
 }: {
   tool: SetupTool;
+  /** The extra value this client already has; the field can stay empty then. */
+  knownExtra: string | null;
   busy: string | null;
   error: string | null;
   onRun: (key: string, fn: () => Promise<string | null>, closeAfter?: boolean) => Promise<void>;
@@ -305,10 +406,12 @@ function ConnectForm({
   const [useKey, setUseKey] = useState(!tool.composio);
   const [value, setValue] = useState("");
   const [extra, setExtra] = useState("");
+  const extraRequired = Boolean(tool.extraField && !knownExtra);
+  const ready = Boolean(value.trim()) && (!extraRequired || Boolean(extra.trim()));
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!value.trim()) return;
+    if (!ready) return;
     const extras: Record<string, string> = tool.extraField && extra.trim() ? { [tool.extraField.key]: extra.trim() } : {};
     onRun("key", () => actions.connectKey(tool, value.trim(), extras));
   }
@@ -341,18 +444,26 @@ function ConnectForm({
             placeholder={tool.keyPlaceholder ?? "API key"}
             className="h-10 w-full rounded-lg border bg-background px-3 font-mono text-[13px] outline-none transition-shadow placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40"
           />
-          {tool.extraField && (
-            <input
-              type="url"
-              value={extra}
-              onChange={(e) => setExtra(e.target.value)}
-              placeholder={tool.extraField.placeholder}
-              aria-label={tool.extraField.label}
-              className="h-10 w-full rounded-lg border bg-background px-3 text-[13px] outline-none transition-shadow placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40"
-            />
-          )}
           {tool.keyHowTo && <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">Find it in {tool.keyHowTo}.</p>}
-          <Button type="submit" className="w-full" size="lg" disabled={busy !== null || !value.trim()}>
+          {tool.extraField && (
+            <div className="space-y-1.5 pt-1">
+              <input
+                type={tool.extraField.inputType}
+                spellCheck={false}
+                value={extra}
+                onChange={(e) => setExtra(e.target.value)}
+                placeholder={knownExtra ? `${tool.extraField.label}: ${knownExtra} (leave empty to keep)` : tool.extraField.placeholder}
+                aria-label={tool.extraField.label}
+                className="h-10 w-full rounded-lg border bg-background px-3 text-[13px] outline-none transition-shadow placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40"
+              />
+              {!knownExtra && (
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                  {tool.extraField.why} Find it in {tool.extraField.howTo}.
+                </p>
+              )}
+            </div>
+          )}
+          <Button type="submit" className="w-full" size="lg" disabled={busy !== null || !ready}>
             {busy === "key" ? <Loader2 className="animate-spin" /> : null}
             {busy === "key" ? "Checking…" : "Connect"}
           </Button>

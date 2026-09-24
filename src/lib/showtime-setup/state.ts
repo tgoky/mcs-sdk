@@ -25,6 +25,8 @@ import { showtimePickTargets } from "./picks";
 import { INTEL_FACT_PREFIX, type AccountIntel } from "@/lib/account-intel/types";
 import type { Raw } from "@/lib/account-intel/reader";
 import { findShowtimeTool } from "./catalog";
+import { ghlLocationIdOf } from "@/lib/ghl-location";
+import { toolExtra } from "./tool-states";
 import { PICK_FACT_PREFIX, type AccountRead, type PickSlot, type PickState, type SetupValue, type ShowtimeSetupState, type ToolState } from "./types";
 
 type Stack = Partial<EngagementStack> & Record<string, unknown>;
@@ -126,6 +128,8 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
   // running).
   const tools: ToolState[] = [];
   const vault = await listVaultCredentials(workspaceId);
+  const ghlLocationId = ghlLocationIdOf(stack);
+  const acBaseUrl = nonEmpty(stack.activecampaign_base_url) ? stack.activecampaign_base_url : null;
   for (const t of SHOWTIME_TOOLS) {
     const linked = t.needsKey ? await hasCredential(engagementId, t.provider) : false;
     const savedHere = vault.filter((v) => v.provider === t.provider);
@@ -151,6 +155,7 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
       seenOnSite: siteFact?.source === "website" && siteFact.value === t.provider,
       saved: savedConnections,
       accountCheck: check && typeof check.matches === "boolean" ? { matches: check.matches, probability: check.probability ?? 0 } : null,
+      extra: toolExtra(t, stack, facts),
     });
     if (linked && !platforms[t.group].value) {
       platforms[t.group] = { value: t.provider, tier: "done", source: "account", sourceDetail: t.provider, evidence: "Connected for this client.", confidence: null };
@@ -186,6 +191,7 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
   const hostingMeta = (stack.hosting_platform_meta ?? {}) as Record<string, unknown>;
   const savedPickValue: Record<PickSlot, unknown> = {
     target_list_id: stack.target_list_id,
+    target_workflow_id: stack.target_workflow_id,
     recovery_list_id: stack.recovery_list_id,
     recovery_workflow_id: stack.recovery_workflow_id,
     webflow_site_id: hostingMeta.webflow_site_id,
@@ -194,7 +200,8 @@ export async function loadShowtimeSetupState(engagementId: string, workspaceId: 
   for (const target of showtimePickTargets({
     emailPlatform: platforms.email.value,
     hostingPlatform: platforms.hosting.value,
-    activecampaignBaseUrl: typeof stack.activecampaign_base_url === "string" ? stack.activecampaign_base_url : null,
+    activecampaignBaseUrl: acBaseUrl,
+    ghlLocationId,
   })) {
     const fact = facts[`${PICK_FACT_PREFIX}${target.slot}`];
     const factValue = fact?.value as { id?: string | null; name?: string; resource?: string; noneFit?: boolean } | undefined;
