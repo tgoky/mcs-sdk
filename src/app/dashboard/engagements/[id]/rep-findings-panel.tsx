@@ -195,7 +195,7 @@ type TriggerResult = { runId?: string; message?: string; error?: string } | null
 function RunResultBanner({ result }: { result: TriggerResult }) {
   if (!result) return null;
   return (
-    <p className={cn("text-[11px] font-mono font-semibold flex items-center justify-between gap-2", result.error ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
+    <p className={cn("text-[13px] font-mono font-semibold flex items-center justify-between gap-2", result.error ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
       <span>{result.error ?? result.message}</span>
       {result.runId && (
         <a href={`/dashboard/runs/${result.runId}`} className="underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold shrink-0">
@@ -240,7 +240,7 @@ function DraftResponseButton({ engagementId, findingText, findingPlatform }: { e
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hover-lift press-settle flex items-center gap-1 text-[10.5px] font-mono font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+        className="hover-lift press-settle flex items-center gap-1 text-[13px] font-mono font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
       >
         <PenLine size={11} /> Draft a response
       </button>
@@ -254,7 +254,7 @@ function DraftResponseButton({ engagementId, findingText, findingPlatform }: { e
           type="button"
           onClick={() => fire({ action: "draft_response", findingText, findingPlatform })}
           disabled={state === "running"}
-          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[10.5px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+          className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-2.5 py-1 text-[13px] font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
         >
           {state === "running" ? <Loader2 size={11} className="animate-spin" /> : <PenLine size={11} />}
           Confirm and draft a response to this
@@ -281,18 +281,18 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
       {source === "engine" && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Subject (optional: a competitor)</label>
-            <input value={engineSubject} onChange={(e) => setEngineSubject(e.target.value)} placeholder="Client themselves if blank" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs w-56" />
+            <label className="text-xs font-mono uppercase text-zinc-500 font-bold block">Subject (optional: a competitor)</label>
+            <input value={engineSubject} onChange={(e) => setEngineSubject(e.target.value)} placeholder="Client themselves if blank" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm w-56" />
           </div>
           <div className="space-y-1 flex-1 min-w-[180px]">
-            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Question (optional)</label>
-            <input value={engineQuestion} onChange={(e) => setEngineQuestion(e.target.value)} placeholder="Default: general reputation check" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs w-full" />
+            <label className="text-xs font-mono uppercase text-zinc-500 font-bold block">Question (optional)</label>
+            <input value={engineQuestion} onChange={(e) => setEngineQuestion(e.target.value)} placeholder="Default: general reputation check" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm w-full" />
           </div>
           <button
             type="button"
             onClick={() => trigger.fire({ action: "check_ai_engines", subject: engineSubject.trim() || undefined, question: engineQuestion.trim() || undefined })}
             disabled={trigger.state === "running"}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Ask now
@@ -303,14 +303,14 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
       {(source === "trustpilot" || source === "twitter") && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Scan back to</label>
-            <input type="date" value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs" />
+            <label className="text-xs font-mono uppercase text-zinc-500 font-bold block">Scan back to</label>
+            <input type="date" value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm" />
           </div>
           <button
             type="button"
             onClick={() => trigger.fire({ action: source === "trustpilot" ? "trustpilot_deep_scan" : "twitter_deep_scan", deepScanSinceDate: sinceDate })}
             disabled={trigger.state === "running" || !sinceDate}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Deep scan
@@ -321,8 +321,8 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
       {source === "reddit" && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Widen to timeframe</label>
-            <select value={redditTimeframe} onChange={(e) => setRedditTimeframe(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs">
+            <label className="text-xs font-mono uppercase text-zinc-500 font-bold block">Widen to timeframe</label>
+            <select value={redditTimeframe} onChange={(e) => setRedditTimeframe(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm">
               {["hour", "day", "week", "month", "year", "all"].map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -332,7 +332,7 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
             type="button"
             onClick={() => trigger.fire({ action: "reddit_deep_scan", deepScanTimeframe: redditTimeframe })}
             disabled={trigger.state === "running"}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
           >
             {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
             Widen scan
@@ -342,15 +342,15 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
 
       {source === "incident" && (
         <div className="space-y-1.5">
-          <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold block">Test a hypothetical finding against this client&apos;s threshold</label>
+          <label className="text-xs font-mono uppercase text-zinc-500 font-bold block">Test a hypothetical finding against this client&apos;s threshold</label>
           <div className="flex flex-wrap items-end gap-2">
             <input
               value={crisisText}
               onChange={(e) => setCrisisText(e.target.value)}
               placeholder="Made-up finding, e.g. a hypothetical bad review"
-              className="flex-1 min-w-[200px] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs"
+              className="flex-1 min-w-[200px] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm"
             />
-            <select value={crisisSource} onChange={(e) => setCrisisSource(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs">
+            <select value={crisisSource} onChange={(e) => setCrisisSource(e.target.value)} className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-sm">
               {["trustpilot", "reddit", "twitter", "engine_panel"].map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -359,13 +359,13 @@ function SourceCheckBar({ engagementId, source }: { engagementId: string; source
               type="button"
               onClick={() => trigger.fire({ action: "check_crisis_threshold", hypotheticalFindingText: crisisText, hypotheticalFindingSource: crisisSource })}
               disabled={trigger.state === "running" || !crisisText.trim()}
-              className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
+              className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
             >
               {trigger.state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
               Test threshold
             </button>
           </div>
-          <p className="text-[10.5px] text-zinc-500">Hypothetical only. Never declares a real incident or notifies anyone.</p>
+          <p className="text-[13px] text-zinc-500">Hypothetical only. Never declares a real incident or notifies anyone.</p>
         </div>
       )}
 
@@ -440,11 +440,11 @@ export function RepFindingsPanel({
   }, [filtered, selectedKey]);
 
   if (loading) {
-    return <p className="text-xs text-zinc-500 font-mono py-8 text-center">Loading findings…</p>;
+    return <p className="text-sm text-zinc-500 font-mono py-8 text-center">Loading findings…</p>;
   }
 
   if (error || !data) {
-    return <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">{error}</div>;
+    return <div className="rounded-xl border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300">{error}</div>;
   }
 
   return (
@@ -458,11 +458,11 @@ export function RepFindingsPanel({
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search findings…"
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none"
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] overflow-x-auto">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[13px] overflow-x-auto">
             <button
               type="button"
               onClick={() => setSourceFilter("all")}
@@ -490,12 +490,12 @@ export function RepFindingsPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-500 font-mono">{flaggedCount} flagged</p>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-500 font-mono">{flaggedCount} flagged</p>
           <button
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -511,8 +511,8 @@ export function RepFindingsPanel({
             calendar-style day buckets — just a timestamp per row) */}
         <div className="overflow-hidden bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800">
-            <span className="text-xs font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
-            <span className="text-[10.5px] font-mono text-zinc-500">{filtered.length} shown</span>
+            <span className="text-sm font-bold text-zinc-900 dark:text-white">Findings Timeline</span>
+            <span className="text-[13px] font-mono text-zinc-500">{filtered.length} shown</span>
           </div>
 
           {filtered.length === 0 ? (
@@ -542,14 +542,14 @@ export function RepFindingsPanel({
 
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">{entryTitle(e)}</span>
+                        <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{entryTitle(e)}</span>
                         {flag?.flagged && <FlaggedPill flagged reason={flag.reason} />}
                         {sentiment && <SentimentPill sentiment={sentiment} />}
                       </div>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{entrySnippet(e)}</p>
+                      <p className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate">{entrySnippet(e)}</p>
                     </div>
 
-                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                    <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
                       <Clock size={9} />
                       {formatEntryTime(e.at)}
                     </span>
@@ -580,8 +580,8 @@ export function RepFindingsPanel({
                         <Icon size={16} />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white">{entryTitle(selected)}</h4>
-                        <span className="text-[10.5px] font-mono text-zinc-500">
+                        <h4 className="text-[15px] font-bold text-zinc-900 dark:text-white">{entryTitle(selected)}</h4>
+                        <span className="text-[13px] font-mono text-zinc-500">
                           {meta.label} · {new Date(selected.at).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
@@ -594,24 +594,24 @@ export function RepFindingsPanel({
 
                   {selected.kind === "engine" && (
                     <div className="space-y-1.5">
-                      <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{selected.item.promptText}</p>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{selected.item.responseText}</p>
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{selected.item.promptText}</p>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{selected.item.responseText}</p>
                     </div>
                   )}
                   {selected.kind !== "engine" && selected.kind !== "incident" && (
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">{entrySnippet(selected)}</p>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{entrySnippet(selected)}</p>
                   )}
                   {selected.kind === "incident" && (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{selected.item.summary}</p>
-                      <p className="text-[10.5px] font-mono text-zinc-500">Status: {selected.item.status}</p>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{selected.item.summary}</p>
+                      <p className="text-[13px] font-mono text-zinc-500">Status: {selected.item.status}</p>
                     </div>
                   )}
 
                   {(permalink || draftPlatform) && (
                     <div className="flex items-center gap-3 pt-1">
                       {permalink && (
-                        <a href={permalink} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10.5px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
+                        <a href={permalink} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[13px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2">
                           View original <ExternalLink size={10} />
                         </a>
                       )}
@@ -624,7 +624,7 @@ export function RepFindingsPanel({
           ) : (
             <div className="py-10 text-center text-zinc-500 space-y-2">
               <Radar size={22} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-              <p className="text-xs">Select a finding from the timeline above to inspect it.</p>
+              <p className="text-sm">Select a finding from the timeline above to inspect it.</p>
             </div>
           )}
         </div>

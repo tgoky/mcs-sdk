@@ -309,7 +309,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
         return (
           <div className="flex items-center gap-2 bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md px-3 py-2 font-sans">
             <Icon size={13} className={tone} />
-            <span className="text-xs text-zinc-700 dark:text-zinc-300 font-sans">
+            <span className="text-sm text-zinc-700 dark:text-zinc-300 font-sans">
               <span className="font-mono font-bold text-zinc-900 dark:text-white">{thisWeek}</span> booked this week
               <span className="text-zinc-500"> · {priorWeek} last week</span>
             </span>
@@ -328,7 +328,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
+            <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans px-1 min-w-[100px] text-center">
               {monthName} {year}
             </span>
             <button
@@ -341,7 +341,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             <button
               type="button"
               onClick={handleTodayClick}
-              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
+              className="hover-lift press-settle shadow-elevation-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-0.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer font-sans ml-0.5"
             >
               Today
             </button>
@@ -353,7 +353,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="Search prospect name..."
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-zinc-400 dark:focus:border-zinc-700 focus:outline-none font-sans"
             />
           </div>
 
@@ -361,7 +361,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             type="button"
             onClick={load}
             disabled={loading}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
           >
             <RefreshCw size={13} className={cn(loading && "animate-spin")} />
           </button>
@@ -369,7 +369,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           <button
             type="button"
             onClick={() => setShowManualEnroll(true)}
-            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
+            className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer font-sans"
             title="Manually enroll a prospect who booked outside a connected webhook"
           >
             <UserPlus size={13} />
@@ -377,13 +377,13 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
           </button>
 
           {!loading && callTodayCount > 0 && (
-            <span className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-rose-950 dark:text-rose-200 bg-[#ffcfd2] dark:bg-rose-950/60 px-2.5 py-1 rounded-full shrink-0">
+            <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-rose-950 dark:text-rose-200 bg-[#ffcfd2] dark:bg-rose-950/60 px-2.5 py-1 rounded-full shrink-0">
               <PhoneCall size={10} className="fill-current" /> {callTodayCount} call{callTodayCount === 1 ? "" : "s"} today
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+        <div className="flex items-center gap-1 rounded-md bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-sm font-sans">
           {([
             ["month", CalendarIcon, "Month"],
             ["day", Clock, "Day View"],
@@ -408,7 +408,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 font-sans">{error}</div>
+        <div className="rounded-md border border-rose-300 dark:border-rose-800/50 bg-rose-100 dark:bg-rose-950/20 px-3 py-2 text-sm text-rose-800 dark:text-rose-300 font-sans">{error}</div>
       )}
 
       {/* 1. MONTH VIEW */}
@@ -419,7 +419,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               same pattern as master-roster-calendar.tsx's month view. */}
           <div className="overflow-x-auto">
           <div className="min-w-[630px]">
-          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-sans">
+          <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 text-center text-xs font-bold uppercase tracking-wider text-zinc-500 font-sans">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="border-r border-zinc-200 dark:border-zinc-800/60 py-2 last:border-r-0">{d}</div>
             ))}
@@ -452,7 +452,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 >
                   <div className="flex items-start justify-between gap-1 w-full">
                     <span className={cn(
-                      "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[11px] font-semibold shrink-0",
+                      "flex h-6 w-6 items-center justify-center rounded-full font-mono text-[13px] font-semibold shrink-0",
                       isToday
                         ? "bg-emerald-500 text-zinc-950 font-bold"
                         : isPast
@@ -466,7 +466,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       {metric && metric.total > 0 && (
                         <div className="relative">
                           <SquishySkillBadge skill="pile-on" size={16} enabled={true} />
-                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-purple-500 text-[8px] font-bold text-zinc-950 font-mono">
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-purple-500 text-[10px] font-bold text-zinc-950 font-mono">
                             {metric.total}
                           </span>
                         </div>
@@ -481,16 +481,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                           <PhoneCall size={10} className="fill-current" />
                         </span>
                         <div>
-                          <span className="text-[11px] font-bold block leading-none text-purple-950 dark:text-purple-200 font-sans">
+                          <span className="text-[13px] font-bold block leading-none text-purple-950 dark:text-purple-200 font-sans">
                             {metric.total} booking{metric.total === 1 ? "" : "s"}
                           </span>
-                          <span className="text-[9.5px] font-mono mt-0.5 block font-semibold text-purple-700 dark:text-purple-300/90">
+                          <span className="text-[11px] font-mono mt-0.5 block font-semibold text-purple-700 dark:text-purple-300/90">
                             {metric.active} active
                           </span>
                         </div>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono italic block">No bookings</span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-600 font-mono italic block">No bookings</span>
                     )}
                   </div>
                 </button>
@@ -514,12 +514,12 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 <button type="button" onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() + 86400000))} className="hover-lift press-settle rounded-lg p-1.5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer font-sans">
                   <ChevronRight size={15} />
                 </button>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+                <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white font-sans">
                   {selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                 </h3>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              <div className="flex items-center gap-1.5 font-mono text-[13px]">
                 <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400 font-semibold">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
                     <PhoneCall size={10} className="fill-current" />
@@ -540,7 +540,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     ref={isEarliestHour ? firstMeetingRef : null}
                     className="flex min-h-[60px] gap-3 py-1.5 border-b border-zinc-200 dark:border-zinc-900/80 last:border-b-0 font-sans"
                   >
-                    <span className="w-14 shrink-0 font-mono text-[11px] text-zinc-500 text-right pt-0.5">
+                    <span className="w-14 shrink-0 font-mono text-[13px] text-zinc-500 text-right pt-0.5">
                       {hour.toString().padStart(2, "0")}:00
                     </span>
                     <div className="flex-1 space-y-1.5 font-sans">
@@ -560,13 +560,13 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                           >
                             <div className="space-y-1 min-w-0 font-sans">
                               <div className="flex items-center gap-2 font-sans">
-                                <span className="font-bold text-zinc-900 dark:text-white text-xs font-sans">{item.prospectName ?? item.prospectEmail}</span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
+                                <span className="font-bold text-zinc-900 dark:text-white text-sm font-sans">{item.prospectName ?? item.prospectEmail}</span>
+                                <span className="inline-flex items-center gap-1 text-xs font-mono text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded font-bold border-0">
                                   <PhoneCall size={9} className="fill-current text-rose-950" />
                                   {timeStr(item.callTime ?? item.createdAt)}
                                 </span>
                               </div>
-                              <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{item.prospectEmail}</p>
+                              <p className="text-[13px] font-mono text-zinc-600 dark:text-zinc-400 truncate">{item.prospectEmail}</p>
 
                               <div className="flex flex-wrap gap-1 pt-1 font-sans">
                                 <StatusPill tone={STAGE_META[item.stage].tone}>
@@ -597,11 +597,11 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
           <div className="lg:col-span-5 space-y-3 font-sans">
             <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-lg p-3 space-y-2 font-sans">
-              <span className="text-[11px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
-              <div className="grid grid-cols-7 text-center text-[9px] font-mono text-zinc-500 font-bold uppercase font-sans">
+              <span className="text-[13px] font-bold text-zinc-900 dark:text-white block px-1 font-sans">{monthName} {year}</span>
+              <div className="grid grid-cols-7 text-center text-[11px] font-mono text-zinc-500 font-bold uppercase font-sans">
                 {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i}>{d}</div>)}
               </div>
-              <div className="grid grid-cols-7 text-center text-xs gap-1 font-sans">
+              <div className="grid grid-cols-7 text-center text-sm gap-1 font-sans">
                 {gridDays.map(({ date, isCurrentMonth }, idx) => {
                   const isSelected = dateKey(date) === selectedDayKey;
                   return (
@@ -610,7 +610,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       type="button"
                       onClick={() => handleUpdateSelectedDate(date)}
                       className={cn(
-                        "hover-lift press-settle h-6 w-6 mx-auto flex items-center justify-center rounded-full font-mono text-[10px] transition-colors cursor-pointer font-sans",
+                        "hover-lift press-settle h-7 w-7 mx-auto flex items-center justify-center rounded-full font-mono text-xs transition-colors cursor-pointer font-sans",
                         isSelected ? "bg-emerald-500 text-zinc-950 font-bold" : isCurrentMonth ? "text-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800" : "text-zinc-400 dark:text-zinc-700"
                       )}
                     >
@@ -633,16 +633,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       <button
                         type="button"
                         onClick={() => handleCopyEmail(selected.prospectEmail)}
-                        className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                        className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[13px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                       >
                         {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                         <span>Copy Email</span>
                       </button>
                     </div>
 
-                    <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
+                    <h4 className="text-lg font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
-                    <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                    <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                       <div className="flex items-center gap-2">
                         <Mail size={12} className="text-zinc-500 shrink-0" />
                         <span className="truncate">{selected.prospectEmail}</span>
@@ -654,7 +654,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     </div>
                   </div>
 
-                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-sm font-sans">
                     <div className="flex items-center justify-between font-sans">
                       <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                       <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -682,14 +682,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     const diagnosis = classifyRunError(selected.sendError);
                     return (
                       <div className="rounded-md border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
-                        <span className="block text-[10.5px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
+                        <span className="block text-[13px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
                         {diagnosis ? (
                           <>
-                            <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">{diagnosis.title}</p>
-                            <p className="text-[11px] text-rose-800 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                            <p className="text-sm font-semibold text-rose-900 dark:text-rose-300">{diagnosis.title}</p>
+                            <p className="text-[13px] text-rose-800 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
                           </>
                         ) : (
-                          <p className="text-[11px] text-rose-800 dark:text-rose-300/90">
+                          <p className="text-[13px] text-rose-800 dark:text-rose-300/90">
                             This hit an unexpected error and didn&apos;t send.
                           </p>
                         )}
@@ -698,8 +698,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   })()}
 
                   {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
-                      <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
+                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-sm font-sans">
+                      <span className="flex items-center gap-1.5 text-[13px] font-mono text-zinc-500 uppercase">
                         <Wand2 size={11} /> AI-personalized intro
                       </span>
                       <p className="text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{selected.personalizedIntro}</p>
@@ -707,13 +707,13 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   )}
 
                   {selected.runId && (
-                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-xs font-sans">
+                    <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-sm font-sans">
                       <button
                         type="button"
                         onClick={() => setShowRunActivity((p) => !p)}
                         className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                       >
-                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                           <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                           Run activity
                         </span>
@@ -724,7 +724,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                           <RunActivityPanel runId={selected.runId} />
                           <a
                             href={`/dashboard/runs/${selected.runId}`}
-                            className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                            className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                           >
                             <span>Open full research run</span>
                             <ExternalLink size={10} />
@@ -737,7 +737,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
               ) : (
                 <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                   <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                  <p className="text-xs font-sans">
+                  <p className="text-sm font-sans">
                     {selectedDate ? (
                       <>
                         <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
@@ -763,14 +763,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
-                <span className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
+                <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
                   {listScope === "week" ? "Current Week Feed" : listScope === "month" ? `${monthName} Feed` : "All Activity"}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
                 {listScope === "week" && (
-                  <div className="flex items-center gap-1 font-mono text-xs text-zinc-500">
+                  <div className="flex items-center gap-1 font-mono text-sm text-zinc-500">
                     <button
                       type="button"
                       onClick={() => handleUpdateSelectedDate(new Date(selectedDate.getTime() - 7 * 86400000))}
@@ -782,7 +782,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     <button
                       type="button"
                       onClick={handleTodayClick}
-                      className="hover-lift press-settle text-[10.5px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+                      className="hover-lift press-settle text-[13px] px-1.5 py-0.5 rounded font-sans font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
                     >
                       Today
                     </button>
@@ -797,7 +797,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   </div>
                 )}
 
-                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] font-sans">
+                <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[13px] font-sans">
                   <button
                     type="button"
                     onClick={() => setListScope("week")}
@@ -836,7 +836,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             {listDaysToRender.length === 0 && !loading ? (
               <div className="flex flex-col items-center gap-2 py-12 text-zinc-400 dark:text-zinc-600 font-sans">
                 <CalendarX2 size={22} />
-                <span className="text-xs">
+                <span className="text-sm">
                   {listScope === "all"
                     ? "No bookings on file for this client yet."
                     : `No bookings in this ${listScope === "week" ? "week" : "month"}. Try "All" to see full history.`}
@@ -849,7 +849,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
 
                   return (
                     <div key={dateStr} className="space-y-0 font-sans">
-                      <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500">
+                      <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur-xs px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500">
                         <span className="flex items-center gap-1.5">
                           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#ffcfd2] text-rose-950 dark:bg-rose-950/60 dark:text-rose-200 shrink-0">
                             <PhoneCall size={9} className="fill-current" />
@@ -885,16 +885,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                                 )}
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
+                                  <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0 border-0">
                                     <PhoneCall size={9} className="fill-current text-rose-950" />
                                     {appointmentHour}
                                   </span>
 
                                   <div className="min-w-0 space-y-0.5">
-                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white block font-sans">
+                                    <span className="truncate text-sm font-bold text-zinc-900 dark:text-white block font-sans">
                                       {item.prospectName ?? item.prospectEmail}
                                     </span>
-                                    <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                                    <span className="text-[13px] text-zinc-500 font-mono block truncate">
                                       {item.prospectEmail}
                                     </span>
                                   </div>
@@ -903,7 +903,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                                 <div className="flex items-center gap-2 shrink-0">
                                   {item.touchesTotal > 0 && (
                                     <div className="hidden sm:flex flex-col items-end gap-1 w-20">
-                                      <span className="text-[9.5px] font-mono text-zinc-500 font-bold">
+                                      <span className="text-[11px] font-mono text-zinc-500 font-bold">
                                         {item.touchesSent}/{item.touchesTotal} SMS
                                       </span>
                                       <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
@@ -941,7 +941,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                               setSelectedId(null);
                             }}
                             className={cn(
-                              "hover-lift press-settle w-full px-4 py-2.5 text-left text-xs font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
+                              "hover-lift press-settle w-full px-4 py-2.5 text-left text-sm font-mono transition-colors cursor-pointer flex items-center justify-between border-0",
                               isSelectedDay
                                 ? "bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 font-semibold"
                                 : "text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40"
@@ -953,7 +953,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                               </span>
                               No speed-to-lead runs
                             </span>
-                            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">0 / 0</span>
+                            <span className="text-xs text-zinc-400 dark:text-zinc-600">0 / 0</span>
                           </button>
                         )}
                       </div>
@@ -966,7 +966,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     <button
                       type="button"
                       onClick={() => setShowUpcomingInMonth((p) => !p)}
-                      className="hover-lift press-settle flex w-full items-center justify-between px-4 py-2 text-[11px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
+                      className="hover-lift press-settle flex w-full items-center justify-between px-4 py-2 text-[13px] font-mono font-bold text-zinc-500 uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer font-sans"
                     >
                       <span>Upcoming Runs in {monthName} ({monthDaysSmart.future.reduce((acc, d) => acc + d.calls.length, 0)})</span>
                       <ChevronDown size={13} className={cn("transition-transform", showUpcomingInMonth && "rotate-180")} />
@@ -976,7 +976,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-sans">
                         {monthDaysSmart.future.map(({ dateStr, calls }) => (
                           <div key={dateStr} className="space-y-0 font-sans">
-                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
+                            <div className="bg-zinc-100/90 dark:bg-zinc-900/90 px-4 py-1.5 border-b border-zinc-200/80 dark:border-zinc-800/80 text-[13px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex justify-between">
                               <span className="flex items-center gap-1.5">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 shrink-0">
                                   <PhoneCall size={9} className="fill-current" />
@@ -997,11 +997,11 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                                   className="hover-lift press-settle flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 cursor-pointer font-sans border-0"
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
-                                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
+                                    <span className="flex items-center gap-1 text-xs font-mono font-bold text-zinc-950 bg-[#ffcfd2] px-1.5 py-0.5 rounded shrink-0">
                                       <PhoneCall size={9} className="fill-current text-rose-950" />
                                       {formatTimeBadge(item.callTime ?? item.createdAt)}
                                     </span>
-                                    <span className="truncate text-xs font-bold text-zinc-900 dark:text-white">
+                                    <span className="truncate text-sm font-bold text-zinc-900 dark:text-white">
                                       {item.prospectName ?? item.prospectEmail}
                                     </span>
                                   </div>
@@ -1033,16 +1033,16 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                     <button
                       type="button"
                       onClick={() => handleCopyEmail(selected.prospectEmail)}
-                      className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
+                      className="hover-lift press-settle flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent px-2 py-1 text-[13px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-sans"
                     >
                       {copiedEmail ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                       <span>Copy Email</span>
                     </button>
                   </div>
 
-                  <h4 className="text-base font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
+                  <h4 className="text-lg font-bold text-zinc-900 dark:text-white font-sans">{selected.prospectName ?? selected.prospectEmail}</h4>
 
-                  <div className="space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                  <div className="space-y-1 font-mono text-sm text-zinc-600 dark:text-zinc-400">
                     <div className="flex items-center gap-2">
                       <Mail size={12} className="text-zinc-500 shrink-0" />
                       <span className="truncate">{selected.prospectEmail}</span>
@@ -1054,7 +1054,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   </div>
                 </div>
 
-                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-xs font-sans">
+                <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-2 text-sm font-sans">
                   <div className="flex items-center justify-between font-sans">
                     <span className="text-zinc-600 dark:text-zinc-400 font-semibold">Email 1 Method</span>
                     <span className="font-mono text-zinc-900 dark:text-white capitalize">{sentViaLabel(selected.sentVia)}</span>
@@ -1082,14 +1082,14 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                   const diagnosis = classifyRunError(selected.sendError);
                   return (
                     <div className="rounded-md border border-rose-300 dark:border-rose-900/50 bg-rose-100 dark:bg-rose-950/20 p-3 font-sans">
-                      <span className="block text-[10.5px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
+                      <span className="block text-[13px] font-mono uppercase text-rose-700 dark:text-rose-400/80 mb-1">Email 1 didn&apos;t go out</span>
                       {diagnosis ? (
                         <>
-                          <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">{diagnosis.title}</p>
-                          <p className="text-[11px] text-rose-800 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
+                          <p className="text-sm font-semibold text-rose-900 dark:text-rose-300">{diagnosis.title}</p>
+                          <p className="text-[13px] text-rose-800 dark:text-rose-300/90 mt-0.5">{diagnosis.explanation}</p>
                         </>
                       ) : (
-                        <p className="text-[11px] text-rose-800 dark:text-rose-300/90">
+                        <p className="text-[13px] text-rose-800 dark:text-rose-300/90">
                           This hit an unexpected error and didn&apos;t send.
                         </p>
                       )}
@@ -1098,8 +1098,8 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 })()}
 
                 {selected.sentVia === "hybrid" && selected.personalizedIntro && (
-                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-xs font-sans">
-                    <span className="flex items-center gap-1.5 text-[10.5px] font-mono text-zinc-500 uppercase">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md p-3 space-y-1.5 text-sm font-sans">
+                    <span className="flex items-center gap-1.5 text-[13px] font-mono text-zinc-500 uppercase">
                       <Wand2 size={11} /> AI-personalized intro
                     </span>
                     <p className="text-zinc-800 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">{selected.personalizedIntro}</p>
@@ -1107,13 +1107,13 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                 )}
 
                 {selected.runId && (
-                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-xs font-sans">
+                  <div className="bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-md overflow-hidden text-sm font-sans">
                     <button
                       type="button"
                       onClick={() => setShowRunActivity((p) => !p)}
                       className="hover-lift press-settle flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
                     >
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
+                      <span className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-300">
                         <SquishySkillBadge skill="pile-on" size={14} enabled={true} />
                         Run activity
                       </span>
@@ -1124,7 +1124,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
                         <RunActivityPanel runId={selected.runId} />
                         <a
                           href={`/dashboard/runs/${selected.runId}`}
-                          className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+                          className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
                         >
                           <span>Open full research run</span>
                           <ExternalLink size={10} />
@@ -1137,7 +1137,7 @@ export function PileOnPipeline({ engagementId }: { engagementId: string }) {
             ) : (
               <div className="py-12 text-center text-zinc-500 space-y-2 font-sans">
                 <CalendarDays size={24} className="mx-auto text-zinc-400 dark:text-zinc-600" />
-                <p className="text-xs font-sans">
+                <p className="text-sm font-sans">
                   {selectedDate ? (
                     <>
                       <span className="font-bold text-zinc-800 dark:text-zinc-200 block mb-0.5">
