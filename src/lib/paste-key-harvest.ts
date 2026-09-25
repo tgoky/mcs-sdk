@@ -2,8 +2,8 @@
 //
 // The paste-a-key equivalent of account-harvest.ts — the trigger point
 // for every provider that isn't in composio-providers.ts's
-// PROVIDER_TOOLKIT_MAP (Calendly, HubSpot, Klaviyo, Mailchimp, GHL are the
-// only 5 with real OAuth in this app). Everything else — Cal.com,
+// PROVIDER_TOOLKIT_MAP (the providers that can sign in through Composio;
+// see that file for which need our own OAuth app first). Everything else — Cal.com,
 // OnceHub, ActiveCampaign, ConvertKit, SMTP, Twilio, Hyros, Apollo, PDL,
 // Recall, Slack, Webflow, WordPress, Vercel, Whop, Instantly, SmartLead,
 // Reply.io, Lemlist, Apify — is paste-a-key only, so there's no Composio

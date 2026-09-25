@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { composioConnectAttempts } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { isComposioManagedProvider, toolkitSlugForProvider } from "@/lib/composio-providers";
+import { isComposioManagedProvider, toolkitSlugForProvider, customAuthConfigIdForProvider } from "@/lib/composio-providers";
 
 // Re-exported for backward compatibility — every existing import of these
 // three from "@/lib/composio" (composio/connect, composio/callback, etc.)
@@ -39,12 +39,11 @@ export { isComposioManagedProvider, toolkitSlugForProvider };
  * volume (see the credential-health cron for the existing precedent of
  * network calls happening at check/use time, not just at save time).
  *
- * Toolkit coverage: only the 5 platforms confirmed to have real,
- * Composio-supported OAuth as of Aug 2026 — see PROVIDER_TOOLKIT_MAP.
- * Every other provider in this app (cal_com, oncehub, activecampaign,
- * smtp, convertkit) keeps using the existing paste-a-key vault flow
- * unchanged; Composio was never going to remove that step for platforms
- * that don't offer OAuth themselves.
+ * Toolkit coverage: see composio-providers.ts for which toolkits Composio
+ * provides the OAuth app for, and which need our own app registered as a
+ * custom auth config first. Every other provider in this app (cal_com,
+ * oncehub, activecampaign, smtp, convertkit) keeps using the existing
+ * paste-a-key vault flow unchanged.
  */
 
 let client: Composio | null = null;
@@ -60,15 +59,24 @@ function getComposioClient(): Composio {
 }
 
 /**
- * List-or-create an auth config for a toolkit, using Composio's own
- * managed OAuth app (no client ID/secret of ours required to get started;
- * see "Custom Auth Configs" in Composio's docs if this app ever wants to
- * bring its own OAuth app per toolkit instead — out of scope here).
- * Idempotent and cheap enough to just call on every connect attempt
- * rather than caching the id anywhere; Composio's own list() call is the
- * source of truth so there's nothing to keep in sync.
+ * The auth config a connect attempt uses. Our own (a custom auth config
+ * holding our OAuth app's client id and secret, set per toolkit in
+ * NEXT_PUBLIC_COMPOSIO_AUTH_CONFIG_<TOOLKIT>) always wins. Otherwise
+ * list-or-create one on Composio's managed OAuth app, which exists only
+ * for the toolkits composio-providers.ts lists as managed: for any other
+ * toolkit Composio answers Auth_Config_DefaultAuthConfigNotFound, so this
+ * refuses up front with a message that says what to do instead.
+ * Idempotent and cheap enough to call on every connect attempt; Composio's
+ * own list() call is the source of truth so there's nothing to keep in sync.
  */
-async function ensureAuthConfigId(toolkitSlug: string): Promise<string> {
+async function ensureAuthConfigId(provider: string, toolkitSlug: string): Promise<string> {
+  const custom = customAuthConfigIdForProvider(provider);
+  if (custom) return custom;
+  if (!isComposioManagedProvider(provider)) {
+    throw new Error(
+      `Sign in isn't available for ${toolkitSlug}: Composio has no ready-made login for it. Paste an API key instead, or register an OAuth app and set NEXT_PUBLIC_COMPOSIO_AUTH_CONFIG_${toolkitSlug.toUpperCase()}.`
+    );
+  }
   const composio = getComposioClient();
   const existing = await composio.authConfigs.list({ toolkit: toolkitSlug, isComposioManaged: true });
   const activeConfig = existing.items?.find((c) => c.status === "ENABLED");
@@ -103,7 +111,7 @@ export async function startComposioConnect(
     throw new Error(`${provider} is not a Composio-managed provider.`);
   }
   const composio = getComposioClient();
-  const authConfigId = await ensureAuthConfigId(toolkitSlug);
+  const authConfigId = await ensureAuthConfigId(provider, toolkitSlug);
 
   // link() is the current, non-deprecated hosted-auth method — initiate()
   // is being retired for Composio-managed OAuth (fully rolled out as of
@@ -157,13 +165,40 @@ export async function getComposioCredentialValue(connectedAccountId: string): Pr
   return value;
 }
 
-/** Confirms a just-created connection is active and returns its toolkit slug, for the callback route to label the vault row correctly. */
+/**
+ * Confirms a just-created connection is active and belongs to this
+ * workspace, and returns its toolkit slug for the callback route to label
+ * the vault row correctly.
+ *
+ * The connected account id arrives in the callback's query string, so it
+ * is only trusted once Composio lists it under this workspace's own user
+ * id (startComposioConnect links every connection with userId =
+ * workspaceId). The single-use state token already binds the attempt to
+ * the workspace; this closes the other half, so an id from someone else's
+ * connection can't be swapped in on the way back. Returns ownedByWorkspace
+ * false rather than throwing, for the route to answer with an error.
+ */
 export async function finalizeComposioConnection(
-  connectedAccountId: string
-): Promise<{ toolkitSlug: string; status: string }> {
+  connectedAccountId: string,
+  workspaceId: string
+): Promise<{ toolkitSlug: string; status: string; ownedByWorkspace: boolean }> {
   const composio = getComposioClient();
   const account = await composio.connectedAccounts.get(connectedAccountId);
-  return { toolkitSlug: account.toolkit.slug, status: account.status };
+  const ownedByWorkspace = await connectedAccountBelongsToUser(composio, connectedAccountId, workspaceId, account.toolkit.slug);
+  return { toolkitSlug: account.toolkit.slug, status: account.status, ownedByWorkspace };
+}
+
+async function connectedAccountBelongsToUser(composio: Composio, connectedAccountId: string, userId: string, toolkitSlug: string): Promise<boolean> {
+  let cursor: string | null | undefined;
+  // A workspace holds a handful of connections per toolkit; the page cap
+  // only guards against an unbounded loop on a misbehaving cursor.
+  for (let page = 0; page < 10; page++) {
+    const res = await composio.connectedAccounts.list({ userIds: [userId], toolkitSlugs: [toolkitSlug], limit: 100, cursor });
+    if (res.items.some((a) => a.id === connectedAccountId)) return true;
+    cursor = res.nextCursor;
+    if (!cursor) return false;
+  }
+  return false;
 }
 
 /**

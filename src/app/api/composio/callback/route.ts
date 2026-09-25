@@ -132,7 +132,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(returnUrl);
     }
 
-    const { status: connectionStatus, toolkitSlug } = await finalizeComposioConnection(connectedAccountId);
+    const { status: connectionStatus, toolkitSlug, ownedByWorkspace } = await finalizeComposioConnection(connectedAccountId, activeWorkspace.workspaceId);
+    if (!ownedByWorkspace) {
+      console.warn(`[composio/callback] connected account ${connectedAccountId} is not listed under workspace ${activeWorkspace.workspaceId}; refusing to store it`);
+      returnUrl.searchParams.set("composio_error", `That ${provider} connection doesn't belong to this workspace. Try connecting again.`);
+      return NextResponse.redirect(returnUrl);
+    }
     if (connectionStatus !== "ACTIVE") {
       returnUrl.searchParams.set("composio_error", `${provider} connection ended up ${connectionStatus.toLowerCase()}, not active. Try reconnecting.`);
       return NextResponse.redirect(returnUrl);
