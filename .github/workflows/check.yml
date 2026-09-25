@@ -1,6 +1,7 @@
-# Blocks a broken main: every push and pull request must typecheck and
-# pass the test suite. (Lint isn't gated yet — it has pre-existing
-# errors — and `next build` needs real environment values.)
+# Blocks a broken main: every push and pull request must typecheck, pass
+# the test suite and build. (Lint isn't gated yet — it has pre-existing
+# errors.) The build only needs placeholder values: it evaluates modules
+# that read these at load, but never connects to anything.
 name: check
 
 on:
@@ -22,3 +23,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm test
+      - run: pnpm build
+        env:
+          DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+          SESSION_SECRET: ci-only-placeholder
+          CREDENTIAL_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+          NEXT_TELEMETRY_DISABLED: "1"
