@@ -532,15 +532,6 @@ function Welcome({
         </div>
       </header>
 
-      <section className={cn("transition-opacity", working && "pointer-events-none opacity-60")}>
-        <h2 className="text-sm font-medium text-[var(--text-primary)]">What should we watch?</h2>
-        <ul className="mt-1 divide-y">
-          {REP_SETUP_SKILLS.map((id) => (
-            <SkillSwitchRow key={id} skillId={id} blurb={SKILL_BLURB[id] ?? REP_SKILL_MANIFEST[id].description} on={skills.includes(id)} onChange={(v) => onToggleSkill(id, v)} />
-          ))}
-        </ul>
-      </section>
-
       <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-60")}>
         <label htmlFor="rep-website" className="flex items-baseline gap-2 text-sm font-medium text-[var(--text-primary)]">
           Your website
@@ -580,6 +571,15 @@ function Welcome({
           </p>
         </div>
         {toolRow}
+      </section>
+
+      <section className={cn("transition-opacity", working && "pointer-events-none opacity-60")}>
+        <h2 className="text-sm font-medium text-[var(--text-primary)]">What should we watch?</h2>
+        <ul className="mt-1 divide-y">
+          {REP_SETUP_SKILLS.map((id) => (
+            <SkillSwitchRow key={id} skillId={id} blurb={SKILL_BLURB[id] ?? REP_SKILL_MANIFEST[id].description} on={skills.includes(id)} onChange={(v) => onToggleSkill(id, v)} />
+          ))}
+        </ul>
       </section>
 
       <section>
