@@ -18,6 +18,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { HubSpotClient } from "@/lib/platforms/email";
 import { recordDeliveryEvent } from "@/lib/esp-delivery-events";
+import { patchEngagementStack } from "@/lib/engagement-stack";
 import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-monitor";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
@@ -83,10 +84,12 @@ export async function pollHubspotDeliveryForEngagement(engagementId: string): Pr
   // Watermark only advances on a successful poll — a failed poll (caught
   // above) intentionally leaves it where it was so the next cycle
   // re-covers the same window rather than silently skipping it.
-  await db
-    .update(engagements)
-    .set({ stack: { ...stack, hubspot_delivery_poll_watermark_ms: now }, updatedAt: new Date() })
-    .where(eq(engagements.engagementId, engagementId));
+  //
+  // Only the watermark key is written. checkAndApplyAutoPause above sets
+  // win_back_auto_paused on the same stack column; writing back the copy
+  // read at the top of this function would erase that pause the moment it
+  // was applied.
+  await patchEngagementStack(engagementId, { hubspot_delivery_poll_watermark_ms: now });
 
   return { bounced, complained };
 }
