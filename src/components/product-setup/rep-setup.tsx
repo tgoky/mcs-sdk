@@ -42,6 +42,7 @@ import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
 import { Popover, relativeTime } from "./review-kit";
+import { RepRunNow, hasRepRunNow } from "./rep-run-now";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -1578,6 +1579,7 @@ function Review({
           }
         />
         {shown.length > 0 && <ul className="divide-y">{shown}</ul>}
+        {hasRepRunNow(focus) && <RepRunNow engagementId={data.engagementId} skill={focus} />}
         {f.todos.length > 0 && (
           <section className="space-y-2 border-t pt-5">
             <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">Still needed</h2>

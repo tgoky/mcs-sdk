@@ -81,6 +81,8 @@ interface Draft {
   alerts: string;
   sample: string;
   bridgeUrl: string;
+  /** Field renames, one "whop_name = their_name" per line. */
+  bridgeMapping: string;
 }
 
 function draftFrom(s: WhopSetupState): Draft {
@@ -97,6 +99,7 @@ function draftFrom(s: WhopSetupState): Draft {
     alerts: String(s.alerts.alertThreshold),
     sample: String(s.alerts.minSample),
     bridgeUrl: s.bridge.url,
+    bridgeMapping: mappingText(s.bridge.fieldMapping),
   };
 }
 
@@ -242,6 +245,7 @@ export function WhopSetup({
       saveOffer: offerParts.every(Boolean) ? { discount: draft.discount, months: draft.months, message: draft.message, minTenureDays: draft.tenure, cooldownDays: draft.cooldown } : null,
       alerts: { refundRate: Number(draft.refundPct) / 100, disputeRate: Number(draft.disputePct) / 100, alertThreshold: Number(draft.alerts), minSample: Number(draft.sample) },
       bridgeUrl: draft.bridgeUrl,
+      bridgeFieldMapping: parseMapping(draft.bridgeMapping).mapping,
     };
     try {
       const res = await fetch(`/api/engagements/${engagementId}/setup/whop/save`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1035,7 +1039,30 @@ function AlertsEditor({ data, draft, set, close }: { data: WhopSetupState; draft
   );
 }
 
+/** "whop_name = their_name", one per line, both ways. */
+function mappingText(m: Record<string, string> | undefined): string {
+  return Object.entries(m ?? {})
+    .map(([k, v]) => `${k} = ${v}`)
+    .join("\n");
+}
+
+function parseMapping(text: string): { mapping: Record<string, string> | null; bad: number } {
+  const mapping: Record<string, string> = {};
+  let bad = 0;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const i = line.indexOf("=");
+    const k = i > 0 ? line.slice(0, i).trim() : "";
+    const v = i > 0 ? line.slice(i + 1).trim() : "";
+    if (k && v) mapping[k] = v;
+    else bad++;
+  }
+  return { mapping: Object.keys(mapping).length ? mapping : null, bad };
+}
+
 function BridgeEditor({ data, draft, set, close }: { data: WhopSetupState; draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  const badLines = parseMapping(draft.bridgeMapping).bad;
   return (
     <div className="space-y-3">
       <Labeled label="Send Whop events to">
@@ -1049,6 +1076,18 @@ function BridgeEditor({ data, draft, set, close }: { data: WhopSetupState; draft
         />
       </Labeled>
       {data.bridge.ghlConnected && <p className="text-[12px] text-[var(--text-muted)]">GoHighLevel is connected for {data.buyer}. An inbound webhook address from one of its workflows works here.</p>}
+      <Labeled label="Rename fields (optional), one per line: whop_name = your_name">
+        <textarea
+          aria-label="Rename fields"
+          value={draft.bridgeMapping}
+          onChange={(e) => set((d) => ({ ...d, bridgeMapping: e.target.value }))}
+          placeholder="email = contact_email"
+          rows={3}
+          spellCheck={false}
+          className={`${inputCls} py-2 font-mono text-[12px]`}
+        />
+      </Labeled>
+      {badLines > 0 && <p className="text-[12px] text-[var(--error)]">{badLines === 1 ? "One line isn't" : `${badLines} lines aren't`} in the form whop_name = your_name, and will be left out.</p>}
       <EditorFoot close={close} onClear={draft.bridgeUrl ? () => set((d) => ({ ...d, bridgeUrl: "" })) : undefined} />
     </div>
   );

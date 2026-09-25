@@ -182,15 +182,7 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
   "pile-on": {
     title: skillName("pile-on"),
     subtitle: "Every speed-to-lead sequence this client has ever run, not just today's calendar.",
-    // Pile-On's small form takes its current values from the stack.
-    headerAction: (ctx) => (
-      <SkillConfigureMenu
-        skillId="pile-on"
-        engagementId={ctx.engagement.engagementId}
-        pileOnInitial={{ smsPlatform: ctx.engagement.stack?.sms_platform ?? "none", adDataPlatform: ctx.engagement.stack?.ad_data_platform ?? "none" }}
-        defaultOpen={openOnArrival(ctx)}
-      />
-    ),
+    headerAction: configure("pile-on"),
     body: (ctx) => <PileOnBody {...ctx} />,
   },
   "pre-call-read": {
@@ -215,6 +207,7 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
         </Link>
       </>
     ),
+    headerAction: configure("rep-onboarding"),
     body: (ctx) => <ReputationManagerBody {...ctx} />,
   },
   "whop-webhook-audit": {
@@ -236,7 +229,7 @@ export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
   },
   "whop-bridge-manager": {
     title: "Bridge Manager",
-    // No Configure menu: the console below is the config form.
+    headerAction: configure("whop-bridge-manager"),
     body: ({ engagement }) => <BridgeManagerConsole engagementId={engagement.engagementId} />,
   },
 };

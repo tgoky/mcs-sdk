@@ -129,10 +129,10 @@ describe("skill page", () => {
     expect(SKILLS_CONFIGURED_ON_OWN_PAGE).toEqual([]);
   });
 
-  it("uses the breadcrumb override and shows no Configure menu where the body is the form", async () => {
+  it("uses the breadcrumb override, and edits Bridge Manager through Configure rather than a form in the page", async () => {
     render(await SkillPage(props("whop-bridge-manager")));
     expect(screen.getByRole("heading", { name: "Bridge Manager for Acme" })).toBeInTheDocument();
-    expect(screen.queryByTestId("configure")).not.toBeInTheDocument();
+    expect(screen.getByTestId("configure")).toBeInTheDocument();
     expect(SKILL_PAGES["whop-webhook-audit"].breadcrumb).toBe("Webhook Fleet");
   });
 });

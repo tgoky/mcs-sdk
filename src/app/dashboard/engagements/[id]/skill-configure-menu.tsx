@@ -15,7 +15,6 @@
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { FloatingPanel } from "@/components/floating-panel";
-import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
 import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
@@ -27,18 +26,12 @@ export type ConfigurableSkillId = WorkerId;
 export function SkillConfigureMenu({
   skillId,
   engagementId,
-  pileOnInitial,
   defaultOpen = false,
   triggerClassName,
   iconSize = 17,
 }: {
   skillId: ConfigurableSkillId;
   engagementId: string;
-  /** Only pile-on needs this — its two config fields live on the
-   * engagement's stack, already fetched by whatever server page renders
-   * this menu, rather than behind a GET this form would otherwise have to
-   * fetch itself the way the other skills' forms do. */
-  pileOnInitial?: { smsPlatform: string; adDataPlatform: string };
   /** Open on arrival: the page was reached from a settings link
    * (?configure=1, see workerSettingsHref), not from the skill itself. */
   defaultOpen?: boolean;
@@ -57,7 +50,7 @@ export function SkillConfigureMenu({
     <FloatingPanel
       align="end"
       defaultOpen={defaultOpen}
-      panelWidth={skillId === "pile-on" ? 340 : 560}
+      panelWidth={560}
       trigger={({ toggle, open }) => (
         <button
           type="button"
@@ -89,17 +82,7 @@ export function SkillConfigureMenu({
         };
         return (
           <div className="p-2.5">
-            {skillId === "pile-on" ? (
-              <PileOnConfigForm
-                engagementId={engagementId}
-                initialSmsPlatform={pileOnInitial?.smsPlatform ?? "none"}
-                initialAdDataPlatform={pileOnInitial?.adDataPlatform ?? "none"}
-                onCancel={close}
-                onSaved={savedAndRefresh}
-              />
-            ) : (
-              renderWorkerConfigForm(skillId, { engagementId, onClose: closeAndRefresh, onSaved: savedAndRefresh })
-            )}
+            {renderWorkerConfigForm(skillId, { engagementId, onClose: closeAndRefresh, onSaved: savedAndRefresh })}
           </div>
         );
       }}

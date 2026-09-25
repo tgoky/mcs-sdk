@@ -16,17 +16,10 @@
 import type { ReactNode } from "react";
 import type { WorkerId } from "@/lib/worker-registry";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
-import { WinBackConfigForm } from "./win-back-config-form";
-import { PreCallReadConfigForm } from "./pre-call-read-config-form";
-import { PileOnConfigForm } from "./pile-on-config-form";
-import { LeakMapConfigForm } from "./leak-map-config-form";
+import { ShowtimeSkillSettings, type ShowtimeSettingsSkill } from "@/components/product-setup/showtime-skill-settings";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
 import { WhopSetup } from "@/components/product-setup/whop-setup";
-import { RepEnginePanelConfigForm } from "./rep-engine-panel-config-form";
-import { RepTrustpilotWatchConfigForm } from "./rep-trustpilot-watch-config-form";
-import { RepRedditWatchConfigForm } from "./rep-reddit-watch-config-form";
-import { RepTwitterWatchConfigForm } from "./rep-twitter-watch-config-form";
 import { COLD_OPEN_SKILL_IDS } from "@/lib/cold-open-skill-manifest";
 import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
@@ -61,13 +54,6 @@ export interface ConfigFormHandlers {
 type FormRenderer = (h: ConfigFormHandlers) => ReactNode;
 
 // Forms that only take onCancel (they save in place and show "Saved").
-const simple = (Form: (props: { engagementId: string; onCancel: () => void; cancelLabel?: string }) => ReactNode): FormRenderer => {
-  function SimpleForm(h: ConfigFormHandlers) {
-    return <Form engagementId={h.engagementId} onCancel={h.onClose} cancelLabel={h.cancelLabel} />;
-  }
-  return SimpleForm;
-};
-
 // A product setup as one skill's settings. The onboarding worker's own
 // setup page shows the whole setup instead.
 const focused = (
@@ -105,11 +91,13 @@ const focused = (
 
 // The Rep watches whose form is a one-off "scan further back" action, not
 // settings; they keep it.
-const REP_OWN_FORMS: Partial<Record<WorkerId, FormRenderer>> = {
-  "rep-engine-panel": simple(RepEnginePanelConfigForm),
-  "rep-trustpilot-watch": simple(RepTrustpilotWatchConfigForm),
-  "rep-reddit-watch": simple(RepRedditWatchConfigForm),
-  "rep-twitter-watch": simple(RepTwitterWatchConfigForm),
+/** One Showtime skill's own settings (everything but Show Rate Setup,
+ * whose settings live inside ShowtimeSetup). */
+const showtimeSkill = (skill: ShowtimeSettingsSkill): FormRenderer => {
+  function ShowtimeSkillForm(h: ConfigFormHandlers) {
+    return <ShowtimeSkillSettings engagementId={h.engagementId} skill={skill} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} backHref={h.backHref} />;
+  }
+  return ShowtimeSkillForm;
 };
 
 const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
@@ -134,21 +122,13 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // wrong saved value. SkillConfigureMenu still passes real prefetched
   // values directly to PileOnConfigForm where it already has them, purely
   // to skip that fetch's flash; both paths land on the same form.
-  "pile-on": (h) => (
-    <PileOnConfigForm
-      engagementId={h.engagementId}
-      initialSmsPlatform="none"
-      initialAdDataPlatform="none"
-      onCancel={h.onClose}
-      onSaved={() => h.onSaved?.({})}
-    />
-  ),
-  "win-back": simple(WinBackConfigForm),
-  "pre-call-read": simple(PreCallReadConfigForm),
-  "leak-map": simple(LeakMapConfigForm),
+  "pile-on": showtimeSkill("pile-on"),
+  "win-back": showtimeSkill("win-back"),
+  "pre-call-read": showtimeSkill("pre-call-read"),
+  "leak-map": showtimeSkill("leak-map"),
   // Reputation Manager, Cold Open and Whop Agent: every skill opens its
   // product's review narrowed to the rows it owns.
-  ...Object.fromEntries(REP_SKILL_IDS.map((id) => [id, REP_OWN_FORMS[id] ?? focused(RepSetup, "rep-onboarding", id)])),
+  ...Object.fromEntries(REP_SKILL_IDS.map((id) => [id, focused(RepSetup, "rep-onboarding", id)])),
   ...Object.fromEntries(COLD_OPEN_SKILL_IDS.map((id) => [id, focused(ColdOpenSetup, "icp-lock", id)])),
   ...Object.fromEntries(WHOP_AGENT_SKILL_IDS.map((id) => [id, focused(WhopSetup, "whop-connect", id)])),
 };

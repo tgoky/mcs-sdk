@@ -40,17 +40,17 @@ describe("worker setup page", () => {
     await expect(WorkerSetupPage(params("pin-down"))).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("shows the heading, the one-line description and that worker's form", async () => {
-    render(await WorkerSetupPage(params("leak-map")));
-    expect(screen.getByRole("heading", { name: "Configure Funnel Audit" })).toBeInTheDocument();
-    expect(screen.getByText(/Audits the funnel/)).toBeInTheDocument();
-    expect(screen.getByTestId("form")).toHaveTextContent("leak-map");
-  });
-
-  it("leaves the heading to Whop Agent's own setup screen", async () => {
-    render(await WorkerSetupPage(params("whop-connect")));
-    expect(screen.queryByRole("heading", { name: /Configure|Connect your Whop account/ })).toBeNull();
-    expect(screen.getByTestId("form")).toHaveTextContent("whop-connect");
+  it("renders that worker's form with no heading of its own, handing it the way back", async () => {
+    // Every form carries its own heading and puts Back on its line.
+    for (const id of ["leak-map", "whop-connect", "voice-capture"]) {
+      handlersSeen.length = 0;
+      const { unmount } = render(await WorkerSetupPage(params(id)));
+      expect(screen.queryByRole("heading")).toBeNull();
+      expect(screen.queryByLabelText("Back")).toBeNull();
+      expect(screen.getByTestId("form")).toHaveTextContent(id);
+      expect((handlersSeen.at(-1) as { backHref?: string }).backHref).toBe("/dashboard/engagements/e1");
+      unmount();
+    }
   });
 
   it("goes back to ?from= on cancel, to the run a setup started, else back", async () => {
@@ -73,6 +73,6 @@ describe("worker setup page", () => {
   it("ignores a ?from= outside the dashboard", async () => {
     search = new URLSearchParams({ from: "https://evil.example" });
     render(await WorkerSetupPage(params("win-back")));
-    expect(screen.getByLabelText("Back")).toHaveAttribute("href", "/dashboard/engagements/e1");
+    expect((handlersSeen.at(-1) as { backHref?: string }).backHref).toBe("/dashboard/engagements/e1");
   });
 });

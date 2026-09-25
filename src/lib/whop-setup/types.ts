@@ -105,7 +105,8 @@ export interface WhopSetupState {
   };
   alerts: AlertProposal & { saved: boolean };
   /** signingSecret: shown once a destination is saved, so it can check X-Whop-Agent-Signature. */
-  bridge: { url: string; ghlConnected: boolean; signingSecret: string | null };
+  /** fieldMapping: renames Whop's field names in what's forwarded (Whop name -> theirs). */
+  bridge: { url: string; ghlConnected: boolean; signingSecret: string | null; fieldMapping: Record<string, string> };
   webhook: {
     /** Events the agent's own subscription carries now. */
     current: string[] | null;

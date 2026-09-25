@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Send, MessageSquare, Search, RefreshCw, Clock, ExternalLink, Check, X, Loader2, Settings2, Target, Mic, Database, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
+import Link from "next/link";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
 import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
 import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
@@ -370,7 +371,15 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
           </div>
         </div>
       ) : (
-        <EmptyState icon={Send} title="Cold Open isn't configured for this client yet" description="Set up ICP Lock, Voice Capture, Source Connect, and Send Connect from the Library to start generating real sends." />
+        <div className="flex flex-col items-center">
+          <EmptyState icon={Send} title="Cold Open isn't set up for this client yet" description="Set it up from the client's website and sending tool: who to email, how it should sound, and where the leads come from." />
+          <Link
+            href={`/dashboard/engagements/${engagementId}/bridges/icp-lock`}
+            className="-mt-8 mb-6 inline-flex h-9 items-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            Set up Cold Open
+          </Link>
+        </div>
       )}
 
       {/* Toolbar */}

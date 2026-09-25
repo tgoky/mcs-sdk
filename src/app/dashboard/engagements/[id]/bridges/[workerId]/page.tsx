@@ -1,10 +1,12 @@
 // src/app/dashboard/engagements/[id]/bridges/[workerId]/page.tsx
 //
-// One setup page for every worker with a config form: title, one
-// sentence, the form. Replaces seven near-identical per-worker pages
-// (pin-down, win-back, leak-map, pre-call-read, icp-lock, rep-onboarding,
-// whop-connect) at the same URLs, so every existing link, "Finish setup"
-// button and Composio return path keeps working.
+// One setup page for every worker with a config form. Replaces seven
+// near-identical per-worker pages (pin-down, win-back, leak-map,
+// pre-call-read, icp-lock, rep-onboarding, whop-connect) at the same URLs,
+// so every existing link, "Finish setup" button and Composio return path
+// keeps working. Every form carries its own heading (a product's setup,
+// or one skill's settings), so the page adds only the breadcrumb and hands
+// the form the way back.
 
 import { notFound } from "next/navigation";
 import { isWorkerId, WORKER_REGISTRY } from "@/lib/worker-registry";
@@ -13,11 +15,6 @@ import { loadOwnedEngagement } from "../../owned-engagement";
 import { SetupPageClient } from "./setup-page-client";
 
 export const revalidate = 0;
-
-/** Headings that don't read as "Configure <name>". */
-/** Setups that introduce themselves (their own heading and copy), so the
- * page only adds the way back. */
-const SELF_HEADED_SETUPS = new Set(["pin-down", "rep-onboarding", "icp-lock", "whop-connect", "whop-cancellation-save-offer", "whop-bridge-manager"]);
 
 export default async function WorkerSetupPage({ params }: { params: Promise<{ id: string; workerId: string }> }) {
   const { id, workerId } = await params;
@@ -32,12 +29,7 @@ export default async function WorkerSetupPage({ params }: { params: Promise<{ id
   return (
     <>
       <SetBreadcrumbLabel label={`${engagement.buyer} · ${worker.name}`} />
-      <SetupPageClient
-        engagementId={id}
-        workerId={workerId}
-        heading={SELF_HEADED_SETUPS.has(workerId) ? null : `Configure ${worker.name}`}
-        description={SELF_HEADED_SETUPS.has(workerId) ? null : worker.description}
-      />
+      <SetupPageClient engagementId={id} workerId={workerId} />
     </>
   );
 }

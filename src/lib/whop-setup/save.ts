@@ -19,6 +19,9 @@ export interface WhopSetupInput {
   /** Refund and dispute levels are fractions of payments. */
   alerts: { refundRate: number; disputeRate: number; alertThreshold: number; minSample: number };
   bridgeUrl: string;
+  /** Field renames for what's forwarded: an object replaces the saved one,
+   * null clears it, undefined (an older caller) leaves it as saved. */
+  bridgeFieldMapping?: Record<string, string> | null;
 }
 
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
@@ -56,11 +59,26 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
   if (!Number.isInteger(alertThreshold) || alertThreshold < 1 || alertThreshold > 100) return { error: "Dispute alerts must be a whole number from 1 to 100." };
   if (!Number.isInteger(minSample) || minSample < 1 || minSample > 1000) return { error: "Payments needed before a rate counts must be a whole number from 1 to 1,000." };
 
+  // Field renames: each key a Whop field name, each value the name the
+  // receiving tool expects. Only plain strings, and not too many.
+  let parsedMapping: Record<string, string> | null = null;
+  if (b.bridgeFieldMapping !== undefined && b.bridgeFieldMapping !== null) {
+    const m = b.bridgeFieldMapping;
+    if (typeof m !== "object" || Array.isArray(m)) return { error: "Field names must be a list of Whop name to your name." };
+    const entries = Object.entries(m as Record<string, unknown>);
+    if (entries.length > 100) return { error: "Keep field names to 100 or fewer." };
+    for (const [k, v] of entries) {
+      if (!k.trim() || typeof v !== "string" || !v.trim()) return { error: "Every field name needs both the Whop name and yours." };
+    }
+    parsedMapping = Object.fromEntries(entries.map(([k, v]) => [k.trim(), String(v).trim()]));
+  }
+
   return {
     skills: Array.isArray(b.skills) ? b.skills.filter((s: unknown): s is string => typeof s === "string" && (WHOP_AGENT_SKILL_IDS as string[]).includes(s)) : [],
     saveOffer,
     alerts: { refundRate, disputeRate, alertThreshold, minSample },
     bridgeUrl: typeof b.bridgeUrl === "string" ? b.bridgeUrl.trim() : "",
+    ...(b.bridgeFieldMapping === undefined ? {} : { bridgeFieldMapping: parsedMapping }),
   };
 }
 
@@ -95,6 +113,7 @@ export async function saveWhopSetup(engagementId: string, input: WhopSetupInput,
     dispute_alert_threshold: input.alerts.alertThreshold,
     min_payment_sample_size: input.alerts.minSample,
     whop_bridge_destination_url: bridgeUrl,
+    ...(input.bridgeFieldMapping === undefined ? {} : { whop_bridge_field_mapping: input.bridgeFieldMapping && Object.keys(input.bridgeFieldMapping).length ? input.bridgeFieldMapping : undefined }),
     ...(input.saveOffer
       ? {
           whop_save_offer_discount_percentage: input.saveOffer.discount,

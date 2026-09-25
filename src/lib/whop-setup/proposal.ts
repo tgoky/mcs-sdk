@@ -70,7 +70,7 @@ export function buildWhopProposal(input: ProposalInput): Pick<WhopSetupState, "s
     snapshot,
     saveOffer,
     alerts,
-    bridge: { url: stack.whop_bridge_destination_url ?? "", ghlConnected: input.ghlConnected },
+    bridge: { url: stack.whop_bridge_destination_url ?? "", ghlConnected: input.ghlConnected, fieldMapping: stack.whop_bridge_field_mapping ?? {} },
     webhook: {
       current: input.agentEvents,
       receiverUrl: input.receiverUrl,

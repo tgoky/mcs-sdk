@@ -2,8 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import { PRODUCTS_WITH_SKILL_SETTINGS, WORKER_IDS, WORKER_REGISTRY } from "@/lib/worker-registry";
 import { WORKERS_WITH_CONFIG_FORM, hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
-import { LeakMapConfigForm } from "@/components/worker-config-forms/leak-map-config-form";
-import { PileOnConfigForm } from "@/components/worker-config-forms/pile-on-config-form";
+import { ShowtimeSkillSettings } from "@/components/product-setup/showtime-skill-settings";
 import { ShowtimeSetup } from "@/components/product-setup/showtime-setup";
 import { RepSetup } from "@/components/product-setup/rep-setup";
 import { WhopSetup } from "@/components/product-setup/whop-setup";
@@ -17,8 +16,7 @@ describe("config form lookup", () => {
   it("has a form for exactly the workers with a Configure panel, every skill of a product whose setup opens per skill, and Pile-On", () => {
     // Pile-On has no "hinges panel" (worker.hasHingesPanel is false,
     // skill-manifest.ts) but still gets a real config form here
-    // (PileOnConfigForm, which fully self-loads its own current values —
-    // see its own header) so every surface that renders a worker's
+    // (ShowtimeSkillSettings, which loads its own current values) so every surface that renders a worker's
     // settings through this registry (the Library's product page among
     // them) can configure it in place instead of falling back to a
     // full-page navigation for lack of a registry entry.
@@ -38,25 +36,19 @@ describe("config form lookup", () => {
     expect(renderWorkerConfigForm("pile-on", { engagementId: "e1", onClose: () => {} })).not.toBeNull();
   });
 
-  it("defaults Pile-On's config form to its own self-loaded values and wires cancel/save", () => {
+  it("opens Pile-On, Win-Back, Call Brief and Funnel Audit as their own Showtime settings, wiring cancel, save and the way back", () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
-    const el = element("pile-on", { engagementId: "e1", onClose, onSaved });
-    expect(el.type).toBe(PileOnConfigForm);
-    expect(el.props.engagementId).toBe("e1");
-    expect(el.props.onCancel).toBe(onClose);
-    el.props.onSaved?.();
-    expect(onSaved).toHaveBeenCalledWith({});
-  });
-
-  it("wires a simple form's cancel and label", () => {
-    const onClose = vi.fn();
-    const el = element("leak-map", { engagementId: "e1", onClose, cancelLabel: "Close" });
-    expect(el.type).toBe(LeakMapConfigForm);
-    expect(el.props.engagementId).toBe("e1");
-    expect(el.props.onCancel).toBe(onClose);
-    expect(el.props.cancelLabel).toBe("Close");
-    expect(el.props.onSaved).toBeUndefined();
+    for (const id of ["pile-on", "win-back", "pre-call-read", "leak-map"] as const) {
+      const el = element(id, { engagementId: "e1", onClose, onSaved, cancelLabel: "Close", backHref: "/dashboard/x" });
+      expect(el.type, id).toBe(ShowtimeSkillSettings);
+      expect(el.props.skill).toBe(id);
+      expect(el.props.engagementId).toBe("e1");
+      expect(el.props.onCancel).toBe(onClose);
+      expect(el.props.onSaved).toBe(onSaved);
+      expect(el.props.cancelLabel).toBe("Close");
+      expect(el.props.backHref).toBe("/dashboard/x");
+    }
   });
 
   it("passes onSaved through to setup forms", () => {
