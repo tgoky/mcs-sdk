@@ -1754,15 +1754,6 @@ function PinDownSettings({
       </SettingsGroup>
 
       <SettingsGroup title="The offer" description="What the page and the scripts are written around.">
-        <p className="border-b border-[var(--border)]/60 py-3 text-[13px] leading-relaxed text-[var(--text-secondary)] @md:pl-[184px]">
-          {data.buyer} sells{" "}
-          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerName || "…"}</span>
-          {" "}for{" "}
-          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerPrice || "…"}</span>
-          {" "}to{" "}
-          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerIcp || "…"}</span>
-          .
-        </p>
         <SettingRow label="What they sell" needed={needed.has("offer")}>{t.offerName}</SettingRow>
         <SettingRow label="Price" needed={needed.has("price")}>{t.offerPrice}</SettingRow>
         <SettingRow label="Who it's for" needed={needed.has("icp")}>{t.offerIcp}</SettingRow>
