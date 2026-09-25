@@ -34,10 +34,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  // Promote any trusted client_facts on load
-  await applyResolvableFacts(id).catch((err) =>
-    console.error(`[whop-connect] applyResolvableFacts error for ${id}:`, err)
-  );
+  // Loading only reads. Trusted facts reach config on Save (POST below),
+  // confirming a fact, or Enable — never on a page load.
 
   const [connection] = await db.select().from(whopAgentConnections).where(eq(whopAgentConnections.engagementId, id)).limit(1);
 
@@ -85,6 +83,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Agent workers are on by default, and re-enabling all of them on every
     // (re)connect silently undid any a user had switched off.
     await setSkillEnabledForEngagement(id, "whop-connect", true);
+
+    // Connecting is the operator's own action: promote trusted facts into
+    // config (only empty fields are filled).
+    await applyResolvableFacts(id).catch((err) => console.error(`[whop-connect] applyResolvableFacts error for ${id}:`, err));
 
     return NextResponse.json(result);
   } catch (error) {

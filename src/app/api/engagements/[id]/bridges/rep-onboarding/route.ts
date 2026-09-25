@@ -60,11 +60,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     })
     .onConflictDoNothing();
 
-  // Promote any trusted, high-confidence client_facts suggestions (competitors,
-  // entities, seedPanelPrompts, operatorHandles, collisions) into repIdentityGraphs before querying
-  await applyResolvableFacts(id).catch((err) =>
-    console.error(`[bridges/rep-onboarding] GET applyResolvableFacts failed for ${id}:`, err)
-  );
+  // Loading only reads. Trusted facts reach config on Save (POST below),
+  // confirming a fact, or Enable — never on a page load.
 
   const [graph] = await db.select().from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, id)).limit(1);
   const enabled = await isSkillEnabledForEngagement(id, "rep-onboarding");

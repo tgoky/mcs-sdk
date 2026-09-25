@@ -41,8 +41,9 @@ type TrafficTemperature = (typeof TRAFFIC_TEMPERATURES)[number];
 
 /**
  * pin-down bridge route — Showtime Single Dossier API handler.
- * Runs applyResolvableFacts on GET to promote harvested facts and returns
- * a pre-filled payload supporting 1-click Show Rate engine arming.
+ * GET returns a pre-filled payload (saved values, trusted facts and
+ * suggestions) without writing anything; POST saves it and promotes the
+ * remaining trusted facts into config.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -64,10 +65,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  // Promote trusted client_facts before loading row configuration
-  await applyResolvableFacts(id).catch((err) =>
-    console.error(`[bridges/pin-down] applyResolvableFacts error for ${id}:`, err)
-  );
+  // Loading only reads. Trusted facts reach config on Save (POST below),
+  // confirming a fact, or Enable — never on a page load.
 
   const [engagementRow] = await db
     .select({
@@ -378,6 +377,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         )
       );
     }
+
+    // Save is the operator's own action: promote the trusted facts the body
+    // didn't carry (the HubSpot portal, timezone, site testimonials...) into
+    // config. Only empty fields are filled, so what was just saved stays.
+    await applyResolvableFacts(id).catch((err) => console.error(`[bridges/pin-down] applyResolvableFacts error for ${id}:`, err));
 
     // Pin-Down builds the confirmation page; nothing to run when it's off.
     // Show Rate Setup's own settings send runPinDown: false when nothing

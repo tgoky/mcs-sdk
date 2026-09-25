@@ -122,7 +122,8 @@ describe("GET /api/engagements/[id]/bridges/pin-down", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(applyResolvableFacts).toHaveBeenCalledWith("e1");
+    // Loading only reads: promotion happens on Save, not on a page load.
+    expect(applyResolvableFacts).not.toHaveBeenCalled();
     expect(data.buyer).toBe("Acme");
     expect(data.enabled).toBe(true);
     expect(data.hasVoiceCorpus).toBe(true);
@@ -225,6 +226,8 @@ describe("POST /api/engagements/[id]/bridges/pin-down", () => {
     expect(seedPrimaryDomainFromUrl).toHaveBeenCalledWith("e1", "acme.com");
     expect(dispatchSkillRun).toHaveBeenCalledWith("e1", "pin-down", "Acme");
     expect(data.runId).toBe("run-456");
+    // Save is where trusted facts the body didn't carry reach config.
+    expect(applyResolvableFacts).toHaveBeenCalledWith("e1");
   });
 
   it("refuses to save without a traffic temperature instead of assuming warm", async () => {

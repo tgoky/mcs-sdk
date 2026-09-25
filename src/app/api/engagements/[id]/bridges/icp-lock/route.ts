@@ -48,10 +48,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  // Attempt auto-writeback of any trusted facts before loading config
-  await applyResolvableFacts(id).catch((err) =>
-    console.error(`[bridges/icp-lock] applyResolvableFacts error for ${id}:`, err)
-  );
+  // Loading only reads. Trusted facts reach config on Save (POST below),
+  // confirming a fact, or Enable — never on a page load.
 
   const config = await getColdOpenConfig(id);
   const facts = await getClientFacts(id);
@@ -229,6 +227,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         )
       );
     }
+
+    // Save is the operator's own action: promote the trusted facts the body
+    // didn't carry. Only empty fields are filled, so what was saved stays.
+    await applyResolvableFacts(id).catch((err) => console.error(`[bridges/icp-lock] applyResolvableFacts error for ${id}:`, err));
 
     const runId = await dispatchSkillRun(id, "icp-lock", engagementRow.buyer);
 
