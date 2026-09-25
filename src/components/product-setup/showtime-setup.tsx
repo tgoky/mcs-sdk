@@ -988,7 +988,7 @@ function Review({
     // line (a wrapped "Still needed: …" list, or Show Rate Setup's own
     // rebuild-choice toggles above it), so the bar visibly overlapped
     // whatever content settled at the bottom of the scroll.
-    <div className="w-full pb-40">
+    <div className="w-full pb-10">
       <div className="min-w-0 space-y-10">
         <header className="flex items-start gap-4">
           <ShowtimeMark size={40} />
@@ -1590,7 +1590,7 @@ function PinDownSettings({
     // own wrapper above — this settings-only view renders inside a
     // narrower panel, but the bar underneath it can still grow past one
     // line.
-    <div className="space-y-6 pb-28">
+    <div className="space-y-6 pb-10">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
         <p className="text-[13px] text-[var(--text-muted)]">{domain ? `Read from ${domain}` : `${data.buyer}'s confirmation page`}</p>
         <a
@@ -2215,7 +2215,7 @@ function SaveBar({
   ) : null;
 
   return (
-    <div className="sticky bottom-0 z-20 mt-4 bg-background/90 px-4 py-3 backdrop-blur-md shadow-[0_-12px_24px_-18px_rgba(0,0,0,0.35)]">
+   <div className="mt-10 border-t pt-6">
       {extra}
       <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
         <div className="min-w-0 flex-1">
