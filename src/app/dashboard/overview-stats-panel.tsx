@@ -7,7 +7,6 @@ import Link from "next/link";
 import {
   ChevronRight,
   X,
-  ArrowUpRight,
   AlertCircle,
   CheckCircle2,
   Check,

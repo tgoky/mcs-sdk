@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import {
   Check,
   X,
-  ArrowUpRight,
   ShieldAlert,
   CircleAlert,
   Info,
