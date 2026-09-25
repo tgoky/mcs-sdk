@@ -20,8 +20,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowUpRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, ChevronLeft, Eye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { useTour } from "@/components/tours/tour-provider";
@@ -170,6 +171,7 @@ export function ShowtimeSetup({
   onSaved,
   cancelLabel = "Cancel",
   focus,
+  backHref,
 }: {
   engagementId: string;
   onCancel: () => void;
@@ -179,6 +181,11 @@ export function ShowtimeSetup({
    * is set up. Before that, the full setup shows either way: there's
    * nothing to configure until it has run once. */
   focus?: "pin-down";
+  /** Showtime carries its own heading, so the page that hosts it (see
+   * setup-page-client.tsx) has nothing of its own to put beside the way
+   * back — it hands us the href instead, and we put the back button on
+   * the same line as our own mark and title. */
+  backHref?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -669,6 +676,7 @@ export function ShowtimeSetup({
               onCancel={onCancel}
               cancelLabel={cancelLabel}
               onBackToReview={data.configured ? () => setPhase("review") : undefined}
+              backHref={backHref}
             />
           </motion.div>
         ) : (
@@ -729,6 +737,7 @@ export function ShowtimeSetup({
                 setTimeout(() => setFlashGroup(null), 1500);
               }}
               engagementId={engagementId}
+              backHref={backHref}
             />
             )}
             <SaveBar
@@ -786,6 +795,23 @@ function ShowtimeMark({ size = 44 }: { size?: number }) {
   );
 }
 
+/** The way back, sized to sit on the same line as a header's mark and
+ * title rather than above them (see setup-page-client.tsx: Showtime
+ * carries its own heading, so the page hands us the href instead of
+ * rendering its own back button). */
+function BackButton({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label="Back"
+      title="Back"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100/80 text-zinc-700 transition-colors hover:bg-zinc-200 dark:border-zinc-800/80 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:bg-zinc-800"
+    >
+      <ChevronLeft className="h-4 w-4" />
+    </Link>
+  );
+}
+
 function Welcome({
   data,
   draft,
@@ -801,6 +827,7 @@ function Welcome({
   onCancel,
   cancelLabel,
   onBackToReview,
+  backHref,
 }: {
   data: ShowtimeSetupState;
   draft: Draft;
@@ -816,6 +843,7 @@ function Welcome({
   onCancel: () => void;
   cancelLabel: string;
   onBackToReview?: () => void;
+  backHref?: string;
 }) {
   const working = phase === "working";
   const host = bareHost(draft.domain);
@@ -828,6 +856,7 @@ function Welcome({
   return (
     <div className="space-y-9">
       <header className="flex items-start gap-4">
+        {backHref && <BackButton href={backHref} />}
         <ShowtimeMark />
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">
@@ -961,6 +990,7 @@ function Review({
   onToggleSkill,
   setKeepPage,
   setSalesCall,
+  backHref,
 }: {
   skills: string[];
   needs: CombinedNeeds;
@@ -981,6 +1011,7 @@ function Review({
   onReread: () => void;
   onFocusGroup: (g: ToolGroupId) => void;
   engagementId: string;
+  backHref?: string;
 }) {
   const o = draft.offer;
   const tokenProps = (key: string) => ({ open: openKey === key, onOpenChange: (open: boolean) => setOpenKey(open ? key : null) });
@@ -1006,6 +1037,7 @@ function Review({
     <div className="w-full pb-10">
       <div className="min-w-0 space-y-10">
         <header className="flex items-start gap-4">
+          {backHref && <BackButton href={backHref} />}
           <ShowtimeMark size={40} />
           <div className="min-w-0 space-y-1.5">
           <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
@@ -1040,7 +1072,7 @@ function Review({
         {needs.offer && (
         <section className="space-y-3">
           <SectionTitle>What we learned</SectionTitle>
-          <p className="max-w-[62ch] text-[17px] leading-[2.1] text-[var(--text-secondary)]">
+          <p className="text-[17px] leading-[2.1] text-[var(--text-secondary)]">
             <span className="font-semibold text-[var(--text-primary)]">{name}</span> sells{" "}
             {t.offerName}
             {" "}for{" "}
@@ -1804,8 +1836,8 @@ function weakGuess(v: SetupValue | undefined): string | null {
 
 function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-2.5">
-      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{children}</h2>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-[var(--text-primary)]/10 pb-2.5">
+      <h2 className="text-[19px] font-semibold tracking-tight text-[var(--text-primary)]">{children}</h2>
       {hint && <p className="text-xs text-[var(--text-muted)]">{hint}</p>}
     </div>
   );

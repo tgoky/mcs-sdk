@@ -50,6 +50,11 @@ export interface ConfigFormHandlers {
    * worker. Anywhere else, and for every other worker, a product's setup
    * opens as that one skill's own settings (see each setup's `focus`). */
   mode?: "setup" | "settings";
+  /** For a self-headed form (its own mark and title, not "Configure X"):
+   * the way back, so it can put the back button on the same line as its
+   * own heading instead of the page rendering one above it. Only forms
+   * that carry their own heading read this. */
+  backHref?: string;
 }
 
 type FormRenderer = (h: ConfigFormHandlers) => ReactNode;
@@ -88,7 +93,16 @@ const FORMS: Partial<Record<WorkerId, FormRenderer>> = {
   // Showtime
   // Showtime's setup covers every Showtime skill from the website and the
   // connected tools; Pin-Down is the worker it lives under.
-  "pin-down": (h) => <ShowtimeSetup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} focus={h.mode === "setup" ? undefined : "pin-down"} />,
+  "pin-down": (h) => (
+    <ShowtimeSetup
+      engagementId={h.engagementId}
+      onCancel={h.onClose}
+      onSaved={h.onSaved}
+      cancelLabel={h.cancelLabel}
+      focus={h.mode === "setup" ? undefined : "pin-down"}
+      backHref={h.backHref}
+    />
+  ),
   // PileOnConfigForm always re-fetches its own current values on mount
   // (see its own useEffect) — these two "initial" props are only the
   // pre-fetch default, so a generic caller with nothing better to pass
