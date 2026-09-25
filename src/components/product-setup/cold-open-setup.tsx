@@ -8,30 +8,15 @@
 //             (already-connected ones show as such; one connection per
 //             client serves every product)
 //   working   "Set it up" streams its real steps
-//   review    a findings report: what we read (site, outbound, CRM),
-//             what we decided (offer, buyers, voice, subjects, emails,
-//             campaigns, schedule), what's left before anything sends,
-//             and Save. Live sending stays off until someone switches
-//             it on in Daily Send — never as a side effect of Save.
+//   review    how outreach has gone so far, then what they sell, who to,
+//             in whose voice, which subject lines and emails, into which
+//             campaigns, how many a day. Save. Live sending stays off
+//             until someone switches it on in Daily Send.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ExternalLink,
-  Loader2,
-  Minus,
-  Plus,
-  RotateCcw,
-  SearchX,
-  Send,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, Check, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { COLD_OPEN_SEND_TOOLS, findSetupTool, findShowtimeTool } from "@/lib/showtime-setup/catalog";
@@ -39,59 +24,35 @@ import type { ActivationStep } from "@/lib/showtime-setup/types";
 import type { ColdOpenSetupState, TrustTier } from "@/lib/cold-open-setup/types";
 import type { ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
-import { ActivationProgress, type ActivationStage } from "./activation-steps";
+import { ChoiceList } from "./fact-token";
+import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry } from "./review-kit";
 import { anySkillDisplayName } from "@/lib/any-skill";
+import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { cn } from "@/lib/utils";
 import { allTimezones, COMMON_TIMEZONES, isValidTimezone } from "@/lib/timezones";
 
 // ── Skills ─────────────────────────────────────────────────────────────
 
+/** Setup steps this page fills in; always on once saved. */
 const SETUP_SKILLS: ColdOpenSkillId[] = ["voice-capture", "source-connect", "send-connect"];
+/** The day-to-day workers a person can switch off. */
 const RUN_SKILLS: ColdOpenSkillId[] = ["daily-send", "reply-sort", "send-report"];
-
-const COLD_OPEN_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean; about: string }> = {
-  "icp-lock": {
-    rows: ["site", "offer", "buyers", "crm"],
-    todos: [],
-    save: true,
-    about: "What you sell, who buys it, and the past customers we learned it from.",
-  },
-  "voice-capture": {
-    rows: ["voice", "subjects"],
-    todos: [],
-    save: true,
-    about: "How your emails open, sign off, and sound, and which of your own subject lines we reuse.",
-  },
-  "send-connect": {
-    rows: ["outbound", "campaign-"],
-    todos: ["tool", "campaigns"],
-    save: true,
-    about: "Where your emails go out, and which campaign each group of buyers goes into.",
-  },
-  "source-connect": {
-    rows: [],
-    todos: [],
-    save: false,
-    about: "Where each group's leads come from. A list is used as soon as you add it.",
-  },
-  "daily-send": {
-    rows: ["schedule", "emails"],
-    todos: [],
-    save: true,
-    about: "How many new leads a day, when, and whether the emails are written per lead or sent as written. Live sending has its own switch.",
-  },
+/** What each skill's own settings show: the review rows (and "Left to do"
+ * steps) it owns, whether it has anything to save, and a line on what it
+ * does when it has nothing to set. */
+const COLD_OPEN_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean; about?: string }> = {
+  "icp-lock": { rows: ["site", "offer", "buyers", "crm"], todos: [], save: true },
+  "voice-capture": { rows: ["voice", "subjects", "emails"], todos: [], save: true },
+  "send-connect": { rows: ["outbound", "dns-", "campaign-"], todos: ["tool", "campaigns"], save: true, about: "Where your emails go out, and which campaign each group of buyers goes into." },
+  "source-connect": { rows: [], todos: [], save: false, about: "Where each group's leads come from. A list is used as soon as you add it." },
+  "daily-send": { rows: ["schedule", "emails"], todos: [], save: true },
   "reply-sort": {
     rows: ["outbound"],
     todos: ["tool"],
     save: false,
     about: "Sorts each reply as it comes in (interested, not now, not a fit, an objection, an auto-reply or an unsubscribe) and sends anything real to your Queue. There's nothing to set: it reads replies from your sending tool.",
   },
-  "send-report": {
-    rows: [],
-    todos: [],
-    save: false,
-    about: "Sums up each week's sending: how many emails went out, what happened to them, and how people replied. There's nothing to set.",
-  },
+  "send-report": { rows: [], todos: [], save: false, about: "Sums up each week's sending: how many emails went out, what happened to them, and how people replied. There's nothing to set." },
 };
 
 const STAGES: ActivationStage[] = [
@@ -102,7 +63,6 @@ const STAGES: ActivationStage[] = [
 ];
 
 const HUBSPOT = findShowtimeTool("hubspot");
-const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? "am" : "pm"}`;
 
 // ── Draft ──────────────────────────────────────────────────────────────
 
@@ -171,6 +131,8 @@ function stepsBeforeSending(data: ColdOpenSetupState, campaignMap: Record<string
   return out;
 }
 
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? "am" : "pm"}`;
+
 // ── Component ──────────────────────────────────────────────────────────
 
 export function ColdOpenSetup({
@@ -179,7 +141,6 @@ export function ColdOpenSetup({
   onSaved,
   cancelLabel = "Cancel",
   focus,
-  leading,
 }: {
   engagementId: string;
   onCancel: () => void;
@@ -188,9 +149,6 @@ export function ColdOpenSetup({
   /** Opens as this one skill's own settings once Cold Open is set up: only
    * the rows it owns, saved without touching which skills are on. */
   focus?: string;
-  /** The back chevron, when the caller renders one. Sits inline with the
-   * title row so the header reads as one line, not two. */
-  leading?: ReactNode;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -205,10 +163,6 @@ export function ColdOpenSetup({
   const [saveError, setSaveError] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const storageKey = `cold-open-setup:${engagementId}:domain`;
-  // Which fields have been edited since load. Drives "unsaved changes"
-  // without hashing the draft on every keystroke.
-  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
-  const markTouched = (key: string) => setTouched((t) => (t.has(key) ? t : new Set(t).add(key)));
 
   const load = useCallback(
     async (opts: { initial?: boolean; fresh?: boolean } = {}) => {
@@ -233,7 +187,6 @@ export function ColdOpenSetup({
       if (opts.initial) {
         setPhase(next.configured ? "review" : "welcome");
         setSkills(next.configured ? RUN_SKILLS.filter((id) => next.skills[id] !== false) : [...RUN_SKILLS]);
-        setTouched(new Set());
       }
       return next;
     },
@@ -261,10 +214,7 @@ export function ColdOpenSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
-  const set = (fn: (d: Draft) => Draft, key?: string) => {
-    if (key) markTouched(key);
-    setDraft((d) => (d ? fn(d) : d));
-  };
+  const set = (fn: (d: Draft) => Draft) => setDraft((d) => (d ? fn(d) : d));
 
   // ── Tools: the same connect endpoint Showtime uses (one per client) ──
   async function post(path: string, body: unknown): Promise<string | null> {
@@ -276,16 +226,12 @@ export function ColdOpenSetup({
   const toolActions: ToolActions = {
     useSaved: async (tool, vaultId) => {
       const err = await post(connectPath, { provider: tool.provider, vaultId });
-      if (!err) {
-        markTouched("tools");
-        await load().catch(() => undefined);
-      }
+      if (!err) await load().catch(() => undefined);
       return err;
     },
     connectKey: async (tool, value, extra) => {
       const err = await post(connectPath, { provider: tool.provider, value, ...extra });
       if (!err) {
-        markTouched("tools");
         toast.success(`${tool.label} connected.`);
         await load().catch(() => undefined);
       }
@@ -309,10 +255,7 @@ export function ColdOpenSetup({
     },
     disconnect: async (tool) => {
       const err = await post(connectPath, { provider: tool.provider, disconnect: true });
-      if (!err) {
-        markTouched("tools");
-        await load().catch(() => undefined);
-      }
+      if (!err) await load().catch(() => undefined);
       return err;
     },
     choose: () => undefined,
@@ -363,26 +306,7 @@ export function ColdOpenSetup({
 
   // ── Save ──
   const onTouchsets = draft?.touchsets.filter((t) => t.on).length ?? 0;
-
-  /** The fields the *focused* view actually needs. A focused save shouldn't
-   * be blocked by requirements it doesn't own — the full setup does that. */
-  const focusedMissing = useMemo(() => {
-    if (!draft || !focus) return [] as string[];
-    const m: string[] = [];
-    const f = COLD_OPEN_FOCUS[focus];
-    if (f?.rows.includes("offer")) {
-      if (!draft.product.name.trim()) m.push("your product's name");
-      if (!draft.product.url.trim()) m.push("its web address");
-      if (!draft.product.valueProp.trim()) m.push("what it does for people");
-    }
-    if (f?.rows.includes("buyers") && !draft.icps.some((i) => i.label.trim())) m.push("who you sell to");
-    if (f?.rows.includes("voice") && (!draft.voice.greeting.trim() || !draft.voice.signOff.trim() || !draft.voice.tone.trim())) m.push("how you write");
-    if (draft.copyMode === "upload" && onTouchsets < 2) m.push("a second email to send as written");
-    return m;
-  }, [draft, focus, onTouchsets]);
-
-  /** Everything the full setup needs. */
-  const fullMissing = useMemo(() => {
+  const missing = useMemo(() => {
     const m: string[] = [];
     if (!draft) return m;
     if (!draft.product.name.trim()) m.push("your product's name");
@@ -395,8 +319,7 @@ export function ColdOpenSetup({
   }, [draft, onTouchsets]);
 
   const settings = Boolean(focus && data?.configured);
-  const missing = settings ? focusedMissing : fullMissing;
-  const dirty = touched.size > 0;
+  const dirty = useMemo(() => (data && draft ? JSON.stringify({ ...draft, domain: "" }) !== JSON.stringify({ ...draftFrom(data), domain: "" }) : false), [data, draft]);
 
   async function save() {
     if (!data || !draft) return;
@@ -405,14 +328,8 @@ export function ColdOpenSetup({
     const icps = draft.icps.filter((i) => i.label.trim());
     const body = {
       product: draft.product,
-      icps: icps.map((i) => ({
-        slug: data.proposal.icps.some((x) => x.slug === i.slug) ? i.slug : "",
-        label: i.label.trim(),
-        weight: i.share,
-        teamSizeMin: Number(i.min) || null,
-        teamSizeMax: Number(i.max) || null,
-        disqualifyIf: i.disqualifyIf,
-      })),
+      // A group added here gets its slug from its name on the server.
+      icps: icps.map((i) => ({ slug: data.proposal.icps.some((x) => x.slug === i.slug) ? i.slug : "", label: i.label.trim(), weight: i.share, teamSizeMin: Number(i.min) || null, teamSizeMax: Number(i.max) || null, disqualifyIf: i.disqualifyIf })),
       voice: draft.voice,
       subjects: draft.subjects.filter((s) => s.on).map((s) => s.value),
       touchsets: draft.touchsets.filter((t) => t.on).map(({ subject, body1, body2, body3 }) => ({ subject, body1, body2, body3 })),
@@ -423,15 +340,12 @@ export function ColdOpenSetup({
       ...(settings ? { settings: true } : {}),
     };
     try {
-      const res = await fetch(`/api/engagements/${engagementId}/setup/cold-open/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(`/api/engagements/${engagementId}/setup/cold-open/save`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.step ? `${json.step}: ${json.error}` : (json.error ?? "Couldn't save."));
       await load({ fresh: true }).catch(() => undefined);
       if (settings) {
+        // The panel it opened in says it saved; elsewhere, say so here.
         if (onSaved) onSaved({});
         else toast.success("Saved.");
         return;
@@ -465,24 +379,15 @@ export function ColdOpenSetup({
   const toolRow = <ToolRow data={data} actions={toolActions} />;
 
   return (
-    <div ref={topRef} className="@container w-full px-1">
+    <div ref={topRef} className="@container w-full px-1 pb-4">
       {phase === "review" ? (
-        <div className="pb-16">
-          <Review
-            data={data}
-            draft={draft}
-            set={set}
-            onReread={() => setPhase("welcome")}
-            toolRow={toolRow}
-            focus={settings ? focus : undefined}
-            leading={leading}
-            reload={() => load()}
-          />
+        <>
+          <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} />
           {settings ? (
-            COLD_OPEN_FOCUS[focus!]?.save ? (
+            COLD_OPEN_FOCUS[focus!]?.save && (
               <ApproveBar
                 label="Save"
-                note={missing.length ? `Add ${missing.join(" and ")}, then save.` : dirty ? "Unsaved changes." : undefined}
+                note={missing.length ? "Something the full setup needs is missing. Open the full setup to add it." : undefined}
                 error={saveError}
                 saving={saving}
                 disabled={!dirty || missing.length > 0}
@@ -490,10 +395,10 @@ export function ColdOpenSetup({
                 onCancel={onCancel}
                 cancelLabel={cancelLabel}
               />
-            ) : null
+            )
           ) : (
             <ApproveBar
-              note={missing.length ? undefined : "Nothing sends until you switch live sending on."}
+              note={missing.length ? "Add what we couldn't find above, then approve." : undefined}
               error={saveError}
               saving={saving}
               disabled={missing.length > 0}
@@ -502,7 +407,7 @@ export function ColdOpenSetup({
               cancelLabel={cancelLabel}
             />
           )}
-        </div>
+        </>
       ) : (
         <Welcome
           data={data}
@@ -516,63 +421,20 @@ export function ColdOpenSetup({
           onCancel={onCancel}
           cancelLabel={cancelLabel}
           onBackToReview={data.configured ? () => setPhase("review") : undefined}
-          leading={leading}
         />
       )}
     </div>
   );
 }
 
-// ── Shared header ──────────────────────────────────────────────────────
+// ── Pieces ─────────────────────────────────────────────────────────────
 
 function ColdOpenMark({ size = 44 }: { size?: number }) {
   return (
-    <span
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-elevation-1 ring-1 ring-black/5 dark:ring-white/10"
-      style={{ width: size, height: size }}
-    >
+    <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-elevation-1 ring-1 ring-black/5 dark:ring-white/10" style={{ width: size, height: size }}>
       {/* eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's */}
       <img src="/images/cold-open.svg" alt="" className="h-[82%] w-[82%] object-contain" />
     </span>
-  );
-}
-
-/** One header, three sizes. Welcome, the full review, and a focused
- * skill's settings all use it, so the product mark appears once per visit
- * and the shape is the same at every step. */
-function ColdOpenHeader({
-  size = 44,
-  eyebrow,
-  title,
-  subtitle,
-  trailing,
-  leading,
-}: {
-  size?: number;
-  eyebrow?: string;
-  title: ReactNode;
-  subtitle?: ReactNode;
-  trailing?: ReactNode;
-  leading?: ReactNode;
-}) {
-  return (
-    <header className="flex items-start gap-4">
-      {leading && <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center">{leading}</div>}
-      <ColdOpenMark size={size} />
-      <div className="min-w-0 flex-1">
-        {eyebrow && <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">{eyebrow}</p>}
-        <h1
-          className={cn(
-            "font-semibold leading-tight tracking-tight text-[var(--text-primary)]",
-            size === 44 ? "text-[24px] @xl:text-[28px]" : "text-[19px]",
-          )}
-        >
-          {title}
-        </h1>
-        {subtitle && <div className="mt-1.5">{subtitle}</div>}
-      </div>
-      {trailing && <div className="shrink-0">{trailing}</div>}
-    </header>
   );
 }
 
@@ -611,7 +473,6 @@ function Welcome({
   onCancel,
   cancelLabel,
   onBackToReview,
-  leading,
 }: {
   data: ColdOpenSetupState;
   draft: Draft;
@@ -624,23 +485,21 @@ function Welcome({
   onCancel: () => void;
   cancelLabel: string;
   onBackToReview?: () => void;
-  leading?: ReactNode;
 }) {
   const host = bareHost(draft.domain);
   const known = Boolean(data.website.domain) && bareHost(data.website.domain ?? "") === host;
   const sender = data.tools.find((t) => t.group === "sending" && t.linked);
   return (
     <div className="space-y-9">
-      <ColdOpenHeader
-        leading={leading}
-        eyebrow="Cold Open"
-        title={`Cold email for ${data.buyer}`}
-        subtitle={
-          <p className="max-w-xl text-[15px] leading-relaxed text-[var(--text-secondary)]">
+      <header className="flex items-start gap-4">
+        <ColdOpenMark />
+        <div className="min-w-0 space-y-1.5">
+          <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">Cold email for {data.buyer}</h1>
+          <p className="max-w-xl text-[15px] leading-relaxed">
             We learn what you sell, who buys it, and what has already worked in your outreach, then set up the daily sending. You check our work, and nothing goes out until you say so.
           </p>
-        }
-      />
+        </div>
+      </header>
 
       <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-60")}>
         <label htmlFor="cold-open-website" className="flex items-baseline gap-2 text-sm font-medium text-[var(--text-primary)]">
@@ -711,306 +570,14 @@ function Welcome({
   );
 }
 
-// ── State marks ────────────────────────────────────────────────────────
-
-function FoundMark() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
-      <Check className="h-3 w-3" strokeWidth={3.5} />
-    </span>
-  );
-}
-function DecidedMark() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[var(--text-secondary)]">
-      <Sparkles className="h-4 w-4" />
-    </span>
-  );
-}
-function MissingMark() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[var(--text-muted)]">
-      <Minus className="h-4 w-4" />
-    </span>
-  );
-}
-function WarnMark() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[var(--error)]">
-      <AlertTriangle className="h-4 w-4" />
-    </span>
-  );
-}
-function NotFoundMark() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[var(--text-muted)]">
-      <SearchX className="h-4 w-4" />
-    </span>
-  );
-}
-
-function markFor(kind: "found" | "decided" | "missing" | "warn" | "notfound") {
-  switch (kind) {
-    case "found": return <FoundMark />;
-    case "decided": return <DecidedMark />;
-    case "missing": return <MissingMark />;
-    case "warn": return <WarnMark />;
-    case "notfound": return <NotFoundMark />;
-  }
-}
-
-// ── Rows ───────────────────────────────────────────────────────────────
-//
-// A finding is read-only-ish: something we learned, with its source.
-// A decision is editable: what the person is being asked to confirm, with
-// a "Change" on the right. A state is a fact about the wiring (sending
-// through X, drafts only). Three registers, one row shape.
-
-function Row({
-  kind,
-  count,
-  noun,
-  text,
-  source,
-  action,
-  body,
-  onOpen,
-  open,
-}: {
-  kind: "found" | "decided" | "missing" | "warn";
-  /** The headline number, when the count is the point. */
-  count?: number;
-  /** What we're counting. */
-  noun?: string;
-  /** The sentence. */
-  text: ReactNode;
-  /** Where the value came from. */
-  source?: ReactNode;
-  /** A "Change" affordance on the right. */
-  action?: { label: string; onClick: () => void };
-  /** The chips, list, or sub-editor underneath. */
-  body?: ReactNode;
-  /** When present, the row is a disclosure whose body opens on click. */
-  onOpen?: () => void;
-  open?: boolean;
-}) {
-  const clickable = Boolean(onOpen);
-  return (
-    <li className="flex gap-3 py-5">
-      {markFor(kind)}
-      <div className="min-w-0 flex-1">
-        {typeof count === "number" ? (
-          <>
-            <p className="flex items-baseline gap-2">
-              <span className="text-[26px] font-semibold leading-none tabular-nums tracking-tight text-[var(--text-primary)]">{count}</span>
-              {noun && <span className="text-[14px] font-medium text-[var(--text-primary)]">{noun}</span>}
-            </p>
-            <p className="mt-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">{text}</p>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onOpen}
-            disabled={!clickable}
-            className={cn("block w-full text-left text-[15px] leading-snug text-[var(--text-secondary)]", clickable && "cursor-pointer")}
-          >
-            {text}
-          </button>
-        )}
-        {source && <p className="mt-1 text-[12px] text-[var(--text-muted)]">{source}</p>}
-        {body && <div className="mt-2.5">{body}</div>}
-      </div>
-      {action && (
-        <button
-          type="button"
-          onClick={action.onClick}
-          className="shrink-0 self-start pt-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
-        >
-          {action.label}
-        </button>
-      )}
-    </li>
-  );
-}
-
-// ── Chips ──────────────────────────────────────────────────────────────
-
-function Chip({
-  on,
-  title,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  title?: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] transition-colors",
-        on ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)]" : "border-dashed border-[var(--border)] text-[var(--text-muted)] line-through",
-      )}
-    >
-      <button type="button" onClick={onClick} title={title} className="min-w-0 truncate cursor-pointer">
-        {children}
-      </button>
-    </span>
-  );
-}
-
-function ChipRow({
-  items,
-  onToggle,
-  onAdd,
-  addLabel,
-}: {
-  items: { value: string; on: boolean; hint?: string }[];
-  onToggle: (i: number) => void;
-  onAdd?: (value: string) => void;
-  addLabel?: string;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [v, setV] = useState("");
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {items.map((x, i) => (
-        <Chip key={`${x.value}-${i}`} on={x.on} title={x.hint} onClick={() => onToggle(i)}>
-          {x.value}
-        </Chip>
-      ))}
-      {onAdd && addLabel && (adding ? (
-        <input
-          autoFocus
-          value={v}
-          onChange={(e) => setV(e.target.value)}
-          onBlur={() => {
-            if (v.trim()) onAdd(v);
-            setV("");
-            setAdding(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (v.trim()) onAdd(v);
-              setV("");
-              setAdding(false);
-            }
-            if (e.key === "Escape") {
-              setV("");
-              setAdding(false);
-            }
-          }}
-          className="h-7 w-40 rounded-full border border-[var(--border)] bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-[var(--ring)]/40"
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--border)] px-3 py-1 text-[13px] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text-secondary)] cursor-pointer"
-        >
-          <Plus className="h-3 w-3" /> {addLabel}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Popover ────────────────────────────────────────────────────────────
-
-function Popover({
-  label,
-  title,
-  strong,
-  children,
-}: {
-  label: string;
-  title: string;
-  strong?: boolean;
-  children: (close: () => void) => ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "text-[13px] font-medium underline decoration-dashed underline-offset-4 cursor-pointer",
-          strong ? "text-[var(--text-primary)] decoration-[var(--text-muted)]" : "text-[var(--text-secondary)] decoration-[var(--border)] hover:text-[var(--text-primary)]",
-        )}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="absolute right-0 z-20 mt-2 w-[340px] max-w-[85vw] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-elevation-2">
-          <p className="mb-2.5 text-[13px] font-medium text-[var(--text-primary)]">{title}</p>
-          {children(() => setOpen(false))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Still needed ───────────────────────────────────────────────────────
-
-function StillNeeded({ items }: { items: { key: string; label: string; action: ReactNode }[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface-prefill)]/60 p-4 @md:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
-          <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />
-        </span>
-        <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">
-          {items.length === 1 ? "One thing still needed" : `${items.length} things still needed`}
-        </h2>
-      </div>
-      <ul className="space-y-3">
-        {items.map((it) => (
-          <li key={it.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-            <p className="min-w-0 text-[14px] leading-relaxed text-[var(--text-secondary)]">{it.label}</p>
-            <div className="shrink-0">{it.action}</div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-// ── Left to do ─────────────────────────────────────────────────────────
-
-function TodoRow({
-  done,
-  optional,
-  label,
-  action,
-}: {
-  done: boolean;
-  optional?: boolean;
-  label: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <li className="flex items-center gap-3 py-3">
-      <span
-        className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-          done ? "bg-[var(--ink)] text-[var(--ink-foreground)]" : "ring-1 ring-inset ring-[var(--text-muted)]/50",
-        )}
-      >
-        {done && <Check className="h-3 w-3" strokeWidth={3.5} />}
-      </span>
-      <span className={cn("min-w-0 flex-1 text-[14px]", done ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]")}>
-        {label}
-        {optional && !done && <span className="ml-1.5 text-[12px] text-[var(--text-muted)]">Optional</span>}
-      </span>
-      {action && <div className="shrink-0">{action}</div>}
-    </li>
-  );
-}
-
 // ── Review ─────────────────────────────────────────────────────────────
+
+// ── Review: the campaign, what we did, what's left ─────────────────────
+//
+// What "Set it up" found, said back as a short feed the person approves:
+// the campaign at a glance, each thing we did with where it came from
+// (Change opens a small editor; Undo puts back what we found), and the
+// few steps left before anything sends. No form on the page itself.
 
 function Review({
   data,
@@ -1019,16 +586,14 @@ function Review({
   onReread,
   toolRow,
   focus,
-  leading,
   reload,
 }: {
   data: ColdOpenSetupState;
   draft: Draft;
-  set: (fn: (d: Draft) => Draft, key?: string) => void;
+  set: (fn: (d: Draft) => Draft) => void;
   onReread: () => void;
   toolRow: ReactNode;
   focus?: string;
-  leading?: ReactNode;
   reload: () => Promise<unknown>;
 }) {
   const p = data.proposal;
@@ -1041,323 +606,244 @@ function Review({
   const unmapped = icps.filter((i) => !draft.campaignMap[i.slug]);
   const bridge = (worker: string) => `/dashboard/engagements/${data.engagementId}/bridges/${worker}`;
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  const from = (source: string) =>
-    source === "saved" ? "Saved" : source === "a common default" ? "A starting point. Change it anytime." : source ? `From ${source}` : "";
+  // "your website" -> "From your website"; a default says so plainly.
+  const from = (source: string) => (source === "saved" ? "Saved" : source === "a common default" ? "A starting point. Change it anytime." : source ? `From ${source}` : "");
 
-  // ── Findings: what we read. Read-only-ish, cited. ──
-  const findings: ReactNode[] = [];
-  const notFound: { key: string; noun: string; addLabel: string; onAdd: () => void }[] = [];
+  const entries: FeedEntry[] = [];
 
-  if (data.website.domain) {
-    findings.push(
-      <Row
-        key="site"
-        kind="found"
-        text={<>Read <span className="font-semibold text-[var(--text-primary)]">{data.website.domain}</span></>}
-        source={data.website.readAt ? `Read ${new Date(data.website.readAt).toLocaleDateString()}` : undefined}
-      />,
-    );
-  }
-
-  if (out) {
-    findings.push(
-      <Row
-        key="outbound"
-        kind="found"
-        text={
-          <>
-            Read {platformName}: <span className="font-semibold text-[var(--text-primary)]">{out.campaigns.length} campaigns</span>
-            {out.overallReplyRate != null ? <>, <span className="font-semibold text-[var(--text-primary)]">{out.overallReplyRate}%</span> replied</> : null}
-            {out.capacity != null ? <>, mailboxes send up to <span className="font-semibold text-[var(--text-primary)]">{out.capacity} a day</span></> : null}
-          </>
-        }
-        source={`Read ${new Date(out.pulledAt).toLocaleDateString()}`}
-      />,
-    );
-    for (const d of out.domains.filter((x) => !x.ok)) {
-      findings.push(
-        <Row
-          key={`dns-${d.domain}`}
-          kind="warn"
-          text={
-            <>
-              <span className="font-semibold text-[var(--text-primary)]">{d.domain}</span> is missing email records: {d.problems.join(" ")}
-            </>
-          }
-          source="Fix before sending more"
-        />,
-      );
-    }
-  }
-
-  if (data.buyers) {
-    const b = data.buyers;
-    findings.push(
-      <Row
-        key="crm"
-        kind="found"
-        text={
-          <>
-            Your <span className="font-semibold text-[var(--text-primary)]">{b.companies} customers</span> in HubSpot are mostly{" "}
-            {b.industries[0] ? <span className="font-semibold text-[var(--text-primary)]">{b.industries[0].industry}</span> : "varied"}
-            {b.sweetSpot ? <>, <span className="font-semibold text-[var(--text-primary)]">{b.sweetSpot.min}{b.sweetSpot.max ? `-${b.sweetSpot.max}` : "+"} people</span></> : null}
-          </>
-        }
-        source={`${b.wonDeals} won deals`}
-      />,
-    );
-  }
-
-  // ── Decisions: what the person is being asked to confirm. Editable. ──
-  const decisions: ReactNode[] = [];
+  entries.push(
+    data.website.domain
+      ? { key: "site", text: <>Read <b>{data.website.domain}</b></>, source: data.website.readAt ? `Read ${new Date(data.website.readAt).toLocaleDateString()}` : "" }
+      : { key: "site", todo: true, text: <>No website yet</>, action: { label: "Add it", onClick: onReread } }
+  );
 
   const offerEditor = (close: () => void) => (
     <OfferEditor
       value={draft.product}
       onSave={(v) => {
-        set((d) => ({ ...d, product: v }), "offer");
+        set((d) => ({ ...d, product: v }));
         close();
       }}
     />
   );
-  if (draft.product.name.trim()) {
-    decisions.push(
-      <Row
-        key="offer"
-        kind={draft.product.valueProp.trim() ? "decided" : "missing"}
-        text={
-          <>
-            Your offer is <span className="font-semibold text-[var(--text-primary)]">{draft.product.name}</span>
-            {draft.product.price ? <> at <span className="font-semibold text-[var(--text-primary)]">{draft.product.price}</span></> : null}
-            {draft.product.valueProp ? (
-              <span className="mt-1 block text-[13px] text-[var(--text-muted)]">{draft.product.valueProp}</span>
-            ) : (
-              <span className="mt-1 block text-[13px] text-[var(--text-muted)]">We still need a line on what it does for people.</span>
-            )}
-          </>
+  entries.push(
+    draft.product.name.trim()
+      ? {
+          key: "offer",
+          text: (
+            <>
+              Your offer is <b>{draft.product.name}</b>
+              {draft.product.price ? <> at <b>{draft.product.price}</b></> : null}
+              {draft.product.valueProp ? <span className="block text-[var(--text-muted)]">{draft.product.valueProp}</span> : <span className="block text-[var(--text-muted)]">We still need a line on what it does for people.</span>}
+            </>
+          ),
+          source: from(p.product.name.source),
+          editor: offerEditor,
+          undo: same(draft.product, initial.product) ? undefined : () => set((d) => ({ ...d, product: initial.product })),
+          todo: !draft.product.valueProp.trim(),
         }
-        source={from(p.product.name.source)}
-        action={{ label: "Change", onClick: () => {} }}
-        body={null}
-      />,
-    );
-    // The editor is opened by the "Change" action, but Row's action button
-    // doesn't carry an editor. Wrap with a Popover for these.
-  } else {
-    notFound.push({ key: "offer", noun: "your product", addLabel: "Add", onAdd: onReread });
-  }
+      : { key: "offer", todo: true, text: <>Couldn&apos;t tell what you sell</>, editor: offerEditor, editLabel: "Add it" }
+  );
 
   const buyersEditor = (close: () => void) => (
     <BuyersEditor
       value={draft.icps}
       showShare={icps.length > 1}
       onSave={(list) => {
-        set((d) => ({ ...d, icps: list }), "buyers");
+        set((d) => ({ ...d, icps: list }));
         close();
       }}
     />
   );
-  if (icps.length) {
-    decisions.push(
-      <Row
-        key="buyers"
-        kind="decided"
-        text={
-          <>
-            Writing to{" "}
-            {icps.map((i, n) => (
-              <span key={i.slug}>
-                {n > 0 ? (n === icps.length - 1 ? " and " : ", ") : ""}
-                <span className="font-semibold text-[var(--text-primary)]">{i.label}</span>
-                {i.min || i.max ? ` (${i.min || "1"}${i.max ? `-${i.max}` : "+"} people)` : ""}
-              </span>
-            ))}
-          </>
+  entries.push(
+    icps.length
+      ? {
+          key: "buyers",
+          text: (
+            <>
+              Writing to{" "}
+              {icps.map((i, n) => (
+                <span key={i.slug}>
+                  {n > 0 ? (n === icps.length - 1 ? " and " : ", ") : ""}
+                  <b>{i.label}</b>
+                  {i.min || i.max ? ` (${i.min || "1"}${i.max ? `-${i.max}` : "+"} people)` : ""}
+                </span>
+              ))}
+            </>
+          ),
+          source: icps[0].evidence ?? (icps[0].tier === "done" ? "Saved" : "From your website"),
+          editor: buyersEditor,
+          undo: same(draft.icps, initial.icps) ? undefined : () => set((d) => ({ ...d, icps: initial.icps })),
         }
-        source={icps[0].evidence ?? (icps[0].tier === "done" ? "Saved" : "From your website")}
-      />,
-    );
-  } else {
-    notFound.push({ key: "buyers", noun: "buyer groups", addLabel: "Add", onAdd: onReread });
-  }
-
-  decisions.push(
-    <Row
-      key="voice"
-      kind="decided"
-      text={
-        <>
-          Emails open with <span className="font-semibold text-[var(--text-primary)]">&ldquo;{draft.voice.greeting || "Hi"}&rdquo;</span>, sign off{" "}
-          <span className="font-semibold text-[var(--text-primary)]">&ldquo;{draft.voice.signOff || "Best,"}&rdquo;</span> and sound{" "}
-          <span className="font-semibold text-[var(--text-primary)]">{draft.voice.tone.toLowerCase() || "plain"}</span>
-        </>
-      }
-      source={from(p.voice.tone.source)}
-    />,
+      : { key: "buyers", todo: true, text: <>Couldn&apos;t tell who you sell to</>, editor: buyersEditor, editLabel: "Add them" }
   );
+
+  entries.push({
+    key: "voice",
+    text: (
+      <>
+        Emails open with <b>&ldquo;{draft.voice.greeting || "Hi"}&rdquo;</b>, sign off <b>&ldquo;{draft.voice.signOff || "Best,"}&rdquo;</b> and sound <b>{draft.voice.tone.toLowerCase() || "plain"}</b>
+      </>
+    ),
+    source: from(p.voice.tone.source),
+    editor: (close) => (
+      <VoiceEditor
+        value={draft.voice}
+        onSave={(v) => {
+          set((d) => ({ ...d, voice: v }));
+          close();
+        }}
+      />
+    ),
+    undo: same(draft.voice, initial.voice) ? undefined : () => set((d) => ({ ...d, voice: initial.voice })),
+  });
+
+  if (out) {
+    entries.push({
+      key: "outbound",
+      text: (
+        <>
+          Read {platformName}: <b>{out.campaigns.length} campaigns</b>
+          {out.overallReplyRate != null ? <>, <b>{out.overallReplyRate}%</b> replied</> : null}
+          {out.capacity != null ? <>, mailboxes send up to <b>{out.capacity} a day</b></> : null}
+        </>
+      ),
+      source: `Read ${new Date(out.pulledAt).toLocaleDateString()}`,
+    });
+    for (const d of out.domains.filter((x) => !x.ok)) {
+      entries.push({ key: `dns-${d.domain}`, warn: true, text: <><b>{d.domain}</b> is missing email records: {d.problems.join(" ")}</>, source: "Fix before sending more" });
+    }
+  }
+  if (data.buyers) {
+    const b = data.buyers;
+    entries.push({
+      key: "crm",
+      text: (
+        <>
+          Your <b>{b.companies} customers</b> in HubSpot are mostly {b.industries[0] ? <b>{b.industries[0].industry}</b> : "varied"}
+          {b.sweetSpot ? <>, <b>{b.sweetSpot.min}{b.sweetSpot.max ? `-${b.sweetSpot.max}` : "+"} people</b></> : null}
+        </>
+      ),
+      source: `${b.wonDeals} won deals`,
+    });
+  }
 
   const subjectsOn = draft.subjects.filter((x) => x.on).length;
   if (draft.subjects.length || focus === "voice-capture") {
-    decisions.push(
-      <Row
-        key="subjects"
-        kind="decided"
-        text={subjectsOn
-          ? <>Reusing <span className="font-semibold text-[var(--text-primary)]">{subjectsOn} of your best subject lines</span></>
-          : <>No subject lines of your own, so each lead gets one written for them</>}
-        source={draft.subjects.length ? (platformName ? `From ${platformName}` : "Saved") : undefined}
-        body={
-          focus ? (
-            <ChipRow
-              items={draft.subjects.map((x) => ({ value: x.value, on: x.on, hint: x.replyRate != null ? `${x.replyRate}% replied` : undefined }))}
-              onToggle={(i) => set((d) => ({ ...d, subjects: d.subjects.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }), "subjects")}
-              onAdd={(v) =>
-                set(
-                  (d) => (d.subjects.some((x) => x.value.toLowerCase() === v.toLowerCase()) ? d : { ...d, subjects: [...d.subjects, { value: v, source: "you", replyRate: null, on: true }] }),
-                  "subjects",
-                )
-              }
-              addLabel="Add a subject line"
-            />
-          ) : undefined
-        }
-      />,
-    );
+    const toggleSubject = (i: number) => set((d) => ({ ...d, subjects: d.subjects.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }));
+    entries.push({
+      key: "subjects",
+      text: subjectsOn ? <>Reusing <b>{subjectsOn} of your best subject lines</b></> : <>No subject lines of your own, so each lead gets one written for them</>,
+      source: draft.subjects.length ? (platformName ? `From ${platformName}` : "Saved") : undefined,
+      // In Voice Capture's own settings the lines are chips to switch and add to.
+      ...(focus
+        ? {
+            body: (
+              <ChipRow
+                items={draft.subjects.map((x) => ({ value: x.value, on: x.on, hint: x.replyRate != null ? `${x.replyRate}% replied` : undefined }))}
+                onToggle={toggleSubject}
+                onAdd={(v) => set((d) => (d.subjects.some((x) => x.value.toLowerCase() === v.toLowerCase()) ? d : { ...d, subjects: [...d.subjects, { value: v, source: "you", replyRate: null, on: true }] }))}
+                addLabel="Add a subject line"
+              />
+            ),
+          }
+        : {
+            editor: () => (
+              <ToggleList items={draft.subjects.map((x) => ({ label: x.value, hint: x.replyRate != null ? `${x.replyRate}% replied` : undefined, on: x.on }))} onToggle={toggleSubject} />
+            ),
+          }),
+    });
   }
 
   const ownOn = draft.touchsets.filter((t) => t.on).length;
-  decisions.push(
-    <Row
-      key="emails"
-      kind="decided"
-      text={
-        draft.copyMode === "upload" ? (
-          <>Sending <span className="font-semibold text-[var(--text-primary)]">{ownOn} of your own sequences</span> as written</>
-        ) : (
-          <>Writing <span className="font-semibold text-[var(--text-primary)]">fresh emails for each lead</span>, three per person</>
-        )
-      }
-      source={draft.copyMode === "upload" ? `From ${platformName ?? "your saved emails"}` : ""}
-    />,
-  );
+  entries.push({
+    key: "emails",
+    text:
+      draft.copyMode === "upload" ? (
+        <>Sending <b>{ownOn} of your own sequences</b> as written</>
+      ) : (
+        <>Writing <b>fresh emails for each lead</b>, three per person</>
+      ),
+    source: draft.copyMode === "upload" ? `From ${platformName ?? "your saved emails"}` : "",
+    editor: () => <EmailsEditor draft={draft} set={set} />,
+  });
 
-  for (const i of icps.filter((x) => draft.campaignMap[x.slug])) {
-    const c = campaigns.find((x) => x.id === draft.campaignMap[i.slug]);
-    decisions.push(
-      <Row
-        key={`campaign-${i.slug}`}
-        kind="decided"
-        text={
-          <>
-            <span className="font-semibold text-[var(--text-primary)]">{i.label}</span> go into <span className="font-semibold text-[var(--text-primary)]">{c?.name ?? "a campaign"}</span>
-          </>
-        }
-        source={p.campaignMap[i.slug]?.id === draft.campaignMap[i.slug] ? "Matched by Jev" : ""}
-      />,
-    );
+  if (campaigns.length) {
+    for (const i of icps.filter((x) => draft.campaignMap[x.slug])) {
+      const c = campaigns.find((x) => x.id === draft.campaignMap[i.slug]);
+      entries.push({
+        key: `campaign-${i.slug}`,
+        text: <>{i.label} go into <b>{c?.name ?? "a campaign"}</b></>,
+        source: p.campaignMap[i.slug]?.id === draft.campaignMap[i.slug] ? "Matched by Jev" : "",
+        editor: (close) => <CampaignPicker campaigns={campaigns} value={draft.campaignMap[i.slug]} onPick={(v) => (set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [i.slug]: v } })), close())} />,
+      });
+    }
   }
 
-  decisions.push(
-    <Row
-      key="schedule"
-      kind="decided"
-      text={
-        <>
-          <span className="font-semibold text-[var(--text-primary)]">{draft.volume} new leads a day</span> at{" "}
-          <span className="font-semibold text-[var(--text-primary)]">{hourLabel(draft.localHour)}</span>
-          {draft.timezone ? <> {draft.timezone.replace(/_/g, " ")}</> : null}
-        </>
-      }
-      source={p.daily.volumeSource === "saved" ? "Saved" : p.daily.volumeSource.charAt(0).toUpperCase() + p.daily.volumeSource.slice(1)}
-    />,
-  );
+  entries.push({
+    key: "schedule",
+    text: (
+      <>
+        <b>{draft.volume} new leads a day</b> at <b>{hourLabel(draft.localHour)}</b>
+        {draft.timezone ? <> {draft.timezone.replace(/_/g, " ")}</> : null}
+      </>
+    ),
+    source: p.daily.volumeSource === "saved" ? "Saved" : p.daily.volumeSource.charAt(0).toUpperCase() + p.daily.volumeSource.slice(1),
+    editor: (close) => (
+      <ScheduleEditor
+        value={{ volume: draft.volume, localHour: draft.localHour, timezone: draft.timezone }}
+        onSave={(v) => {
+          set((d) => ({ ...d, ...v }));
+          close();
+        }}
+      />
+    ),
+  });
 
   // ── Left to do ──
-  const todos: { key: string; label: ReactNode; done: boolean; optional?: boolean; action?: ReactNode }[] = [
-    {
-      key: "tool",
-      label: sendingLinked ? `Sending through ${platformName ?? "your tool"}` : "Connect your sending tool",
-      done: sendingLinked,
-      action: sendingLinked ? null : (
-        <Popover label="Connect" title="Your sending tool" strong>
-          {() => <div className="py-1">{toolRow}</div>}
-        </Popover>
-      ),
-    },
+  const todos: { key: string; label: string; done: boolean; action?: ReactNode }[] = [
+    { key: "tool", label: sendingLinked ? `Sending through ${platformName ?? "your tool"}` : "Connect your sending tool", done: sendingLinked, action: sendingLinked ? null : <Popover label="Connect" title="Your sending tool" strong>{() => <div className="py-1">{toolRow}</div>}</Popover> },
   ];
   if (sendingLinked && icps.length) {
     todos.push({
       key: "campaigns",
       label: unmapped.length ? `Choose a campaign for ${unmapped.map((i) => i.label).join(" and ")}` : "Each group has a campaign",
       done: unmapped.length === 0,
-      action:
-        unmapped.length && campaigns.length ? (
-          <Popover label="Choose" title={`Campaign for ${unmapped[0].label}`} strong>
-            {(close) => (
-              <CampaignPicker
-                campaigns={campaigns}
-                value={null}
-                onPick={(v) => {
-                  set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [unmapped[0].slug]: v } }), "campaigns");
-                  close();
-                }}
-              />
-            )}
-          </Popover>
-        ) : null,
+      action: unmapped.length && campaigns.length ? (
+        <Popover label="Choose" title={`Campaign for ${unmapped[0].label}`} strong>
+          {(close) => <CampaignPicker campaigns={campaigns} value={null} onPick={(v) => (set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [unmapped[0].slug]: v } })), close())} />}
+        </Popover>
+      ) : null,
     });
   }
   todos.push({
     key: "leads",
     label: data.leadSources.length ? `Leads from ${data.leadSources.map((l) => l.icp).join(", ")}` : "Add a lead list",
     done: data.leadSources.length > 0,
-    action: data.leadSources.length ? null : (
-      <a href={bridge("source-connect")} className="text-[13px] font-medium text-[var(--text-primary)] underline underline-offset-4">
-        Add
-      </a>
-    ),
+    action: data.leadSources.length ? null : <a href={bridge("source-connect")} className="text-[13px] font-medium text-[var(--text-primary)] underline underline-offset-4">Add</a>,
   });
   todos.push({
     key: "live",
     label: p.daily.liveSendEnabled ? "Live sending is on" : "Switch on live sending when you're ready (until then, emails are drafts)",
     done: p.daily.liveSendEnabled,
-    action: p.daily.liveSendEnabled ? null : (
-      <a href={bridge("daily-send")} className="text-[13px] text-[var(--text-muted)] underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)]">
-        Later
-      </a>
-    ),
+    action: p.daily.liveSendEnabled ? null : <a href={bridge("daily-send")} className="text-[13px] text-[var(--text-muted)] underline decoration-dashed underline-offset-4 hover:text-[var(--text-primary)]">Later</a>,
   });
   const ready = todos.filter((t) => t.key !== "live").every((t) => t.done);
 
-  // ── Focused view: a skill's own settings. ──
   if (focus) {
-    const f = COLD_OPEN_FOCUS[focus] ?? { rows: [], todos: [], save: false, about: "" };
-    const rowKeys = new Set(f.rows);
-    const shownFindings = findings.filter((n) => rowKeys.has((n as any)?.key));
-    const shownDecisions = decisions.filter((n) => rowKeys.has((n as any)?.key) || f.rows.some((r) => r.endsWith("-") && String((n as any)?.key ?? "").startsWith(r)));
-    const shownTodos = todos.filter((t) => f.todos.includes(t.key));
+    const f = COLD_OPEN_FOCUS[focus] ?? { rows: [], todos: [], save: false };
+    const rows = pick(entries, f.rows);
+    const steps = pick(todos, f.todos);
     const own = focus === "source-connect" || focus === "daily-send";
     return (
-      <div className="space-y-8 pb-10">
-        <ColdOpenHeader
-          size={36}
-          leading={leading}
-          eyebrow="Cold Open"
-          title={anySkillDisplayName(focus)}
-          subtitle={<p className="text-[14px] leading-relaxed text-[var(--text-secondary)]">{f.about}</p>}
-          trailing={
-            <a
-              href={bridge("icp-lock")}
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-            >
-              Full setup <ArrowUpRight className="h-3 w-3" />
-            </a>
-          }
-        />
-        {(shownFindings.length > 0 || shownDecisions.length > 0 || own) && (
-          <ul className="divide-y">
-            {shownFindings}
-            {shownDecisions}
+      <div className="space-y-6">
+        <SettingsHeader mark={<ColdOpenMark size={36} />} name={anySkillDisplayName(focus)} buyer={data.buyer} fullSetupHref={bridge("icp-lock")} />
+        {f.about && <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">{f.about}</p>}
+        {(rows.length > 0 || own) && (
+          <ol className="space-y-1">
+            {rows.map((e) => (
+              <FeedRow key={e.key} entry={e} />
+            ))}
             {focus === "source-connect" && <LeadLists engagementId={data.engagementId} icps={icps} />}
             {focus === "daily-send" && (
               <>
@@ -1365,126 +851,61 @@ function Review({
                 <HeldLeads engagementId={data.engagementId} />
               </>
             )}
-          </ul>
+          </ol>
         )}
-        {shownTodos.length > 0 && (
-          <section className="space-y-2 border-t pt-5">
-            <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">Left to do</h2>
-            <ul className="divide-y">
-              {shownTodos.map((t) => (
-                <TodoRow key={t.key} done={t.done} optional={t.optional} label={t.label} action={t.action} />
-              ))}
-            </ul>
-          </section>
-        )}
+        {steps.length > 0 && <Todos items={steps} />}
       </div>
     );
   }
 
-  // ── Full review. ──
-  const sendingLabel = p.daily.liveSendEnabled ? "Sending" : "Drafts only";
-  const stateWord = ready ? sendingLabel : "Not sending yet";
-  const needed: { key: string; label: string; action: ReactNode }[] = [];
-  if (!draft.product.name.trim() || !draft.product.valueProp.trim()) {
-    needed.push({
-      key: "offer",
-      label: "We couldn't fully read your offer. Add what you sell and what it does.",
-      action: (
-        <Popover label="Edit" title="Your offer" strong>
-          {(close) => <OfferEditor value={draft.product} onSave={(v) => (set((d) => ({ ...d, product: v }), "offer"), close())} />}
-        </Popover>
-      ),
-    });
-  }
-  if (icps.length === 0) {
-    needed.push({
-      key: "buyers",
-      label: "Say who you sell to — one or more groups.",
-      action: (
-        <Popover label="Add" title="Who you sell to" strong>
-          {(close) => (
-            <BuyersEditor
-              value={draft.icps}
-              showShare={false}
-              onSave={(list) => {
-                set((d) => ({ ...d, icps: list }), "buyers");
-                close();
-              }}
-            />
-          )}
-        </Popover>
-      ),
-    });
-  }
-  if (!draft.voice.greeting.trim() || !draft.voice.signOff.trim() || !draft.voice.tone.trim()) {
-    needed.push({
-      key: "voice",
-      label: "Set how the emails open, sign off and sound.",
-      action: (
-        <Popover label="Edit" title="How you write" strong>
-          {(close) => <VoiceEditor value={draft.voice} onSave={(v) => (set((d) => ({ ...d, voice: v }), "voice"), close())} />}
-        </Popover>
-      ),
-    });
-  }
-
   return (
-    <div className="space-y-8 pb-4">
-      <ColdOpenHeader
-        size={44}
-        leading={leading}
-        eyebrow="Cold Open"
-        title={
-          <>
-            {draft.product.name || "Your offer"} <span className="text-[var(--text-muted)]">to</span> {icps.map((i) => i.label).join(" and ") || "your buyers"}
-          </>
-        }
-        subtitle={
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--text-muted)]">
-            <span className="inline-flex items-center gap-1.5">
-              <Send className="h-3 w-3" />
-              {stateWord}
-            </span>
-            <span aria-hidden>·</span>
-            <span>{draft.volume} a day at {hourLabel(draft.localHour)}</span>
-            <span aria-hidden>·</span>
-            <span>Sounds {draft.voice.tone.toLowerCase() || "plain"}</span>
-            <span aria-hidden>·</span>
-            <span>{draft.copyMode === "upload" ? "Your own emails" : "Written per lead"}</span>
-            <span aria-hidden>·</span>
-            <button
-              type="button"
-              onClick={onReread}
-              className="inline-flex items-center gap-1 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
-            >
-              <RotateCcw className="h-3 w-3" /> Read again
-            </button>
-          </p>
-        }
-      />
-
-      <StillNeeded items={needed} />
-
-      {findings.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[13px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">What we read</h2>
-          <ul className="divide-y">{findings}</ul>
-        </section>
-      )}
-
-      <section className="space-y-2">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="text-[13px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">What we decided</h2>
-          <p className="text-[12px] text-[var(--text-muted)]">Tap any value to change it.</p>
+    <div className="space-y-9">
+      {/* The campaign at a glance */}
+      <header className="px-1 @xl:px-0">
+        <div className="flex items-start gap-4">
+          <ColdOpenMark size={40} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)]">{data.buyer}&apos;s cold email</p>
+            <h1 className="mt-1 text-[22px] font-semibold leading-snug tracking-tight text-[var(--text-primary)] @xl:text-[26px]">
+              {draft.product.name || "Your offer"} <span className="text-[var(--text-muted)]">to</span> {icps.map((i) => i.label).join(" and ") || "your buyers"}
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2 text-[12px]">
+              <Pill>{draft.volume} a day at {hourLabel(draft.localHour)}</Pill>
+              <Pill>Sounds {draft.voice.tone.toLowerCase() || "plain"}</Pill>
+              <Pill>{draft.copyMode === "upload" ? "Your own emails" : "Written per lead"}</Pill>
+              <Pill tone={ready && p.daily.liveSendEnabled ? "on" : "off"}>{ready ? (p.daily.liveSendEnabled ? "Sending" : "Drafts only") : "Not sending yet"}</Pill>
+            </div>
+          </div>
         </div>
-        <ul className="divide-y">{decisions}</ul>
+      </header>
+
+      {/* What we did */}
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between gap-4 px-1">
+          <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">What we did</h2>
+          <button type="button" onClick={onReread} className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            Read again
+          </button>
+        </div>
+        <ol className="space-y-1">
+          {entries.map((e) => (
+            <FeedRow key={e.key} entry={e} />
+          ))}
+        </ol>
       </section>
 
-      <section className="space-y-2">
-        <h2 className="text-[13px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{ready ? "Ready" : "Left to do"}</h2>
-        <ul className="divide-y">
+      {/* Left to do */}
+      <section className="space-y-3">
+        <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{ready ? "Ready" : "Left to do"}</h2>
+        <ul className="px-1 divide-y divide-[var(--border)]">
           {todos.map((t) => (
-            <TodoRow key={t.key} done={t.done} optional={t.optional} label={t.label} action={t.action} />
+            <li key={t.key} className="flex items-center gap-3 py-3">
+              <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", t.done ? "bg-[var(--ink)] text-[var(--ink-foreground)]" : "ring-1 ring-inset ring-[var(--text-muted)]/50")}>
+                {t.done && <Check className="h-3 w-3" strokeWidth={3.5} />}
+              </span>
+              <span className={cn("min-w-0 flex-1 text-[14px]", t.done ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]")}>{t.label}</span>
+              {t.action}
+            </li>
           ))}
         </ul>
       </section>
@@ -1492,28 +913,11 @@ function Review({
   );
 }
 
-// ── Editors ────────────────────────────────────────────────────────────
-
-const inputCls =
-  "w-full rounded-lg border border-[var(--border)] bg-background px-3 text-sm outline-none placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)]/40";
-
-function Labeled({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-[12px] font-medium text-[var(--text-secondary)]">{label}</span>
-      {children}
-    </label>
-  );
-}
-
 function OfferEditor({ value, onSave }: { value: Draft["product"]; onSave: (v: Draft["product"]) => void }) {
   const [v, setV] = useState(value);
   const up = (k: keyof Draft["product"]) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
   return (
-    <form
-      onSubmit={(e) => (e.preventDefault(), onSave({ ...v, name: v.name.trim(), price: v.price.trim(), valueProp: v.valueProp.trim(), url: v.url.trim() }))}
-      className="space-y-3"
-    >
+    <form onSubmit={(e) => (e.preventDefault(), onSave({ ...v, name: v.name.trim(), price: v.price.trim(), valueProp: v.valueProp.trim(), url: v.url.trim() }))} className="space-y-3">
       <Labeled label="What you sell">
         <input autoFocus value={v.name} onChange={up("name")} className={cn(inputCls, "h-10")} />
       </Labeled>
@@ -1563,56 +967,28 @@ function VoiceEditor({ value, onSave }: { value: Draft["voice"]; onSave: (v: Dra
 }
 
 function BuyersEditor({ value, showShare, onSave }: { value: IcpDraft[]; showShare: boolean; onSave: (v: IcpDraft[]) => void }) {
-  const [list, setList] = useState<IcpDraft[]>(() =>
-    value.length ? value : [{ slug: `icp-${Date.now().toString(36)}`, label: "", share: 100, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }],
-  );
+  const [list, setList] = useState<IcpDraft[]>(() => (value.length ? value : [{ slug: `icp-${Date.now().toString(36)}`, label: "", share: 100, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }]));
   const up = (i: number, patch: Partial<IcpDraft>) => setList((l) => l.map((x, j) => (j === i ? { ...x, ...patch, tier: "done" } : x)));
   const many = showShare || list.length > 1;
   return (
-    <form
-      onSubmit={(e) => (e.preventDefault(), onSave(list.filter((x) => x.label.trim()).map((x) => ({ ...x, label: x.label.trim() }))))}
-      className="space-y-3"
-    >
+    <form onSubmit={(e) => (e.preventDefault(), onSave(list.filter((x) => x.label.trim()).map((x) => ({ ...x, label: x.label.trim() }))))} className="space-y-3">
       {list.map((g, i) => (
         <div key={g.slug} className="space-y-2 rounded-xl border p-3">
           <div className="flex items-center gap-2">
             <input autoFocus={i === 0} value={g.label} onChange={(e) => up(i, { label: e.target.value })} placeholder="e.g. Marketing agencies" className={cn(inputCls, "h-9")} />
-            <button
-              type="button"
-              aria-label="Remove"
-              onClick={() => setList((l) => l.filter((_, j) => j !== i))}
-              className="text-[var(--text-muted)] hover:text-[var(--error)] cursor-pointer"
-            >
+            <button type="button" aria-label="Remove" onClick={() => setList((l) => l.filter((_, j) => j !== i))} className="text-[var(--text-muted)] hover:text-[var(--error)] cursor-pointer">
               <X className="h-4 w-4" />
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-secondary)]">
-            <input
-              inputMode="numeric"
-              value={g.min}
-              onChange={(e) => up(i, { min: e.target.value.replace(/\D/g, "") })}
-              placeholder="any"
-              className={cn(inputCls, "h-8 w-14 px-2 text-center")}
-            />
+            <input inputMode="numeric" value={g.min} onChange={(e) => up(i, { min: e.target.value.replace(/\D/g, "") })} placeholder="any" className={cn(inputCls, "h-8 w-14 px-2 text-center")} />
             to
-            <input
-              inputMode="numeric"
-              value={g.max}
-              onChange={(e) => up(i, { max: e.target.value.replace(/\D/g, "") })}
-              placeholder="any"
-              className={cn(inputCls, "h-8 w-14 px-2 text-center")}
-            />
+            <input inputMode="numeric" value={g.max} onChange={(e) => up(i, { max: e.target.value.replace(/\D/g, "") })} placeholder="any" className={cn(inputCls, "h-8 w-14 px-2 text-center")} />
             people
             {many && (
               <>
                 <span className="ml-auto" />
-                <input
-                  inputMode="numeric"
-                  value={String(g.share)}
-                  onChange={(e) => up(i, { share: Number(e.target.value.replace(/\D/g, "")) || 0 })}
-                  className={cn(inputCls, "h-8 w-12 px-2 text-center")}
-                />
-                % of leads
+                <input inputMode="numeric" value={String(g.share)} onChange={(e) => up(i, { share: Number(e.target.value.replace(/\D/g, "")) || 0 })} className={cn(inputCls, "h-8 w-12 px-2 text-center")} />% of leads
               </>
             )}
           </div>
@@ -1621,9 +997,7 @@ function BuyersEditor({ value, showShare, onSave }: { value: IcpDraft[]; showSha
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() =>
-            setList((l) => [...l, { slug: `icp-${Date.now().toString(36)}`, label: "", share: 0, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }])
-          }
+          onClick={() => setList((l) => [...l, { slug: `icp-${Date.now().toString(36)}`, label: "", share: 0, min: "", max: "", disqualifyIf: [], evidence: null, tier: "done" }])}
           className="inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
         >
           <Plus className="h-3 w-3" /> Another group
@@ -1639,13 +1013,7 @@ function BuyersEditor({ value, showShare, onSave }: { value: IcpDraft[]; showSha
 function ScheduleEditor({ value, onSave }: { value: { volume: number; localHour: number; timezone: string }; onSave: (v: { volume: number; localHour: number; timezone: string }) => void }) {
   const [v, setV] = useState({ ...value, volume: String(value.volume) });
   return (
-    <form
-      onSubmit={(e) =>
-        (e.preventDefault(),
-        onSave({ volume: Math.max(1, Math.min(500, Number(v.volume) || value.volume)), localHour: v.localHour, timezone: v.timezone.trim() }))
-      }
-      className="space-y-3"
-    >
+    <form onSubmit={(e) => (e.preventDefault(), onSave({ volume: Math.max(1, Math.min(500, Number(v.volume) || value.volume)), localHour: v.localHour, timezone: v.timezone.trim() }))} className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <Labeled label="New leads a day">
           <input autoFocus inputMode="numeric" value={v.volume} onChange={(e) => setV((x) => ({ ...x, volume: e.target.value.replace(/\D/g, "") }))} className={cn(inputCls, "h-10")} />
@@ -1661,6 +1029,7 @@ function ScheduleEditor({ value, onSave }: { value: { volume: number; localHour:
         </Labeled>
       </div>
       <Labeled label="Time zone">
+        {/* A list, not a text box: a typo used to send at the UTC hour. */}
         <select value={v.timezone} onChange={(e) => setV((x) => ({ ...x, timezone: e.target.value }))} className={cn(inputCls, "h-10")}>
           <option value="">The client&apos;s time zone</option>
           {v.timezone && !isValidTimezone(v.timezone) && <option value={v.timezone}>{v.timezone} (not recognized)</option>}
@@ -1681,27 +1050,74 @@ function ScheduleEditor({ value, onSave }: { value: { volume: number; localHour:
 }
 
 function CampaignPicker({ campaigns, value, onPick }: { campaigns: { id: string; name: string; replyRate: number | null }[]; value: string | null | undefined; onPick: (id: string) => void }) {
+  return <ChoiceList options={campaigns.map((c) => ({ value: c.id, label: c.name, hint: c.replyRate != null ? `${c.replyRate}% replied` : undefined }))} value={value ?? null} onPick={onPick} />;
+}
+
+
+
+// ── Emails ─────────────────────────────────────────────────────────────
+
+function EmailsEditor({ draft, set }: { draft: Draft; set: (fn: (d: Draft) => Draft) => void }) {
+  const [writing, setWriting] = useState(false);
   return (
-    <ul className="space-y-1">
-      {campaigns.map((c) => {
-        const active = value === c.id;
-        return (
-          <li key={c.id}>
-            <button
-              type="button"
-              onClick={() => onPick(c.id)}
-              className={cn(
-                "flex w-full items-baseline justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-[var(--accent-dim)] cursor-pointer",
-                active && "bg-[var(--accent-dim)]",
-              )}
-            >
-              <span className="min-w-0 truncate text-[var(--text-primary)]">{c.name}</span>
-              {c.replyRate != null && <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{c.replyRate}% replied</span>}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="space-y-3">
+      <ChoiceList
+        options={[
+          { value: "generate", label: "Write fresh for each lead" },
+          { value: "upload", label: "Send my own sequences as written", hint: draft.touchsets.length ? `${draft.touchsets.length} to choose from` : "Write at least two below" },
+        ]}
+        value={draft.copyMode}
+        onPick={(v) => set((d) => ({ ...d, copyMode: v as Draft["copyMode"] }))}
+      />
+      {draft.copyMode === "upload" && draft.touchsets.length > 0 && (
+        <ToggleList items={draft.touchsets.map((t) => ({ label: t.subject, hint: t.campaign, on: t.on }))} onToggle={(i) => set((d) => ({ ...d, touchsets: d.touchsets.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }))} />
+      )}
+      {draft.copyMode === "upload" &&
+        (writing ? (
+          <SequenceWriter
+            onAdd={(t) => {
+              set((d) => ({ ...d, touchsets: [...d.touchsets, { ...t, campaign: "Written by you", on: true }] }));
+              setWriting(false);
+            }}
+            onCancel={() => setWriting(false)}
+          />
+        ) : (
+          <button type="button" onClick={() => setWriting(true)} className="inline-flex items-center gap-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            <Plus className="h-3 w-3" /> Write one yourself
+          </button>
+        ))}
+    </div>
+  );
+}
+
+function SequenceWriter({ onAdd, onCancel }: { onAdd: (t: { subject: string; body1: string; body2: string; body3: string }) => void; onCancel: () => void }) {
+  const [t, setT] = useState({ subject: "", body1: "", body2: "", body3: "" });
+  const up = (k: keyof typeof t) => (e: { target: { value: string } }) => setT((x) => ({ ...x, [k]: e.target.value }));
+  const ready = Object.values(t).every((v) => v.trim());
+  const area = cn(inputCls, "resize-y py-2 leading-relaxed");
+  return (
+    <div className="space-y-2.5 rounded-xl border border-[var(--border)] p-3">
+      <Labeled label="Subject">
+        <input autoFocus value={t.subject} onChange={up("subject")} className={cn(inputCls, "h-9")} />
+      </Labeled>
+      <Labeled label="First email">
+        <textarea value={t.body1} onChange={up("body1")} rows={3} className={area} />
+      </Labeled>
+      <Labeled label="Follow-up">
+        <textarea value={t.body2} onChange={up("body2")} rows={2} className={area} />
+      </Labeled>
+      <Labeled label="Last follow-up">
+        <textarea value={t.body3} onChange={up("body3")} rows={2} className={area} />
+      </Labeled>
+      <div className="flex items-center justify-end gap-3">
+        <button type="button" onClick={onCancel} className="text-[13px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+          Cancel
+        </button>
+        <Button type="button" size="sm" disabled={!ready} onClick={() => onAdd({ subject: t.subject.trim(), body1: t.body1.trim(), body2: t.body2.trim(), body3: t.body3.trim() })}>
+          Add
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -1724,6 +1140,7 @@ const csvHeader = (text: string) =>
     .map((h) => h.trim().replace(/^"|"$/g, ""))
     .filter(Boolean);
 
+/** Which column holds what, matched on the usual header names. */
 function guessColumns(headers: string[]): Record<string, string> {
   const find = (re: RegExp) => headers.find((h) => re.test(h));
   const out: Record<string, string> = {};
@@ -1776,59 +1193,49 @@ function LeadLists({ engagementId, icps }: { engagementId: string; icps: { slug:
     return null;
   }
 
-  if (error) return <li className="py-3 text-sm text-[var(--error)]">{error}</li>;
+  if (error) return <li className="px-1 py-2 text-sm text-[var(--error)]">{error}</li>;
   if (!state) {
     return (
-      <li className="py-3 text-[var(--text-muted)]">
+      <li className="px-1 py-2 text-[var(--text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
       </li>
     );
   }
-  if (icps.length === 0) {
-    return (
-      <li className="flex gap-3 py-5">
-        <MissingMark />
-        <p className="text-[15px] leading-snug text-[var(--text-secondary)]">Say who you sell to in the full setup first, then add a list for each group.</p>
-      </li>
-    );
-  }
+  if (icps.length === 0) return <FeedRow entry={{ key: "leads-none", todo: true, text: <>Say who you sell to in the full setup first, then add a list for each group.</> }} />;
   return (
     <>
       {icps.map((i) => {
         const s = state.sources.find((x) => x.icp === i.slug);
         return (
-          <li key={i.slug} className="flex gap-3 py-5">
-            {s ? <FoundMark /> : <MissingMark />}
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] leading-snug text-[var(--text-secondary)]">
-                {s ? (
-                  <>
-                    <span className="font-semibold text-[var(--text-primary)]">{i.label}</span>: {describeSource(s)}
-                  </>
-                ) : (
-                  <>
-                    No leads for <span className="font-semibold text-[var(--text-primary)]">{i.label}</span> yet
-                  </>
-                )}
-              </p>
-              <div className="mt-2">
-                <Popover label={s ? "Change" : "Add"} title={s ? `Change the list for ${i.label}` : `Add a list for ${i.label}`} strong={!s}>
-                  {(close) => (
-                    <LeadListEditor
-                      engagementId={engagementId}
-                      current={s ?? null}
-                      apifyConnected={state.apifyConnected}
-                      onSave={async (src) => {
-                        const err = await put(i.slug, src);
-                        if (!err) close();
-                        return err;
-                      }}
-                    />
-                  )}
-                </Popover>
-              </div>
-            </div>
-          </li>
+          <FeedRow
+            key={i.slug}
+            entry={{
+              key: `leads-${i.slug}`,
+              todo: !s,
+              text: s ? (
+                <>
+                  <b>{i.label}</b>: {describeSource(s)}
+                </>
+              ) : (
+                <>
+                  No leads for <b>{i.label}</b> yet
+                </>
+              ),
+              editLabel: s ? "Change" : "Add",
+              editor: (close) => (
+                <LeadListEditor
+                  engagementId={engagementId}
+                  current={s ?? null}
+                  apifyConnected={state.apifyConnected}
+                  onSave={async (src) => {
+                    const err = await put(i.slug, src);
+                    if (!err) close();
+                    return err;
+                  }}
+                />
+              ),
+            }}
+          />
         );
       })}
     </>
@@ -1879,11 +1286,7 @@ function LeadListEditor({
   const submit = () =>
     run(async () => {
       if (kind === "apify" && !apifyConnected) {
-        const res = await fetch("/api/credentials", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ engagementId, provider: "cold_open_apify", value: token.trim() }),
-        });
+        const res = await fetch("/api/credentials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engagementId, provider: "cold_open_apify", value: token.trim() }) });
         if (!res.ok) return (await res.json().catch(() => ({}))).error ?? "Couldn't save the Apify key.";
       }
       const base = { dailyLimit: current?.dailyLimit };
@@ -1895,28 +1298,14 @@ function LeadListEditor({
 
   return (
     <div className="space-y-3">
-      <ul className="space-y-1">
-        {(
-          [
-            { value: "csv", label: "Upload a CSV" },
-            { value: "apify", label: "Pull from an Apify actor" },
-          ] as const
-        ).map((o) => (
-          <li key={o.value}>
-            <button
-              type="button"
-              onClick={() => setKind(o.value)}
-              className={cn(
-                "flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-[var(--accent-dim)] cursor-pointer",
-                kind === o.value && "bg-[var(--accent-dim)]",
-              )}
-            >
-              <span className="text-[var(--text-primary)]">{o.label}</span>
-              {kind === o.value && <Check className="h-3.5 w-3.5 text-[var(--ink)]" strokeWidth={3} />}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <ChoiceList
+        options={[
+          { value: "csv", label: "Upload a CSV" },
+          { value: "apify", label: "Pull from an Apify actor" },
+        ]}
+        value={kind}
+        onPick={(v) => setKind(v as "csv" | "apify")}
+      />
       {kind === "csv" ? (
         <div className="space-y-2">
           <label className="flex h-10 cursor-pointer items-center justify-center rounded-lg border border-dashed text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -2006,40 +1395,34 @@ function LiveSending({ engagementId, daily, onChanged }: { engagementId: string;
   }
 
   return (
-    <li className="flex gap-3 py-5">
-      {on ? <WarnMark /> : <MissingMark />}
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] leading-snug text-[var(--text-secondary)]">
-          {on ? (
-            <>
-              Live sending is <span className="font-semibold text-[var(--text-primary)]">on</span>. Real emails go out every day.
-            </>
-          ) : (
-            <>
-              Live sending is <span className="font-semibold text-[var(--text-primary)]">off</span>. Each run picks leads and writes emails, but sends nothing.
-            </>
-          )}
-        </p>
-        {!on && <p className="mt-1 text-[12px] text-[var(--text-muted)]">Turn it on once a dry run looks right.</p>}
-        <div className="mt-2">
-          <Popover label={on ? "Turn off" : "Turn on"} title={on ? "Turn off live sending" : "Turn on live sending"} strong={!on}>
-            {(close) => (
-              <div className="space-y-3">
-                <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-                  {on ? "Runs go back to dry runs. Nothing is sent." : `Real emails go out from the next run, up to ${daily.volume} a day.`}
-                </p>
-                <div className="flex justify-end">
-                  <Button type="button" size="sm" disabled={busy} onClick={() => void flip(close)}>
-                    {busy ? <Loader2 className="animate-spin" /> : null}
-                    {on ? "Turn off live sending" : "Turn on live sending"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Popover>
-        </div>
-      </div>
-    </li>
+    <FeedRow
+      entry={{
+        key: "live",
+        todo: !on,
+        text: on ? (
+          <>
+            Live sending is <b>on</b>. Real emails go out every day.
+          </>
+        ) : (
+          <>
+            Live sending is <b>off</b>. Each run picks leads and writes emails, but sends nothing.
+          </>
+        ),
+        source: on ? undefined : "Turn it on once a dry run looks right.",
+        editLabel: on ? "Turn off" : "Turn on",
+        editor: (close) => (
+          <div className="space-y-3">
+            <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">{on ? "Runs go back to dry runs. Nothing is sent." : `Real emails go out from the next run, up to ${daily.volume} a day.`}</p>
+            <div className="flex justify-end">
+              <Button type="button" size="sm" disabled={busy} onClick={() => void flip(close)}>
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {on ? "Turn off live sending" : "Turn on live sending"}
+              </Button>
+            </div>
+          </div>
+        ),
+      }}
+    />
   );
 }
 
@@ -2052,6 +1435,7 @@ interface HeldLead {
   statusDetail: { copy?: { subject: string } } | null;
 }
 
+/** Leads Daily Send set aside for a person to approve or drop. */
 function HeldLeads({ engagementId }: { engagementId: string }) {
   const toast = useToast();
   const url = `/api/engagements/${engagementId}/bridges/daily-send/held-leads`;
@@ -2083,85 +1467,31 @@ function HeldLeads({ engagementId }: { engagementId: string }) {
   return (
     <>
       {leads.map((l) => (
-        <li key={l.id} className="flex gap-3 py-5">
-          <WarnMark />
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] leading-snug text-[var(--text-secondary)]">
-              <span className="font-semibold text-[var(--text-primary)]">{[l.firstName, l.lastName].filter(Boolean).join(" ") || l.email}</span>
-              {l.companyName ? ` at ${l.companyName}` : ""} is held for your review
-            </p>
-            {l.statusDetail?.copy?.subject && <p className="mt-1 text-[12px] text-[var(--text-muted)]">&ldquo;{l.statusDetail.copy.subject}&rdquo;</p>}
-            <div className="mt-2 flex gap-4 text-[13px]">
-              <button
-                type="button"
-                disabled={busy === l.id}
-                onClick={() => void act(l.id, "approve")}
-                className="font-medium text-[var(--text-primary)] underline underline-offset-4 cursor-pointer disabled:opacity-50"
-              >
-                Approve and send
-              </button>
-              <button
-                type="button"
-                disabled={busy === l.id}
-                onClick={() => void act(l.id, "discard")}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
-              >
-                Discard
-              </button>
-            </div>
-          </div>
-        </li>
+        <FeedRow
+          key={l.id}
+          entry={{
+            key: `held-${l.id}`,
+            warn: true,
+            text: (
+              <>
+                <b>{[l.firstName, l.lastName].filter(Boolean).join(" ") || l.email}</b>
+                {l.companyName ? ` at ${l.companyName}` : ""} is held for your review
+              </>
+            ),
+            source: l.statusDetail?.copy?.subject ? `\u201c${l.statusDetail.copy.subject}\u201d` : undefined,
+            body: (
+              <div className="flex gap-4 text-[13px]">
+                <button type="button" disabled={busy === l.id} onClick={() => void act(l.id, "approve")} className="font-medium text-[var(--text-primary)] underline underline-offset-4 cursor-pointer disabled:opacity-50">
+                  Approve and send
+                </button>
+                <button type="button" disabled={busy === l.id} onClick={() => void act(l.id, "discard")} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50">
+                  Discard
+                </button>
+              </div>
+            ),
+          }}
+        />
       ))}
     </>
-  );
-}
-
-// ── Save bar ───────────────────────────────────────────────────────────
-//
-// One row, one idea. When something's still needed, the block at the top
-// of the screen already says so; this bar doesn't repeat it.
-
-function ApproveBar({
-  label = "Approve",
-  note,
-  error,
-  saving,
-  disabled,
-  onApprove,
-  onCancel,
-  cancelLabel,
-}: {
-  label?: string;
-  note?: string;
-  error: string | null;
-  saving: boolean;
-  disabled: boolean;
-  onApprove: () => void;
-  onCancel: () => void;
-  cancelLabel: string;
-}) {
-  return (
-    <div className="sticky bottom-0 z-10 mt-8 border-t border-[var(--border)] bg-background/95 py-4 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
-          {error ? (
-            <p className="flex items-center gap-2 text-[13px] text-[var(--error)]">
-              <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
-            </p>
-          ) : note ? (
-            <p className="text-[13px] text-[var(--text-muted)]">{note}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={saving}>
-            {cancelLabel}
-          </Button>
-          <Button onClick={onApprove} disabled={saving || disabled}>
-            {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {label}
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
