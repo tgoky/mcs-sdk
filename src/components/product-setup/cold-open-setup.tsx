@@ -501,15 +501,15 @@ function Welcome({
   const sender = data.tools.find((t) => t.group === "sending" && t.linked);
   return (
     <div className="space-y-9">
-      <header className="flex items-start gap-4">
-        {backHref && <BackButton href={backHref} />}
-        <ColdOpenMark />
-        <div className="min-w-0 space-y-1.5">
+      <header className="space-y-3">
+        <div className="flex items-center gap-4">
+          {backHref && <BackButton href={backHref} />}
+          <ColdOpenMark />
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">Cold email for {data.buyer}</h1>
-          <p className="max-w-xl text-[15px] leading-relaxed">
-            We learn what you sell, who buys it, and what has already worked in your outreach, then set up the daily sending. You check our work, and nothing goes out until you say so.
-          </p>
         </div>
+        <p className="max-w-xl text-[15px] leading-relaxed">
+          We learn what you sell, who buys it, and what has already worked in your outreach, then set up the daily sending. You check our work, and nothing goes out until you say so.
+        </p>
       </header>
 
       <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-60")}>

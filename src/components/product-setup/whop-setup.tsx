@@ -383,15 +383,15 @@ function Welcome({
   const ready = connected || draft.apiKey.trim().length > 0;
   return (
     <div className="space-y-9">
-      <header className="flex items-start gap-4">
-        {backHref && <BackButton href={backHref} />}
-        <WhopMark />
-        <div className="min-w-0 space-y-1.5">
+      <header className="space-y-3">
+        <div className="flex items-center gap-4">
+          {backHref && <BackButton href={backHref} />}
+          <WhopMark />
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">Whop Agent for {data.buyer}</h1>
-          <p className="max-w-xl text-[15px] leading-relaxed">
-            We read your Whop business, from plans and members to refunds, disputes and reviews, then set your workers up from what we find. Anything that touches your members or money waits for your approval.
-          </p>
         </div>
+        <p className="max-w-xl text-[15px] leading-relaxed">
+          We read your Whop business, from plans and members to refunds, disputes and reviews, then set your workers up from what we find. Anything that touches your members or money waits for your approval.
+        </p>
       </header>
 
       <section className={cn("space-y-2.5 transition-opacity", working && "pointer-events-none opacity-60")}>

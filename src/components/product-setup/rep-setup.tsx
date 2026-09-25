@@ -605,6 +605,7 @@ function RepHeader({
   subtitle,
   trailing,
   leading,
+  subtitleFullWidth,
 }: {
   size?: number;
   eyebrow?: string;
@@ -612,19 +613,26 @@ function RepHeader({
   subtitle?: ReactNode;
   trailing?: ReactNode;
   leading?: ReactNode;
+  /** A long intro sentence reads as its own line, flush with the mark
+   * rather than squeezed into the title's indented column — a short
+   * byline (domain · tools connected · …) stays there instead. */
+  subtitleFullWidth?: boolean;
 }) {
   return (
-    <header className="flex items-start gap-4">
-      {leading && <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center">{leading}</div>}
-      <RepMark size={size} />
-      <div className="min-w-0 flex-1">
-        {eyebrow && <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">{eyebrow}</p>}
-        <h1 className={cn("font-semibold leading-tight tracking-tight text-[var(--text-primary)]", size === 44 ? "text-[26px] @xl:text-[30px]" : "text-[19px]")}>
-          {title}
-        </h1>
-        {subtitle && <div className="mt-1.5">{subtitle}</div>}
+    <header className={subtitleFullWidth ? "space-y-3" : undefined}>
+      <div className={cn("flex gap-4", subtitleFullWidth ? "items-center" : "items-start")}>
+        {leading && <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center", !subtitleFullWidth && "mt-0.5")}>{leading}</div>}
+        <RepMark size={size} />
+        <div className="min-w-0 flex-1">
+          {eyebrow && <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">{eyebrow}</p>}
+          <h1 className={cn("font-semibold leading-tight tracking-tight text-[var(--text-primary)]", size === 44 ? "text-[26px] @xl:text-[30px]" : "text-[19px]")}>
+            {title}
+          </h1>
+          {subtitle && !subtitleFullWidth && <div className="mt-1.5">{subtitle}</div>}
+        </div>
+        {trailing && <div className="shrink-0">{trailing}</div>}
       </div>
-      {trailing && <div className="shrink-0">{trailing}</div>}
+      {subtitle && subtitleFullWidth && subtitle}
     </header>
   );
 }
@@ -668,6 +676,7 @@ function Welcome({
       <RepHeader
         leading={leading}
         title={`Watch ${data.buyer}'s reputation`}
+        subtitleFullWidth
         subtitle={
           <p className="max-w-xl text-[15px] leading-relaxed text-[var(--text-secondary)]">
             We find every name people know you by, see where your reputation stands today, and watch it every day after. You check our work.

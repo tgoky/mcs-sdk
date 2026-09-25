@@ -838,17 +838,17 @@ function Welcome({
 
   return (
     <div className="space-y-9">
-      <header className="flex items-start gap-4">
-        {backHref && <BackButton href={backHref} />}
-        <ShowtimeMark />
-        <div className="min-w-0 space-y-1.5">
+      <header className="space-y-3">
+        <div className="flex items-center gap-4">
+          {backHref && <BackButton href={backHref} />}
+          <ShowtimeMark />
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">
             Set up Showtime for {data.buyer}
           </h1>
-          <p className="max-w-xl text-[15px] leading-relaxed">
-            Pick what you want running. We set it up from your website and the tools you already use, and you check our work.
-          </p>
         </div>
+        <p className="max-w-xl text-[15px] leading-relaxed">
+          Pick what you want running. We set it up from your website and the tools you already use, and you check our work.
+        </p>
       </header>
 
       <section className={cn("transition-opacity", working && "pointer-events-none opacity-60")}>
