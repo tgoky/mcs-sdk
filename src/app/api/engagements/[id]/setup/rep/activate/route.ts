@@ -65,16 +65,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           // before — Showtime's own read, or an earlier Rep run that
           // stopped short. It says nothing about whether Reputation
           // Manager's own deep extraction (competitors, contact emails,
-          // offers, AI panel prompts) ever ran. Reusing "Already read" in
-          // that case would leave this screen empty no matter how many
-          // times Set it up runs, so a corpus with none of Rep's own
-          // fields still gets a real re-read rather than being skipped.
+          // offers, AI panel prompts, the Trustpilot baseline) ever ran.
+          // Reusing "Already read" in that case would leave this screen
+          // empty no matter how many times Set it up runs, so a corpus
+          // with none of Rep's own fields still gets a real re-read
+          // rather than being skipped.
           const missingRepFields =
             corpusMatches &&
             !(await getClientFact(id, "competitors")) &&
             !(await getClientFact(id, "contactInfo")) &&
             !(await getClientFact(id, "offerTiers")) &&
-            !(await getClientFact(id, "seedPanelPrompts"));
+            !(await getClientFact(id, "seedPanelPrompts")) &&
+            !(await getClientFact(id, "reviewBaseline"));
           if (corpusMatches && !missingRepFields) {
             step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus!.updatedAt.toISOString() });
           } else {
