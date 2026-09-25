@@ -162,7 +162,7 @@ export async function findWebCompetitors(engagementId: string, input: Competitor
   let checked: WebCompetitor[];
   let model: string | null = null;
   try {
-    const result = await askJev({ state: { business: input.business, website: input.domain ?? undefined, offer: input.offer ?? undefined, category: input.category ?? undefined, candidates }, questions });
+    const result = await askJev({ state: { business: input.business, website: input.domain ?? undefined, offer: input.offer ?? undefined, category: input.category ?? undefined, candidates }, questions, reading: { engagementId, purpose: "web-competitors", runId: input.runId } });
     model = result.model;
     checked = candidates.flatMap((c, i): WebCompetitor[] => {
       const ans = result.answers[`c${i}`];

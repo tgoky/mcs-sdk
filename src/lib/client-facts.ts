@@ -14,7 +14,7 @@
 // "decide which fact backs a config field."
 
 import { db } from "@/lib/db";
-import { clientFacts } from "@/models/schema";
+import { clientFacts, factVerdicts } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 
 // "website" is a value scraped directly from the page (a script signature,
@@ -122,8 +122,34 @@ export async function getClientFact(engagementId: string, key: string): Promise<
   return row ? toClientFact(row) : null;
 }
 
+/**
+ * Keeps what was suggested next to what the person did with it (see
+ * fact_verdicts in schema.ts), before the fact row changes. Only a
+ * suggestion gets a verdict: re-confirming a confirmed fact, or editing
+ * one the person already edited, says nothing new about the source.
+ * Best-effort: a failed write never blocks the person's action.
+ */
+async function recordVerdict(engagementId: string, key: string, verdict: "confirmed" | "edited" | "rejected", finalValue?: unknown): Promise<void> {
+  try {
+    const before = await getClientFact(engagementId, key);
+    if (!before || before.status !== "suggested") return;
+    await db.insert(factVerdicts).values({
+      engagementId,
+      key,
+      verdict,
+      suggestedValue: before.value,
+      suggestedSource: before.source,
+      suggestedConfidence: before.confidence,
+      finalValue: verdict === "edited" ? (finalValue ?? null) : null,
+    });
+  } catch (err) {
+    console.warn(`[client-facts] couldn't record the ${verdict} verdict on ${key} for ${engagementId}:`, err instanceof Error ? err.message : err);
+  }
+}
+
 /** Marks a fact confirmed as-is — the "use this" half of a confirm chip. */
 export async function confirmClientFact(engagementId: string, key: string): Promise<void> {
+  await recordVerdict(engagementId, key, "confirmed");
   await db
     .update(clientFacts)
     .set({ status: "confirmed", updatedAt: new Date() })
@@ -132,12 +158,14 @@ export async function confirmClientFact(engagementId: string, key: string): Prom
 
 /** Records a human edit over a suggestion — the "override" half of a confirm chip. */
 export async function editClientFact(engagementId: string, key: string, value: unknown): Promise<void> {
+  await recordVerdict(engagementId, key, "edited", value);
   await upsertClientFact(engagementId, key, value, { source: "user", status: "edited", allowOverwriteConfirmed: true });
 }
 
 /** Records a human "that's not right" — kept (not deleted) so the same
  * value isn't suggested again; see upsertClientFact. */
 export async function rejectClientFact(engagementId: string, key: string): Promise<void> {
+  await recordVerdict(engagementId, key, "rejected");
   await db
     .update(clientFacts)
     .set({ status: "rejected", updatedAt: new Date() })

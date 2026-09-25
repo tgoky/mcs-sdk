@@ -74,6 +74,7 @@ export async function resolveSalesCallEvent(engagementId: string): Promise<Sales
           criteria,
         },
       },
+      reading: { engagementId, purpose: "sales-call-event" },
     });
     const answer = result.answers.salesCall;
     if (!answer || answer.type !== "choice") return null;
@@ -210,7 +211,7 @@ Rules: use only the evidence. Quote or closely paraphrase prospects; never inven
     const questions: Record<string, JevQuestion> = {
       read: { type: "score", instructions: "How well is this read of the business supported by the evidence (its numbers and its prospects' own words)?", criteria: READ_LEVELS },
     };
-    const result = await askJev({ state: { evidence: digest, read }, questions });
+    const result = await askJev({ state: { evidence: digest, read }, questions, reading: { engagementId, purpose: "business-read" } });
     confidence = scoreToConfidence(result.answers.read, READ_LEVELS.length);
     model = result.model;
   } catch (err) {

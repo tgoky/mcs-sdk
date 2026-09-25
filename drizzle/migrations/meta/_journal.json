@@ -414,6 +414,13 @@
       "when": 1790235767609,
       "tag": "0058_users_session_version",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790379184295,
+      "tag": "0059_jev_readings_and_fact_verdicts",
+      "breakpoints": true
     }
   ]
 }

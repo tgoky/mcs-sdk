@@ -53,7 +53,7 @@ export async function resolveFieldsFromEvidence(
     return { resolved: [], skipped: true };
   }
 
-  const result = await askJev({ state: evidence.value, questions });
+  const result = await askJev({ state: evidence.value, questions, reading: { engagementId, purpose: `resolve:${evidenceFactKey}` } });
 
   const resolved: string[] = [];
   for (const [fieldKey, answer] of Object.entries(result.answers)) {
@@ -141,7 +141,7 @@ export async function verifyReputationExtractions(
     };
   }
 
-  const result = await askJev({ state, questions });
+  const result = await askJev({ state, questions, reading: { engagementId, purpose: "verify-reputation" } });
 
   const verified: string[] = [];
   for (const { factKey, list } of candidates) {
@@ -228,7 +228,7 @@ export async function verifyWebsiteReadings(
     };
   }
 
-  const result = await askJev({ state, questions });
+  const result = await askJev({ state, questions, reading: { engagementId, purpose: "verify-website" } });
 
   const verified: string[] = [];
   const verticalAnswer = result.answers.offerVertical;
@@ -463,7 +463,7 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
   // leaving the setup blank.
   let result: Awaited<ReturnType<typeof askJev>> | null = null;
   try {
-    result = await askJev({ state, questions });
+    result = await askJev({ state, questions, reading: { engagementId, purpose: "cold-open-derived" } });
   } catch (err) {
     console.warn(`[field-resolvers] resolveColdOpenDerivedFields: Jev failed for ${engagementId}, keeping Claude's reading unscored:`, err instanceof Error ? err.message : err);
   }
@@ -639,7 +639,7 @@ export async function resolveDeepSiteReadings(engagementId: string): Promise<{ r
   }
   if (Object.keys(questions).length === 0) return { resolved, skipped: resolved.length === 0 };
 
-  const result = await askJev({ state, questions });
+  const result = await askJev({ state, questions, reading: { engagementId, purpose: "deep-site-readings" } });
 
   const objectionScore = scoreToConfidence(result.answers.objectionsVerification, OBJECTION_LEVELS.length);
   if (objectionScore !== undefined) {

@@ -82,7 +82,7 @@ export async function decideRepIdentity(engagementId: string, proposal: RepPropo
   index.forEach((a, i) => (questions[`q${i}`] = a.q));
 
   try {
-    const result = await askJev({ state: { business: name, website: website ?? undefined, siteCopy: corpus }, questions });
+    const result = await askJev({ state: { business: name, website: website ?? undefined, siteCopy: corpus }, questions, reading: { engagementId, purpose: "rep-identity" } });
     const out: RepDecisions = {};
     index.forEach((a, i) => {
       const ans = result.answers[`q${i}`];

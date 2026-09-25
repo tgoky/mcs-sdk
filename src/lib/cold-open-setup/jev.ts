@@ -20,7 +20,7 @@ export async function loadCampaignMatches(engagementId: string): Promise<Campaig
 export async function matchCampaigns(engagementId: string, icps: Pick<ColdOpenIcp, "slug" | "label">[], campaigns: { id: string; name: string }[]): Promise<CampaignMatches | null> {
   if (icps.length === 0 || campaigns.length === 0) return null;
   try {
-    const found = await suggestCampaignMap(icps, campaigns);
+    const found = await suggestCampaignMap(icps, campaigns, engagementId);
     const out: CampaignMatches = {};
     for (const i of icps) out[i.slug] = found[i.slug] ? { id: found[i.slug].campaignId, confidence: found[i.slug].confidence } : null;
     const scores = Object.values(found).map((m) => m.confidence);

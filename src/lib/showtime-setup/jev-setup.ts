@@ -84,7 +84,7 @@ export async function pickShowtimeIds(engagementId: string, domain: string | nul
         };
       }
 
-      const result = await askJev({ state: { ...context, options: options.map((o) => o.name) }, questions });
+      const result = await askJev({ state: { ...context, options: options.map((o) => o.name) }, questions, reading: { engagementId, purpose: "showtime-pick" } });
       const byId = new Map(options.map((o) => [o.id, o]));
       for (const t of group) {
         const answer = result.answers[t.slot];
@@ -140,6 +140,7 @@ export async function checkSite(engagementId: string, domain: string): Promise<{
           },
         },
       },
+      reading: { engagementId, purpose: "site-check" },
     });
     const answer = result.answers.isRealSite;
     if (!answer || answer.type !== "noul") return null;
@@ -195,6 +196,7 @@ export async function checkAccountMatches(
           },
         },
       },
+      reading: { engagementId, purpose: "account-match" },
     });
     const answer = result.answers.sameBusiness;
     if (!answer || answer.type !== "noul") return null;
@@ -234,6 +236,7 @@ export async function matchSavedConnection(
       questions: {
         connection: { type: "choice", instructions: "Judged by its label, which saved connection belongs to this business?", criteria },
       },
+      reading: { engagementId, purpose: "saved-connection-match" },
     });
     const answer = result.answers.connection;
     if (!answer || answer.type !== "choice" || answer.choice === NONE) return null;

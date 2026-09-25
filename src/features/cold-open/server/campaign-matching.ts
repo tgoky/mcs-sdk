@@ -23,7 +23,8 @@ export interface CampaignMatch {
 
 export async function suggestCampaignMap(
   icps: Pick<ColdOpenIcp, "slug" | "label">[],
-  campaigns: { id: string; name: string }[]
+  campaigns: { id: string; name: string }[],
+  engagementId?: string
 ): Promise<Record<string, CampaignMatch>> {
   const usable = campaigns.filter((c) => c.id && c.name?.trim()).slice(0, MAX_CAMPAIGNS);
   if (icps.length === 0 || usable.length === 0) return {};
@@ -40,7 +41,7 @@ export async function suggestCampaignMap(
     };
   }
 
-  const result = await askJev({ state: { campaigns: usable.map((c) => c.name) }, questions });
+  const result = await askJev({ state: { campaigns: usable.map((c) => c.name) }, questions, reading: { engagementId, purpose: "cold-open-campaign-match" } });
 
   const byId = new Map(usable.map((c) => [c.id, c.name]));
   const out: Record<string, CampaignMatch> = {};

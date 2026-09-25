@@ -5,6 +5,7 @@ import {
   timestamp,
   uuid,
   integer,
+  doublePrecision,
   boolean,
   uniqueIndex,
   index,
@@ -3385,5 +3386,68 @@ export const clientFacts = pgTable(
   },
   (table) => ({
     clientFactsEngagementKeyUidx: uniqueIndex("client_facts_engagement_key_uidx").on(table.engagementId, table.key),
+  })
+);
+
+/**
+ * One row per Jev call (lib/jev.ts): what it was asked for, which model
+ * version actually answered, every answer with its probabilities, and what
+ * it cost. The calibration record: thresholds (fact-trust.ts) are set
+ * against a version, and this is how a change of version, or drift in how
+ * sure it is, shows up. Written best-effort; a failed write never fails
+ * the call it records.
+ */
+export const jevReadings = pgTable(
+  "jev_readings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id").references(() => engagements.engagementId, { onDelete: "cascade" }),
+    runId: uuid("run_id"),
+    // What the reading was for, e.g. "rep-identity", "web-competitors".
+    purpose: text("purpose").notNull(),
+    modelRequested: text("model_requested").notNull(),
+    // The version that answered ("jev-1.13.0"); null when the call failed.
+    modelServed: text("model_served"),
+    questionCount: integer("question_count").notNull(),
+    answers: jsonb("answers"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    // Fractional: a Jev call is a small fraction of a cent.
+    costInCents: doublePrecision("cost_in_cents").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull(),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    jevReadingsRunIdx: index("jev_readings_run_idx").on(table.runId),
+    jevReadingsCreatedIdx: index("jev_readings_created_idx").on(table.createdAt),
+  })
+);
+
+/**
+ * Every human verdict on a suggested fact: what was suggested (value,
+ * source, confidence) and what the person did with it (confirmed, edited
+ * to something else, rejected). Append-only, so an edit no longer erases
+ * what Jev said; the agreement report (lib/jev-agreement.ts) reads this.
+ */
+export const factVerdicts = pgTable(
+  "fact_verdicts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    // "confirmed" | "edited" | "rejected"
+    verdict: text("verdict").notNull(),
+    suggestedValue: jsonb("suggested_value"),
+    suggestedSource: text("suggested_source"),
+    suggestedConfidence: integer("suggested_confidence"),
+    // The value the person saved, for an edit.
+    finalValue: jsonb("final_value"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    factVerdictsKeyIdx: index("fact_verdicts_key_idx").on(table.key, table.suggestedSource),
   })
 );
