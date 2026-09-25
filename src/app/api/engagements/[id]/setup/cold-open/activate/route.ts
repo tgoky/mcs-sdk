@@ -5,6 +5,7 @@ import { engagements } from "@/models/schema";
 import { getClientFact, getClientFacts, upsertClientFact } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { discoverClient } from "@/lib/discover-client";
+import { isSiteReadReusable, wantsFreshRead } from "@/lib/site-read";
 import { resolveColdOpenDerivedFields } from "@/lib/field-resolvers";
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { getColdOpenConfig } from "@/features/cold-open/server/config";
@@ -40,7 +41,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const access = await authorizeProductSetup(id, "cold-open", { requireInstalled: true });
   if (!access.ok) return access.response;
 
-  const body = (await req.json().catch(() => ({}))) as { domain?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { domain?: unknown; force?: unknown };
+  // "Read again": crawl the site fresh instead of reusing a stored read.
+  const force = wantsFreshRead(body);
   const typedHost = typeof body.domain === "string" ? hostOf(body.domain) : null;
   if (typeof body.domain === "string" && body.domain.trim() && !typedHost) {
     return NextResponse.json({ error: "That doesn't look like a website address." }, { status: 400 });
@@ -58,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const host = hostOf((await getPrimaryDomainForEngagement(id)) ?? typedHost);
         if (host) {
           const corpus = await getClientFact(id, "rawVoiceCorpus");
-          if (corpus && typeof corpus.value === "string" && corpus.value.trim() && hostOf(corpus.sourceDetail) === host) {
+          if (corpus && isSiteReadReusable({ corpus, sameHost: hostOf(corpus.sourceDetail) === host, force })) {
             step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus.updatedAt.toISOString() });
             // Read for another product: the Cold Open fields may not exist yet.
             const have = await Promise.all(["productIdentity", "icps", "voiceProfile"].map((k) => getClientFact(id, k)));

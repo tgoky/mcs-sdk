@@ -406,3 +406,17 @@ export function pick<T extends { key: string }>(rows: T[], keys: readonly string
   if (!keys) return rows;
   return rows.filter((r) => keys.some((k) => (k.endsWith("-") ? r.key.startsWith(k) : r.key === k)));
 }
+
+/** "3 days ago" for a stored timestamp; a date once it's over a week old. */
+export function relativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

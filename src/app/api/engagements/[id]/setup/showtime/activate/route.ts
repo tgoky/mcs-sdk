@@ -5,6 +5,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { getClientFact, getClientFacts } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { discoverClient } from "@/lib/discover-client";
+import { isSiteReadReusable, wantsFreshRead } from "@/lib/site-read";
 import { hasCredential, listVaultCredentials } from "@/lib/credentials";
 import { verticalLabel } from "@/lib/verticals";
 import { SHOWTIME_TOOL_GROUPS, SHOWTIME_TOOLS, findShowtimeTool } from "@/lib/showtime-setup/catalog";
@@ -61,6 +62,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // means every skill (older callers).
   const skills = Array.isArray(body.skills) ? body.skills.filter((s): s is string => typeof s === "string") : SHOWTIME_SKILLS.map((s) => s.id);
   const needs = needsFor(skills);
+  // "Read again": crawl the site and pull every connected tool fresh,
+  // skipping both caches.
+  const force = wantsFreshRead(body);
   const typed = typeof body.domain === "string" ? body.domain : "";
   const typedHost = bareHost(typed);
   if (typed.trim() && !typedHost) {
@@ -88,13 +92,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           return;
         }
 
-        // Reuse a read of this same site (from any product) instead of
-        // crawling it again.
+        // Reuse a recent read of this same site (from any product) instead
+        // of crawling it again, unless the person asked to read it again.
         const corpus = host ? await getClientFact(id, "rawVoiceCorpus") : null;
-        const alreadyRead = corpus && typeof corpus.value === "string" && corpus.value.trim() && bareHost(corpus.sourceDetail ?? "") === host;
+        const alreadyRead = isSiteReadReusable({ corpus, sameHost: bareHost(corpus?.sourceDetail ?? "") === host, force });
         if (!host) {
           // Nothing switched on needs the site; the tools carry the rest.
-        } else if (alreadyRead) {
+        } else if (alreadyRead && corpus) {
           step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus.updatedAt.toISOString() });
         } else {
           const result = await discoverClient(id);
@@ -169,7 +173,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const connected: (typeof INTEL_PROVIDERS)[number][] = [];
         for (const p of INTEL_PROVIDERS) if (await hasCredential(id, p)) connected.push(p);
         const toRead = connected.filter((p) => !(p === "ghl" && connected.includes("ghl_calendar")));
-        const runs = await Promise.all(toRead.map((p) => runAccountIntel(id, p)));
+        const runs = await Promise.all(toRead.map((p) => runAccountIntel(id, p, { force })));
         for (const run of runs) {
           if (!run.intel) continue;
           for (const s of intelSteps(run.intel, findShowtimeTool(run.provider)?.label ?? run.provider)) step(s);

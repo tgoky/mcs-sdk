@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ArrowUpRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "./back-button";
+import { relativeTime } from "./review-kit";
 import { useToast } from "@/components/toast/toast-provider";
 import { useTour } from "@/components/tours/tour-provider";
 import { VERTICALS, verticalLabel } from "@/lib/verticals";
@@ -116,19 +117,6 @@ const AD_LABEL: Record<string, string> = { hyros: "Hyros", native_crm: "your CRM
 function toolLabel(provider: string | null | undefined): string {
   if (!provider) return "";
   return findShowtimeTool(provider)?.label ?? provider;
-}
-
-function relativeTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.round(ms / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function sourceText(v: SetupValue | undefined, domain: string): string | null {
@@ -371,6 +359,19 @@ export function ShowtimeSetup({
   };
 
   // ── Activate ──
+  // "Read again": run Activate straight away, reading the site and the
+  // connected tools fresh instead of reusing what's stored. With no website
+  // yet there's nothing to re-read, so it goes back to where one is typed.
+  const readAgain = useRef(false);
+  function readSiteAgain() {
+    if (!(draft?.domain || data?.website.domain)) {
+      setPhase("welcome");
+      return;
+    }
+    readAgain.current = true;
+    void activate();
+  }
+
   async function activate() {
     if (!draft) return;
     setPhase("working");
@@ -382,12 +383,14 @@ export function ShowtimeSetup({
       const res = await fetch(`/api/engagements/${engagementId}/setup/showtime/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: draft.domain, skills }),
+        body: JSON.stringify({ domain: draft.domain, skills , force: readAgain.current }),
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't start the setup.");
       }
+      // The fresh read was accepted; a later Activate may reuse it again.
+      readAgain.current = false;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -728,9 +731,8 @@ export function ShowtimeSetup({
               setKeepPage={setKeepPage}
               setSalesCall={setSalesCall}
               toolRows={toolRows(true)}
-              onReread={() => {
-                setPhase("welcome");
-              }}
+              onReread={readSiteAgain}
+              onChangeWebsite={() => setPhase("welcome")}
               onFocusGroup={(g) => {
                 toolsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                 setFlashGroup(g);
@@ -966,6 +968,7 @@ function Review({
   setSlack,
   toolRows,
   onReread,
+  onChangeWebsite,
   onFocusGroup,
   engagementId,
   skills,
@@ -992,6 +995,8 @@ function Review({
   setSlack: (v: string) => void;
   toolRows: React.ReactNode;
   onReread: () => void;
+  /** Back to the first screen, where the website is typed. */
+  onChangeWebsite: () => void;
   onFocusGroup: (g: ToolGroupId) => void;
   engagementId: string;
   backHref?: string;
@@ -1039,7 +1044,11 @@ function Review({
             </span>
             <span aria-hidden>·</span>
             <button type="button" onClick={onReread} className="inline-flex items-center gap-1 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
-              <RotateCcw className="h-3 w-3" /> Change website or read again
+              <RotateCcw className="h-3 w-3" /> Read again
+            </button>
+            <span aria-hidden>·</span>
+            <button type="button" onClick={onChangeWebsite} className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
+              Change website
             </button>
           </p>
           {data.website.siteCheck && !data.website.siteCheck.isRealSite && (

@@ -7,6 +7,7 @@ import { hasCredential } from "@/lib/credentials";
 import { finishRun, startRun, emptySummary } from "@/lib/run-log";
 import { factTier } from "@/lib/fact-trust";
 import { INTEL_PROVIDERS, runAccountIntel } from "@/lib/account-intel";
+import { isSiteReadReusable, wantsFreshRead } from "@/lib/site-read";
 import { findGoogleListing } from "@/features/reputation-manager/server/outscraper-google";
 import { resolveOutscraperConfig } from "@/features/reputation-manager/trustpilot-config";
 import type { RepEngineId, RepGoogleListing } from "@/models/schema";
@@ -27,6 +28,26 @@ const WATCH_SKILLS = ["rep-engine-panel", "rep-trustpilot-watch", "rep-reddit-wa
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const count = (v: unknown) => (Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0);
 
+/** Rep fields the chosen watches read that only a site read produces. */
+const NEEDED_BY_SKILL: Record<string, string[]> = {
+  "rep-engine-panel": ["seedPanelPrompts", "competitors"],
+  "rep-reddit-watch": ["competitors"],
+};
+
+async function missingNeededRepField(id: string, skills: readonly string[]): Promise<boolean> {
+  const keys = new Set(skills.flatMap((s) => NEEDED_BY_SKILL[s] ?? []));
+  for (const key of keys) {
+    const fact = await getClientFact(id, key);
+    const empty = !fact || fact.status === "rejected" || (Array.isArray(fact.value) && fact.value.length === 0);
+    if (empty) return true;
+  }
+  return false;
+}
+
+function readWithinADay(corpus: { updatedAt: Date } | undefined | null): boolean {
+  return Boolean(corpus) && Date.now() - new Date(corpus!.updatedAt).getTime() < 24 * 60 * 60 * 1000;
+}
+
 /**
  * Reputation Manager's "Set it up": gathers every name the watches should
  * search for (site, connected tools, Whop), finds the Google listing, has
@@ -41,7 +62,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const access = await authorizeProductSetup(id, "reputation-manager", { requireInstalled: true });
   if (!access.ok) return access.response;
 
-  const body = (await req.json().catch(() => ({}))) as { domain?: unknown; skills?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { domain?: unknown; skills?: unknown; force?: unknown };
+  // "Read again": crawl the site and pull every connected tool fresh,
+  // skipping both caches.
+  const force = wantsFreshRead(body);
   const skills = Array.isArray(body.skills) ? body.skills.filter((s): s is string => typeof s === "string") : WATCH_SKILLS;
   const typedHost = typeof body.domain === "string" ? hostOf(body.domain) : null;
   if (typeof body.domain === "string" && body.domain.trim() && !typedHost) {
@@ -60,7 +84,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const host = hostOf((await getPrimaryDomainForEngagement(id)) ?? typedHost);
         if (host) {
           const corpus = await getClientFact(id, "rawVoiceCorpus");
-          const corpusMatches = Boolean(corpus && typeof corpus.value === "string" && corpus.value.trim() && hostOf(corpus.sourceDetail) === host);
+          const corpusMatches = isSiteReadReusable({ corpus, sameHost: hostOf(corpus?.sourceDetail) === host, force });
           // A matching corpus only means SOME product has read this site
           // before — Showtime's own read, or an earlier Rep run that
           // stopped short. It says nothing about whether Reputation
@@ -70,13 +94,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           // empty no matter how many times Set it up runs, so a corpus
           // with none of Rep's own fields still gets a real re-read
           // rather than being skipped.
+          //
+          // The same goes for a field one of the chosen watches needs (AI
+          // questions for AI Engine Watch, competitors for the watches that
+          // compare), unless the site was read in the last day: a site that
+          // simply doesn't say is not re-crawled on every Activate.
           const missingRepFields =
             corpusMatches &&
-            !(await getClientFact(id, "competitors")) &&
-            !(await getClientFact(id, "contactInfo")) &&
-            !(await getClientFact(id, "offerTiers")) &&
-            !(await getClientFact(id, "seedPanelPrompts")) &&
-            !(await getClientFact(id, "reviewBaseline"));
+            ((!(await getClientFact(id, "competitors")) &&
+              !(await getClientFact(id, "contactInfo")) &&
+              !(await getClientFact(id, "offerTiers")) &&
+              !(await getClientFact(id, "seedPanelPrompts")) &&
+              !(await getClientFact(id, "reviewBaseline"))) ||
+              (!readWithinADay(corpus) && (await missingNeededRepField(id, skills))));
           if (corpusMatches && !missingRepFields) {
             step({ id: "site", label: `Already read ${host}`, status: "reused", detail: corpus!.updatedAt.toISOString() });
           } else {
@@ -111,7 +141,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const connected: (typeof INTEL_PROVIDERS)[number][] = [];
         for (const p of INTEL_PROVIDERS) if (await hasCredential(id, p)) connected.push(p);
         const toRead = connected.filter((p) => !(p === "ghl" && connected.includes("ghl_calendar")));
-        const runs = await Promise.all(toRead.map((p) => runAccountIntel(id, p)));
+        const runs = await Promise.all(toRead.map((p) => runAccountIntel(id, p, { force })));
         for (const r of runs) {
           if (!r.intel) continue;
           const names = [r.intel.business?.name, r.intel.sender?.fromName, ...(r.intel.booking?.history.hosts ?? []).map((h) => h.name)].filter(Boolean);

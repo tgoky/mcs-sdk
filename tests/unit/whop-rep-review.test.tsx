@@ -106,4 +106,26 @@ describe("Reputation Manager review", () => {
     expect(body.operatorAliases).toEqual(["Mudd"]);
     expect(body.operatorHandles).toEqual({ x: "@mudd" });
   });
+  it("reads the site again straight away, skipping what's stored, on Read again", async () => {
+    // jsdom has no layout, so no scrollIntoView (Activate scrolls its progress into view).
+    Element.prototype.scrollIntoView = vi.fn();
+    const calls = mockFetch(configured);
+    render(<RepSetup engagementId="e1" onCancel={() => {}} />);
+    await screen.findByText("What we watch");
+    fireEvent.click(screen.getByRole("button", { name: /Read again/ }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/setup/rep/activate"))).toBe(true));
+    const body = calls.find((c) => c.url.endsWith("/setup/rep/activate"))!.body as Record<string, unknown>;
+    expect(body.force).toBe(true);
+  });
+
+  it("says unsure finds are unsure instead of showing a zero", async () => {
+    const unsure = {
+      ...configured,
+      proposal: { ...rep.proposal, competitors: [{ value: "Acme", sources: ["your website"], tier: "ask", on: false }] },
+    };
+    mockFetch(unsure);
+    render(<RepSetup engagementId="e1" onCancel={() => {}} />);
+    await screen.findByText("What we watch");
+    expect(line(/We found a possible competitor, but we're not sure it's right/)).toBeInTheDocument();
+  });
 });

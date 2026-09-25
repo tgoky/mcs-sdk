@@ -11,7 +11,7 @@
 //             what we looked for and didn't find (collapsed), what's
 //             still needed from you (top, accent), and Approve.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -41,7 +41,7 @@ import type { RepEngineId } from "@/models/schema";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
-import { Popover } from "./review-kit";
+import { Popover, relativeTime } from "./review-kit";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -207,6 +207,26 @@ function draftFrom(s: RepSetupState, prevDomain?: string): Draft {
 const on = <T extends { on: boolean }>(xs: T[]) => xs.filter((x) => x.on);
 const tally = (xs: { on: boolean }[]) => xs.filter((x) => x.on).length;
 
+/**
+ * The headline for a list row. With something switched on, it's the count.
+ * With only unsure finds (they start switched off), a bare "0" would read
+ * as "found nothing" while the chips sit right under it, so it says what
+ * happened instead.
+ */
+function countHeadline(xs: { on: boolean }[], singular: string, plural: string, tail?: ReactNode): { count?: number; noun?: string; tail?: ReactNode; kind?: "guess" } {
+  const n = tally(xs);
+  if (n > 0) return { count: n, noun: n === 1 ? singular : plural, tail };
+  return {
+    kind: "guess",
+    tail: (
+      <>
+        We found {xs.length === 1 ? `a possible ${singular}` : `${xs.length} possible ${plural}`}, but we&apos;re not sure {xs.length === 1 ? "it's" : "they're"} right. Switch on the
+        ones that are, or add your own.
+      </>
+    ),
+  };
+}
+
 function bareHost(value: string): string {
   return value.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
 }
@@ -366,6 +386,19 @@ export function RepSetup({
   };
 
   // ── Set it up ──
+  // "Read again": run Activate straight away, reading the site and the
+  // connected tools fresh instead of reusing what's stored. With no website
+  // yet there's nothing to re-read, so it goes back to where one is typed.
+  const readAgain = useRef(false);
+  function readSiteAgain() {
+    if (!(draft?.domain || data?.website.domain)) {
+      setPhase("welcome");
+      return;
+    }
+    readAgain.current = true;
+    void activate();
+  }
+
   async function activate() {
     if (!draft) return;
     setPhase("working");
@@ -376,12 +409,14 @@ export function RepSetup({
       const res = await fetch(`/api/engagements/${engagementId}/setup/rep/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: draft.domain, skills }),
+        body: JSON.stringify({ domain: draft.domain, skills , force: readAgain.current }),
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't start the setup.");
       }
+      // The fresh read was accepted; a later Activate may reuse it again.
+      readAgain.current = false;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -505,7 +540,7 @@ export function RepSetup({
             set={set}
             skills={skills}
             setSkills={setSkills}
-            onReread={() => setPhase("welcome")}
+            onReread={readSiteAgain}
             toolRow={toolRow}
             focus={settings ? focus : undefined}
             leading={leading}
@@ -1264,14 +1299,12 @@ function Review({
     );
   }
 
-  const emailCount = tally(draft.emails);
   if (draft.emails.length > 0) {
     findings.push(
       <FindingRow
         key="emails"
         kind="found"
-        count={emailCount}
-        noun={emailCount === 1 ? "contact email" : "contact emails"}
+        {...countHeadline(draft.emails, "contact email", "contact emails")}
         body={<ChipRow items={chipData(draft.emails)} onToggle={toggle("emails")} onAdd={add("emails", (v) => v.trim().toLowerCase())} addLabel="Add an email" />}
       />,
     );
@@ -1336,14 +1369,12 @@ function Review({
     );
   }
 
-  const offeringCount = tally(draft.offerings);
   if (draft.offerings.length > 0) {
     findings.push(
       <FindingRow
         key="offerings"
         kind="found"
-        count={offeringCount}
-        noun={offeringCount === 1 ? "product" : "products"}
+        {...countHeadline(draft.offerings, "product", "products")}
         body={<ChipRow items={chipData(draft.offerings)} onToggle={toggle("offerings")} onAdd={add("offerings")} addLabel="Add a product" />}
       />,
     );
@@ -1351,15 +1382,12 @@ function Review({
     notFound.push({ key: "offerings", noun: "products", addLabel: "Add", onAdd: add("offerings") });
   }
 
-  const competitorCount = tally(draft.competitors);
   if (draft.competitors.length > 0) {
     findings.push(
       <FindingRow
         key="competitors"
         kind="found"
-        count={competitorCount}
-        noun={competitorCount === 1 ? "competitor" : "competitors"}
-        tail={<>so we can tell when you&apos;re compared.</>}
+        {...countHeadline(draft.competitors, "competitor", "competitors", <>so we can tell when you&apos;re compared.</>)}
         body={<ChipRow items={chipData(draft.competitors)} onToggle={toggle("competitors")} onAdd={add("competitors")} addLabel="Add a competitor" />}
       />,
     );
@@ -1411,15 +1439,27 @@ function Review({
     );
   }
 
-  const promptCount = tally(draft.prompts);
   if (skills.includes("rep-engine-panel") && draft.prompts.length > 0) {
     findings.push(
       <FindingRow
         key="prompts"
-        kind="found"
-        count={promptCount}
-        noun={promptCount === 1 ? "question" : "questions"}
-        tail={<>{<>we&apos;ll ask</>} <span className="font-medium text-[var(--text-primary)]">{draft.engines.length} AI {draft.engines.length === 1 ? "engine" : "engines"}</span> on a schedule, then watch the answers.</>}
+        kind={data.engines.available.length === 0 ? "warn" : "found"}
+        {...countHeadline(
+          draft.prompts,
+          "question",
+          "questions",
+          data.engines.available.length === 0 ? (
+            <>
+              to ask AI engines, but no AI engine is set up on the server yet, so nothing will be asked. An admin adds them with the REP_ENGINE_MODEL_* settings.
+            </>
+          ) : draft.engines.length === 0 ? (
+            <>to ask AI engines. Switch on at least one engine below, or nothing will be asked.</>
+          ) : (
+            <>
+              we&apos;ll ask <span className="font-medium text-[var(--text-primary)]">{draft.engines.length} AI {draft.engines.length === 1 ? "engine" : "engines"}</span> on a schedule, then watch the answers.
+            </>
+          )
+        )}
         body={
           <div className="space-y-2">
             <ChipRow items={chipData(draft.prompts)} onToggle={toggle("prompts")} onAdd={add("prompts")} addLabel="Add a question" />
@@ -1571,6 +1611,7 @@ function Review({
             <span aria-hidden>·</span>
             <span>Never posts for you</span>
             <span aria-hidden>·</span>
+            {relativeTime(data.website.readAt) && <span>Site read {relativeTime(data.website.readAt)}</span>}
             <button
               type="button"
               onClick={onReread}

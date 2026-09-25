@@ -25,7 +25,7 @@ import type { ColdOpenSetupState, TrustTier } from "@/lib/cold-open-setup/types"
 import type { ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList } from "./fact-token";
-import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry } from "./review-kit";
+import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, relativeTime, type FeedEntry } from "./review-kit";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { cn } from "@/lib/utils";
@@ -269,6 +269,19 @@ export function ColdOpenSetup({
   };
 
   // ── Set it up ──
+  // "Read again": run Activate straight away, reading the site and the
+  // connected tools fresh instead of reusing what's stored. With no website
+  // yet there's nothing to re-read, so it goes back to where one is typed.
+  const readAgain = useRef(false);
+  function readSiteAgain() {
+    if (!(draft?.domain || data?.website.domain)) {
+      setPhase("welcome");
+      return;
+    }
+    readAgain.current = true;
+    void activate();
+  }
+
   async function activate() {
     if (!draft) return;
     setPhase("working");
@@ -279,12 +292,14 @@ export function ColdOpenSetup({
       const res = await fetch(`/api/engagements/${engagementId}/setup/cold-open/activate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: draft.domain }),
+        body: JSON.stringify({ domain: draft.domain , force: readAgain.current }),
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't start the setup.");
       }
+      // The fresh read was accepted; a later Activate may reuse it again.
+      readAgain.current = false;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -389,7 +404,7 @@ export function ColdOpenSetup({
     <div ref={topRef} className="@container w-full px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} backHref={backHref} />
+          <Review data={data} draft={draft} set={set} onReread={readSiteAgain} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} backHref={backHref} />
           {settings ? (
             COLD_OPEN_FOCUS[focus!]?.save && (
               <ApproveBar
@@ -904,9 +919,12 @@ function Review({
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-4 px-1">
           <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">What we did</h2>
-          <button type="button" onClick={onReread} className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
-            Read again
-          </button>
+          <span className="flex items-baseline gap-2 text-[12px] text-[var(--text-muted)]">
+            {relativeTime(data.website.readAt) && <span>Site read {relativeTime(data.website.readAt)}</span>}
+            <button type="button" onClick={onReread} className="hover:text-[var(--text-primary)] cursor-pointer">
+              Read again
+            </button>
+          </span>
         </div>
         <ol className="space-y-1">
           {entries.map((e) => (
