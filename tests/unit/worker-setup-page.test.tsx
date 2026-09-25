@@ -56,9 +56,12 @@ describe("worker setup page", () => {
   it("goes back to ?from= on cancel, to the run a setup started, else back", async () => {
     search = new URLSearchParams({ from: "/dashboard/library" });
     render(await WorkerSetupPage(params("pin-down")));
-    expect(screen.getByLabelText("Back")).toHaveAttribute("href", "/dashboard/library");
+    // Showtime's setup carries its own heading, so the way back is handed to
+    // it (it renders the Back button in its own header) instead of drawn here.
+    expect(screen.queryByLabelText("Back")).toBeNull();
 
-    const h = handlersSeen.at(-1) as { onClose: () => void; onSaved: (r: { runId?: string }) => void };
+    const h = handlersSeen.at(-1) as { onClose: () => void; onSaved: (r: { runId?: string }) => void; backHref?: string };
+    expect(h.backHref).toBe("/dashboard/library");
     h.onClose();
     expect(push).toHaveBeenLastCalledWith("/dashboard/library");
     h.onSaved({ runId: "run-7" });

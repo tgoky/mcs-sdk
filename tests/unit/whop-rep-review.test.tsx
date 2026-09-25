@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { repState, whopState } from "./fixtures/setup-states";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/dashboard" }));
 vi.mock("@/components/toast/toast-provider", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 import { WhopSetup } from "@/components/product-setup/whop-setup";
@@ -73,11 +73,13 @@ describe("Reputation Manager review", () => {
   it("shows every name as chips in the feed, and never pre-fills the crisis contact", async () => {
     mockFetch(configured);
     render(<RepSetup engagementId="e1" onCancel={() => {}} />);
-    await screen.findByText("What we did");
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Mudd Ventures, right now");
+    await screen.findByText("What we watch");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Mudd Ventures");
     expect(line(/Watching for/)).toHaveTextContent("Watching for Mudd Ventures, from muddventures.com.");
-    for (const chip of ["Mudd", "muddventures.com", "x: @mudd", "hi@muddventures.com", "AI Clarity Call", "Acme", "Is Mudd Ventures legit?"]) expect(screen.getByRole("button", { name: chip })).toBeInTheDocument();
-    expect(screen.getByText("Choose who's paged when something's serious")).toBeInTheDocument();
+    for (const chip of ["Mudd", "muddventures.com", "hi@muddventures.com", "AI Clarity Call", "Acme", "Is Mudd Ventures legit?"]) expect(screen.getByRole("button", { name: chip })).toBeInTheDocument();
+    // A handle chip carries its platform's icon, so its name is more than the handle.
+    expect(screen.getByRole("button", { name: /@mudd$/ })).toBeInTheDocument();
+    expect(screen.getByText(/Choose who's paged when something's serious/)).toBeInTheDocument();
     expect(screen.queryByText(/Ada Mudd/)).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
@@ -86,9 +88,9 @@ describe("Reputation Manager review", () => {
   it("switches a chip off in place and saves the same body once someone is chosen", async () => {
     const calls = mockFetch(configured);
     render(<RepSetup engagementId="e1" onCancel={() => {}} />);
-    await screen.findByText("What we did");
+    await screen.findByText("What we watch");
     fireEvent.click(screen.getByRole("button", { name: "Acme" }));
-    const todo = screen.getByText("Choose who's paged when something's serious").closest("li")!;
+    const todo = screen.getByText(/Choose who's paged when something's serious/).closest("li")!;
     fireEvent.click(within(todo).getByRole("button", { name: "Choose" }));
     const card = await screen.findByRole("dialog", { name: "Who's paged" });
     // The site's founder is one tap, not a pre-fill.

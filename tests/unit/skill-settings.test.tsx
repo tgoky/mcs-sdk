@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/dashboard" }));
 vi.mock("@/components/toast/toast-provider", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 import { ColdOpenSetup } from "@/components/product-setup/cold-open-setup";
@@ -102,7 +102,9 @@ describe("a Reputation Manager skill's own settings", () => {
     const calls = mockFetch({ "/setup/rep": { ...repState, configured: true, skills: {}, proposal: { ...repState.proposal, soleAuthority: { saved: "Ada Mudd", suggestion: null } } } });
     const onSaved = vi.fn();
     render(<RepSetup engagementId="e1" onCancel={() => {}} onSaved={onSaved} focus="rep-crisis-response" />);
-    await screen.findByText("Settings for Mudd1s");
+    // The focused view is headed by the skill's own name (RepHeader), not the
+    // shared "Settings for {buyer}" line the other products use.
+    await screen.findByText(/Pages one person the moment serious findings add up/);
     expect(line(/Page at severity/)).toBeInTheDocument();
     expect(screen.getByText(/is paged when/)).toHaveTextContent("Ada Mudd is paged when something's serious");
     expect(screen.queryByRole("button", { name: "Mudd" })).not.toBeInTheDocument();

@@ -80,7 +80,7 @@ const REP_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean
     about: "Every name we watch for you, and where each one came from. Anything you switch off here stops being watched everywhere.",
   },
   "rep-crisis-response": {
-    rows: ["threshold"],
+    rows: ["authority", "threshold"],
     todos: ["authority"],
     save: true,
     about: "Pages one person the moment serious findings add up. Nothing is ever posted on your behalf.",
@@ -839,8 +839,9 @@ function FindingRow({
   tail?: ReactNode;
   /** Where the value came from, in a line under the headline. */
   source?: ReactNode;
-  /** A "Change" / "This is us" affordance on the right. */
-  action?: { label: string; onClick: () => void };
+  /** A "Change" / "This is us" affordance on the right: a plain action, or
+   * an editor opened in a card anchored to the link. */
+  action?: { label: string; onClick: () => void } | { label: string; title: string; editor: (close: () => void) => ReactNode };
   /** The chip row or list of values. */
   body?: ReactNode;
 }) {
@@ -862,7 +863,13 @@ function FindingRow({
         {source && <p className="mt-1 text-[12px] text-[var(--text-muted)]">{source}</p>}
         {body && <div className="mt-2.5">{body}</div>}
       </div>
-      {action && (
+      {action && "editor" in action ? (
+        <div className="shrink-0 self-start pt-1">
+          <Popover label={action.label} title={action.title}>
+            {action.editor}
+          </Popover>
+        </div>
+      ) : action ? (
         <button
           type="button"
           onClick={action.onClick}
@@ -870,7 +877,7 @@ function FindingRow({
         >
           {action.label}
         </button>
-      )}
+      ) : null}
     </li>
   );
 }
@@ -1204,11 +1211,9 @@ function Review({
           </>
         }
         source={found.operatorName.source ? `From ${found.operatorName.source}` : undefined}
-        action={{ label: "Change", onClick: () => {} }} // replaced by popover below
+        action={{ label: "Change", title: "Your name", editor: (close) => <NameEditor draft={draft} set={set} close={close} /> }}
       />,
     );
-  } else {
-    notFound.push({ key: "name", noun: "your business name", addLabel: "Add", onAdd: () => {} });
   }
 
   const aliasCount = tally(draft.aliases);
@@ -1443,9 +1448,25 @@ function Review({
         kind="found"
         tail={<>Page at severity <span className="font-semibold text-[var(--text-primary)] tabular-nums">{draft.threshold ?? 80}</span>{draft.threshold == null ? " (the default)" : ""}.</>}
         source="Lower pages you sooner."
-        action={{ label: "Change", onClick: () => {} }}
+        action={{ label: "Change", title: "When we page", editor: (close) => <ThresholdEditor draft={draft} set={set} close={close} /> }}
       />,
     );
+    const pagedName = draft.soleAuthority.trim();
+    if (pagedName) {
+      findings.push(
+        <FindingRow
+          key="authority"
+          kind="found"
+          tail={
+            <>
+              <span className="font-semibold text-[var(--text-primary)]">{pagedName}</span> is paged when something&apos;s serious.
+            </>
+          }
+          source="Nothing is ever posted on your behalf."
+          action={{ label: "Change", title: "Who's paged", editor: (close) => <AuthorityEditor draft={draft} set={set} close={close} suggestion={suggestion} /> }}
+        />,
+      );
+    }
   }
 
   // ── The "what's happening right now" preview card, only if there's
