@@ -1074,7 +1074,7 @@ function Review({
 
         {/* Skills: switch each one on or off; what an on skill will do, editable */}
         <section className="space-y-1">
-          <SectionTitle hint="Switch any skill on or off. Tap a highlighted word to change it.">Skills</SectionTitle>
+          <SectionTitle >Skills</SectionTitle>
           <ul className="divide-y">
             <SkillSwitchRow {...skillRow("pin-down")}>
               {data.existingPage.url && draft.keepPage ? (
