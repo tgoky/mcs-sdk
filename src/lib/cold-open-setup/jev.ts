@@ -27,7 +27,8 @@ export async function matchCampaigns(engagementId: string, icps: Pick<ColdOpenIc
     await upsertClientFact(engagementId, "coldOpenCampaignMatch", out, {
       source: "jev",
       sourceDetail: "coldOpenSetup",
-      confidence: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : undefined,
+      // The weakest match decides: one bad pairing shouldn't hide behind three good ones.
+      confidence: scores.length ? Math.round(Math.min(...scores)) : undefined,
       evidence: `Jev matched ${icps.length} ICPs against ${campaigns.length} campaign names.`,
     });
     return out;

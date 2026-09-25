@@ -95,7 +95,9 @@ export async function decideRepIdentity(engagementId: string, proposal: RepPropo
     await upsertClientFact(engagementId, "repIdentityDecisions", out, {
       source: "jev",
       sourceDetail: "repSetup",
-      confidence: confidences.length ? Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length) : undefined,
+      // The weakest call decides how far the set is trusted as a whole;
+      // each name keeps its own confidence inside the value.
+      confidence: confidences.length ? Math.min(...confidences) : undefined,
       evidence: `Jev's calls on ${index.length} names, domains and lookalikes (model ${result.model}).`,
     });
     return out;

@@ -16,7 +16,13 @@ import { getClientFact, getClientFacts, upsertClientFact } from "@/lib/client-fa
 import { hasCredential, resolveCredential } from "@/lib/credentials";
 import { fetchStackOptions, type StackOption } from "@/lib/stack-options";
 import type { PickTarget } from "./picks";
+
 import { PICK_FACT_PREFIX } from "./types";
+
+/** Confidence (0-100) in a yes/no call as made: a confident "no" is as sure as a confident "yes". */
+export function callConfidence(probabilityOfYes: number): number {
+  return Math.round(Math.max(probabilityOfYes, 1 - probabilityOfYes) * 100);
+}
 
 const NONE = "__none__";
 // Jev's documented ceiling is 255 choices per question; one is "none".
@@ -148,7 +154,9 @@ export async function checkSite(engagementId: string, domain: string): Promise<{
     await upsertClientFact(engagementId, "siteCheck", verdict, {
       source: "jev",
       sourceDetail: domain,
-      confidence: verdict.probability,
+      // How sure Jev is of the call it made, yes or no (the value keeps the
+      // probability of yes), the same meaning every other yes/no fact has.
+      confidence: callConfidence(answer.noul),
       evidence: `Checked against the copy read from ${domain} (model ${result.model}).`,
     });
     return verdict;
@@ -204,7 +212,7 @@ export async function checkAccountMatches(
     await upsertClientFact(engagementId, `accountCheck:${provider}`, verdict, {
       source: "jev",
       sourceDetail: provider,
-      confidence: verdict.probability,
+      confidence: callConfidence(answer.noul),
       evidence: `Compared the ${provider} account to ${domain ?? "the website"} (model ${result.model}).`,
     });
     return verdict;

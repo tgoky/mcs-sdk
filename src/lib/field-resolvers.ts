@@ -29,10 +29,14 @@ function answerToValue(answer: JevAnswer): { value: unknown; confidence: number 
   if (answer.type === "choice") return { value: answer.choice, confidence: answer.confidence };
   if (answer.type === "score") return { value: answer.score, confidence: answer.confidence };
   // Noul has no separate confidence field per TypeSafe's own docs — the
-  // probability itself already is the certainty (near 0.5 is uncertain,
-  // near 0 or 1 is confident), so it's reused as the confidence too.
-  return { value: answer.noul >= 0.5, confidence: answer.noul };
+  // probability of yes carries the certainty (near 0.5 is uncertain, near 0
+  // or 1 is confident). Stored as how sure it is of the call it made, so a
+  // confident "no" reads as sure, the same as every other yes/no fact.
+  return { value: answer.noul >= 0.5, confidence: Math.max(answer.noul, 1 - answer.noul) };
 }
+
+/** A Choice question's "none of these" option: picked, nothing is stored. */
+export const NONE_OF_THESE = "none";
 
 /**
  * Resolves several fields that all share the same evidence in ONE Jev
@@ -57,6 +61,9 @@ export async function resolveFieldsFromEvidence(
 
   const resolved: string[] = [];
   for (const [fieldKey, answer] of Object.entries(result.answers)) {
+    // The copy doesn't say: leave the field for the person rather than
+    // storing the least-bad option as if it were read.
+    if (answer.type === "choice" && answer.choice === NONE_OF_THESE) continue;
     const { value, confidence } = answerToValue(answer);
     await upsertClientFact(engagementId, fieldKey, value, {
       source: "jev",
@@ -75,17 +82,18 @@ export async function resolveWebsiteDerivedChoices(engagementId: string) {
     trafficTemperature: {
       type: "choice",
       instructions:
-        "Based on this website's marketing copy, what temperature best describes how this business's leads typically arrive. How much they already know about the offer before being sold to?",
+        "From this website's marketing copy, how much do this business's leads typically already know about the offer before they are sold to? Pick none if the copy gives no clear signal.",
       criteria: {
         cold: "Outbound or cold-traffic offer. The copy is written to first introduce the problem and the business to someone unfamiliar with them.",
         warm: "The copy assumes some prior familiarity. An email list, a retargeted visitor, or a referred lead who already knows roughly who this business is.",
         hot: "The copy is written for someone who already actively wants this and is close to buying: pricing-forward, direct comparison, or a returning-customer tone.",
+        [NONE_OF_THESE]: "None of these: the copy doesn't show how its leads arrive.",
       },
     },
     castingChoice: {
       type: "choice",
       instructions:
-        "Based on this website's marketing copy, who is most likely to appear on camera for this business's sales calls or video content. Who the copy is written in the voice of, or who it credits by name or role?",
+        "From this website's marketing copy (whose voice it is written in, and who it credits by name or role), who is most likely to appear on camera in this business's sales calls and videos?",
       criteria: {
         founder_on_camera: "The copy speaks in the founder's/owner's own voice, or names a single founder as the face of the business.",
         coach_on_camera: "The copy centers a named coach, expert, or practitioner distinct from company branding. A personal-brand-driven offer.",
@@ -184,9 +192,30 @@ const SINGLE_VALUE_LEVELS = [
 const WEBSITE_READING_PROMPTS: Record<string, string> = {
   operatorName: "Score how accurately the proposed business name matches how the site copy names the business itself.",
   offerName: "Score how accurately the proposed offer name matches the main offer the site copy is selling.",
-  offerPrice: "Score how accurately the proposed price matches a price the site copy actually states. An invented price is fabricated.",
   offerIcp: "Score how accurately the proposed ideal customer matches who the site copy is written for.",
 };
+
+/** The amounts in a price string, as plain numbers: "$1,997/mo" -> [1997]. */
+export function priceAmounts(text: string): number[] {
+  const out: number[] = [];
+  for (const m of text.matchAll(/\d{1,3}(?:[,\s]\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?/g)) {
+    const n = Number(m[0].replace(/[,\s]/g, ""));
+    if (Number.isFinite(n) && n > 0) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Whether the copy states this price, checked by rule rather than asked:
+ * every amount in the proposed price has to appear in the copy. Jev can't
+ * tell a real price from a plausible invented one, so it isn't asked to.
+ */
+export function priceStatedInCopy(price: string, copy: string): boolean {
+  const wanted = priceAmounts(price);
+  if (wanted.length === 0) return false;
+  const found = new Set(priceAmounts(copy));
+  return wanted.every((n) => found.has(n));
+}
 
 export async function verifyWebsiteReadings(
   engagementId: string
@@ -204,6 +233,15 @@ export async function verifyWebsiteReadings(
     }
   }
 
+  // The price is matched against the copy by rule; Jev only answers
+  // whether the copy states a price for the offer at all.
+  const priceFact = await getClientFact(engagementId, "offerPrice");
+  const proposedPrice =
+    priceFact && priceFact.source === "llm" && priceFact.status === "suggested" && typeof priceFact.value === "string" && priceFact.value.trim()
+      ? priceFact.value
+      : null;
+  const priceInCopy = proposedPrice ? priceStatedInCopy(proposedPrice, corpus.value) : false;
+
   // Classify the vertical when there's no answer from the list yet: no
   // fact, or an unscored reading / free-text account value that isn't a
   // listed id. A listed account value or a human's answer is left alone.
@@ -212,13 +250,23 @@ export async function verifyWebsiteReadings(
     !verticalFact ||
     (verticalFact.status === "suggested" && !(verticalFact.source !== "llm" && isListedVertical(String(verticalFact.value))));
 
-  if (candidates.length === 0 && !classifyVertical) return { verified: [], skipped: true };
+  if (candidates.length === 0 && !classifyVertical && !proposedPrice) return { verified: [], skipped: true };
 
   const state: Record<string, unknown> = { siteCopy: corpus.value };
   const questions: FieldQuestionMap = {};
   for (const { factKey, value } of candidates) {
     state[`proposed${factKey.charAt(0).toUpperCase()}${factKey.slice(1)}`] = value;
     questions[`${factKey}Verification`] = { type: "score", instructions: WEBSITE_READING_PROMPTS[factKey], criteria: SINGLE_VALUE_LEVELS };
+  }
+  if (proposedPrice && priceInCopy) {
+    questions.statesPrice = {
+      type: "noul",
+      instructions: "Does the site copy state a price for the main offer it sells?",
+      criteria: {
+        true: "The copy gives what the offer costs (a price, a monthly fee, a payment plan).",
+        false: "No price for the offer is given; any numbers are results, stats, dates or something else.",
+      },
+    };
   }
   if (classifyVertical) {
     questions.offerVertical = {
@@ -228,7 +276,10 @@ export async function verifyWebsiteReadings(
     };
   }
 
-  const result = await askJev({ state, questions, reading: { engagementId, purpose: "verify-website" } });
+  const result =
+    Object.keys(questions).length > 0
+      ? await askJev({ state, questions, reading: { engagementId, purpose: "verify-website" } })
+      : { model: "none", answers: {} as Awaited<ReturnType<typeof askJev>>["answers"] };
 
   const verified: string[] = [];
   const verticalAnswer = result.answers.offerVertical;
@@ -253,6 +304,22 @@ export async function verifyWebsiteReadings(
       evidence: `Read from site copy by Claude, scored ${answer.score.toFixed(2)}/${SINGLE_VALUE_LEVELS.length - 1} by Jev (peakedness ${(answer.confidence * 100).toFixed(0)}%; model ${result.model}).`,
     });
     verified.push(factKey);
+  }
+
+  if (proposedPrice) {
+    const answer = result.answers.statesPrice;
+    const confidence = !priceInCopy ? 0 : answer && answer.type === "noul" ? Math.round(answer.noul * 100) : undefined;
+    if (confidence !== undefined) {
+      await upsertClientFact(engagementId, "offerPrice", proposedPrice, {
+        source: "jev",
+        sourceDetail: "rawVoiceCorpus",
+        confidence,
+        evidence: priceInCopy
+          ? `Read from site copy by Claude; the amount appears in the copy, and Jev put ${confidence}% on the copy stating a price for the offer (model ${result.model}).`
+          : "Read from site copy by Claude, but that amount doesn't appear anywhere in the copy.",
+      });
+      verified.push("offerPrice");
+    }
   }
   return { verified, skipped: false };
 }
@@ -445,12 +512,13 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
   if (wantVoice) {
     questions.voiceTone = {
       type: "choice",
-      instructions: "Based on this website's marketing copy, what tone best characterizes their cold outreach and brand messaging?",
+      instructions: "From this website's marketing copy, which tone best fits this business's cold outreach and brand messaging? Pick none if no single tone clearly fits.",
       criteria: {
         Professional: "Corporate, formal, authoritative, and structured copy.",
         Direct: "Concise, results-oriented, pitch-focused copy with zero fluff.",
         Casual: "Conversational, friendly, approachable, and lighthearted copy.",
         Warm: "Empathetic, consultative, relationship-first copy.",
+        [NONE_OF_THESE]: "None of these: the copy mixes tones, or is too thin to tell.",
       },
     };
   }
@@ -528,7 +596,7 @@ Only include ICPs the copy is clearly written for; return an empty list if none 
   }
 
   const toneAnswer = answers.voiceTone;
-  const toneChosen = toneAnswer && toneAnswer.type === "choice" ? toneAnswer : null;
+  const toneChosen = toneAnswer && toneAnswer.type === "choice" && toneAnswer.choice !== NONE_OF_THESE ? toneAnswer : null;
   // No tone from Jev, no voice profile: a default tone is never stored as
   // read from the site (the setup screen offers its own marked default).
   if (wantVoice && toneChosen) {
@@ -659,7 +727,7 @@ export async function resolveDeepSiteReadings(engagementId: string): Promise<{ r
       const confidence = Math.round(offerAnswer.confidence * 100);
       const evidence = `Chosen by Jev as the offer people book a call about, from ${tierList.length} offers on the site (model ${result.model}).`;
       await upsertClientFact(engagementId, "offerName", tier.name, { source: "jev", sourceDetail: "offerTiers", confidence, evidence });
-      if (tier.price) await upsertClientFact(engagementId, "offerPrice", tier.price, { source: "jev", sourceDetail: "offerTiers", confidence, evidence });
+      if (tier.price && priceStatedInCopy(tier.price, corpus.value)) await upsertClientFact(engagementId, "offerPrice", tier.price, { source: "jev", sourceDetail: "offerTiers", confidence, evidence });
       resolved.push("offerName");
     }
   }

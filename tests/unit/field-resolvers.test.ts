@@ -9,7 +9,7 @@ import { askJev } from "@/lib/jev";
 import { callClaude } from "@/lib/llm";
 import { getClientFact, upsertClientFact } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
-import { resolveColdOpenDerivedFields, resolveDeepSiteReadings, verifyWebsiteReadings } from "@/lib/field-resolvers";
+import { priceStatedInCopy, resolveColdOpenDerivedFields, resolveDeepSiteReadings, verifyWebsiteReadings } from "@/lib/field-resolvers";
 
 type Fact = { key: string; value: unknown; source: string; status: string; confidence: number | null };
 
@@ -188,6 +188,15 @@ describe("resolveColdOpenDerivedFields sizing", () => {
   });
 });
 
+describe("priceStatedInCopy", () => {
+  it("matches amounts however they're written", () => {
+    expect(priceStatedInCopy("$1,997", "Only 1997 dollars")).toBe(true);
+    expect(priceStatedInCopy("$499/mo", "Plans from $499 a month")).toBe(true);
+    expect(priceStatedInCopy("$2,500", "Join 2,000 founders")).toBe(false);
+    expect(priceStatedInCopy("Contact us", "$99")).toBe(false);
+  });
+});
+
 describe("verifyWebsiteReadings", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -206,20 +215,31 @@ describe("verifyWebsiteReadings", () => {
       model: "jev-latest",
       answers: {
         offerNameVerification: { type: "score", score: 4, confidence: 0.8, legend: {}, probabilities: {} },
-        offerPriceVerification: { type: "score", score: 1, confidence: 0.9, legend: {}, probabilities: {} },
+        statesPrice: { type: "noul", noul: 0.9 },
       },
     } as any);
 
     const result = await verifyWebsiteReadings("e1");
 
     expect(result.verified.sort()).toEqual(["offerName", "offerPrice"]);
-    expect(Object.keys(vi.mocked(askJev).mock.calls[0][0].questions).sort()).toEqual([
-      "offerNameVerification",
-      "offerPriceVerification",
-    ]);
+    // The price isn't scored by Jev: it's matched by rule, and Jev only
+    // says whether the copy states a price at all.
+    expect(Object.keys(vi.mocked(askJev).mock.calls[0][0].questions).sort()).toEqual(["offerNameVerification", "statesPrice"]);
     expect(upsertFor("offerName")?.[3]).toMatchObject({ source: "jev", confidence: 80 });
-    // 1/4 x 0.9 = 22.5 -> 23: below the auto-apply threshold
-    expect(upsertFor("offerPrice")?.[3]).toMatchObject({ source: "jev", confidence: 23 });
+    expect(upsertFor("offerPrice")?.[3]).toMatchObject({ source: "jev", confidence: 90 });
+  });
+
+  it("gives an invented price no confidence, without asking Jev about it", async () => {
+    factStore({
+      rawVoiceCorpus: { value: "Acme Coaching — book a call to hear pricing. 400 founders helped." },
+      offerPrice: { source: "llm", value: "$4,000" },
+      offerVertical: { source: "account", value: "coaching_consulting" },
+    });
+    const result = await verifyWebsiteReadings("e1");
+
+    expect(result.verified).toEqual(["offerPrice"]);
+    expect(askJev).not.toHaveBeenCalled();
+    expect(upsertFor("offerPrice")?.[3]).toMatchObject({ source: "jev", confidence: 0 });
   });
 
   it("classifies the vertical into the fixed list, replacing a free-text reading", async () => {
@@ -252,7 +272,7 @@ describe("resolveDeepSiteReadings", () => {
 
   it("scores objections, picks the main offer among tiers and the sales-call link among several", async () => {
     factStore({
-      rawVoiceCorpus: { value: "site copy" },
+      rawVoiceCorpus: { value: "Starter $99. Scale Sprint $2,500." },
       siteObjections: { value: ["Is it worth it?"], source: "llm" },
       offerTiers: { value: [{ name: "Starter", price: "$99" }, { name: "Scale Sprint", price: "$2,500" }], source: "llm" },
       bookingLinks: { value: [{ url: "https://calendly.com/a/support", platform: "calendly" }, { url: "https://calendly.com/a/strategy", platform: "calendly", event: "strategy" }] },
