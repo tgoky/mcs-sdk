@@ -41,6 +41,7 @@ import type { RepEngineId } from "@/models/schema";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
+import { Popover } from "./review-kit";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -971,40 +972,32 @@ function ChipRow({
   );
 }
 
-// ── Popover ────────────────────────────────────────────────────────────
-//
-// A small anchored editor, opened from a "Change" action on a finding.
-
-function Popover({
-  label,
-  title,
-  strong,
-  children,
+/** A social handle reads by its platform's own mark, not a pill with the
+ * platform spelled out in text — the logo already says which one. */
+function HandleRow({
+  items,
+  onToggle,
 }: {
-  label: string;
-  title: string;
-  strong?: boolean;
-  children: (close: () => void) => ReactNode;
+  items: { platform: string; value: string; on: boolean; tier: TrustTier; sources: string[] }[];
+  onToggle: (i: number) => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "text-[13px] font-medium underline decoration-dashed underline-offset-4 cursor-pointer",
-          strong ? "text-[var(--text-primary)] decoration-[var(--text-muted)]" : "text-[var(--text-secondary)] decoration-[var(--border)] hover:text-[var(--text-primary)]",
-        )}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="absolute right-0 z-20 mt-2 w-[320px] max-w-[80vw] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-elevation-2">
-          <p className="mb-2.5 text-[13px] font-medium text-[var(--text-primary)]">{title}</p>
-          {children(() => setOpen(false))}
-        </div>
-      )}
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      {items.map((h, i) => (
+        <button
+          key={`${h.platform}-${i}`}
+          type="button"
+          onClick={() => onToggle(i)}
+          title={`From ${h.sources.join(", ")}${h.on ? ". Tap to stop watching for it." : ". Tap to watch for it."}`}
+          className={cn(
+            "inline-flex min-w-0 max-w-full items-center gap-1.5 text-[13px] transition-colors cursor-pointer",
+            h.on ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] line-through",
+          )}
+        >
+          <PlatformLogo provider={h.platform} size={16} />
+          <span className="min-w-0 truncate">{h.value}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -1014,18 +1007,16 @@ function Popover({
 function StillNeeded({ items }: { items: { key: string; label: ReactNode; action: ReactNode }[] }) {
   if (items.length === 0) return null;
   return (
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface-prefill)]/60 p-4 @md:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-[var(--ink-foreground)]">
-          <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />
-        </span>
+    <section className="space-y-3">
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--text-prefill-accent)]" strokeWidth={2.5} />
         <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">
           {items.length === 1 ? "One thing still needed" : `${items.length} things still needed`}
         </h2>
       </div>
-      <ul className="space-y-3">
+      <ul className="space-y-3 divide-y divide-[var(--border)]">
         {items.map((it) => (
-          <li key={it.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+          <li key={it.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 pt-3 first:pt-0">
             <p className="min-w-0 text-[14px] leading-relaxed text-[var(--text-secondary)]">{it.label}</p>
             <div className="shrink-0">{it.action}</div>
           </li>
@@ -1250,13 +1241,8 @@ function Review({
         count={handleCount}
         noun={handleCount === 1 ? "social handle" : "social handles"}
         body={
-          <ChipRow
-            items={draft.handles.map((h) => ({
-              value: `${h.platform}: ${h.value}`,
-              on: h.on,
-              guess: h.tier === "likely",
-              hint: `From ${h.sources.join(", ")}`,
-            }))}
+          <HandleRow
+            items={draft.handles}
             onToggle={(i) => set((d) => ({ ...d, handles: d.handles.map((h, j) => (j === i ? { ...h, on: !h.on } : h)) }), "handles")}
           />
         }
@@ -1802,26 +1788,24 @@ function ApproveBar({
   cancelLabel: string;
 }) {
   return (
-    <div className="sticky bottom-0 z-10 mt-8 border-t border-[var(--border)] bg-background/95 py-4 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
-          {error ? (
-            <p className="flex items-center gap-2 text-[13px] text-[var(--error)]">
-              <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
-            </p>
-          ) : note ? (
-            <p className="text-[13px] text-[var(--text-muted)]">{note}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={saving}>
-            {cancelLabel}
-          </Button>
-          <Button onClick={onApprove} disabled={saving || disabled}>
-            {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {label}
-          </Button>
-        </div>
+    <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--border)] pt-4">
+      <div className="min-w-0 flex-1">
+        {error ? (
+          <p className="flex items-center gap-2 text-[13px] text-[var(--error)]">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+          </p>
+        ) : note ? (
+          <p className="text-[13px] text-[var(--text-muted)]">{note}</p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>
+          {cancelLabel}
+        </Button>
+        <Button onClick={onApprove} disabled={saving || disabled}>
+          {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {label}
+        </Button>
       </div>
     </div>
   );

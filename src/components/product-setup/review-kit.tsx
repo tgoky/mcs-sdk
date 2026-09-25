@@ -338,31 +338,29 @@ export function ApproveBar({
   label?: string;
 }) {
   return (
-    <div className="sticky bottom-0 z-20 mt-8 bg-background/90 px-4 py-3 backdrop-blur-md shadow-[0_-12px_24px_-18px_rgba(0,0,0,0.35)]">
-      <div className="flex flex-col gap-2.5 @3xl:flex-row @3xl:items-center @3xl:gap-4">
-        <div className="min-w-0 flex-1 text-sm">
-          {error ? (
-            <p className="flex items-center gap-2 text-[var(--error)]">
-              <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
-            </p>
-          ) : note ? (
-            <p className="text-[var(--text-secondary)]">{note}</p>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={onCancel} disabled={saving} className="hidden h-9 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer @md:inline">
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onApprove}
-            disabled={saving || disabled}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--ink)] px-5 text-sm font-medium text-[var(--ink-foreground)] transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-          >
-            {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-            {label}
-          </button>
-        </div>
+    <div className="mt-8 flex flex-col gap-2.5 border-t border-[var(--border)] pt-4 @3xl:flex-row @3xl:items-center @3xl:gap-4">
+      <div className="min-w-0 flex-1 text-sm">
+        {error ? (
+          <p className="flex items-center gap-2 text-[var(--error)]">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+          </p>
+        ) : note ? (
+          <p className="text-[var(--text-secondary)]">{note}</p>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button type="button" onClick={onCancel} disabled={saving} className="hidden h-9 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer @md:inline">
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onApprove}
+          disabled={saving || disabled}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--ink)] px-5 text-sm font-medium text-[var(--ink-foreground)] transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+        >
+          {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+          {label}
+        </button>
       </div>
     </div>
   );

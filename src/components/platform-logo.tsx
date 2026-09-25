@@ -34,6 +34,17 @@ const SIMPLE_ICON_SLUGS: Record<string, string> = {
   nextjs_vercel: "vercel",
   twilio: "twilio",
   google_sheets: "googlesheets",
+  // Reputation Manager's social handles (rep-setup.tsx's HandleRow) — the
+  // platform strings its handle finder stores (see rep-setup/types.ts).
+  x: "x",
+  youtube: "youtube",
+  linkedin: "linkedin",
+  substack: "substack",
+  trustpilot: "trustpilot",
+  instagram: "instagram",
+  tiktok: "tiktok",
+  facebook: "facebook",
+  reddit: "reddit",
 };
 
 // Fixes the real bug: the connections page's <img src={`/logos/${provider}.png`}>
