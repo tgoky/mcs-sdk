@@ -20,7 +20,7 @@
 // refusal into an explicit "yes, do it anyway."
 
 import { useState } from "react";
-import { Mail, User, Loader2, CheckCircle2, AlertTriangle, X as XIcon, ArrowRight } from "lucide-react";
+import { Mail, User, Loader2, CheckCircle2, AlertTriangle, X as XIcon, ArrowUpRight } from "lucide-react";
 import { Modal } from "@/components/modal";
 
 type PreviewState = { actions: string[]; warnings: string[] } | null;
@@ -216,7 +216,7 @@ export function PileOnManualEnrollModal({
                   disabled={!emailValid || step === "previewing"}
                   className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {step === "previewing" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                  {step === "previewing" ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
                   Preview
                 </button>
               )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowRight, LayoutGrid, List } from "lucide-react";
+import { Plus, ArrowUpRight, LayoutGrid, List } from "lucide-react";
 import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import type { Workspace } from "@/lib/workspace";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -325,7 +325,7 @@ function WorkspaceRow({
                 className="inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
               >
                 <span>Enter</span>
-                <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                <ArrowUpRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
               </button>
             </form>
           )}

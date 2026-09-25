@@ -9,7 +9,7 @@
 // literally showing up on screen.
 
 import React from "react";
-import { AlertTriangle, HelpCircle, ArrowRight, Target } from "lucide-react";
+import { AlertTriangle, HelpCircle, ArrowUpRight, Target } from "lucide-react";
 
 // Section headings the audit-engine prompt reliably produces (severity
 // verdict, data-gap callouts, next-step guidance) get a small icon so they
@@ -20,7 +20,7 @@ import { AlertTriangle, HelpCircle, ArrowRight, Target } from "lucide-react";
 const HEADING_ICONS: { pattern: RegExp; Icon: React.ElementType }[] = [
   { pattern: /severity/i, Icon: AlertTriangle },
   { pattern: /data gaps?/i, Icon: HelpCircle },
-  { pattern: /(what happens next|next steps)/i, Icon: ArrowRight },
+  { pattern: /(what happens next|next steps)/i, Icon: ArrowUpRight },
   { pattern: /(recommend|action items?)/i, Icon: Target },
 ];
 

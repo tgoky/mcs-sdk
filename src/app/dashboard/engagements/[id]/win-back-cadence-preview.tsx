@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, MessageSquare, ChevronDown, Loader2, ArrowRight } from "lucide-react";
+import { Mail, MessageSquare, ChevronDown, Loader2, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -74,7 +74,7 @@ export function WinBackCadencePreview({
                 disabled={generating}
                 className="hover-lift press-settle shadow-elevation-1 w-full flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
-                {generating ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                {generating ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
                 {generating ? "Generating…" : "Generate cadence now"}
               </button>
               {generateError && (

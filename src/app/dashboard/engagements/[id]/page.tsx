@@ -20,7 +20,7 @@ import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { WorkerId } from "@/lib/worker-registry";
 import {
-  ArrowRight,
+  ArrowUpRight,
   Server,
   ChevronLeft,
   Megaphone
@@ -369,7 +369,7 @@ export default async function EngagementDetailPage({
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Three guided steps to improve what Google and AI assistants say about this client: their website, the press, and Reddit.</p>
               </div>
             </div>
-            <ArrowRight size={16} className="text-zinc-400 shrink-0" />
+            <ArrowUpRight size={16} className="text-zinc-400 shrink-0" />
           </Link>
         )}
 

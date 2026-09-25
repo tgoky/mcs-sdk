@@ -17,7 +17,7 @@
 
 import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, KeyRound, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, KeyRound, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlatformLogo } from "@/components/platform-logo";
 import type { SetupTool } from "@/lib/showtime-setup/catalog";
@@ -286,7 +286,7 @@ function ToolCard({
                 onClick={() => setMode("connect")}
                 className="flex w-full items-center justify-between py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               >
-                Connect another account <ArrowRight className="h-3.5 w-3.5" />
+                Connect another account <ArrowUpRight className="h-3.5 w-3.5" />
               </button>
             </div>
           )}

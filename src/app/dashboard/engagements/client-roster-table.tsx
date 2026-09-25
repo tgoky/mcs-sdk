@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { List, MoreHorizontal, Pencil, Palette, Check, X, Loader2, Zap, ArrowRight } from "lucide-react";
+import { List, MoreHorizontal, Pencil, Palette, Check, X, Loader2, Zap, ArrowUpRight } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -429,7 +429,7 @@ export function ClientRosterTable({
                   <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
                     {new Date(eng.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
-                  <ArrowRight
+                  <ArrowUpRight
                     size={13}
                     className="text-zinc-400 group-hover/row:text-zinc-600 dark:group-hover/row:text-zinc-200 group-hover/row:translate-x-0.5 transition-all opacity-0 group-hover/row:opacity-100 shrink-0"
                   />

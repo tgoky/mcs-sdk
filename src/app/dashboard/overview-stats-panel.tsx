@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   ChevronRight,
   X,
-  ArrowRight,
+  ArrowUpRight,
   AlertCircle,
   CheckCircle2,
   Check,
@@ -209,7 +209,7 @@ export function OverviewStatsPanel({
               href="/dashboard/runs"
               className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
             >
-              View all executions <ArrowRight className="w-3 h-3" />
+              View all executions <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
         </div>
@@ -477,7 +477,7 @@ export function OverviewStatsPanel({
               href="/dashboard/queue"
               className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
             >
-              View full Queue <ArrowRight className="w-3 h-3" />
+              View full Queue <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
         </div>

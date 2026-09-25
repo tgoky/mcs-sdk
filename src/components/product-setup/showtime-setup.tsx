@@ -895,7 +895,7 @@ function Welcome({
           ) : (
             <motion.div key="cta" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t pt-6">
               <Button size="lg" className="h-11 px-5 text-[15px]" onClick={onActivate} disabled={!canActivate}>
-                {skills.length > 1 ? `Set up ${skills.length} skills` : "Set it up"} <ArrowRight />
+                {skills.length > 1 ? `Set up ${skills.length} skills` : "Set it up"} <ArrowUpRight />
               </Button>
               <p className="text-[13px] text-[var(--text-muted)]">
                 {skills.length === 0

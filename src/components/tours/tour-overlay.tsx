@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFloating, offset, flip, shift, arrow, autoUpdate, FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import { ArrowRight, ArrowLeft, X, Loader2 } from "lucide-react";
+import { ArrowUpRight, ArrowLeft, X, Loader2 } from "lucide-react";
 import { useTour } from "./tour-provider";
 
 const SPOTLIGHT_PADDING = 8;
@@ -64,7 +64,7 @@ export function TourOverlay() {
     function onKeyDown(e: KeyboardEvent) {
       if (!activeTourId) return;
       if (e.key === "Escape") close();
-      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowUpRight") next();
       if (e.key === "ArrowLeft") back();
     }
     document.addEventListener("keydown", onKeyDown);
@@ -167,7 +167,7 @@ export function TourOverlay() {
                   onClick={next}
                   className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-3 py-1.5 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
                 >
-                  {isLast ? "Finish" : "Next"} <ArrowRight size={12} />
+                  {isLast ? "Finish" : "Next"} <ArrowUpRight size={12} />
                 </button>
               </div>
             </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Radio, ChevronRight, ArrowRight } from "lucide-react";
+import { Radio, ChevronRight, ArrowUpRight } from "lucide-react";
 
 interface RecentEngagement {
   engagementId: string;
@@ -91,7 +91,7 @@ export function ConnectProviderMenu({ recent }: { recent: RecentEngagement[] }) 
             onClick={() => setOpen(false)}
             className="flex items-center gap-1 border-t border-zinc-100 dark:border-zinc-800 px-3 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
           >
-            See all clients <ArrowRight className="w-3 h-3" />
+            See all clients <ArrowUpRight className="w-3 h-3" />
           </Link>
         </div>
       )}

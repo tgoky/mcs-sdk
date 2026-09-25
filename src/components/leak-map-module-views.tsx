@@ -13,7 +13,7 @@ import {
   Maximize2,
   ArrowUpRight,
   ArrowLeft,
-  ArrowRight,
+  ArrowUpRight,
   Ban,
   RotateCcw,
   PauseCircle,
@@ -588,7 +588,7 @@ export function LeakMapModuleView({
                   disabled={clampedPage >= pageCount - 1}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover-lift press-settle"
                 >
-                  Next <ArrowRight className="w-3 h-3" />
+                  Next <ArrowUpRight className="w-3 h-3" />
                 </button>
               </div>
             </div>

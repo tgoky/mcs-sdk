@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { BOOKING_PLATFORM_LABELS, BRIEF_DESTINATION_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS } from "@/lib/copy";
 import { STEPS } from "../constants";
 import { PlatformLogo } from "../form-fields";
@@ -56,7 +56,7 @@ export function ConfirmStep({
                         onClick={() => setStep(err.step)}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-sm transition-all cursor-pointer border bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 shrink-0 ml-3"
                       >
-                        Jump to Step <ArrowRight className="w-3 h-3" />
+                        Jump to Step <ArrowUpRight className="w-3 h-3" />
                       </button>
                     </div>
                   ))}

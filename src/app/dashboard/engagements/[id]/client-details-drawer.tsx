@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowUpRight, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { TriggerSkillButton } from "./trigger-skill-button";
 
@@ -132,7 +132,7 @@ export function ClientDetailsDrawer({
               href={`/dashboard/engagements/${data.engagementId}/skills/pin-down?configure=1`}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-white hover:text-zinc-300 transition-colors"
             >
-              Open Show Rate Setup settings <ArrowRight size={13} />
+              Open Show Rate Setup settings <ArrowUpRight size={13} />
             </Link>
           </Section>
 

@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, XCircle, Loader2, AlertCircle, MinusCircle, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowUpRight, CheckCircle2, XCircle, Loader2, AlertCircle, MinusCircle, Calendar } from "lucide-react";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { phaseLabel, runStatusLabel, runStatusColor } from "@/lib/copy";
@@ -308,7 +308,7 @@ export function RunHistoryPanel({
                       <div className="shrink-0 flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 pt-0.5" title={new Date(run.startedAt).toLocaleString()}>
                         <AnySkillBadge skill={run.skillName} size={24} enabled={true} />
                         <span className="whitespace-nowrap">{relativeTime(String(run.startedAt))}</span>
-                        <ArrowRight className={cn("w-3.5 h-3.5 transition-all", isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5")} />
+                        <ArrowUpRight className={cn("w-3.5 h-3.5 transition-all", isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5")} />
                         {/* The menu renders in a portal, but React still
                             bubbles its clicks through this row — stop them
                             here so picking an action doesn't also open the

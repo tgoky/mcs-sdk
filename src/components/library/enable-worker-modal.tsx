@@ -33,7 +33,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, ArrowRight, Settings2, MessageCircle } from "lucide-react";
+import { Loader2, ArrowUpRight, Settings2, MessageCircle } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
 import { TeammatesChat } from "@/app/dashboard/teammates/teammates-chat";
@@ -159,7 +159,7 @@ export function EnablePileOnModal({
                 <p>{error}</p>
                 {gateBridgeHref && (
                   <Link href={gateBridgeHref} className="inline-flex items-center gap-1 font-bold underline underline-offset-2 hover:text-rose-900 dark:hover:text-rose-200 transition-colors">
-                    Finish setup <ArrowRight size={11} />
+                    Finish setup <ArrowUpRight size={11} />
                   </Link>
                 )}
               </div>
@@ -180,7 +180,7 @@ export function EnablePileOnModal({
                 disabled={pending}
                 className="flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3.5 py-1.5 text-xs font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 cursor-pointer"
               >
-                {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                {pending ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
                 Enable {pileOnName}
               </button>
             </div>

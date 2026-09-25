@@ -9,7 +9,7 @@ import {
   Loader2,
   AlertCircle,
   Hash,
-  ArrowRight,
+  ArrowUpRight,
   ArrowLeft,
   ArrowUpRight,
   Clock,
@@ -420,7 +420,7 @@ function RunRow({
 
       <td className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
-          <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
+          <ArrowUpRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-2px] group-hover:translate-x-0 duration-150" />
           <ActionPanel
             open={panelOpen}
             onOpenChange={setPanelOpen}
@@ -885,7 +885,7 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
               disabled={clampedPage >= pageCount - 1}
               className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-mono font-bold rounded border border-border text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
-              Next <ArrowRight className="w-2.5 h-2.5" />
+              Next <ArrowUpRight className="w-2.5 h-2.5" />
             </button>
           </div>
         </div>

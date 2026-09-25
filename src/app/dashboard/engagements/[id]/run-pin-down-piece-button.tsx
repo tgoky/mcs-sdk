@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowRight } from "lucide-react";
+import { Loader2, ArrowUpRight } from "lucide-react";
 import { useToast } from "@/components/toast/toast-provider";
 
 export function RunPinDownPieceButton({
@@ -82,7 +82,7 @@ export function RunPinDownPieceButton({
           disabled={state === "running" || !value.trim()}
           className="hover-lift press-settle shadow-elevation-1 flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white px-3 py-1.5 text-sm font-semibold text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
         >
-          {state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+          {state === "running" ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
           {buttonLabel}
         </button>
       </div>
@@ -99,7 +99,7 @@ export function RunPinDownPieceButton({
               href={`/dashboard/runs/${runId}`}
               className="inline-flex items-center gap-1 underline underline-offset-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 font-bold ml-auto transition-colors"
             >
-              View run <ArrowRight className="w-3 h-3" />
+              View run <ArrowUpRight className="w-3 h-3" />
             </a>
           )}
         </p>

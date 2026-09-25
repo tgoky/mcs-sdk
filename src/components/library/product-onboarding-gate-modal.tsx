@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Wand2 } from "lucide-react";
+import { ArrowUpRight, Wand2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import type { ProductId } from "@/lib/product-catalog";
 
@@ -71,7 +71,7 @@ export function ProductOnboardingGateModal({
             onClick={() => router.push(bridgeHref)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer"
           >
-            Finish setup <ArrowRight size={13} />
+            Finish setup <ArrowUpRight size={13} />
           </button>
           <button
             type="button"

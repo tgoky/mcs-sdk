@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, X, AlertTriangle, ArrowRight } from "lucide-react";
+import { Settings, X, AlertTriangle, ArrowUpRight } from "lucide-react";
 import type { WorkerDefinition, WorkerId } from "@/lib/worker-registry";
 import { workerSettingsHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
@@ -267,7 +267,7 @@ export function WorkerCard({
       href={onboardingBridgeHref ?? "#"}
       className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors whitespace-nowrap"
     >
-      Needs {onboardingWorkerName} first <ArrowRight size={11} />
+      Needs {onboardingWorkerName} first <ArrowUpRight size={11} />
     </Link>
   ) : (
     <button

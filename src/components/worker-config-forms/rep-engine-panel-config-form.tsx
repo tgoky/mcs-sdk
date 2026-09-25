@@ -10,7 +10,7 @@
 // behavior can't drift between them.
 
 import { useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { InputField, TextAreaField } from "@/app/dashboard/engagements/new/form-fields";
 
 export function RepEnginePanelConfigForm({
@@ -92,7 +92,7 @@ export function RepEnginePanelConfigForm({
           ✓ {message}
           {runId && (
             <a href={`/dashboard/runs/${runId}`} className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-200">
-              View run <ArrowRight className="w-3 h-3" />
+              View run <ArrowUpRight className="w-3 h-3" />
             </a>
           )}
         </p>

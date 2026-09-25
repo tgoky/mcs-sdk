@@ -3,7 +3,7 @@ import { projects, projectEngagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { and, eq, isNull, desc, sql } from "drizzle-orm";
 import Link from "next/link";
-import { Plus, FolderKanban, ArrowRight } from "lucide-react";
+import { Plus, FolderKanban, ArrowUpRight } from "lucide-react";
 import { SKILLS, SKILL_INFO, type SkillName } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { SkillOrbitalRing } from "./skill-orbital-ring";
@@ -141,7 +141,7 @@ export default async function ProjectsPage() {
 
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-mono text-xs text-zinc-400">
                       <span>Manage Archetype</span>
-                      <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                      <ArrowUpRight size={14} className="group-hover:translate-x-1 transition-transform" />
                     </div>
                   </Link>
                 );

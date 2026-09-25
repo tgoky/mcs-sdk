@@ -35,7 +35,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Compass, PlayCircle, ListChecks, X, ArrowRight } from "lucide-react";
+import { Compass, PlayCircle, ListChecks, X, ArrowUpRight } from "lucide-react";
 import { useTour } from "./tour-provider";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 
@@ -153,7 +153,7 @@ export function TourWelcomeNudge({
                 Dashboard, Library, and every worker. A few minutes, start to finish.
               </span>
             </span>
-            <ArrowRight
+            <ArrowUpRight
               size={16}
               className="shrink-0 text-zinc-400 dark:text-zinc-500 transition-transform group-hover:translate-x-0.5"
             />
@@ -174,7 +174,7 @@ export function TourWelcomeNudge({
                   {setupAction.body}
                 </span>
               </span>
-              <ArrowRight
+              <ArrowUpRight
                 size={16}
                 className="shrink-0 text-zinc-300 dark:text-zinc-700 transition-transform group-hover:translate-x-0.5"
               />

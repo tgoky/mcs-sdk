@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowUpRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { PlatformLogo } from "@/components/platform-logo";
@@ -418,7 +418,7 @@ function Welcome({
           ) : (
             <motion.div key="cta" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t pt-6">
               <Button size="lg" className="h-11 px-5 text-[15px]" onClick={onActivate} disabled={!ready}>
-                Set it up <ArrowRight />
+                Set it up <ArrowUpRight />
               </Button>
               <p className="text-[13px] text-[var(--text-muted)]">{ready ? "About a minute. We only read." : "Paste your key to start."}</p>
               <span className="ml-auto flex items-center gap-4">
