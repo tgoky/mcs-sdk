@@ -6,7 +6,6 @@ import { getClientFact, getClientFacts } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement, seedPrimaryDomainFromUrl } from "@/lib/client-profile";
 import { discoverClient } from "@/lib/discover-client";
 import { hasCredential, listVaultCredentials } from "@/lib/credentials";
-import { applyResolvableFacts } from "@/lib/field-writeback";
 import { verticalLabel } from "@/lib/verticals";
 import { SHOWTIME_TOOL_GROUPS, SHOWTIME_TOOLS, findShowtimeTool } from "@/lib/showtime-setup/catalog";
 import { showtimePickTargets } from "@/lib/showtime-setup/picks";
@@ -181,7 +180,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           if (read && read.status !== "rejected") step({ id: "account-read", label: "Read your business from your tools", status: "done" });
         }
 
-        await applyResolvableFacts(id).catch((err) => console.error(`[setup/showtime/activate] applyResolvableFacts failed for ${id}:`, err));
+        // Nothing is promoted into config here: what was found is shown in
+        // the review, and applied when the person presses Save.
 
         // ── 4. Account-specific ids ──
         const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, id)).limit(1);

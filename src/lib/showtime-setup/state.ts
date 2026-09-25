@@ -7,8 +7,7 @@
 //
 // A saved value always wins and reads as done. Otherwise the fact store
 // fills in, and its tier says how sure the app is. Nothing here writes to
-// the client's config except applyResolvableFacts, which the old dossier
-// GET already ran on every open.
+// the client's config: facts reach it when the person presses Save.
 
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
@@ -17,7 +16,7 @@ import { getClientFacts, type ClientFact } from "@/lib/client-facts";
 import { getPrimaryDomainForEngagement } from "@/lib/client-profile";
 import { hasCredential, listEngagementsUsingVaultCredential, listVaultCredentials } from "@/lib/credentials";
 import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
-import { applyResolvableFacts, type OfferDetails } from "@/lib/field-writeback";
+import type { OfferDetails } from "@/lib/field-writeback";
 import { factTier } from "@/lib/fact-trust";
 import { getEngagementSkillStates } from "@/lib/engagement-skills";
 import { SHOWTIME_TOOLS, type ToolGroupId } from "./catalog";
@@ -66,10 +65,8 @@ function listOf<T>(fact: ClientFact | undefined): T[] {
 const ASK: SetupValue = { value: null, tier: "ask", source: null, sourceDetail: null, evidence: null, confidence: null };
 
 export async function loadShowtimeSetupState(engagementId: string, workspaceId: string): Promise<ShowtimeSetupState | null> {
-  // Same promotion the old dossier GET ran: trusted facts land in config.
-  await applyResolvableFacts(engagementId).catch((err) =>
-    console.error(`[showtime-setup] applyResolvableFacts failed for ${engagementId}:`, err)
-  );
+  // Loading the screen only reads. Unsaved facts are shown as what we
+  // found (fromFact); they reach config when the person presses Save.
 
   const [row] = await db
     .select({

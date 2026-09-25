@@ -31,6 +31,7 @@ import { isWorkerId, WORKER_REGISTRY, PRODUCT_ONBOARDING_WORKER_ID } from "@/lib
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isProductOnboarded } from "@/lib/product-onboarding";
 import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -106,6 +107,10 @@ export async function POST(
     // triggers the existing ProductOnboardingGateModal on the frontend,
     // which is about running the PRODUCT's onboarding worker, a different
     // thing from this worker's own missing fields.
+    // Enabling is the operator's own action, so trusted facts are promoted
+    // into config here, before the check reads it (the check itself never
+    // writes; see getMissingRequiredFields).
+    await applyResolvableFacts(id).catch((err) => console.error(`[workers/${workerId}/enable] field-writeback failed for ${id}:`, err));
     const missingFields = await getMissingRequiredFields(workerId, id);
     if (missingFields.length > 0) {
       return NextResponse.json(

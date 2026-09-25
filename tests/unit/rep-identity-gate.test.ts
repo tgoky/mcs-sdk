@@ -6,6 +6,7 @@ vi.mock("@/lib/credentials", () => ({ hasCredential: vi.fn() }));
 vi.mock("@/features/cold-open/server/config", () => ({ getColdOpenConfig: vi.fn() }));
 
 import { db } from "@/lib/db";
+import { applyResolvableFacts } from "@/lib/field-writeback";
 import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
 import { fakeDb } from "../helpers/fake-db";
 
@@ -35,5 +36,13 @@ describe("Reputation Manager identity gate", () => {
     Object.assign(db, fakeDb([]));
     const missing = await getMissingRequiredFields("rep-twitter-watch", "eng-1");
     expect(missing.map((m) => m.key)).toEqual(["repIdentityGraph"]);
+  });
+
+  it("only reads: a check never promotes facts into config", async () => {
+    // It runs from the run gate, page renders and status reads; a Jev
+    // reading must not fill a required field without anyone seeing it.
+    Object.assign(db, fakeDb([{ operatorName: "", soleAuthorityName: "" }]));
+    await getMissingRequiredFields("rep-onboarding", "eng-1");
+    expect(applyResolvableFacts).not.toHaveBeenCalled();
   });
 });

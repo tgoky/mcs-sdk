@@ -183,8 +183,8 @@ export async function runAccountReadings(engagementId: string): Promise<void> {
 
 /**
  * Everything that follows connecting a tool for a client: the deep pull
- * (read fresh, since the connection just changed), the readings, then
- * promoting whatever is now trusted into config. Meant for next/server's
+ * (read fresh, since the connection just changed) and the readings, stored
+ * as facts for the setup screens to show. Meant for next/server's
  * after(), so the person connecting never waits on it. Never throws.
  */
 export async function deepPullAfterConnect(engagementId: string, provider: string, credential?: string): Promise<void> {
@@ -192,6 +192,6 @@ export async function deepPullAfterConnect(engagementId: string, provider: strin
   const run = await runAccountIntel(engagementId, provider, { force: true, credential });
   if (!run.intel) return;
   await runAccountReadings(engagementId);
-  const { applyResolvableFacts } = await import("@/lib/field-writeback");
-  await applyResolvableFacts(engagementId).catch((err) => console.error(`[account-intel] writeback after ${provider} pull failed for ${engagementId}:`, err));
+  // Readings are stored as facts only. They reach config when the person
+  // saves a setup or confirms the fact, never from a background pull.
 }
