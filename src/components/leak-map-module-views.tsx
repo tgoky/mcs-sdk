@@ -13,7 +13,6 @@ import {
   Maximize2,
   ArrowUpRight,
   ArrowUpLeft,
-  ArrowUpRight,
   Ban,
   RotateCcw,
   PauseCircle,
