@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/toast-provider";
 import { useTour } from "@/components/tours/tour-provider";
@@ -1597,7 +1597,7 @@ function PinDownSettings({
           href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
-          Full Showtime setup <ArrowRight className="w-3 h-3" />
+          Full Showtime setup <ArrowUpRight className="w-3 h-3" />
         </a>
       </div>
 
