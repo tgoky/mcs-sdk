@@ -588,10 +588,10 @@ export function ShowtimeSetup({
 
   const shownGroups = SHOWTIME_TOOL_GROUPS.filter((g) => needs.groups.has(g.id) || needs.optionalGroups.has(g.id));
   const toolRows = (compact: boolean) => (
-  <div 
-    ref={toolsRef} 
+  <div
+    ref={toolsRef}
     className={cn(
-      "space-y-6 divide-y divide-[var(--border)]/40", 
+      "space-y-6 divide-y divide-[var(--border)]/40",
       compact && "space-y-4"
     )}
   >
@@ -1486,22 +1486,13 @@ function TestimonialsEditor({
   );
 }
 
-/** A labelled settings row: the name of the setting, then its value. */
-function SettingRow({ label, needed, children }: { label: string; needed?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-1 py-3 @md:grid-cols-[140px_1fr] @md:items-center @md:gap-5">
-      <p className="flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
-        {label}
-        {needed && <NeededMark />}
-      </p>
-      <div className="min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">{children}</div>
-    </div>
-  );
-}
-
 /** Marks a setting that's still empty and needed, where it sits. */
 function NeededMark() {
-  return <span className="rounded-full bg-[var(--surface-prefill)] px-1.5 py-px text-[10px] font-medium text-[var(--text-prefill-accent)]">Needed</span>;
+  return (
+    <span className="rounded-full bg-[var(--surface-prefill)] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--text-prefill-accent)]">
+      Needed
+    </span>
+  );
 }
 
 function ToggleSetting({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
@@ -1513,14 +1504,42 @@ function ToggleSetting({ on, onChange, label }: { on: boolean; onChange: (on: bo
   );
 }
 
-/** A settings group: a quiet title over one soft card of rows. Space, not
- * rules, separates rows, so the screen reads as settings rather than a
- * ruled page. */
-function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+/** A labelled settings row: the name of the setting, then its value. The
+ * label column sits at 160px on wide screens and aligns to the value's
+ * first baseline, so multi-line content doesn't float. */
+function SettingRow({ label, needed, children }: { label: string; needed?: boolean; children: React.ReactNode }) {
   return (
-    <section className="space-y-2">
-      <h2 className="px-1 text-[13px] font-medium text-[var(--text-secondary)]">{title}</h2>
-      <div className="px-1 @md:px-0 divide-y divide-[var(--border)]">{children}</div>
+    <div className="grid grid-cols-1 gap-1 py-3.5 @md:grid-cols-[160px_1fr] @md:items-baseline @md:gap-6">
+      <p className="flex items-baseline gap-1.5 text-[13px] text-[var(--text-muted)]">
+        {label}
+        {needed && <NeededMark />}
+      </p>
+      <div className="min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">{children}</div>
+    </div>
+  );
+}
+
+/** A settings group: a real header over a bordered card of rows. The card
+ * owns the padding and the rules; the header sits outside it so the group
+ * reads as its own section, not another row. */
+function SettingsGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="px-1">
+        <h2 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">{title}</h2>
+        {description && <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">{description}</p>}
+      </div>
+      <div className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 @md:px-5">
+        {children}
+      </div>
     </section>
   );
 }
@@ -1605,18 +1624,25 @@ function PinDownSettings({
     // own wrapper above — this settings-only view renders inside a
     // narrower panel, but the bar underneath it can still grow past one
     // line.
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
-        <p className="text-[13px] text-[var(--text-muted)]">{domain ? `Read from ${domain}` : `${data.buyer}'s confirmation page`}</p>
+    <div className="space-y-8 pb-10">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+        <div className="min-w-0">
+          <h1 className="text-[19px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
+            Show Rate Setup
+          </h1>
+          <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">
+            {domain ? `Read from ${domain}` : `${data.buyer}'s confirmation page`}
+          </p>
+        </div>
         <a
           href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
           Full Showtime setup <ArrowUpRight className="w-3 h-3" />
         </a>
-      </div>
+      </header>
 
-      <SettingsGroup title="The page">
+      <SettingsGroup title="The page" description="The confirmation page bookers see right after they book.">
         {data.existingPage.url && (
           <SettingRow label="Which page">
             {keepingOwn ? (
@@ -1679,7 +1705,7 @@ function PinDownSettings({
                 460
               )}
             </SettingRow>
-            <SettingRow label="Preview">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t py-3.5 @md:pl-[184px]">
               <PagePreview
                 open={openKey === "preview"}
                 onOpenChange={(v) => setOpenKey(v ? "preview" : null)}
@@ -1689,12 +1715,22 @@ function PinDownSettings({
                 template={data.preview.template}
                 domain={domain}
               />
-            </SettingRow>
+              <p className="text-xs text-[var(--text-muted)]">Nothing is published until you save.</p>
+            </div>
           </>
         )}
       </SettingsGroup>
 
-      <SettingsGroup title="The offer">
+      <SettingsGroup title="The offer" description="What the page and the scripts are written around.">
+        <p className="border-b border-[var(--border)]/60 py-3 text-[13px] leading-relaxed text-[var(--text-secondary)] @md:pl-[184px]">
+          {data.buyer} sells{" "}
+          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerName || "…"}</span>
+          {" "}for{" "}
+          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerPrice || "…"}</span>
+          {" "}to{" "}
+          <span className="font-medium text-[var(--text-primary)]">{draft.offer.offerIcp || "…"}</span>
+          .
+        </p>
         <SettingRow label="What they sell" needed={needed.has("offer")}>{t.offerName}</SettingRow>
         <SettingRow label="Price" needed={needed.has("price")}>{t.offerPrice}</SettingRow>
         <SettingRow label="Who it's for" needed={needed.has("icp")}>{t.offerIcp}</SettingRow>
@@ -1703,7 +1739,7 @@ function PinDownSettings({
         <SettingRow label="On camera">{t.castingChoice}</SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title="Scripts and briefs">
+      <SettingsGroup title="Scripts and briefs" description="What the writer and the rep work from.">
         <SettingRow label="Who runs the calls">
           {saved(
             "extra.prospectMeets",
@@ -1728,7 +1764,7 @@ function PinDownSettings({
       </SettingsGroup>
 
       {eventTypes.length > 0 && (
-        <SettingsGroup title="Bookings">
+        <SettingsGroup title="Bookings" description="Which event counts as the sales call.">
           <SettingRow label="Sales call event">
             <FactToken
               {...tokenProps("salesCall")}
@@ -1749,7 +1785,7 @@ function PinDownSettings({
         </SettingsGroup>
       )}
 
-      <SettingsGroup title="Tools">
+      <SettingsGroup title="Tools" description="What Show Rate Setup runs on. Change one and it sets up again.">
         <div className="py-4">{toolRows}</div>
       </SettingsGroup>
     </div>
@@ -2297,4 +2333,3 @@ function SetupSkeleton() {
     </div>
   );
 }
-
