@@ -25,7 +25,7 @@ import {
   UserCheck,
   CalendarClock,
   Loader2,
-  ArrowLeft,
+  ArrowUpLeft,
   ArrowUpRight,
 } from "lucide-react";
 import { QUEUE_COPY as copy, QUEUE_TOOLBAR_COPY as toolbarCopy, TABLE_TOOLBAR_COPY as sharedToolbarCopy } from "@/lib/copy";
@@ -1759,7 +1759,7 @@ export function QueuePanel({
                   disabled={clampedPage === 0}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded border border-zinc-200 dark:border-sidebar-border bg-white dark:bg-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-elevation-1"
                 >
-                  <ArrowLeft className="w-3 h-3" /> Prev
+                  <ArrowUpLeft className="w-3 h-3" /> Prev
                 </button>
                 <button
                   onClick={() => setPage(Math.min(pageCount - 1, clampedPage + 1))}

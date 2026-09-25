@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowUpLeft } from "lucide-react";
 
 /**
  * A real button-shaped back affordance — border, subtle depth, hover
@@ -15,7 +15,7 @@ export function BackLink({ href, label }: { href: string; label: string }) {
       href={href}
       className="group inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-white dark:bg-zinc-900/60 py-1 pl-2 pr-3 text-xs font-semibold text-zinc-600 dark:text-zinc-400 shadow-sm transition-all hover:border-zinc-300 hover:text-zinc-900 hover:shadow-md dark:hover:border-zinc-700 dark:hover:text-zinc-100"
     >
-      <ArrowLeft
+      <ArrowUpLeft
         size={13}
         className="shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
       />

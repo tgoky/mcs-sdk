@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFloating, offset, flip, shift, arrow, autoUpdate, FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import { ArrowUpRight, ArrowLeft, X, Loader2 } from "lucide-react";
+import { ArrowUpRight, ArrowUpLeft, X, Loader2 } from "lucide-react";
 import { useTour } from "./tour-provider";
 
 const SPOTLIGHT_PADDING = 8;
@@ -65,7 +65,7 @@ export function TourOverlay() {
       if (!activeTourId) return;
       if (e.key === "Escape") close();
       if (e.key === "ArrowUpRight") next();
-      if (e.key === "ArrowLeft") back();
+      if (e.key === "ArrowUpLeft") back();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -150,7 +150,7 @@ export function TourOverlay() {
                   disabled={isFirst}
                   className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white disabled:opacity-0 disabled:pointer-events-none transition-colors cursor-pointer"
                 >
-                  <ArrowLeft size={12} /> Back
+                  <ArrowUpLeft size={12} /> Back
                 </button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: activeStepTotal }).map((_, i) => (
