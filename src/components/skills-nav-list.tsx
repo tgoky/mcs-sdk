@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, Loader2, Plus } from "lucide-react";
-import type { ProductId } from "@/lib/product-catalog";
+import { usePathname } from "next/navigation";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
-import { useToast } from "@/components/toast/toast-provider";
 
 interface SkillEntry {
   skillId: WorkerId;
@@ -34,47 +34,33 @@ function buildEntries(productIds: ProductId[]): SkillEntry[] {
   );
 }
 
-function toggleEndpoint(engagementId: string, workerId: WorkerId): string {
-  const productId = WORKER_REGISTRY[workerId].productId;
-  if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
-  if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
-  return `/api/engagements/${engagementId}/skills/${workerId}`;
+const PRODUCT_PATHS: Record<string, ProductId> = {
+  "/dashboard/showtime": "showtime",
+  "/dashboard/reputation-manager": "reputation-manager",
+};
+
+/** The product whose page this is, so its row starts open. */
+export function productForPath(pathname: string): ProductId | null {
+  const skill = pathname.match(/\/skills\/([^/?#]+)/)?.[1] ?? pathname.match(/\/bridges\/([^/?#]+)/)?.[1];
+  if (skill && skill in WORKER_REGISTRY) return WORKER_REGISTRY[skill as WorkerId].productId as ProductId;
+  if (skill === "reputation-manager") return "reputation-manager";
+  if (skill === "cold-open") return "cold-open";
+  const library = pathname.match(/^\/dashboard\/library\/([^/?#]+)/)?.[1];
+  if (library && (PRODUCT_IDS as readonly string[]).includes(library)) return library as ProductId;
+  for (const [prefix, product] of Object.entries(PRODUCT_PATHS)) if (pathname.startsWith(prefix)) return product;
+  return null;
 }
 
 /**
- * "Installed Skills" — Since-audit rebuild. Used to be a static, read-only
- * icon grid whose only action was "click to navigate to
- * /dashboard/modules/[skill]" (a roster page that's now itself a
- * redirect — see that file's own header). Rebuilt as real, interactive
- * rows in the toggle-first pattern already
- * established elsewhere in this app: a working on/off switch (the same
- * enable/disable endpoint WorkersPanel's own toggle calls) and a name
- * link into the skill's own page.
+ * "Enabled Skills": one row per product with how many of its skills are on
+ * ("Whop Agent · 15 on"), and a red dot when one of them failed its last
+ * run. A row opens to its skills as plain links, each to that skill's own
+ * page; the product being looked at starts open. The sidebar stays the
+ * same height however many skills a client runs.
  *
- * Deliberately NOT a second place to *enable* a new skill — this only
- * ever lists what's already on, and turning one off here just drops it
- * from this list (Library is still where a skill gets turned on in the
- * first place; keeping that one job in one place is the whole point of
- * this pass).
- *
- * No separate Configure or Analytics icon here — this used to link
- * Configure at the old per-worker bridges page (`/bridges/[workerId]`),
- * which a real bug: several workers' bridges pages were superseded by a
- * proper dedicated page (`/skills/[workerId]`, or a shared findings page)
- * that workerPrimaryHref already knows how to reach, so the two links
- * disagreed on where "configure this skill" actually was. The row's own
- * name link already goes to the correct per-client destination for every
- * skill (its own page, the shared RM/Cold-Open findings page, or a run-
- * history anchor — see workerPrimaryHref) — where that destination itself
- * has settings to change, they're right there on it. A second icon
- * pointing anywhere else would just be a worse, possibly-wrong duplicate
- * of the one click already sitting on the label.
- *
- * Owns its own section header (collapse toggle + a shortcut into the
- * Library to enable another skill) rather than having WorkSidebar render
- * a static one above it — the chevron was previously decorative with no
- * click handler, and there was no way to get to the Library from here at
- * all short of leaving via Home.
+ * Nothing is switched on or off here: that's the client page and the
+ * Library, which show what each switch does. This is for getting to a
+ * skill.
  */
 function InstalledSkillsList({
   entries,
@@ -85,46 +71,17 @@ function InstalledSkillsList({
   engagementId: string | null;
   needsAttentionWorkerIds?: Set<string>;
 }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const toast = useToast();
+  const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(false);
-  const [removedIds, setRemovedIds] = useState<Set<WorkerId>>(new Set());
-  const [busyIds, setBusyIds] = useState<Set<WorkerId>>(new Set());
-  const [errorId, setErrorId] = useState<WorkerId | null>(null);
-  const visible = entries.filter((entry) => !removedIds.has(entry.skillId));
+  // Rows the person opened or closed; any other row follows the page.
+  const [toggled, setToggled] = useState<Partial<Record<ProductId, boolean>>>({});
+  const current = productForPath(pathname);
 
-  async function disable(workerId: WorkerId) {
-    if (!engagementId) return;
-    setBusyIds((prev) => new Set(prev).add(workerId));
-    setErrorId(null);
-    try {
-      const res = await fetch(toggleEndpoint(engagementId, workerId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: false }),
-      });
-      if (!res.ok) throw new Error("Failed to turn off");
-      setRemovedIds((prev) => new Set(prev).add(workerId));
-      toast.success(`${WORKER_REGISTRY[workerId].name} disabled.`);
-      // This list's `entries` prop is a snapshot the parent server
-      // component computed at its own last render — removedIds only
-      // hides the row for THIS mounted instance. Without invalidating
-      // that snapshot, a later remount (switching engagements, a layout
-      // re-render elsewhere) falls back to the stale prop and the just-
-      // disabled skill reappears as "enabled" even though the server
-      // already has it off.
-      router.refresh();
-    } catch {
-      setErrorId(workerId);
-    } finally {
-      setBusyIds((prev) => {
-        const next = new Set(prev);
-        next.delete(workerId);
-        return next;
-      });
-    }
-  }
+  const groups = PRODUCT_IDS.map((productId) => ({
+    productId,
+    product: WORKSPACE_PRODUCTS.find((p) => p.id === productId),
+    skills: entries.filter((e) => WORKER_REGISTRY[e.skillId].productId === productId),
+  })).filter((g) => g.skills.length > 0);
 
   const header = (
     <div className="flex items-center gap-1.5 px-2 py-1.5">
@@ -151,86 +108,86 @@ function InstalledSkillsList({
   // CSS-only accordion: a 0fr/1fr grid-template-rows transition animates
   // height from 0 to content-height without knowing that height ahead of
   // time — the content always stays mounted (inside overflow-hidden), only
-  // its allotted row height animates, which is what actually makes
-  // collapsing feel smooth instead of an instant show/hide.
+  // its allotted row height animates.
   return (
     <div className="space-y-1">
       {header}
       <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
         <div className="overflow-hidden">
-          {visible.length === 0 ? (
+          {groups.length === 0 ? (
             <Link
               href="/dashboard/library"
               className="block rounded-[10px] border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-3 text-center text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
             >
-              No skills installed yet. Visit the Library to turn one on.
+              No skills are on for this client yet. Turn one on in the Library.
             </Link>
           ) : (
-            <div className="grid grid-cols-3 gap-1.5 px-0.5 pt-0.5">
-              {visible.map((entry) => {
-                const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
-                const busy = busyIds.has(entry.skillId);
-                const viewHref = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
-                // Persists the same "icon takes over" zoom primary-rail's
-                // own items get from :hover even after the pointer
-                // leaves, for whichever tile is the page you're actually
-                // on right now — a plain CSS :hover can't express "stays
-                // zoomed because this one's selected."
-                const isViewingThisSkill = Boolean(viewHref) && pathname.startsWith(viewHref!);
-
+            <ul className="space-y-0.5">
+              {groups.map(({ productId, product, skills }) => {
+                const open = toggled[productId] ?? productId === current;
+                const failing = skills.filter((s) => needsAttentionWorkerIds?.has(s.skillId)).length;
+                const name = product?.name ?? productId;
                 return (
-                  <div
-                    key={entry.skillId}
-                    className="group flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-center bg-white/5 dark:bg-white/[0.04] backdrop-blur-md border border-black/5 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/[0.07] transition-colors"
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      <div className={`liquid-icon shrink-0 ${isViewingThisSkill ? "is-active" : ""}`}>
-                        <AnySkillBadge skill={entry.skillId} size={18} />
-                        {needsAttention && (
-                          <span
-                            title={`${entry.label} is failing on its most recent run`}
-                            className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-950"
-                          />
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => !busy && disable(entry.skillId)}
-                        disabled={busy || !engagementId}
-                        aria-label={`Turn off ${entry.label}`}
-                        aria-pressed={true}
-                        className={`relative inline-flex h-3 w-5 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 focus:outline-none bg-amber-400 dark:bg-amber-500 shadow-[0_0_6px_rgba(251,191,36,0.3)] ${
-                          busy ? "opacity-50" : ""
-                        }`}
-                      >
-                        {busy ? (
-                          <Loader2 size={8} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
-                        ) : (
-                          <span className="inline-block h-2 w-2 translate-x-[9px] transform rounded-full bg-white shadow-xs transition-transform duration-200" />
-                        )}
-                      </button>
-                    </div>
-
-                    {viewHref ? (
-                      <Link
-                        href={viewHref}
-                        title={entry.label}
-                        className="w-full line-clamp-2 text-[10px] leading-tight font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                      >
-                        {entry.label}
-                      </Link>
-                    ) : (
-                      <span className="w-full line-clamp-2 text-[10px] leading-tight font-medium text-zinc-700 dark:text-zinc-300">{entry.label}</span>
+                  <li key={productId}>
+                    <button
+                      type="button"
+                      onClick={() => setToggled((t) => ({ ...t, [productId]: !open }))}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60 cursor-pointer"
+                    >
+                      <ChevronRight className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-90" : ""}`} />
+                      {product?.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's
+                        <img src={product.image} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+                      ) : null}
+                      <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                      <span className="shrink-0 text-[12px] tabular-nums text-zinc-400">{skills.length} on</span>
+                      {failing > 0 && (
+                        <span
+                          title={`${failing} ${failing === 1 ? "skill" : "skills"} failed their last run`}
+                          aria-label={`${failing} failing`}
+                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500"
+                        />
+                      )}
+                    </button>
+                    {open && (
+                      <ul className="mb-1 ml-[22px] border-l border-zinc-200 pl-2 dark:border-zinc-800">
+                        {skills.map((entry) => {
+                          const href = engagementId ? workerPrimaryHref(entry.skillId, engagementId) : null;
+                          const here = Boolean(href) && pathname.startsWith(href!.split("?")[0]);
+                          const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
+                          const label = (
+                            <>
+                              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                              {needsAttention && <span title={`${entry.label} failed its last run`} className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />}
+                            </>
+                          );
+                          return (
+                            <li key={entry.skillId}>
+                              {href ? (
+                                <Link
+                                  href={href}
+                                  aria-current={here ? "page" : undefined}
+                                  className={`flex items-center gap-2 rounded-md px-2 py-1 text-[12.5px] transition-colors ${
+                                    here
+                                      ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800/70 dark:text-white"
+                                      : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-100"
+                                  }`}
+                                >
+                                  {label}
+                                </Link>
+                              ) : (
+                                <span className="flex items-center gap-2 px-2 py-1 text-[12.5px] text-zinc-500">{label}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     )}
-
-                    {errorId === entry.skillId && (
-                      <p className="text-[8.5px] leading-tight text-rose-600 dark:text-rose-400">Couldn&apos;t turn off</p>
-                    )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       </div>
