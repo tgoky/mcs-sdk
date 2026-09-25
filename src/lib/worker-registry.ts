@@ -1467,3 +1467,21 @@ export const PRODUCT_ONBOARDING_WORKER_ID: Record<ProductId, WorkerId> = {
   "cold-open": "icp-lock",
   "whop-agent": "whop-connect",
 };
+
+/**
+ * Which route flips this worker on or off for this engagement — the same
+ * per-product skills/[skillId] routes each product's own Skills panel
+ * (skills/[skillId]/page.tsx) and the client page's WorkersPanel already
+ * toggle through, both directions, once its product is onboarded. Pulled
+ * out of workers-panel.tsx (where this logic first lived, as a local
+ * toggleEndpoint function) so worker-card.tsx's Library cards can toggle
+ * a skill the exact same way instead of only ever offering a one-way
+ * Enable button through workers/[workerId]/enable's route.
+ */
+export function skillToggleEndpoint(engagementId: string, workerId: WorkerId): string {
+  const productId = WORKER_REGISTRY[workerId].productId;
+  if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
+  if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
+  if (productId === "whop-agent") return `/api/engagements/${engagementId}/skills/whop-agent/${workerId}`;
+  return `/api/engagements/${engagementId}/skills/${workerId}`;
+}

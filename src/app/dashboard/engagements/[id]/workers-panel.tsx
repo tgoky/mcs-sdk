@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowUpRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
 import { type ModuleStatus } from "@/lib/copy";
-import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, skillToggleEndpoint, type WorkerId } from "@/lib/worker-registry";
 import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -122,14 +122,6 @@ export function WorkersPanel({
   // the only way to reach them.
   const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
 
-  function toggleEndpoint(workerId: WorkerId): string {
-    const productId = WORKER_REGISTRY[workerId].productId;
-    if (productId === "reputation-manager") return `/api/engagements/${engagementId}/skills/rep/${workerId}`;
-    if (productId === "cold-open") return `/api/engagements/${engagementId}/skills/cold-open/${workerId}`;
-    if (productId === "whop-agent") return `/api/engagements/${engagementId}/skills/whop-agent/${workerId}`;
-    return `/api/engagements/${engagementId}/skills/${workerId}`;
-  }
-
   async function handleToggle(workerId: WorkerId) {
     const nextState = !states[workerId];
     const previousState = states[workerId];
@@ -139,7 +131,7 @@ export function WorkersPanel({
 
     startTransition(async () => {
       try {
-        const res = await fetch(toggleEndpoint(workerId), {
+        const res = await fetch(skillToggleEndpoint(engagementId, workerId), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ enabled: nextState }),

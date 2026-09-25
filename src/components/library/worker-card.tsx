@@ -3,9 +3,9 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, X, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Settings, X, AlertTriangle } from "lucide-react";
 import type { WorkerDefinition, WorkerId } from "@/lib/worker-registry";
-import { workerSettingsHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { workerSettingsHref, workerPrimaryHref, PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY, skillToggleEndpoint } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import type { SkillPlaybook } from "@/lib/skill-playbooks";
 import { AnySkillBadge } from "@/components/any-skill-badge";
@@ -167,12 +167,25 @@ export function WorkerCard({
   // console with no settings on it at all.
   const plainConfigureHref = engagementId ? workerSettingsHref(worker.id, engagementId) ?? onboardingBridgeHref : null;
   const plainConfigureTitle = engagementId && !workerSettingsHref(worker.id, engagementId) ? `Settings live in ${onboardingWorkerName}` : "Configure";
-  async function enable() {
+  // Two-way, through the same per-product skills/[skillId] routes the
+  // client page's own WorkersPanel already toggles through (see
+  // skillToggleEndpoint) — replaces the old one-way workers/[workerId]/
+  // enable call, which could only ever turn a skill on and left no way
+  // to turn it back off from the Library at all. A skill this product's
+  // own onboarding already asked about (Runs on its own / When you ask,
+  // in Whop Agent's and Reputation Manager's setup) has nothing left to
+  // configure beyond this switch — "Enable" read as a setup step it
+  // doesn't have.
+  async function toggle(next: boolean) {
     if (!engagementId) return;
     setPending(true);
     setError(null);
     try {
-      const response = await fetch(`/api/engagements/${engagementId}/workers/${worker.id}/enable`, { method: "POST" });
+      const response = await fetch(skillToggleEndpoint(engagementId, worker.id), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         // Defensive backstop for the gate this component already checks
@@ -183,73 +196,111 @@ export function WorkerCard({
           setGateModalOpen(true);
           return;
         }
-        throw new Error(body.error ?? `Could not enable ${worker.name}.`);
+        throw new Error(body.error ?? `Could not update ${worker.name}.`);
       }
-      toast.success(`${worker.name} enabled.`);
+      toast.success(`${worker.name} ${next ? "enabled" : "disabled"}.`);
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : `Could not enable ${worker.name}.`);
+      setError(cause instanceof Error ? cause.message : `Could not update ${worker.name}.`);
     } finally {
       setPending(false);
     }
   }
 
-  function handleEnableClick() {
-    if (needsLighterForm) {
+  function handleToggleClick(next: boolean) {
+    if (next && needsLighterForm) {
       setShowEnableModal(true);
       return;
     }
-    if (needsProductOnboarding) {
+    if (next && needsProductOnboarding) {
       // Already known client-side (productOnboarded) — open the gate
       // modal directly instead of a round trip just to be told the same
       // thing the page already knows.
       setGateModalOpen(true);
       return;
     }
-    enable();
+    toggle(next);
   }
 
   const configureAnalyticsClass = WORKER_CARD_ICON_BUTTON_CLASS;
   const iconSize = "w-4 h-4";
 
-  const actionControls = enabled ? (
-    <>
-      {configureMenu ? (
-        configureMenu
-      ) : canConfigureInline ? (
-        <button
-          type="button"
-          onClick={onToggleConfigure}
-          title={isConfiguring ? "Close" : "Configure"}
-          className={
-            isConfiguring
-              ? "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 transition-colors shrink-0"
-              : configureAnalyticsClass
-          }
-        >
-          {isConfiguring ? <X className={iconSize} /> : <Settings className={iconSize} />}
-        </button>
-      ) : (
-        plainConfigureHref && (
-          <Link href={plainConfigureHref} title={plainConfigureTitle} aria-label={plainConfigureTitle} className={configureAnalyticsClass}>
-            <Settings className={iconSize} />
-          </Link>
-        )
-      )}
-      <WorkerActionsMenu
-        workerId={worker.id}
-        workerName={worker.name}
-        engagementId={engagementId}
-        triggerClassName={configureAnalyticsClass}
-        onOpenPanel={(panel) => setActivePanel((prev) => (prev === panel ? null : panel))}
-        onCompare={(ids) => {
-          setCompareWorkerIds(ids);
-          setActivePanel("compare");
-        }}
+  const configureControl = configureMenu ? (
+    configureMenu
+  ) : canConfigureInline ? (
+    <button
+      type="button"
+      onClick={onToggleConfigure}
+      title={isConfiguring ? "Close" : "Configure"}
+      className={
+        isConfiguring
+          ? "flex items-center justify-center w-8 h-8 rounded-full border border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 transition-colors shrink-0"
+          : configureAnalyticsClass
+      }
+    >
+      {isConfiguring ? <X className={iconSize} /> : <Settings className={iconSize} />}
+    </button>
+  ) : (
+    plainConfigureHref && (
+      <Link href={plainConfigureHref} title={plainConfigureTitle} aria-label={plainConfigureTitle} className={configureAnalyticsClass}>
+        <Settings className={iconSize} />
+      </Link>
+    )
+  );
+
+  const actionsMenu = (
+    <WorkerActionsMenu
+      workerId={worker.id}
+      workerName={worker.name}
+      engagementId={engagementId}
+      triggerClassName={configureAnalyticsClass}
+      onOpenPanel={(panel) => setActivePanel((prev) => (prev === panel ? null : panel))}
+      onCompare={(ids) => {
+        setCompareWorkerIds(ids);
+        setActivePanel("compare");
+      }}
+    />
+  );
+
+  // A skill this product's own setup already asked "runs on its own" or
+  // "when you ask" about (Whop Agent, Reputation Manager, Showtime, Cold
+  // Open's reply-sort/send-report) has nothing left to configure beyond
+  // on/off — the same two-way switch its product's setup screen and the
+  // client page's Workers panel already use, not a one-way Enable button
+  // with no way back off. The product's own onboarding worker keeps its
+  // "Set up X" CTA below; only every OTHER worker gets this.
+  const skillToggle = (
+    <button
+      type="button"
+      onClick={() => !pending && engagementId && handleToggleClick(!enabled)}
+      disabled={pending || !engagementId}
+      aria-label={`Toggle ${worker.name}`}
+      title={
+        !engagementId
+          ? "Create a client first"
+          : !enabled && needsProductOnboarding
+            ? `Needs ${onboardingWorkerName} first${skipDismissed ? "" : " (click for details)"}`
+            : undefined
+      }
+      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
+        pending || !engagementId ? "cursor-not-allowed" : "cursor-pointer"
+      } ${enabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"} ${pending ? "opacity-50" : ""}`}
+    >
+      <span
+        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
+          enabled ? "translate-x-[14px]" : "translate-x-[2px]"
+        }`}
       />
-    </>
-  ) : needsOwnSetup ? (
-    bridgeHref ? (
+    </button>
+  );
+
+  const actionControls = needsOwnSetup ? (
+    enabled ? (
+      <>
+        {configureControl}
+        {actionsMenu}
+      </>
+    ) : bridgeHref ? (
       <Link
         href={bridgeHref}
         className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors whitespace-nowrap"
@@ -259,26 +310,12 @@ export function WorkerCard({
     ) : (
       <span className="text-xs text-zinc-500 dark:text-zinc-500">Create a client first to set this up.</span>
     )
-  ) : needsProductOnboarding && skipDismissed ? (
-    // Already dismissed once this session — no more popping the gate
-    // modal on every skill in this product, just a quiet reminder that
-    // stays available without being in the way.
-    <Link
-      href={onboardingBridgeHref ?? "#"}
-      className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors whitespace-nowrap"
-    >
-      Needs {onboardingWorkerName} first <ArrowUpRight size={11} />
-    </Link>
   ) : (
-    <button
-      type="button"
-      onClick={handleEnableClick}
-      disabled={pending || !engagementId}
-      title={!engagementId ? "Create a client first" : undefined}
-      className="inline-flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-xs font-bold text-white dark:text-zinc-900 transition-colors cursor-pointer whitespace-nowrap"
-    >
-      {pending ? "Enabling…" : "Enable"}
-    </button>
+    <>
+      {skillToggle}
+      {enabled && configureControl}
+      {enabled && actionsMenu}
+    </>
   );
 
   const enableModal = showEnableModal && engagementId && (
