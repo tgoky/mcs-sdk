@@ -150,10 +150,27 @@ export function Tick({ on }: { on: boolean }) {
 }
 
 /** The thing being set up, at a glance. */
-export function ReviewCard({ mark, eyebrow, title, pills, children }: { mark: ReactNode; eyebrow: string; title: ReactNode; pills?: ReactNode; children?: ReactNode }) {
+export function ReviewCard({
+  mark,
+  eyebrow,
+  title,
+  pills,
+  children,
+  leading,
+}: {
+  mark: ReactNode;
+  eyebrow: string;
+  title: ReactNode;
+  pills?: ReactNode;
+  children?: ReactNode;
+  /** The back chevron, when the caller renders one — sits inline with the
+   * mark and title so the header reads as one line, not two. */
+  leading?: ReactNode;
+}) {
   return (
     <header className="px-1 @xl:px-0">
       <div className="flex items-start gap-4">
+        {leading}
         {mark}
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)]">{eyebrow}</p>
@@ -353,9 +370,24 @@ export function ApproveBar({
 
 /** The top of one skill's own settings: which skill, whose, and the way to
  * the product's full setup. */
-export function SettingsHeader({ mark, name, buyer, fullSetupHref }: { mark: ReactNode; name: string; buyer: string; fullSetupHref?: string }) {
+export function SettingsHeader({
+  mark,
+  name,
+  buyer,
+  fullSetupHref,
+  leading,
+}: {
+  mark: ReactNode;
+  name: string;
+  buyer: string;
+  fullSetupHref?: string;
+  /** The back chevron, when the caller renders one — sits inline with the
+   * mark and title so the header reads as one line, not two. */
+  leading?: ReactNode;
+}) {
   return (
     <header className="flex items-center gap-3 px-1">
+      {leading}
       {mark}
       <div className="min-w-0 flex-1">
         <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">{name}</h1>

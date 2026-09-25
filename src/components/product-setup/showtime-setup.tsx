@@ -19,11 +19,11 @@
 // so validation, decision recording and the Pin-Down run are unchanged.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowUpRight, Check, ChevronLeft, Eye, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, Eye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "./back-button";
 import { useToast } from "@/components/toast/toast-provider";
 import { useTour } from "@/components/tours/tour-provider";
 import { VERTICALS, verticalLabel } from "@/lib/verticals";
@@ -792,23 +792,6 @@ function ShowtimeMark({ size = 44 }: { size?: number }) {
       {/* eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's */}
       <img src="/images/showtime.png" alt="" className="h-[82%] w-[82%] object-contain" />
     </span>
-  );
-}
-
-/** The way back, sized to sit on the same line as a header's mark and
- * title rather than above them (see setup-page-client.tsx: Showtime
- * carries its own heading, so the page hands us the href instead of
- * rendering its own back button). */
-function BackButton({ href }: { href: string }) {
-  return (
-    <Link
-      href={href}
-      aria-label="Back"
-      title="Back"
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100/80 text-zinc-700 transition-colors hover:bg-zinc-200 dark:border-zinc-800/80 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:bg-zinc-800"
-    >
-      <ChevronLeft className="h-4 w-4" />
-    </Link>
   );
 }
 
@@ -1624,6 +1607,12 @@ function PinDownSettings({
   const tokenProps = (key: string) => ({ open: openKey === key, onOpenChange: (open: boolean) => setOpenKey(open ? key : null) });
   const t = offerTokens({ data, draft, domain, tierOf, tokenProps, setOffer, setOpenKey });
   const close = () => setOpenKey(null);
+  // Wherever this settings view is showing (a skill's own page, the
+  // client page, the Library) is where Full Showtime setup's own back
+  // button should return to — not resolveBackHref's engagement-page
+  // fallback, which only applies when nothing says where we came from.
+  const pathname = usePathname();
+  const fullSetupHref = `/dashboard/engagements/${engagementId}/bridges/pin-down?from=${encodeURIComponent(pathname)}`;
   // A saved value, tappable to change. Empty ones read as a question.
   const saved = (key: string, display: string | null, placeholder: string, title: string, editor: React.ReactNode, width?: number) => (
     <FactToken {...tokenProps(key)} display={display} placeholder={placeholder} tier="done" title={title} source={display ? "Saved for this client." : null} width={width}>
@@ -1667,7 +1656,7 @@ function PinDownSettings({
           </p>
         </div>
         <a
-          href={`/dashboard/engagements/${engagementId}/bridges/pin-down`}
+          href={fullSetupHref}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
           Full Showtime setup <ArrowUpRight className="w-3 h-3" />

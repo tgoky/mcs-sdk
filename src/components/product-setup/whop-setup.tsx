@@ -13,7 +13,7 @@
 //             Nothing else is written to Whop.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { SkillSwitchRow } from "./skill-switch";
 import { ApproveBar, Feed, Labeled, Pill, Popover, ReviewCard, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry, type TodoItem } from "./review-kit";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { cn } from "@/lib/utils";
+import { BackButton } from "./back-button";
 
 // ── Workers ────────────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ export function WhopSetup({
   onSaved,
   cancelLabel = "Cancel",
   focus,
+  backHref,
 }: {
   engagementId: string;
   onCancel: () => void;
@@ -124,8 +126,14 @@ export function WhopSetup({
   /** Opens as this one skill's own settings once Whop Agent is set up:
    * only the rows it owns, saved without touching which workers are on. */
   focus?: string;
+  /** Whop Agent carries its own heading, so the page that hosts it (see
+   * setup-page-client.tsx) has nothing of its own to put beside the way
+   * back — it hands us the href instead, and we put the back button on
+   * the same line as our own mark and title. */
+  backHref?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const toast = useToast();
   const [data, setData] = useState<WhopSetupState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -281,7 +289,19 @@ export function WhopSetup({
     <div className="@container w-full px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} skills={skills} toggleSkill={toggleSkill} events={events} onReread={() => setPhase("welcome")} onQueueFix={queueFix} focus={settings ? focus : undefined} />
+          <Review
+            data={data}
+            draft={draft}
+            set={set}
+            skills={skills}
+            toggleSkill={toggleSkill}
+            events={events}
+            onReread={() => setPhase("welcome")}
+            onQueueFix={queueFix}
+            focus={settings ? focus : undefined}
+            backHref={backHref}
+            fullSetupHref={`/dashboard/engagements/${engagementId}/bridges/whop-connect?from=${encodeURIComponent(pathname)}`}
+          />
           {settings ? (
             (WHOP_FOCUS[focus!] ?? NOTHING_TO_SET).save && (
               <ApproveBar label="Save" error={saveError ?? offerProblem} saving={saving} disabled={!dirty || Boolean(offerProblem)} onApprove={save} onCancel={onCancel} cancelLabel={cancelLabel} />
@@ -312,6 +332,7 @@ export function WhopSetup({
           onCancel={onCancel}
           cancelLabel={cancelLabel}
           onBackToReview={data.configured ? () => setPhase("review") : undefined}
+          backHref={backHref}
         />
       )}
     </div>
@@ -341,6 +362,7 @@ function Welcome({
   onCancel,
   cancelLabel,
   onBackToReview,
+  backHref,
 }: {
   data: WhopSetupState;
   draft: Draft;
@@ -354,6 +376,7 @@ function Welcome({
   onCancel: () => void;
   cancelLabel: string;
   onBackToReview?: () => void;
+  backHref?: string;
 }) {
   const [replacing, setReplacing] = useState(false);
   const connected = data.connection.connected && !replacing;
@@ -361,6 +384,7 @@ function Welcome({
   return (
     <div className="space-y-9">
       <header className="flex items-start gap-4">
+        {backHref && <BackButton href={backHref} />}
         <WhopMark />
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">Whop Agent for {data.buyer}</h1>
@@ -476,6 +500,8 @@ function Review({
   onReread,
   onQueueFix,
   focus,
+  backHref,
+  fullSetupHref,
 }: {
   data: WhopSetupState;
   draft: Draft;
@@ -486,6 +512,8 @@ function Review({
   onReread: () => void;
   onQueueFix: (body: { action: "dedupe"; groupKey: string } | { action: "pin"; whopWebhookId: string }) => Promise<void>;
   focus?: string;
+  backHref?: string;
+  fullSetupHref: string;
 }) {
   const s = data.snapshot;
   const read = data.read;
@@ -858,7 +886,13 @@ function Review({
     const blurb = [...ON_THEIR_OWN, ...WHEN_ASKED].find((x) => x.id === focus)?.blurb;
     return (
       <div className="space-y-6">
-        <SettingsHeader mark={<WhopMark size={36} />} name={anySkillDisplayName(focus)} buyer={data.buyer} fullSetupHref={`/dashboard/engagements/${data.engagementId}/bridges/whop-connect`} />
+        <SettingsHeader
+          mark={<WhopMark size={36} />}
+          name={anySkillDisplayName(focus)}
+          buyer={data.buyer}
+          fullSetupHref={fullSetupHref}
+          leading={backHref && <BackButton href={backHref} />}
+        />
         {blurb && (
           <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">
             {blurb}
@@ -875,6 +909,7 @@ function Review({
     <div className="space-y-9">
       <ReviewCard
         mark={<WhopMark />}
+        leading={backHref && <BackButton href={backHref} />}
         eyebrow="Whop Agent"
         title={`${data.buyer} on Whop`}
         pills={

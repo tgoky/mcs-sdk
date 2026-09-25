@@ -30,6 +30,7 @@ import { RepTwitterWatchConfigForm } from "./rep-twitter-watch-config-form";
 import { COLD_OPEN_SKILL_IDS } from "@/lib/cold-open-skill-manifest";
 import { REP_SKILL_IDS } from "@/lib/rep-skill-manifest";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
+import { BackButton } from "@/components/product-setup/back-button";
 
 export interface ConfigFormSaveResult {
   /** The run a setup form started on save, when it started one. */
@@ -70,12 +71,34 @@ const simple = (Form: (props: { engagementId: string; onCancel: () => void; canc
 // A product setup as one skill's settings. The onboarding worker's own
 // setup page shows the whole setup instead.
 const focused = (
-  Setup: (props: { engagementId: string; onCancel: () => void; onSaved?: ConfigFormHandlers["onSaved"]; cancelLabel?: string; focus?: string }) => ReactNode,
+  Setup: (props: {
+    engagementId: string;
+    onCancel: () => void;
+    onSaved?: ConfigFormHandlers["onSaved"];
+    cancelLabel?: string;
+    focus?: string;
+    // Self-headed setups read one of these two, whichever their own
+    // header plumbing expects (a plain href it builds its own back
+    // button from, or an already-built node to slot in) — every setup
+    // here declares at most one, so passing both is harmless.
+    backHref?: string;
+    leading?: ReactNode;
+  }) => ReactNode,
   onboarding: WorkerId,
   id: WorkerId
 ): FormRenderer => {
   function SkillSettings(h: ConfigFormHandlers) {
-    return <Setup engagementId={h.engagementId} onCancel={h.onClose} onSaved={h.onSaved} cancelLabel={h.cancelLabel} focus={h.mode === "setup" && id === onboarding ? undefined : id} />;
+    return (
+      <Setup
+        engagementId={h.engagementId}
+        onCancel={h.onClose}
+        onSaved={h.onSaved}
+        cancelLabel={h.cancelLabel}
+        focus={h.mode === "setup" && id === onboarding ? undefined : id}
+        backHref={h.backHref}
+        leading={h.backHref ? <BackButton href={h.backHref} /> : undefined}
+      />
+    );
   }
   return SkillSettings;
 };

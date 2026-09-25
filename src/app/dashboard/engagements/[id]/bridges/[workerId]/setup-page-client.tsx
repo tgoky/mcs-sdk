@@ -7,11 +7,11 @@ import type { WorkerId } from "@/lib/worker-registry";
 import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { resolveBackHref } from "../../resolve-back-href";
 
-/** Self-headed setups (heading === null) whose own form puts the back
- * button on the same line as its own mark and title, given backHref.
- * Every other self-headed setup still gets this page's own back button,
- * stacked above its heading, until it's wired up the same way. */
-const INLINE_BACK_FORMS = new Set<WorkerId>(["pin-down"]);
+/** Self-headed setups (heading === null, see SELF_HEADED_SETUPS in
+ * page.tsx) whose own form puts the back button on the same line as its
+ * own mark and title, given backHref, instead of this page rendering one
+ * above it. */
+const INLINE_BACK_FORMS = new Set<WorkerId>(["pin-down", "rep-onboarding", "icp-lock", "whop-connect", "whop-cancellation-save-offer", "whop-bridge-manager"]);
 
 export function SetupPageClient({
   engagementId,

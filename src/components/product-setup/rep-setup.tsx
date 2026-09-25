@@ -12,7 +12,7 @@
 //             still needed from you (top, accent), and Approve.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -1157,6 +1157,7 @@ function Review({
   showMissing: boolean;
   setShowMissing: (v: boolean) => void;
 }) {
+  const pathname = usePathname();
   const toggle = (key: ListKey) => (i: number) =>
     set((d) => ({ ...d, [key]: d[key].map((x, j) => (j === i ? { ...x, on: !x.on } : x)) }), key);
   const add =
@@ -1513,7 +1514,7 @@ function Review({
           subtitle={<p className="text-[14px] leading-relaxed text-[var(--text-secondary)]">{f.about}</p>}
           trailing={
             <a
-              href={`/dashboard/engagements/${data.engagementId}/bridges/rep-onboarding`}
+              href={`/dashboard/engagements/${data.engagementId}/bridges/rep-onboarding?from=${encodeURIComponent(pathname)}`}
               className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
             >
               Full setup <ArrowUpRight className="h-3 w-3" />

@@ -14,7 +14,7 @@
 //             until someone switches it on in Daily Send.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Check, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { anySkillDisplayName } from "@/lib/any-skill";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { cn } from "@/lib/utils";
 import { allTimezones, COMMON_TIMEZONES, isValidTimezone } from "@/lib/timezones";
+import { BackButton } from "./back-button";
 
 // ── Skills ─────────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ export function ColdOpenSetup({
   onSaved,
   cancelLabel = "Cancel",
   focus,
+  backHref,
 }: {
   engagementId: string;
   onCancel: () => void;
@@ -149,6 +151,11 @@ export function ColdOpenSetup({
   /** Opens as this one skill's own settings once Cold Open is set up: only
    * the rows it owns, saved without touching which skills are on. */
   focus?: string;
+  /** Cold Open carries its own heading, so the page that hosts it (see
+   * setup-page-client.tsx) has nothing of its own to put beside the way
+   * back — it hands us the href instead, and we put the back button on
+   * the same line as our own mark and title. */
+  backHref?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -382,7 +389,7 @@ export function ColdOpenSetup({
     <div ref={topRef} className="@container w-full px-1 pb-4">
       {phase === "review" ? (
         <>
-          <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} />
+          <Review data={data} draft={draft} set={set} onReread={() => setPhase("welcome")} toolRow={toolRow} focus={settings ? focus : undefined} reload={() => load()} backHref={backHref} />
           {settings ? (
             COLD_OPEN_FOCUS[focus!]?.save && (
               <ApproveBar
@@ -421,6 +428,7 @@ export function ColdOpenSetup({
           onCancel={onCancel}
           cancelLabel={cancelLabel}
           onBackToReview={data.configured ? () => setPhase("review") : undefined}
+          backHref={backHref}
         />
       )}
     </div>
@@ -473,6 +481,7 @@ function Welcome({
   onCancel,
   cancelLabel,
   onBackToReview,
+  backHref,
 }: {
   data: ColdOpenSetupState;
   draft: Draft;
@@ -485,6 +494,7 @@ function Welcome({
   onCancel: () => void;
   cancelLabel: string;
   onBackToReview?: () => void;
+  backHref?: string;
 }) {
   const host = bareHost(draft.domain);
   const known = Boolean(data.website.domain) && bareHost(data.website.domain ?? "") === host;
@@ -492,6 +502,7 @@ function Welcome({
   return (
     <div className="space-y-9">
       <header className="flex items-start gap-4">
+        {backHref && <BackButton href={backHref} />}
         <ColdOpenMark />
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-[26px] font-semibold leading-[1.15] tracking-tight text-[var(--text-primary)] @xl:text-[30px]">Cold email for {data.buyer}</h1>
@@ -587,6 +598,7 @@ function Review({
   toolRow,
   focus,
   reload,
+  backHref,
 }: {
   data: ColdOpenSetupState;
   draft: Draft;
@@ -595,6 +607,7 @@ function Review({
   toolRow: ReactNode;
   focus?: string;
   reload: () => Promise<unknown>;
+  backHref?: string;
 }) {
   const p = data.proposal;
   const out = data.outbound;
@@ -604,7 +617,8 @@ function Review({
   const sendingLinked = data.tools.some((t) => t.group === "sending" && t.linked);
   const campaigns = out?.campaigns ?? [];
   const unmapped = icps.filter((i) => !draft.campaignMap[i.slug]);
-  const bridge = (worker: string) => `/dashboard/engagements/${data.engagementId}/bridges/${worker}`;
+  const pathname = usePathname();
+  const bridge = (worker: string) => `/dashboard/engagements/${data.engagementId}/bridges/${worker}?from=${encodeURIComponent(pathname)}`;
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   // "your website" -> "From your website"; a default says so plainly.
   const from = (source: string) => (source === "saved" ? "Saved" : source === "a common default" ? "A starting point. Change it anytime." : source ? `From ${source}` : "");
@@ -837,7 +851,13 @@ function Review({
     const own = focus === "source-connect" || focus === "daily-send";
     return (
       <div className="space-y-6">
-        <SettingsHeader mark={<ColdOpenMark size={36} />} name={anySkillDisplayName(focus)} buyer={data.buyer} fullSetupHref={bridge("icp-lock")} />
+        <SettingsHeader
+          mark={<ColdOpenMark size={36} />}
+          name={anySkillDisplayName(focus)}
+          buyer={data.buyer}
+          fullSetupHref={bridge("icp-lock")}
+          leading={backHref && <BackButton href={backHref} />}
+        />
         {f.about && <p className="px-1 text-[14px] leading-relaxed text-[var(--text-secondary)]">{f.about}</p>}
         {(rows.length > 0 || own) && (
           <ol className="space-y-1">
@@ -863,6 +883,7 @@ function Review({
       {/* The campaign at a glance */}
       <header className="px-1 @xl:px-0">
         <div className="flex items-start gap-4">
+          {backHref && <BackButton href={backHref} />}
           <ColdOpenMark size={40} />
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-medium uppercase tracking-wide text-[var(--text-muted)]">{data.buyer}&apos;s cold email</p>
