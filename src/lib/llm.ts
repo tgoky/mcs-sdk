@@ -625,13 +625,17 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
   const data = await res.json();
   const message = data.choices?.[0]?.message ?? {};
   const text = undash(message.content ?? "");
+  // Chat completions nest the address (url_citation.url); OpenRouter's
+  // other response shape carries it flat (url). Either is accepted.
   interface OpenRouterAnnotation {
     type: string;
+    url?: string;
     url_citation?: { url?: string };
   }
   const citedUrls: string[] = ((message.annotations ?? []) as OpenRouterAnnotation[])
-    .filter((a) => a.type === "url_citation" && !!a.url_citation?.url)
-    .map((a) => a.url_citation!.url!);
+    .filter((a) => a.type === "url_citation")
+    .map((a) => a.url_citation?.url ?? a.url)
+    .filter((u): u is string => typeof u === "string" && u.length > 0);
   const inputTokens: number = data.usage?.prompt_tokens ?? 0;
   const outputTokens: number = data.usage?.completion_tokens ?? 0;
   const pricing = OPENROUTER_PRICING[modelString] ?? { input: 0, output: 0 };

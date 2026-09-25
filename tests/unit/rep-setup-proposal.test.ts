@@ -131,3 +131,39 @@ describe("buildRepProposal", () => {
     expect(p.googleListing).toEqual({ listing: { placeId: "ChIJ", name: "Acme Ltd" }, saved: true });
   });
 });
+
+describe("competitors from the web, and the CRM's own address", () => {
+  it("lists web-found competitors after the site's, each by its own confidence", () => {
+    const p = buildRepProposal(
+      base({
+        facts: facts(
+          fact("competitors", ["SiteRival"]),
+          fact("webCompetitors", [
+            { name: "Bolt Coaching", url: null, sourceUrl: "https://g2.com/a", why: "", confidence: 92 },
+            { name: "Maybe Co", url: null, sourceUrl: "https://g2.com/b", why: "", confidence: 50 },
+            { name: "Unscored", url: null, sourceUrl: "https://g2.com/c", why: "", confidence: null },
+          ], { source: "jev", sourceDetail: "web_search" })
+        ),
+      })
+    );
+    const byName = Object.fromEntries(p.competitors.map((c) => [c.value, c]));
+    expect(p.competitors.map((c) => c.value)).toEqual(["SiteRival", "Bolt Coaching", "Maybe Co", "Unscored"]);
+    expect(byName["Bolt Coaching"]).toMatchObject({ tier: "done", on: true, sources: ["the web"] });
+    expect(byName["Maybe Co"].tier).toBe("likely");
+    // Nobody vouched for it: shown, but switched off until someone does.
+    expect(byName["Unscored"]).toMatchObject({ tier: "ask", on: false });
+  });
+
+  it("ignores web competitors once competitors are saved", () => {
+    const saved = { operatorName: "Acme", competitors: [{ name: "Chosen", monitorFor: [], highPriority: false }] } as unknown as SavedGraph;
+    const p = buildRepProposal(base({ saved, facts: facts(fact("webCompetitors", [{ name: "Bolt", sourceUrl: "https://g2.com/a", confidence: 90 }])) }));
+    expect(p.competitors.map((c) => c.value)).toEqual(["Chosen"]);
+  });
+
+  it("offers the business email a connected tool has on file", () => {
+    const p = buildRepProposal(
+      base({ facts: facts(fact("accountIntel:hubspot", { provider: "hubspot", business: { name: "Acme", email: "Hello@Acme.com" } }, { source: "account" })) })
+    );
+    expect(p.emailContacts.map((e) => e.value)).toContain("hello@acme.com");
+  });
+});

@@ -15,6 +15,7 @@
 import type { ClientFact } from "@/lib/client-facts";
 import type { RepCollision, RepEntity, RepGoogleListing, RepOffering, RepCompetitor } from "@/models/schema";
 import type { TrustTier } from "@/lib/fact-trust";
+import { WEB_COMPETITORS_FACT, type WebCompetitor } from "./types";
 import type { RepCollisionProposal, RepEntityProposal, RepItem, RepProposal } from "./types";
 
 export interface SavedGraph {
@@ -212,7 +213,8 @@ export function buildRepProposal(input: ProposalInput): RepProposal {
   const contact = usable(facts.contactInfo) ? (facts.contactInfo.value as { emails?: string[] }) : null;
   for (const e of contact?.emails ?? []) if (!NO_REPLY.test(e)) emails.add(e.toLowerCase(), SITE, "likely");
   for (const i of intel) {
-    for (const e of [i.sender?.fromEmail, i.sender?.replyTo]) if (e && !NO_REPLY.test(e)) emails.add(e.toLowerCase(), toolLabel(i.provider), "likely");
+    // The business's own address on the account, then who its mail goes out as.
+    for (const e of [i.business?.email, i.sender?.fromEmail, i.sender?.replyTo]) if (e && !NO_REPLY.test(e)) emails.add(e.toLowerCase(), toolLabel(i.provider), "likely");
   }
 
   // ── Handles ──
@@ -263,7 +265,15 @@ export function buildRepProposal(input: ProposalInput): RepProposal {
   // ── Competitors, lookalikes, press, AI questions ──
   const competitors = new Bag();
   if (saved?.competitors?.length) for (const c of saved.competitors) competitors.add(c.name, "saved", "done");
-  else for (const c of strList(facts.competitors).slice(0, 7)) competitors.add(c, SITE, tierOf(facts.competitors));
+  else {
+    for (const c of strList(facts.competitors).slice(0, 7)) competitors.add(c, SITE, tierOf(facts.competitors));
+    // Found by web search and checked one by one (competitor-search.ts): each
+    // name carries its own confidence, so one weak match doesn't pass as sure.
+    const web = facts[WEB_COMPETITORS_FACT];
+    if (usable(web) && Array.isArray(web.value)) {
+      for (const c of web.value as WebCompetitor[]) if (c?.name) competitors.add(c.name, "the web", c.confidence === null ? "ask" : decisionTier({ keep: true, confidence: c.confidence }, "ask"));
+    }
+  }
 
   const collisions: RepCollisionProposal[] = saved?.collisions?.length
     ? saved.collisions.map((c) => ({ ...c, tier: "done" as const, on: true }))
@@ -302,7 +312,7 @@ export function buildRepProposal(input: ProposalInput): RepProposal {
     handles: [...handleMap.entries()].map(([platform, h]) => ({ platform, handle: h.handle, sources: [...h.sources], tier: h.tier, on: h.tier !== "ask" })),
     entities,
     offerings: offerings.list({ max: 10 }),
-    competitors: competitors.list({ savedKeys: savedCompetitorKeys, max: 7 }),
+    competitors: competitors.list({ savedKeys: savedCompetitorKeys, max: 10 }),
     collisions,
     trustedSources: press.list({ max: 10 }),
     seedPrompts: prompts.list({ max: 8 }),

@@ -8,6 +8,7 @@ import { finishRun, startRun, emptySummary } from "@/lib/run-log";
 import { factTier } from "@/lib/fact-trust";
 import { INTEL_PROVIDERS, runAccountIntel } from "@/lib/account-intel";
 import { isSiteReadReusable, wantsFreshRead } from "@/lib/site-read";
+import { findWebCompetitors } from "@/lib/rep-setup/competitor-search";
 import { findGoogleListing } from "@/features/reputation-manager/server/outscraper-google";
 import { resolveOutscraperConfig } from "@/features/reputation-manager/trustpilot-config";
 import type { RepEngineId, RepGoogleListing } from "@/models/schema";
@@ -171,6 +172,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             ? { id: "account-google", label: `Google: ${listing.rating ?? "?"}★${listing.reviews != null ? ` from ${listing.reviews} reviews` : ""}`, status: "done" }
             : { id: "account-google", label: "No Google listing matches your website", status: "skipped", detail: "Google Reviews Watch stays off until there is one." }
         );
+
+        // ── 4b. Competitors from the web ──
+        // Sites rarely name their competitors, so the site read usually finds
+        // none. Search the web for them (each name backed by a page found),
+        // and have Jev check each one. Skipped when competitors are already
+        // saved, and reused for 30 days unless the person asked to read again.
+        if (!graph?.competitors?.length) {
+          const business = (typeof v("operatorName") === "string" ? (v("operatorName") as string) : "") || access.buyer;
+          const offer = typeof v("offerName") === "string" ? (v("offerName") as string) : null;
+          const found = await findWebCompetitors(id, { business, domain: host, offer, category: listing?.category ?? null, location: listing?.address ?? null, force });
+          if (found.status === "found" || (found.status === "reused" && found.count > 0)) {
+            step({ id: "found-web-competitors", label: `${plural(found.count, "competitor")} found on the web`, status: found.status === "reused" ? "reused" : "done" });
+          } else if (found.status === "none") {
+            step({ id: "found-web-competitors", label: "No competitors named on the web", status: "skipped", detail: "Add the ones you know in the review." });
+          } else if (found.status === "failed") {
+            step({ id: "found-web-competitors", label: "Couldn't search the web for competitors", status: "failed", detail: found.detail });
+          }
+        }
 
         // ── 5. Jev sorts the uncertain names ──
         facts = await getClientFacts(id);

@@ -80,3 +80,18 @@ export interface RepSetupState {
   crisisThreshold: number | null;
   operatorPagePhone: string | null;
 }
+
+/** Competitors found by web search (competitor-search.ts), one confidence each. */
+export const WEB_COMPETITORS_FACT = "webCompetitors";
+
+export interface WebCompetitor {
+  name: string;
+  /** Their own site, when the search found it. */
+  url: string | null;
+  /** The page the name was found on. */
+  sourceUrl: string;
+  /** One line on why a customer would compare the two. */
+  why: string;
+  /** Jev's confidence that they really compete, 0-100; null when Jev couldn't say. */
+  confidence: number | null;
+}
