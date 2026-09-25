@@ -78,6 +78,10 @@ async function PinDownBody({ engagement }: SkillPageContext) {
         adCreativeBriefs: engagements.adCreativeBriefs,
         pinDownScriptPack: engagements.pinDownScriptPack,
         pinDownPageAudit: engagements.pinDownPageAudit,
+        confirmationPageUrl: engagements.confirmationPageUrl,
+        confirmationPageDeployment: engagements.confirmationPageDeployment,
+        pasteReadyHtml: engagements.pasteReadyHtml,
+        pasteReadyInstructions: engagements.pasteReadyInstructions,
       })
       .from(engagements)
       .where(eq(engagements.engagementId, id))
@@ -99,6 +103,12 @@ async function PinDownBody({ engagement }: SkillPageContext) {
       adCreativeBriefs={row.adCreativeBriefs}
       pinDownScriptPack={row.pinDownScriptPack}
       pinDownPageAudit={row.pinDownPageAudit}
+      confirmationPage={{
+        url: row.confirmationPageUrl,
+        deployment: row.confirmationPageDeployment,
+        pasteReadyHtml: row.pasteReadyHtml,
+        pasteReadyInstructions: row.pasteReadyInstructions,
+      }}
       conversationIntelligence={{
         enabled: engagement.stack?.conversation_intelligence_provider === "recall_ai",
         lastProcessedAt: sessions.find((s) => s.completedAt)?.completedAt?.toISOString(),
@@ -153,7 +163,7 @@ function ReputationManagerBody({ engagement, searchParams }: SkillPageContext) {
 export const SKILL_PAGES: Record<string, SkillPageDefinition> = {
   "pin-down": {
     title: "Show Rate Setup",
-    subtitle: "Brand voice, ad creative briefs, video scripts, and confirmation page: the one-time onboarding output, not an ongoing run.",
+    subtitle: "The confirmation page every prospect sees after booking, and the voice, ad briefs and video scripts it's built from.",
     headerAction: configure("pin-down"),
     body: (ctx) => <PinDownBody {...ctx} />,
   },

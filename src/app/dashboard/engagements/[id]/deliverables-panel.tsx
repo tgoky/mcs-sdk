@@ -20,6 +20,7 @@ import {
   Shirt
 } from "lucide-react";
 import { RunPinDownPieceButton } from "./run-pin-down-piece-button";
+import { ConfirmationPageBody, confirmationPageSummary, type ConfirmationPageState } from "./confirmation-page-row";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -248,8 +249,11 @@ export function DeliverablesPanel({
   pinDownScriptPack,
   pinDownPageAudit,
   conversationIntelligence,
+  confirmationPage,
 }: {
   engagementId: string;
+  /** The page Show Rate Setup builds; shown first, open, when given. */
+  confirmationPage?: ConfirmationPageState;
   discoveryPrefill: DiscoveryPrefill;
   voiceScrapeArtifacts: VoiceScrapeArtifacts;
   brandVoiceProfile: BrandVoiceProfile;
@@ -263,7 +267,7 @@ export function DeliverablesPanel({
   const isAiExtracted = brandVoiceProfile?.source_path === "ai_extracted";
   const briefs = adCreativeBriefs?.briefs ?? [];
 
-  const defaultOpenId = briefs[0]?.id ?? "brand_voice";
+  const defaultOpenId = confirmationPage ? "confirmation_page" : (briefs[0]?.id ?? "brand_voice");
   const [openRowId, setOpenRowId] = useState<string | null>(defaultOpenId);
 
   const toggleRow = (id: string) => {
@@ -367,7 +371,23 @@ export function DeliverablesPanel({
       {/* MAIN DELIVERABLES CONTAINER — transparent so the page's bg-dot-grid
           shows through instead of the opaque glass fill hiding it. */}
       <div className="w-full bg-transparent border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-3 sm:p-5 divide-y divide-zinc-200 dark:divide-zinc-800/60">
-        
+
+        {/* THE CONFIRMATION PAGE: what this skill is for, so it leads. */}
+        {confirmationPage && (
+          <DeliverableRow
+            id="confirmation_page"
+            isOpen={openRowId === "confirmation_page"}
+            anyOpen={openRowId !== null}
+            onToggle={() => toggleRow("confirmation_page")}
+            icon={Globe}
+            squircleClass="bg-emerald-200 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-200"
+            title="Confirmation page"
+            subtitle={confirmationPageSummary(confirmationPage)}
+          >
+            <ConfirmationPageBody engagementId={engagementId} page={confirmationPage} />
+          </DeliverableRow>
+        )}
+
         {/* BRAND VOICE & SITE INTELLIGENCE ROW */}
         <DeliverableRow
           id="brand_voice"
