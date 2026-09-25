@@ -15,10 +15,13 @@ export function TriggerSkillButton({
   engagementId,
   skillName,
   label,
+  compact = false,
 }: {
   engagementId: string;
   skillName: string;
   label: string;
+  /** A small "Run" link for a row, with its outcome beside it. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -55,6 +58,29 @@ export function TriggerSkillButton({
       setState("error");
       setMessage(e.message);
     }
+  }
+
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-2 text-[12px]">
+        <button
+          type="button"
+          onClick={trigger}
+          disabled={state === "running"}
+          aria-label={label}
+          title={message ?? label}
+          className="font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer disabled:cursor-not-allowed"
+        >
+          {state === "running" ? "Running…" : "Run"}
+        </button>
+        {state === "error" && <span className="text-status-error">Failed to start</span>}
+        {runId && (
+          <a href={`/dashboard/runs/${runId}`} className="inline-flex items-center gap-0.5 text-zinc-500 underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">
+            View <ArrowUpRight className="h-3 w-3" />
+          </a>
+        )}
+      </span>
+    );
   }
 
   return (

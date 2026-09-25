@@ -3,16 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, Settings2, TrendingUp, Workflow, Search, ShieldAlert, PauseCircle, X } from "lucide-react";
-import { type ModuleStatus } from "@/lib/copy";
-import { WORKER_REGISTRY, SKILLS_WITH_OWN_PAGE, REP_SKILLS_WITH_FINDINGS_PAGE, COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE, workerPrimaryHref, skillToggleEndpoint, type WorkerId } from "@/lib/worker-registry";
+import { Settings2, TrendingUp, PauseCircle, X } from "lucide-react";
+import { type ModuleStatus, WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { WORKER_REGISTRY, workerPrimaryHref, skillToggleEndpoint, type WorkerId } from "@/lib/worker-registry";
 import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { TriggerSkillButton } from "./trigger-skill-button";
 import { ProductOnboardingGateModal } from "@/components/library/product-onboarding-gate-modal";
 import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
-import type { ProductId } from "@/lib/product-catalog";
+import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { useToast } from "@/components/toast/toast-provider";
 
 /**
@@ -69,6 +69,39 @@ function deriveModuleStatus(runs: ModuleRunDTO[], isEnabled: boolean, isPaused: 
   if (s === "failed") return "failed";
   if (s === "running" || s === "in_progress") return "running";
   return "not_run";
+}
+
+const STATUS_LABEL: Record<ModuleStatus | "disabled", string> = {
+  live: "Working",
+  failed: "Failed",
+  running: "Running",
+  not_run: "Not run yet",
+  needs_setup: "Needs setup",
+  paused: "Paused",
+  disabled: "Off",
+};
+
+// Three status colors: working, needs you, and everything else neutral.
+const STATUS_TONE: Record<ModuleStatus | "disabled", string> = {
+  live: "text-status-success",
+  failed: "text-status-error",
+  needs_setup: "text-status-error",
+  running: "text-status-neutral",
+  not_run: "text-status-neutral",
+  paused: "text-status-neutral",
+  disabled: "text-status-neutral",
+};
+
+function sinceLabel(at: Date | string): string {
+  const ms = Date.now() - new Date(at).getTime();
+  const min = Math.round(ms / 60_000);
+  if (!Number.isFinite(min)) return "";
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  const d = Math.round(h / 24);
+  return d < 7 ? `${d} day${d === 1 ? "" : "s"} ago` : new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function WorkersPanel({
@@ -246,167 +279,94 @@ export function WorkersPanel({
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
-          {workerIds.map((workerId) => {
-          const worker = WORKER_REGISTRY[workerId];
-          const isEnabled = states[workerId] ?? true;
-          const isBusy = updatingWorkers.has(workerId);
-          const workerRuns = runsByWorker[workerId] ?? [];
-          const missingFields = missingFieldsByWorkerId[workerId] ?? [];
-          const status = deriveModuleStatus(workerRuns, isEnabled, isPaused, missingFields.length);
-          const latestRun = workerRuns[0] ?? null;
-          const isPausedActive = isEnabled && isPaused;
-          const isNeedsSetup = status === "needs_setup";
-
-          return (
-            <div
-              key={workerId}
-              className={`rounded-lg border p-3 flex flex-col justify-between min-h-[168px] transition-all shadow-2xs ${
-                isPausedActive
-                  ? "border-amber-300/70 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/[0.04] backdrop-blur-xs"
-                  : isEnabled
-                    ? "border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/60 backdrop-blur-xs"
-                    : "border-zinc-200/60 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/40 opacity-75"
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <AnySkillBadge skill={workerId} size={26} enabled={isEnabled} paused={isPausedActive} />
-                    <div className="min-w-0 flex-1">
-                      <span
-                        className={`text-xs font-bold tracking-tight truncate block ${
-                          isEnabled ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        {worker.name}
-                      </span>
-                      <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug line-clamp-1">{worker.description}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => !isBusy && handleToggleClick(workerId)}
-                    disabled={isBusy}
-                    aria-label={`Toggle ${worker.name}`}
-                    title={
-                      !isEnabled && !worker.runOnSetup && productOnboarded[worker.productId] === false
-                        ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " (click for details)"}`
-                        : undefined
-                    }
-                    className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
-                      isEnabled ? "bg-amber-400 border border-amber-500/30" : "bg-zinc-300 dark:bg-zinc-800 border border-zinc-400/30 dark:border-zinc-700/50"
-                    } ${isBusy ? "opacity-50" : ""}`}
-                  >
-                    <span
-                      className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
-                        isEnabled ? "translate-x-[14px]" : "translate-x-[2px]"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {(latestRun || isNeedsSetup) && (
-                  <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-1.5 space-y-1">
-                    {isEnabled && latestRun ? (
-                      <div className="space-y-0.5 text-xs">
-                        {latestRun.status.toLowerCase() === "failed" && latestRun.errorMessage && (
-                          <p className="text-[10.5px] text-rose-600 dark:text-rose-400/90 leading-snug font-mono break-all line-clamp-1">{latestRun.errorMessage}</p>
-                        )}
-                        <div className="flex items-center justify-end font-mono text-[10.5px]">
-                          <Link
-                            href={`/dashboard/runs/${latestRun.id}`}
-                            className="text-[10px] font-mono font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors flex items-center gap-0.5"
-                          >
-                            View <ArrowUpRight className="w-2.5 h-2.5" />
-                          </Link>
+        // One row per skill, grouped by product: the page doesn't grow a card
+        // per skill switched on, and every row reads the same way (name, how
+        // it's doing, when it last ran, then Configure, Run and its switch).
+        <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+          {PRODUCT_IDS.map((productId) => ({ productId, ids: workerIds.filter((id) => WORKER_REGISTRY[id].productId === productId) }))
+            .filter((g) => g.ids.length > 0)
+            .map(({ productId, ids }) => (
+              <section key={productId} className="space-y-1">
+                <h3 className="px-1 text-[12px] font-medium text-zinc-500 dark:text-zinc-400">{WORKSPACE_PRODUCTS.find((p) => p.id === productId)?.name ?? productId}</h3>
+                <ul className="divide-y divide-zinc-200/80 rounded-xl border border-zinc-200/80 bg-white/70 dark:divide-zinc-800/60 dark:border-zinc-800/60 dark:bg-zinc-900/40">
+                  {ids.map((workerId) => {
+                    const worker = WORKER_REGISTRY[workerId];
+                    const isEnabled = states[workerId] ?? true;
+                    const isBusy = updatingWorkers.has(workerId);
+                    const workerRuns = runsByWorker[workerId] ?? [];
+                    const missingFields = missingFieldsByWorkerId[workerId] ?? [];
+                    const status = deriveModuleStatus(workerRuns, isEnabled, isPaused, missingFields.length);
+                    const latestRun = workerRuns[0] ?? null;
+                    const isPausedActive = isEnabled && isPaused;
+                    const detail =
+                      status === "failed" && latestRun?.errorMessage
+                        ? { text: latestRun.errorMessage, tone: "text-status-error" }
+                        : status === "needs_setup"
+                          ? { text: `Missing: ${missingFields.map((f) => f.label).join(", ")}`, tone: "text-status-error" }
+                          : null;
+                    return (
+                      <li key={workerId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 ${isEnabled ? "" : "opacity-60"}`}>
+                        <div className="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
+                          <AnySkillBadge skill={workerId} size={22} enabled={isEnabled} paused={isPausedActive} />
+                          <div className="min-w-0">
+                            <Link href={workerPrimaryHref(workerId, engagementId)} className="block truncate text-[13px] font-medium text-zinc-900 hover:underline dark:text-zinc-100">
+                              {worker.name}
+                            </Link>
+                            {detail && <p className={`truncate font-mono text-[11px] ${detail.tone}`}>{detail.text}</p>}
+                          </div>
                         </div>
-                      </div>
-                    ) : isNeedsSetup ? (
-                      <p className="text-[10.5px] text-orange-600 dark:text-orange-400 leading-snug font-mono line-clamp-1">
-                        Missing: {missingFields.map((f) => f.label).join(", ")}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2 space-y-1.5">
-                <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                  {hasWorkerConfigForm(workerId) ? (
-                    <button
-                      type="button"
-                      onClick={() => setExpandedWorker((prev) => (prev === workerId ? null : workerId))}
-                      title={expandedWorker === workerId ? "Close" : "Configure"}
-                      className={`transition-colors cursor-pointer ${
-                        expandedWorker === workerId
-                          ? "text-zinc-900 dark:text-zinc-100"
-                          : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                      }`}
-                    >
-                      {expandedWorker === workerId ? <X size={13} /> : <Settings2 size={13} />}
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-
-                  {/* Icon-only, no background — a bare glyph + tooltip
-                      reads cleaner in a row this dense than a repeated
-                      text+icon link, and distinct icons per destination
-                      (rather than one ExternalLink reused everywhere)
-                      keep them tellable apart without the label. */}
-                  <div className="ml-auto flex items-center gap-2.5">
-                    <Link
-                      href={`/dashboard/analytics/${workerId}`}
-                      title="Analytics"
-                      className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-                    >
-                      <TrendingUp size={13} />
-                    </Link>
-
-                    {SKILLS_WITH_OWN_PAGE.includes(workerId) && (
-                      <Link
-                        href={workerPrimaryHref(workerId, engagementId)}
-                        title="Pipeline"
-                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-                      >
-                        <Workflow size={13} />
-                      </Link>
-                    )}
-
-                    {/* rep-crisis-response's real destination is the
-                        incident tracker, not the shared findings feed —
-                        workerPrimaryHref already routes it there (see
-                        worker-registry.ts) — so it gets its own icon. */}
-                    {(REP_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) || workerId === "rep-crisis-response") && (
-                      <Link
-                        href={workerPrimaryHref(workerId, engagementId)}
-                        title={workerId === "rep-crisis-response" ? "Incidents" : "Findings"}
-                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-                      >
-                        {workerId === "rep-crisis-response" ? <ShieldAlert size={13} /> : <Search size={13} />}
-                      </Link>
-                    )}
-
-                    {COLD_OPEN_SKILLS_WITH_FINDINGS_PAGE.includes(workerId) && (
-                      <Link
-                        href={workerPrimaryHref(workerId, engagementId)}
-                        title="Pipeline"
-                        className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-                      >
-                        <Workflow size={13} />
-                      </Link>
-                    )}
-                  </div>
-                </div>
-
-                <TriggerSkillButton engagementId={engagementId} skillName={workerId} label={`Run ${worker.name}`} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                        <span className={`w-20 shrink-0 text-[12px] ${STATUS_TONE[status]}`}>{STATUS_LABEL[status]}</span>
+                        <span className="w-28 shrink-0 text-[12px] text-zinc-500 dark:text-zinc-400">
+                          {latestRun ? (
+                            <Link href={`/dashboard/runs/${latestRun.id}`} className="hover:text-zinc-900 hover:underline dark:hover:text-zinc-100">
+                              {sinceLabel(latestRun.startedAt)}
+                            </Link>
+                          ) : (
+                            "Never run"
+                          )}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {hasWorkerConfigForm(workerId) && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedWorker(workerId)}
+                              title="Configure"
+                              aria-label={`Configure ${worker.name}`}
+                              className="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
+                            >
+                              <Settings2 size={14} />
+                            </button>
+                          )}
+                          <Link href={`/dashboard/analytics/${workerId}`} title="Analytics" aria-label={`${worker.name} analytics`} className="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
+                            <TrendingUp size={14} />
+                          </Link>
+                          {isEnabled && <TriggerSkillButton engagementId={engagementId} skillName={workerId} label={`Run ${worker.name}`} compact />}
+                          <button
+                            type="button"
+                            onClick={() => !isBusy && handleToggleClick(workerId)}
+                            disabled={isBusy}
+                            role="switch"
+                            aria-checked={isEnabled}
+                            aria-label={`${worker.name} ${isEnabled ? "on" : "off"}`}
+                            title={
+                              !isEnabled && !worker.runOnSetup && productOnboarded[worker.productId] === false
+                                ? `${WORKER_REGISTRY[PRODUCT_ONBOARDING_WORKER_ID[worker.productId]].name} needs to run first${skipDismissed[worker.productId] ? "" : " (click for details)"}`
+                                : undefined
+                            }
+                            className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full border shadow-inner transition-all duration-200 ease-in-out focus:outline-none ${
+                              isEnabled ? "border-amber-500/30 bg-amber-400" : "border-zinc-400/30 bg-zinc-300 dark:border-zinc-700/50 dark:bg-zinc-800"
+                            } ${isBusy ? "opacity-50" : ""}`}
+                          >
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${isEnabled ? "translate-x-[14px]" : "translate-x-[2px]"}`} />
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+        </div>
       )}
 
       {gateWorkerId && (() => {

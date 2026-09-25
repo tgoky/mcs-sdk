@@ -147,17 +147,25 @@ export function DynamicClientReport({
       <WorkerReportBlockGrid blocks={blocks} />
 
       {silentWorkerIds.length > 0 && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-          {silentWorkerIds.map((id) => (
-            <Link
-              key={id}
-              href={workerPrimaryHref(id, engagementId)}
-              className="text-sm text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
-            >
-              {WORKER_REGISTRY[id].name} has no trend to show. See its full report
-            </Link>
-          ))}
-        </div>
+        // One line however many skills are quiet, opening to the list, so the
+        // report doesn't grow a sentence per skill switched on.
+        <details className="group pt-1 text-sm text-zinc-500 dark:text-zinc-500">
+          <summary className="cursor-pointer list-none hover:text-zinc-700 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden">
+            No trends yet for {silentWorkerIds.length === 1 ? WORKER_REGISTRY[silentWorkerIds[0]].name : `${silentWorkerIds.length} skills`}.{" "}
+            <span className="underline decoration-dotted underline-offset-2">{silentWorkerIds.length === 1 ? "See its full report" : "See which"}</span>
+          </summary>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            {silentWorkerIds.map((id) => (
+              <Link
+                key={id}
+                href={workerPrimaryHref(id, engagementId)}
+                className="hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors underline decoration-dotted underline-offset-2"
+              >
+                {WORKER_REGISTRY[id].name}
+              </Link>
+            ))}
+          </div>
+        </details>
       )}
 
       <CompareView engagementId={engagementId} />
