@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, AlertCircle, X, RotateCw, Trash2, LayoutGrid } from "lucide-react";
 import { PlatformLogo } from "@/components/platform-logo";
+import { isComposioManagedProvider } from "@/lib/composio-providers";
+import { otherGhlProvider } from "@/lib/ghl-location";
 
 interface VaultItem {
   id: string;
@@ -54,6 +56,8 @@ const PLATFORMS: PlatformDef[] = [
     group: "Booking platforms",
     composioManaged: true,
     description: "Pulls booked appointments straight from your GoHighLevel calendar.",
+    placeholder: "pit-...",
+    howTo: "GoHighLevel sub-account → Settings → Private Integrations → Create (calendars, contacts and workflows scopes)",
   },
   {
     provider: "oncehub",
@@ -70,6 +74,8 @@ const PLATFORMS: PlatformDef[] = [
     group: "Email & CRM",
     composioManaged: true,
     description: "Sends follow-up and win-back sequences through Klaviyo.",
+    placeholder: "pk_...",
+    howTo: "Klaviyo → Settings → API keys → Create Private API Key (Full Access)",
   },
   {
     provider: "hubspot",
@@ -117,7 +123,9 @@ const PLATFORMS: PlatformDef[] = [
     label: "GoHighLevel (CRM & Email)",
     group: "Email & CRM",
     composioManaged: true,
-    description: "Sends follow-ups and reads CRM activity through GoHighLevel. A separate connection from GoHighLevel Calendar above, since this app stores them as two distinct credentials even on the same GHL account.",
+    description: "Sends follow-ups and reads CRM activity through GoHighLevel. One GoHighLevel key covers this and the calendar, so connecting either card connects both.",
+    placeholder: "pit-...",
+    howTo: "GoHighLevel sub-account → Settings → Private Integrations → Create (calendars, contacts and workflows scopes)",
   },
   // Cold Open's own sending/reply platforms — audited against every
   // resolveCredential() call site in the codebase (send-connect-config-
@@ -296,8 +304,8 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
           Apps
         </h1>
         <p className="text-[15px] mt-1" style={{ color: "var(--text-muted)" }}>
-          Connect the platforms your clients use once here. Every engagement can reuse what&apos;s saved, instead of
-          pasting the same key per client.
+          Connect the platforms your clients use once here. Every client can reuse what&apos;s saved, instead of
+          pasting the same key for each one.
         </p>
       </div>
 
@@ -378,7 +386,15 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {platforms.map((platform) => {
                   const saved = items.filter((i) => i.provider === platform.provider);
-                  const isConnected = saved.length > 0;
+                  // One GoHighLevel token covers both booking and CRM/email
+                  // (ghl-location.ts), so a token saved under either half
+                  // connects this one too.
+                  const twin = otherGhlProvider(platform.provider);
+                  const coveredBy = saved.length === 0 && twin ? items.filter((i) => i.provider === twin) : [];
+                  const isConnected = saved.length > 0 || coveredBy.length > 0;
+                  // Sign in only where Composio can really complete it
+                  // (composio-providers.ts), not wherever it was once assumed.
+                  const signIn = platform.composioManaged && isComposioManagedProvider(platform.provider);
                   return (
                     <div
                       key={platform.provider}
@@ -413,9 +429,9 @@ export function AppsPageClient({ initialItems }: { initialItems: VaultItem[] }) 
                         style={{ borderTop: "1px solid var(--border)" }}
                       >
                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {isConnected ? `${saved.length} saved` : "Not connected"}
+                          {saved.length > 0 ? `${saved.length} saved` : coveredBy.length > 0 ? "Connected through the other GoHighLevel card" : "Not connected"}
                         </span>
-                        {platform.composioManaged ? (
+                        {signIn ? (
                           <button
                             type="button"
                             onClick={() => connect(platform.provider)}

@@ -454,9 +454,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                           </span>
                         </div>
                       </div>
-                    ) : (
-                      <span className="text-xs text-zinc-400 dark:text-zinc-600 font-mono italic block">No calls</span>
-                    )}
+                    ) : null /* an empty day stays empty: "No calls" in every cell was noise */}
                   </div>
                 </button>
               );

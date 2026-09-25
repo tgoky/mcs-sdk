@@ -866,7 +866,9 @@ export function UnifiedActivityPanel({
                 control now (click it to clear every rail selection). */}
             {groupingMode === "worker" ? (
               filteredInstalledProducts.length === 0 ? (
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic px-2.5 py-2">No products installed for this client yet.</p>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic px-2.5 py-2">
+                  {installedProductIds.length === 0 ? "No skills are on for this client yet." : `Nothing matches "${railSearch.trim()}".`}
+                </p>
               ) : (
                 filteredInstalledProducts.map((productId) => {
                   const isSelected = selectedProductId === productId && !selectedWorkerId;

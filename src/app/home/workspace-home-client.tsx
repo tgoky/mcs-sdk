@@ -353,9 +353,9 @@ export function WorkspaceHomeClient({
     <main className="flex-1 py-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-sans">
-          <span className="font-bold text-zinc-900 dark:text-zinc-100">Workspaces</span>
+          <span className="font-bold text-zinc-900 dark:text-zinc-100">Clients</span>
           <span>|</span>
-          <span>Showing all workspaces ({workspaceList.length})</span>
+          <span>Showing all clients ({workspaceList.length})</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center p-0.5 rounded-md bg-zinc-200/60 dark:bg-zinc-900 border border-zinc-300/60 dark:border-zinc-800">
@@ -391,7 +391,7 @@ export function WorkspaceHomeClient({
             className="hover-lift press-settle inline-flex items-center gap-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-zinc-950 px-3 py-1.5 text-xs font-bold transition-all duration-200 shadow-elevation-1"
           >
             <Plus size={14} />
-            <span>Add workspace</span>
+            <span>Add client</span>
           </Link>
         </div>
       </div>
