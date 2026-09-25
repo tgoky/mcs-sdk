@@ -1532,7 +1532,7 @@ function Review({
         size={44}
         leading={leading}
         eyebrow="Reputation Manager"
-        title={`${name || data.buyer}, right now`}
+        title={name || data.buyer}
         subtitle={
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--text-muted)]">
             {data.website.domain && <span className="text-[var(--text-secondary)]">{data.website.domain}</span>}
