@@ -588,44 +588,59 @@ export function ShowtimeSetup({
 
   const shownGroups = SHOWTIME_TOOL_GROUPS.filter((g) => needs.groups.has(g.id) || needs.optionalGroups.has(g.id));
   const toolRows = (compact: boolean) => (
-    <div ref={toolsRef} className={cn("space-y-5", compact && "space-y-4")}>
-      {shownGroups.length === 0 && <p className="text-[13px] text-[var(--text-muted)]">Switch on a skill above and we&apos;ll show only the tools it uses.</p>}
-      {shownGroups.map((group) => (
-        <motion.div
-          key={group.id}
-          animate={flashGroup === group.id ? { backgroundColor: ["rgba(0,0,0,0)", "var(--surface-prefill)", "rgba(0,0,0,0)"] } : {}}
-          transition={{ duration: 1.4 }}
-          className="-mx-3 grid grid-cols-1 gap-3 rounded-xl px-3 py-1 @xl:grid-cols-[140px_1fr] @xl:items-center"
-        >
-          <div>
-            <p className="text-sm font-medium text-[var(--text-primary)]">
-              {group.label}
-              {!needs.groups.has(group.id) && <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">Optional</span>}
-              {focused && blockers.some((b) => b.group === group.id) && (
-                <span className="ml-1.5 align-middle">
-                  <NeededMark />
-                </span>
-              )}
-            </p>
-            <p className="text-xs text-[var(--text-muted)]">{group.hint}</p>
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-3">
-            {group.tools.map((tool) => (
-              <ToolAvatar
-                key={`${group.id}-${tool.provider}`}
-                tool={tool}
-                state={toolState(tool.provider, group.id)}
-                selected={draft.platforms[group.id] === tool.provider}
-                buyer={data.buyer}
-                actions={toolActions}
-                size={compact ? 42 : 48}
-              />
-            ))}
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
+  <div 
+    ref={toolsRef} 
+    className={cn(
+      "space-y-6 divide-y divide-[var(--border)]/40", 
+      compact && "space-y-4"
+    )}
+  >
+    {shownGroups.length === 0 && (
+      <p className="text-[13px] text-[var(--text-muted)]">
+        Switch on a skill above and we&apos;ll show only the tools it uses.
+      </p>
+    )}
+    {shownGroups.map((group, index) => (
+      <motion.div
+        key={group.id}
+        animate={flashGroup === group.id ? { backgroundColor: ["rgba(0,0,0,0)", "var(--surface-prefill)", "rgba(0,0,0,0)"] } : {}}
+        transition={{ duration: 1.4 }}
+        className={cn(
+          "-mx-3 grid grid-cols-1 gap-3 rounded-xl px-3 py-1 @xl:grid-cols-[140px_1fr] @xl:items-center",
+          index > 0 && "pt-6" // Adds padding above the divider line for each section after the first
+        )}
+      >
+        <div>
+          <p className="text-sm font-medium text-[var(--text-primary)]">
+            {group.label}
+            {!needs.groups.has(group.id) && (
+              <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">Optional</span>
+            )}
+            {focused && blockers.some((b) => b.group === group.id) && (
+              <span className="ml-1.5 align-middle">
+                <NeededMark />
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-[var(--text-muted)]">{group.hint}</p>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-3">
+          {group.tools.map((tool) => (
+            <ToolAvatar
+              key={`${group.id}-${tool.provider}`}
+              tool={tool}
+              state={toolState(tool.provider, group.id)}
+              selected={draft.platforms[group.id] === tool.provider}
+              buyer={data.buyer}
+              actions={toolActions}
+              size={compact ? 42 : 48}
+            />
+          ))}
+        </div>
+      </motion.div>
+    ))}
+  </div>
+);
 
   return (
     <div className="@container w-full font-sans text-[var(--text-secondary)] antialiased">
