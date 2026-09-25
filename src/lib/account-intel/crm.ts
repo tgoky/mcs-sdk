@@ -6,6 +6,7 @@
 // team. One pull per vendor, same AccountIntel shape for each. Every part
 // is optional; a part the connection can't see is reported as blocked.
 
+import { mailchimpDatacenter, mailchimpApiEndpoint } from "@/lib/outbound-urls";
 import { summarizeCampaigns, summarizeDeals, type CampaignRecord, type DealRecord } from "./analyze";
 import { pullGhlCalendars } from "./booking";
 import { AccountReader, inBatches, type Raw } from "./reader";
@@ -283,12 +284,14 @@ export async function pullKlaviyo(apiKey: string, now = new Date()): Promise<Acc
 /** A pasted key ends in its datacenter ("-us6"); an OAuth token doesn't,
  * and Mailchimp's metadata endpoint says which one it lives on. */
 export async function mailchimpBase(token: string): Promise<{ base: string; auth: string } | null> {
-  const dc = token.includes("-") ? token.split("-").pop() : null;
-  if (dc && /^[a-z]+\d+$/.test(dc)) return { base: `https://${dc}.api.mailchimp.com/3.0`, auth: `Bearer ${token}` };
+  const dc = mailchimpDatacenter(token);
+  if (dc) return { base: `https://${dc}.api.mailchimp.com/3.0`, auth: `Bearer ${token}` };
   const r = new AccountReader({ Authorization: `OAuth ${token}` }, 8000);
   const meta = await r.json<{ api_endpoint?: string; dc?: string }>("account", "https://login.mailchimp.com/oauth2/metadata");
-  const endpoint = meta?.api_endpoint ?? (meta?.dc ? `https://${meta.dc}.api.mailchimp.com` : null);
-  return endpoint ? { base: `${endpoint.replace(/\/+$/, "")}/3.0`, auth: `Bearer ${token}` } : null;
+  // The metadata's endpoint is where the token gets sent next, so it's held
+  // to a real <dc>.api.mailchimp.com host.
+  const endpoint = mailchimpApiEndpoint(meta?.api_endpoint ?? (meta?.dc ? `https://${meta.dc}.api.mailchimp.com` : null));
+  return endpoint ? { base: `${endpoint}/3.0`, auth: `Bearer ${token}` } : null;
 }
 
 export async function pullMailchimp(token: string, now = new Date()): Promise<AccountIntel> {

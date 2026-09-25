@@ -7,6 +7,7 @@
 // Paste-a-key providers (Cal.com, Twilio, the Cold Open ESPs) are harvested
 // by paste-key-harvest.ts instead; Whop by its own connect flow.
 
+import { mailchimpDatacenter } from "@/lib/outbound-urls";
 import { fetchWithTimeout } from "@/lib/http";
 import { upsertClientFact } from "@/lib/client-facts";
 import { seedPrimaryDomainFromUrl } from "@/lib/client-profile";
@@ -182,8 +183,8 @@ async function harvestKlaviyo(engagementId: string, apiKey: string): Promise<str
 
 // ── 4. MAILCHIMP HARVESTER ──────────────────────────────────────────────
 async function harvestMailchimp(engagementId: string, apiKey: string): Promise<string[]> {
-  const dc = apiKey.split("-").pop();
-  if (!dc || dc === apiKey) {
+  const dc = mailchimpDatacenter(apiKey);
+  if (!dc) {
     throw new Error("Mailchimp API key is missing datacenter suffix (e.g. -us6).");
   }
 

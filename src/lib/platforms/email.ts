@@ -9,6 +9,7 @@
  */
 
 
+import { mailchimpDatacenter } from "@/lib/outbound-urls";
 import { fetchWithTimeout } from "@/lib/http";
 import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
 import crypto from "crypto";
@@ -1263,7 +1264,7 @@ export class MailchimpClient {
    * separate "base URL" the buyer has to look up, unlike ActiveCampaign.
    */
   constructor(apiKey: string) {
-    const dc = apiKey.includes("-") ? apiKey.slice(apiKey.lastIndexOf("-") + 1) : "";
+    const dc = mailchimpDatacenter(apiKey);
     if (!dc) {
       throw new Error(
         `Mailchimp API key doesn't carry a datacenter suffix (expected e.g. "...-us21"). This doesn't look like a valid Mailchimp key.`

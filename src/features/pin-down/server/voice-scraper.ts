@@ -8,6 +8,7 @@
 // twice (text here, HTML again in design-scraper.ts) and a third time
 // fetched without JavaScript for social links and booking detection, and
 // only four pages could use Firecrawl at all.
+import { mailchimpDatacenter } from "@/lib/outbound-urls";
 import { fetchWithTimeout } from "@/lib/http";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
@@ -483,7 +484,7 @@ async function scrapeKlaviyoBroadcasts(apiKey: string): Promise<{ text: string; 
 }
 
 async function scrapeMailchimpBroadcasts(apiKey: string): Promise<{ text: string; wordCount: number }[]> {
-  const dc = apiKey.includes("-") ? apiKey.slice(apiKey.lastIndexOf("-") + 1) : "";
+  const dc = mailchimpDatacenter(apiKey);
   if (!dc) return [];
   const authHeader = `Basic ${Buffer.from(`anystring:${apiKey}`).toString("base64")}`;
 

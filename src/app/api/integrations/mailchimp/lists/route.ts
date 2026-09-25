@@ -1,3 +1,4 @@
+import { mailchimpDatacenter } from "@/lib/outbound-urls";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
@@ -39,8 +40,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing API Key parameter" }, { status: 400 });
     }
 
-    const dc = apiKey.trim().split("-").pop();
-    if (!dc || dc === apiKey.trim()) {
+    const dc = mailchimpDatacenter(apiKey);
+    if (!dc) {
       return NextResponse.json({ error: "This doesn't look like a Mailchimp API key. It should end with a datacenter suffix like -us21." }, { status: 400 });
     }
 
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
 
       if (!res.ok) {
         const errorBody = await res.text().catch(() => "Unknown");
-        return NextResponse.json({ error: `Mailchimp API rejected key [${res.status}]: ${errorBody}` }, { status: res.status });
+        return NextResponse.json({ error: `Mailchimp API rejected key [${res.status}]: ${errorBody.slice(0, 300)}` }, { status: res.status });
       }
 
       const payload: { lists?: Array<{ id: string; name?: string }>; total_items?: number } = await res.json();

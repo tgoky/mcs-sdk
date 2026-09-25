@@ -8,6 +8,7 @@
 // every vendor call.
 
 import { klaviyoAuthorization } from "@/lib/klaviyo-auth";
+import { activeCampaignApiBase, mailchimpDatacenter, ACTIVECAMPAIGN_URL_HINT } from "@/lib/outbound-urls";
 
 export type StackOption = { id: string; name: string };
 type Option = StackOption;
@@ -73,8 +74,8 @@ export async function fetchStackOptions(resource: string, credential: string, pa
     }
 
     case "mailchimp-lists": {
-      const dc = credential.trim().split("-").pop();
-      if (!dc || dc === credential.trim()) throw new Error("Saved Mailchimp key has no datacenter suffix (e.g. -us21). It may not be a valid API key.");
+      const dc = mailchimpDatacenter(credential);
+      if (!dc) throw new Error("Saved Mailchimp key has no datacenter suffix (e.g. -us21). It may not be a valid API key.");
       const res = await fetch(`https://${dc}.api.mailchimp.com/3.0/lists?count=100&fields=lists.id,lists.name`, {
         headers: { Authorization: `Basic ${Buffer.from(`anystring:${credential}`).toString("base64")}`, Accept: "application/json" },
       });
@@ -99,8 +100,12 @@ export async function fetchStackOptions(resource: string, credential: string, pa
 
     case "activecampaign-lists":
     case "activecampaign-automations": {
-      const baseUrl = params.get("baseUrl")?.trim().replace(/\/+$/, "");
-      if (!baseUrl) throw new Error('Enter the ActiveCampaign "Account base URL" field above first. It tells us which account to ask.');
+      // Held to the account's own ActiveCampaign host (outbound-urls.ts), like
+      // every other ActiveCampaign call: the saved token is sent to it.
+      const typed = params.get("baseUrl")?.trim();
+      if (!typed) throw new Error('Enter the ActiveCampaign "Account base URL" field above first. It tells us which account to ask.');
+      const baseUrl = activeCampaignApiBase(typed);
+      if (!baseUrl) throw new Error(ACTIVECAMPAIGN_URL_HINT);
       const path = resource === "activecampaign-lists" ? "lists" : "automations";
       const res = await fetch(`${baseUrl}/${path}?limit=100`, { headers: { "Api-Token": credential, "Content-Type": "application/json" } });
       if (!res.ok) throw new Error(`ActiveCampaign rejected the saved key [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 300)}`);
