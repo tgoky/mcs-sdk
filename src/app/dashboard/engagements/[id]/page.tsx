@@ -41,6 +41,7 @@ import { startOfWeek } from "@/lib/dashboard-stats";
 import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
 import { getClientResults } from "@/features/reports/server/client-results";
+import { getConnectedResults } from "@/features/reports/server/connected-results";
 import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import {
   SKILLS,
@@ -184,12 +185,19 @@ export default async function EngagementDetailPage({
     if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
     return null;
   };
-  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot, [clientResults]] = await Promise.all([
+  // The products this client has on, for what they did together.
+  const productsOn = new Set(workerIds.map((w) => WORKER_REGISTRY[w].productId));
+  const [weekBlocks, monthBlocks, allTimeBlocks, priorWeekSnapshot, [clientResults], connectedResults] = await Promise.all([
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("week") }),
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("month") }),
     getReportBlocksForEngagement(id, workerIds, { start: reportPeriodStart("all_time") }),
     getPriorSnapshot(id, startOfWeek(now)),
     getClientResults([{ engagementId: id, buyer: engagement.buyer, offerPrice: typeof offerDetails?.price === "string" ? offerDetails.price : null }], now),
+    getConnectedResults(id, productsOn, now).catch((err) => {
+      // The report still renders without it.
+      console.error(`[engagement] connected results failed for ${id}:`, err instanceof Error ? err.message : err);
+      return null;
+    }),
   ]);
   const reportBlocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]> = {
     week: attachTrends(weekBlocks, priorWeekSnapshot?.blocks ?? null),
@@ -337,7 +345,7 @@ export default async function EngagementDetailPage({
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
         <div data-tour="engagement-report">
-          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} />
+          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} connected={connectedResults} />
         </div>
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />

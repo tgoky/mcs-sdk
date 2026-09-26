@@ -66,3 +66,19 @@ export interface ClientResults {
   products: ProductResults[];
   showRate: ShowRateThenNow | null;
 }
+
+/** What the products a client has on did together in the window: the
+ * journey from first email to money (features/reports/server/connected-results.ts).
+ * A stage is present only when the product that sees it is on. */
+export interface ConnectedResults {
+  products: ("cold-open" | "showtime" | "whop-agent" | "reputation-manager")[];
+  funnel: { emailed?: number; replied?: number; booked?: number; showed?: number; paid?: number };
+  /** Whop payments in the window, in the client's main currency. */
+  money: { collected: number; refunded: number; kept: number; currency: string; payments: number } | null;
+  /** Bookings by people Cold Open emailed (Cold Open + Showtime on). */
+  fromColdOpen: { booked: number; showed: number; paid: number; value: number | null } | null;
+  /** Buyers who paid after showing up to a call (Showtime + Whop on). */
+  paidAfterCall: { buyers: number; value: number } | null;
+  /** Each Cold Open campaign carried through to calls and money. */
+  campaigns: { campaignId: string; emailed: number; booked: number; showed: number; paid: number; value: number | null }[];
+}

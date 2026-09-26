@@ -20,8 +20,9 @@ import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { WorkerReportBlockGrid } from "./worker-report-block-grid";
 import { CompareView } from "./compare-view";
 import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
-import { RESULTS_WINDOW_DAYS, type ClientResults } from "@/lib/client-results-shape";
+import { RESULTS_WINDOW_DAYS, type ClientResults, type ConnectedResults } from "@/lib/client-results-shape";
 import { ProductResultsGrid, ShowRateThenNowCard } from "@/components/analytics/client-results-section";
+import { ConnectedResultsCard } from "@/components/analytics/connected-results-card";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
   { key: "week", label: "This week" },
@@ -35,6 +36,7 @@ export function DynamicClientReport({
   blocksByPeriod,
   enabledWorkerIds,
   results,
+  connected,
 }: {
   engagementId: string;
   /** Real Showtime offer context when this client has one set up (pin-down)
@@ -53,6 +55,9 @@ export function DynamicClientReport({
   /** What this client got per product, last 30 days against the 30 before
    * (client-results.ts). The same numbers Analytics shows for them. */
   results?: ClientResults | null;
+  /** What this client's products did together (connected-results.ts);
+   * null with fewer than two products contributing. */
+  connected?: ConnectedResults | null;
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const blocks = blocksByPeriod[period];
@@ -115,6 +120,8 @@ export function DynamicClientReport({
           ))}
         </div>
       </div>
+
+      {connected && <ConnectedResultsCard connected={connected} />}
 
       {results && results.products.length > 0 && (
         <div className="space-y-3">
