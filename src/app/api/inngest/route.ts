@@ -45,6 +45,8 @@ import {
   processWeeklyMetricsEngagementCron,
   weeklySnapshotCron,
   processWeeklySnapshotEngagementCron,
+  accountReviewSweepCron,
+  processAccountReviewSweepEngagementCron,
   bookingPollCron,
   processBookingPollEngagementCron,
   docsLinksValidatorCron,
@@ -120,6 +122,11 @@ export const { GET, POST, PUT } = serve({
     // src/features/reports/server/weekly-snapshot.ts.
     weeklySnapshotCron,
     processWeeklySnapshotEngagementCron,
+    // Account review auto-refresh — weekly, and a no-op LLM-call-wise for
+    // any client whose numbers haven't moved since their last stored
+    // review. See src/features/reports/server/account-advisor.ts.
+    accountReviewSweepCron,
+    processAccountReviewSweepEngagementCron,
     // Polling fallback for booking platforms without live webhooks — see
     // src/features/pin-down/server/booking-poller.ts (Pin-Down recovery gap 5).
     bookingPollCron,

@@ -46,13 +46,18 @@ export function AccountAdvisorPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Account review</h2>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Account review</h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Refreshes automatically about once a week when something&apos;s moved — generate anytime for an on-demand read.
+          </p>
+        </div>
         <button
           type="button"
           onClick={generate}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 px-3.5 py-2 text-sm font-semibold text-white dark:text-zinc-900 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg surface-glass-3 no-ambient-glow hover:bg-zinc-200/70 dark:hover:bg-zinc-800 disabled:opacity-50 px-3.5 py-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100 transition-colors cursor-pointer"
         >
           {loading && <Loader2 size={13} className="animate-spin" />}
           {loading ? "Reviewing…" : "Generate account review"}

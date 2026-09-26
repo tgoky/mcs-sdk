@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { EngagementPauseControl } from "./pause-control";
+import { ReportPeriodProvider, PeriodTabs } from "./report-period-context";
 import { WorkersPanel } from "./workers-panel";
 import { RepAuditLogPanel } from "./rep-audit-log-panel";
 import { MasterRosterCalendar } from "./master-roster-calendar";
@@ -271,6 +272,10 @@ export default async function EngagementDetailPage({
 
       {/* Page Content */}
       <div className="relative z-10 space-y-6">
+      {/* Shares the selected report period between the tab control (up
+          here, same line as Pause/Modify) and DynamicClientReport (a
+          sibling further down) — see report-period-context.tsx. */}
+      <ReportPeriodProvider>
 
         {/* Flat Header Section */}
         <div className="space-y-5 border-b border-zinc-200 dark:border-zinc-800/80 pb-5">
@@ -315,6 +320,7 @@ export default async function EngagementDetailPage({
                 />
               )}
               <div className="flex items-center gap-2" data-tour="engagement-pause-control">
+                <PeriodTabs />
                 <EngagementPauseControl
                   engagementId={engagement.engagementId}
                   initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
@@ -347,6 +353,7 @@ export default async function EngagementDetailPage({
         <div data-tour="engagement-report">
           <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} connected={connectedResults} />
         </div>
+      </ReportPeriodProvider>
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
 

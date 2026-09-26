@@ -5,6 +5,7 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/components/reports/compare-view", () => ({ CompareView: () => null }));
 
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { ReportPeriodProvider, PeriodTabs } from "@/app/dashboard/engagements/[id]/report-period-context";
 import { emptyCounts } from "@/features/reports/server/client-results";
 import type { ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 
@@ -14,21 +15,24 @@ describe("client report", () => {
   it("puts each skill's numbers inside its product's card, and keeps Targeting as its own line", () => {
     const week = [block("pin-down", "Bookings", "0"), block("win-back", "Win-back recovery", "No data"), block("rep-engine-panel", "AI engine mentions", "0")];
     render(
-      <DynamicClientReport
-        engagementId="e1"
-        offerDetails={{ name: "AI Clarity Call", icp: "Business owners pitched by AI agencies." }}
-        blocksByPeriod={{ week, month: [block("pin-down", "Bookings", "4")], all_time: [] }}
-        enabledWorkerIds={["pin-down", "win-back", "rep-engine-panel"]}
-        results={{
-          engagementId: "e1",
-          buyer: "b",
-          current: emptyCounts(),
-          previous: emptyCounts(),
-          products: [{ product: "showtime", metrics: [{ key: "booked", label: "Calls booked", current: 0, previous: 2, format: "count", better: "up" }] }],
-          showRate: null,
-          holdout: null,
-        }}
-      />
+      <ReportPeriodProvider>
+        <PeriodTabs />
+        <DynamicClientReport
+          engagementId="e1"
+          offerDetails={{ name: "AI Clarity Call", icp: "Business owners pitched by AI agencies." }}
+          blocksByPeriod={{ week, month: [block("pin-down", "Bookings", "4")], all_time: [] }}
+          enabledWorkerIds={["pin-down", "win-back", "rep-engine-panel"]}
+          results={{
+            engagementId: "e1",
+            buyer: "b",
+            current: emptyCounts(),
+            previous: emptyCounts(),
+            products: [{ product: "showtime", metrics: [{ key: "booked", label: "Calls booked", current: 0, previous: 2, format: "count", better: "up" }] }],
+            showRate: null,
+            holdout: null,
+          }}
+        />
+      </ReportPeriodProvider>
     );
     const showtime = screen.getByText("Showtime").parentElement!;
     expect(within(showtime).getByText("Calls booked")).toBeTruthy();

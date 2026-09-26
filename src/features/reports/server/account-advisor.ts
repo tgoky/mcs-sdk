@@ -15,13 +15,14 @@
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { accountReviews, engagements } from "@/models/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 import { callClaudeWithRetry, MODEL } from "@/lib/llm";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { computeCorrelationFlags } from "@/lib/report-correlation";
 import { startOfWeek } from "@/lib/dashboard-stats";
+import { isEngagementPaused } from "@/lib/engagement-status";
 
 export interface AccountReview {
   id: string;
@@ -98,6 +99,64 @@ ${correlationFlags.length > 0 ? `\nFlagged correlations:\n${correlationFlags.map
   await db.insert(accountReviews).values({ id, engagementId, reviewText, blocksSnapshot: weekBlocks, generatedAt });
 
   return { id, reviewText, generatedAt };
+}
+
+/** A cheap fingerprint of what the review would be grounded in — just
+ * (workerId, label, value) triples, not displayValue/trendLabel/tone,
+ * which are all derived from `value` and would make two fingerprints of
+ * the same underlying numbers look different. */
+function blocksFingerprint(blocks: Pick<ReportBlockWithTrend, "workerId" | "label" | "value">[]): string {
+  return JSON.stringify(
+    blocks.map((b) => [b.workerId, b.label, b.value] as const).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  );
+}
+
+/** Every non-deleted, non-paused engagement with at least one enabled
+ * worker — the weekly sweep's candidate list. Whether each one actually
+ * gets a fresh review (and pays for an LLM call) is decided per-engagement
+ * in autoGenerateAccountReviewIfChanged below. */
+export async function findEngagementsForAccountReviewSweep(): Promise<string[]> {
+  const rows = await db
+    .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt })
+    .from(engagements)
+    .where(isNull(engagements.deletedAt));
+  return rows.filter((row) => !isEngagementPaused(row)).map((row) => row.engagementId);
+}
+
+/**
+ * The auto-refresh half of account reviews (see this file's header for why
+ * generation itself stays user-triggerable, not just automatic): fires
+ * weekly, not daily, and even then only actually calls the model when this
+ * week's blocks differ from the last stored review's blocksSnapshot. A
+ * quiet client whose numbers haven't moved gets no new review and no LLM
+ * call — the fingerprint check is what makes "weekly" cheap rather than
+ * merely less frequent than daily. Returns null (no review, no call) both
+ * when there's nothing to review yet and when nothing has changed.
+ */
+export async function autoGenerateAccountReviewIfChanged(engagementId: string): Promise<AccountReview | null> {
+  const enabledWorkerIds = await getEnabledWorkerIdsForEngagement(engagementId);
+  if (enabledWorkerIds.length === 0) return null;
+
+  const weekBlocks = await getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: startOfWeek(new Date()) });
+  if (weekBlocks.length === 0) return null;
+
+  const [latest] = await db
+    .select({ blocksSnapshot: accountReviews.blocksSnapshot })
+    .from(accountReviews)
+    .where(eq(accountReviews.engagementId, engagementId))
+    .orderBy(desc(accountReviews.generatedAt))
+    .limit(1);
+
+  if (latest) {
+    const priorBlocks = (latest.blocksSnapshot as ReportBlockWithTrend[] | null) ?? [];
+    if (blocksFingerprint(priorBlocks) === blocksFingerprint(weekBlocks)) {
+      // Same numbers as the last review — nothing to say that hasn't
+      // already been said, so skip the model call entirely.
+      return null;
+    }
+  }
+
+  return generateAccountReview(engagementId);
 }
 
 export async function getRecentAccountReviews(engagementId: string, limit = 5): Promise<AccountReview[]> {

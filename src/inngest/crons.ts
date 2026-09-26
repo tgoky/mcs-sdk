@@ -26,7 +26,8 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
+import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChanged } from "@/features/reports/server/account-advisor";
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
@@ -484,6 +485,45 @@ export const processWeeklySnapshotEngagementCron = inngest.createFunction(
   { id: "process-weekly-snapshot-engagement", triggers: [weeklySnapshotEngagement], retries: 2 },
   async ({ event }) => {
     return processWeeklySnapshotForEngagement(event.data.engagementId);
+  }
+);
+
+/**
+ * Account review auto-refresh (see account-advisor.ts's header on why
+ * generation itself stays user-triggerable, plus autoGenerateAccountReviewIfChanged
+ * for the actual gate). Was purely manual before — a client's real read
+ * could sit stale indefinitely with no visible sign of it, and nobody
+ * looking at the dashboard had any way to tell a quiet page from a stale
+ * one. Weekly, same cadence as weeklySnapshotCron, and offset a few
+ * minutes after it so this week's snapshot (and any resulting trend) is
+ * already written by the time a review would read it. The real cost
+ * control isn't the weekly cadence though — it's the fingerprint check
+ * inside autoGenerateAccountReviewIfChanged, which skips the LLM call
+ * entirely for any engagement whose numbers haven't moved since its last
+ * stored review, weekly or not.
+ */
+export const accountReviewSweepCron = inngest.createFunction(
+  { id: "account-review-sweep-cron", triggers: [{ cron: "TZ=UTC 15 0 * * 1" }], retries: 1 }, // Monday 00:15 UTC
+  async ({ step }) => {
+    const engagementIds = await step.run("find-engagements-for-account-review-sweep", () => findEngagementsForAccountReviewSweep());
+
+    if (engagementIds.length > 0) {
+      await step.sendEvent(
+        "dispatch-account-review-sweep",
+        engagementIds.map((engagementId) => accountReviewSweepEngagement.create({ engagementId }))
+      );
+    }
+
+    return { dispatched: engagementIds.length };
+  }
+);
+
+/** Fanned-out handler: one engagement's own auto-refresh check + (maybe) generation. */
+export const processAccountReviewSweepEngagementCron = inngest.createFunction(
+  { id: "process-account-review-sweep-engagement", triggers: [accountReviewSweepEngagement], retries: 1 },
+  async ({ event }) => {
+    const review = await autoGenerateAccountReviewIfChanged(event.data.engagementId);
+    return { generated: review !== null };
   }
 );
 

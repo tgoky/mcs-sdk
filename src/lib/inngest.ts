@@ -159,6 +159,18 @@ export const weeklySnapshotEngagement = eventType("reports/weekly-snapshot-engag
   schema: staticSchema<WeeklySnapshotEngagementData>(),
 });
 
+// Account review auto-refresh — see account-advisor.ts's
+// autoGenerateAccountReviewIfChanged. Weekly, not daily, and even then a
+// no-op (no LLM call) whenever an engagement's numbers haven't moved since
+// its last stored review — same fan-out shape as weeklySnapshotEngagement
+// above, one event per engagement.
+export type AccountReviewSweepEngagementData = {
+  engagementId: string;
+};
+export const accountReviewSweepEngagement = eventType("reports/account-review-sweep-engagement", {
+  schema: staticSchema<AccountReviewSweepEngagementData>(),
+});
+
 // Pin-Down recovery gap 5 — polling fallback for booking platforms without
 // (or not configured for) webhooks. Same fan-out shape as the crons
 // above: bookingPollCron does a cheap DB-only scan for engagements due for
