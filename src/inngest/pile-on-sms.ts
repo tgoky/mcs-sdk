@@ -4,6 +4,7 @@ import { engagements, sequenceMessageLog, type EngagementStack } from "@/models/
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
+import { receiptColumns, twilioStatusCallbackUrl } from "@/lib/delivery-receipts";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 
@@ -157,9 +158,9 @@ export const processPileOnSmsSequence = inngest.createFunction(
 
       // Execute out-of-band message delivery step safely
       try {
-        await step.run(`send-${msg.id}`, async () => {
+        const receipt = await step.run(`send-${msg.id}`, async () => {
           const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
-          await sendSmsForTenant(
+          return sendSmsForTenant(
             stack.sms_platform!,
             apiKey,
             {
@@ -169,7 +170,8 @@ export const processPileOnSmsSequence = inngest.createFunction(
             },
             { email: prospectEmail, phone: prospectPhone },
             msg.body,
-            stack.sms_a2p_10dlc_status
+            stack.sms_a2p_10dlc_status,
+            { statusCallbackUrl: twilioStatusCallbackUrl(engagementId) ?? undefined }
           );
         });
         await step.run(`log-sent-${msg.id}`, async () => {
@@ -183,6 +185,7 @@ export const processPileOnSmsSequence = inngest.createFunction(
             prospectEmail,
             prospectPhone,
             status: "sent",
+            ...receiptColumns(receipt),
           });
         });
         sent++;

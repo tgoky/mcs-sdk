@@ -16,6 +16,7 @@
  */
 
 import { fetchWithTimeout } from "@/lib/http";
+import type { SendReceipt } from "@/lib/delivery-receipts";
 
 // ── Twilio ────────────────────────────────────────────────────────────────
 
@@ -40,12 +41,15 @@ export class TwilioClient {
    * a scheduled sequence needs the caller (pile-on-sms.ts) to know so it
    * can log the failure rather than silently skip a message.
    */
-  async sendSms(to: string, body: string): Promise<{ sid: string }> {
+  async sendSms(to: string, body: string, statusCallbackUrl?: string): Promise<{ sid: string }> {
     if (!this.messagingServiceSid && !this.fromNumber) {
       throw new Error("Twilio send requires either twilio_messaging_service_sid or twilio_from_number in sms_platform_meta");
     }
 
     const params = new URLSearchParams({ To: to, Body: body });
+    // Twilio posts the message's delivery status here (delivered,
+    // undelivered, failed): the proof it reached the phone.
+    if (statusCallbackUrl) params.set("StatusCallback", statusCallbackUrl);
     if (this.messagingServiceSid) {
       params.set("MessagingServiceSid", this.messagingServiceSid);
     } else {
@@ -67,6 +71,7 @@ export class TwilioClient {
     }
 
     const data = await res.json();
+    if (typeof data?.sid !== "string" || !data.sid) throw new Error("Twilio accepted the send but returned no message SID.");
     return { sid: data.sid };
   }
 
@@ -111,7 +116,7 @@ export class GHLSmsClient {
    * contact-scoped, not phone-number-scoped, same lookup-by-email pattern
    * GHLCRMClient uses in email.ts.
    */
-  async sendSms(email: string, body: string): Promise<void> {
+  async sendSms(email: string, body: string): Promise<{ messageId: string | null }> {
     const contactId = await this.findContactId(email);
     if (!contactId) {
       throw new Error(`No GHL contact found for ${email}. Can't send SMS to a contact that doesn't exist yet.`);
@@ -131,6 +136,10 @@ export class GHLSmsClient {
       const errBody = await res.text().catch(() => "");
       throw new Error(`GHL SMS send failed [${res.status}]: ${errBody.slice(0, 300)}`);
     }
+    // GHL answers with the message it created; its id is the receipt.
+    const data = (await res.json().catch(() => null)) as { messageId?: unknown; id?: unknown } | null;
+    const messageId = typeof data?.messageId === "string" ? data.messageId : typeof data?.id === "string" ? data.id : null;
+    return { messageId };
   }
 }
 
@@ -208,8 +217,9 @@ export async function sendSmsForTenant(
   meta: SmsTenantMeta | undefined,
   to: { email: string; phone?: string },
   body: string,
-  a2p10dlcStatus?: "not_started" | "brand_registered" | "campaign_approved"
-): Promise<void> {
+  a2p10dlcStatus?: "not_started" | "brand_registered" | "campaign_approved",
+  options: { statusCallbackUrl?: string } = {}
+): Promise<SendReceipt> {
   // Centralized compliance parsing runs before hitting provider network switch boundaries
   const complianceBody = appendComplianceFooter(
     body,
@@ -227,17 +237,18 @@ export async function sendSmsForTenant(
       }
       if (!to.phone) throw new Error("Twilio send requires a phone number. None was captured for this prospect.");
       if (!meta?.twilio_account_sid) throw new Error("Missing twilio_account_sid in sms_platform_meta");
-      await new TwilioClient(meta.twilio_account_sid, apiKey, meta.twilio_messaging_service_sid, meta.twilio_from_number).sendSms(
+      const { sid } = await new TwilioClient(meta.twilio_account_sid, apiKey, meta.twilio_messaging_service_sid, meta.twilio_from_number).sendSms(
         to.phone,
-        complianceBody
+        complianceBody,
+        options.statusCallbackUrl
       );
-      return;
+      return { provider: "twilio", providerMessageId: sid };
     }
 
     case "ghl_sms": {
       if (!meta?.ghl_location_id) throw new Error("Missing ghl_location_id in sms_platform_meta");
-      await new GHLSmsClient(apiKey, meta.ghl_location_id).sendSms(to.email, complianceBody);
-      return;
+      const { messageId } = await new GHLSmsClient(apiKey, meta.ghl_location_id).sendSms(to.email, complianceBody);
+      return { provider: "ghl_sms", providerMessageId: messageId };
     }
 
     default:

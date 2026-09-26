@@ -1559,14 +1559,16 @@ export class SMTPClient {
    * the fact the way the ESP clients above do; personalization has to be
    * baked in at content-generation time for this platform.
    */
-  async sendEmail(to: string, subject: string, body: string): Promise<void> {
+  async sendEmail(to: string, subject: string, body: string): Promise<{ providerMessageId: string | null }> {
     const isHtml = /<[a-z][\s\S]*>/i.test(body);
-    await this.transporter.sendMail({
+    const info = await this.transporter.sendMail({
       from: this.fromHeader,
       to,
       subject,
       ...(isHtml ? { html: body } : { text: body }),
     });
+    // The Message-ID the receiving server accepted: SMTP's only receipt.
+    return { providerMessageId: typeof info?.messageId === "string" ? info.messageId : null };
   }
 
   /** Confirms the SMTP credentials and connection actually work. */
@@ -1638,7 +1640,7 @@ export class ResendClient {
   }
 
   /** Same content-authoring expectation as SMTPClient.sendEmail — see its doc comment. */
-  async sendEmail(to: string, subject: string, body: string): Promise<void> {
+  async sendEmail(to: string, subject: string, body: string): Promise<{ providerMessageId: string | null }> {
     const isHtml = /<[a-z][\s\S]*>/i.test(body);
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -1657,6 +1659,8 @@ export class ResendClient {
       const errorBody = await response.text().catch(() => "");
       throw new Error(`Resend send failed [${response.status}]${providerErrorReason(errorBody)}`);
     }
+    const data = (await response.json().catch(() => null)) as { id?: unknown } | null;
+    return { providerMessageId: typeof data?.id === "string" ? data.id : null };
   }
 
   /**
@@ -1683,7 +1687,7 @@ export class ResendClient {
 
 /** Either transport a "smtp"-platform credential blob can describe. */
 type DirectSendClient = {
-  sendEmail(to: string, subject: string, body: string): Promise<void>;
+  sendEmail(to: string, subject: string, body: string): Promise<{ providerMessageId: string | null }>;
   checkCredentialHealth(): Promise<void>;
 };
 
@@ -1709,6 +1713,10 @@ function directSendProviderOf(raw: string): "smtp" | "resend" {
  * constructing SMTPClient directly, so both transports ride the exact
  * same owned Inngest cadence and health-check wiring.
  */
+export function directSendProvider(raw: string): "smtp" | "resend" {
+  return directSendProviderOf(raw);
+}
+
 export function createDirectSendClient(raw: string): DirectSendClient {
   return directSendProviderOf(raw) === "resend"
     ? new ResendClient(parseResendCredential(raw))

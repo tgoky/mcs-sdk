@@ -1735,9 +1735,21 @@ export const sequenceMessageLog = pgTable("sequence_message_log", {
   prospectPhone: text("prospect_phone"),
   status: text("status").notNull(), // "sent" | "failed"
   error: text("error"),
+  // The receipt (lib/delivery-receipts.ts): which provider took the
+  // message and the id it gave back, then what it later reported. Null on
+  // rows logged before receipts were kept, and on failed sends.
+  provider: text("provider"), // "twilio" | "ghl_sms" | "smtp" | "resend"
+  providerMessageId: text("provider_message_id"),
+  // "accepted" | "sent" | "delivered" | "undelivered" | "failed"
+  deliveryStatus: text("delivery_status"),
+  deliveryError: text("delivery_error"),
+  deliveredAt: timestamp("delivered_at"),
+  deliveryUpdatedAt: timestamp("delivery_updated_at"),
   sentAt: timestamp("sent_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  providerMessageIdx: index("sequence_message_log_provider_message_idx").on(table.engagementId, table.providerMessageId),
+}));
 
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer

@@ -14,6 +14,7 @@ import { ProductOnboardingGateModal } from "@/components/library/product-onboard
 import { PRODUCT_ONBOARDING_WORKER_ID } from "@/lib/worker-registry";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { useToast } from "@/components/toast/toast-provider";
+import { deliveryLine, type SkillDeliveryProof } from "@/lib/delivery-receipts-shared";
 
 /**
  * Replaces SkillsPanel + RepSkillsPanel — two near-identical components
@@ -113,6 +114,7 @@ export function WorkersPanel({
   productOnboarded = {},
   productOnboardingSkipDismissed = {},
   missingFieldsByWorkerId = {},
+  deliveryProofByWorker = {},
 }: {
   engagementId: string;
   workerIds: WorkerId[];
@@ -129,6 +131,10 @@ export function WorkersPanel({
   /** worker-config-completeness.ts's own gate, precomputed server-side for
    * every worker on this page — see this file's own deriveModuleStatus. */
   missingFieldsByWorkerId?: Partial<Record<WorkerId, MissingField[]>>;
+  /** What the providers said about this skill's recent messages
+   * (lib/delivery-receipts.ts): the proof it's reaching people, not just
+   * running. Only skills that send messages have one. */
+  deliveryProofByWorker?: Partial<Record<WorkerId, SkillDeliveryProof>>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -295,15 +301,21 @@ export function WorkersPanel({
                     const isBusy = updatingWorkers.has(workerId);
                     const workerRuns = runsByWorker[workerId] ?? [];
                     const missingFields = missingFieldsByWorkerId[workerId] ?? [];
-                    const status = deriveModuleStatus(workerRuns, isEnabled, isPaused, missingFields.length);
+                    const runStatus = deriveModuleStatus(workerRuns, isEnabled, isPaused, missingFields.length);
+                    const delivery = isEnabled ? deliveryLine(deliveryProofByWorker[workerId], sinceLabel) : null;
+                    // A skill whose runs succeed but whose messages never
+                    // arrive isn't working, whatever its last run says.
+                    const status = runStatus === "live" && delivery?.notDelivering ? "failed" : runStatus;
                     const latestRun = workerRuns[0] ?? null;
                     const isPausedActive = isEnabled && isPaused;
                     const detail =
-                      status === "failed" && latestRun?.errorMessage
+                      runStatus === "failed" && latestRun?.errorMessage
                         ? { text: latestRun.errorMessage, tone: "text-status-error" }
                         : status === "needs_setup"
                           ? { text: `Missing: ${missingFields.map((f) => f.label).join(", ")}`, tone: "text-status-error" }
-                          : null;
+                          : delivery
+                            ? { text: delivery.text, tone: delivery.tone === "error" ? "text-status-error" : "text-zinc-500 dark:text-zinc-400" }
+                            : null;
                     return (
                       <li key={workerId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 ${isEnabled ? "" : "opacity-60"}`}>
                         <div className="flex min-w-0 flex-1 basis-56 items-center gap-2.5">

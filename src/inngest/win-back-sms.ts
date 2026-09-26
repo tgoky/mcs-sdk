@@ -4,6 +4,7 @@ import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementSta
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
+import { receiptColumns, twilioStatusCallbackUrl } from "@/lib/delivery-receipts";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 
@@ -89,9 +90,9 @@ export const processWinBackSmsSequence = inngest.createFunction(
       }
 
       try {
-        await step.run(`send-${message.id}`, async () => {
+        const receipt = await step.run(`send-${message.id}`, async () => {
           const apiKey = await resolveCredential(engagementId, stack.sms_platform!);
-          await sendSmsForTenant(
+          return sendSmsForTenant(
             stack.sms_platform!,
             apiKey,
             {
@@ -102,7 +103,8 @@ export const processWinBackSmsSequence = inngest.createFunction(
             },
             { email: prospectEmail, phone: prospectPhone },
             message.body,
-            stack.sms_a2p_10dlc_status
+            stack.sms_a2p_10dlc_status,
+            { statusCallbackUrl: twilioStatusCallbackUrl(engagementId) ?? undefined }
           );
         });
         await step.run(`log-sent-${message.id}`, async () => {
@@ -116,6 +118,7 @@ export const processWinBackSmsSequence = inngest.createFunction(
             prospectEmail,
             prospectPhone,
             status: "sent",
+            ...receiptColumns(receipt),
           });
         });
         sent++;

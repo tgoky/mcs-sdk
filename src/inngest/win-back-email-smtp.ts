@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { engagements, winBackEnrollments, sequenceMessageLog, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
-import { createDirectSendClient } from "@/lib/platforms/email";
+import { createDirectSendClient, directSendProvider } from "@/lib/platforms/email";
+import { receiptColumns } from "@/lib/delivery-receipts";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 
@@ -90,13 +91,14 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
       }
 
       try {
-        await step.run(`send-${message.id}`, async () => {
+        const receipt = await step.run(`send-${message.id}`, async () => {
           const raw = await resolveCredential(engagementId, "smtp");
-          await createDirectSendClient(raw).sendEmail(
+          const { providerMessageId } = await createDirectSendClient(raw).sendEmail(
             prospectEmail,
             message.subject ?? `A quick note for ${prospectName}`,
             message.body
           );
+          return { provider: directSendProvider(raw), providerMessageId };
         });
         await step.run(`log-sent-${message.id}`, async () => {
           await db.insert(sequenceMessageLog).values({
@@ -108,6 +110,7 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
             channel: "email",
             prospectEmail,
             status: "sent",
+            ...receiptColumns(receipt),
           });
         });
         sent++;

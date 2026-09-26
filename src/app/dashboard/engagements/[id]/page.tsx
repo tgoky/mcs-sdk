@@ -33,6 +33,7 @@ import type { ReportPeriod } from "@/features/reports/server/report-service";
 import { getReportBlocksForEngagement, attachTrends, type ReportBlockWithTrend } from "@/lib/worker-report-blocks";
 import { isProductOnboarded, isProductOnboardingSkipDismissed } from "@/lib/product-onboarding";
 import { getMissingRequiredFields, type MissingField } from "@/lib/worker-config-completeness";
+import { deliveryProofForEngagement } from "@/lib/delivery-receipts";
 import { WORKER_REGISTRY } from "@/lib/worker-registry";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
@@ -168,6 +169,9 @@ export default async function EngagementDetailPage({
     workerIds.map(async (wid): Promise<[WorkerId, MissingField[]]> => [wid, await getMissingRequiredFields(wid, id)])
   );
   const missingFieldsByWorkerId: Partial<Record<WorkerId, MissingField[]>> = Object.fromEntries(missingFieldsEntries);
+  // What the providers said about the messages this client's skills sent:
+  // the proof they're reaching people (lib/delivery-receipts.ts).
+  const deliveryProofByWorker = workerIds.some((w) => w === "pile-on" || w === "win-back") ? await deliveryProofForEngagement(id) : {};
 
   // Same dynamic, per-worker block model dashboard/reports uses now —
   // replaces the old separately-gated ClientReportCard/RepClientReportCard
@@ -348,6 +352,7 @@ export default async function EngagementDetailPage({
             productOnboarded={productOnboarded}
             productOnboardingSkipDismissed={productOnboardingSkipDismissed}
             missingFieldsByWorkerId={missingFieldsByWorkerId}
+            deliveryProofByWorker={deliveryProofByWorker}
           />
         </div>
 
