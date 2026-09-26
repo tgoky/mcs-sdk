@@ -49,7 +49,7 @@ import { QueueFixDrawer } from "@/components/queue-fix-drawer";
 
 export interface QueueItemDTO {
   id: string;
-  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply";
+  source: "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply" | "sms_reply";
   category: "approve" | "action_needed" | "alert" | "fyi";
   title: string;
   subtitle: string;
@@ -536,7 +536,7 @@ function QueueRow({
           </>
         )}
 
-        {item.category === "action_needed" && item.source === "cold_open_reply" && (
+        {item.category === "action_needed" && (item.source === "cold_open_reply" || item.source === "sms_reply") && (
           <>
             {href ? (
               <Link
@@ -557,7 +557,7 @@ function QueueRow({
           </>
         )}
 
-        {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && item.source !== "cold_open_reply" && (
+        {item.category === "action_needed" && item.source !== "sync_setup" && item.source !== "run_failure" && item.source !== "cold_open_reply" && item.source !== "sms_reply" && (
           <>
             <button
               disabled={isBusy}
@@ -837,6 +837,7 @@ export function QueuePanel({
         else if (item.source === "run_failure") { label = "Fix-It Cards"; key = "run_failure"; }
         else if (item.source === "sync_setup") { label = "Sync Setup Nudges"; key = "sync_setup"; }
         else if (item.source === "cold_open_reply") { label = "Cold Open Replies"; key = "cold_open_reply"; }
+        else if (item.source === "sms_reply") { label = "Text Replies"; key = "sms_reply"; }
         else { label = "System Alerts & FYIs"; key = "notification"; }
       } else if (groupingMode === "preset") {
         if (item.isCredentialIssue) { label = "Broken Credentials"; key = "broken_keys"; }
@@ -914,6 +915,7 @@ export function QueuePanel({
           if (selectedCategory === "run_failure") return item.source === "run_failure";
           if (selectedCategory === "sync_setup") return item.source === "sync_setup";
           if (selectedCategory === "cold_open_reply") return item.source === "cold_open_reply";
+          if (selectedCategory === "sms_reply") return item.source === "sms_reply";
           return item.source === "notification";
         }
         if (groupingMode === "preset") {

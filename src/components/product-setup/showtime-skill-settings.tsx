@@ -835,6 +835,7 @@ function usePileOn(engagementId: string, loaded: Record<string, unknown>): Secti
   const setMeta = (k: keyof PileOnValues["smsPlatformMeta"], value: string) => setV((x) => ({ ...x, smsPlatformMeta: { ...x.smsPlatformMeta, [k]: value } }));
   const suggestions = (loaded.suggestions as Record<string, { value?: unknown }> | undefined) ?? {};
   const campaign = typeof loaded.twilioCampaignStatus === "string" ? loaded.twilioCampaignStatus : null;
+  const replyUrl = typeof loaded.twilioReplyUrl === "string" ? loaded.twilioReplyUrl : null;
   const smsLabel = SMS_PLATFORM_LABELS[v.smsPlatform] ?? v.smsPlatform;
   const adLabel = AD_DATA_PLATFORM_LABELS[v.adDataPlatform] ?? v.adDataPlatform;
   const suggest = (key: "smsPlatform" | "adDataPlatform", labels: Record<string, string>) => {
@@ -881,6 +882,17 @@ function usePileOn(engagementId: string, loaded: Record<string, unknown>): Secti
         </div>
       ),
     },
+    ...(v.smsPlatform === "twilio" && replyUrl
+      ? [
+          {
+            key: "sms-replies",
+            text: <>Replies to these texts come back to the Queue</>,
+            source:
+              "In Twilio, open the Messaging Service (or the number) and set \"A message comes in\" to this address. STOP stops every text to that person; reschedule requests and questions land in the Queue.",
+            body: <CopyAddress value={replyUrl} />,
+          } satisfies FeedEntry,
+        ]
+      : []),
     {
       key: "ad-data",
       todo: !v.adDataPlatform,

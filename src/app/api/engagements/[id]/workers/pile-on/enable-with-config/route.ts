@@ -14,12 +14,14 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
 import { getClientFact } from "@/lib/client-facts";
+import { webhookUrl } from "@/lib/webhook-url-token";
+import { TWILIO_INBOUND_PATH } from "@/lib/sms-replies";
 
 export const runtime = "nodejs";
 
 /** The saved SMS / ad-data choices (null while never chosen — "none" is a
  * real choice, not a default) plus what the connected tools suggest. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: engagementId } = await params;
   const session = await getSession();
   if (!session?.whopUserId) {
@@ -54,6 +56,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     suggestions: await showtimeConnectionSuggestions(engagementId, stack),
     // Twilio's raw A2P campaign status ("IN_PROGRESS", "VERIFIED", "FAILED").
     twilioCampaignStatus: stack.sms_platform === "twilio" ? ((await getClientFact(engagementId, "smsA2pCampaignStatus"))?.value ?? null) : null,
+    // Where the client's Twilio number sends the texts prospects reply
+    // with (api/webhooks/twilio-inbound), tokened per client.
+    twilioReplyUrl: stack.sms_platform === "twilio" ? webhookUrl(process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin, TWILIO_INBOUND_PATH, engagementId) : null,
   });
 }
 

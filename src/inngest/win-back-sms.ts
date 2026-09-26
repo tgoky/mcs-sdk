@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
 import { receiptColumns, twilioStatusCallbackUrl } from "@/lib/delivery-receipts";
+import { isOptedOut } from "@/lib/sms-replies";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 
@@ -88,6 +89,10 @@ export const processWinBackSmsSequence = inngest.createFunction(
       if (!stillActive) {
         return { sent, reason: "win-back enrollment no longer active, or the client was paused (stopping)" };
       }
+
+      // They may have texted STOP since the last message (lib/sms-replies.ts).
+      const optedOut = await step.run(`check-opt-out-${message.id}`, () => isOptedOut(engagementId, prospectPhone));
+      if (optedOut) return { sent, reason: "the prospect texted STOP (stopping)" };
 
       try {
         const receipt = await step.run(`send-${message.id}`, async () => {

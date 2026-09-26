@@ -1751,6 +1751,61 @@ export const sequenceMessageLog = pgTable("sequence_message_log", {
   providerMessageIdx: index("sequence_message_log_provider_message_idx").on(table.engagementId, table.providerMessageId),
 }));
 
+// ── Text replies (lib/sms-replies.ts) ───────────────────────────────────
+// What prospects texted back to a client's number: every message Twilio
+// forwards to api/webhooks/twilio-inbound, matched to the booking it's
+// about, sorted (stop / start / confirm / reschedule / cancel / question
+// / other), and routed to the Queue when a person should answer it.
+export const smsReplies = pgTable(
+  "sms_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    fromPhone: text("from_phone").notNull(),
+    toPhone: text("to_phone"),
+    body: text("body").notNull(),
+    // Twilio's MessageSid: a retried webhook can't log the same text twice.
+    providerMessageId: text("provider_message_id").notNull(),
+    prospectEmail: text("prospect_email"),
+    prospectName: text("prospect_name"),
+    bookingId: text("booking_id"),
+    // null until sorted.
+    intent: text("intent"),
+    confidence: integer("confidence"),
+    // How it was sorted: "keyword" (STOP/START) or "jev".
+    classifiedBy: text("classified_by"),
+    routedToQueue: boolean("routed_to_queue").notNull().default(false),
+    queueResolvedAt: timestamp("queue_resolved_at"),
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+    processedAt: timestamp("processed_at"),
+  },
+  (table) => [
+    uniqueIndex("sms_replies_engagement_message_uidx").on(table.engagementId, table.providerMessageId),
+    index("sms_replies_engagement_received_idx").on(table.engagementId, table.receivedAt),
+  ]
+);
+
+// Numbers that texted STOP (or another carrier opt-out word) to a client.
+// Every sequence checks this before each text; START clears it.
+export const smsOptOuts = pgTable(
+  "sms_opt_outs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    // Last 10 digits (lib/sms-replies.ts phoneKey), so "+1 (555) 123-4567"
+    // and "5551234567" are the same person.
+    phoneKey: text("phone_key").notNull(),
+    optedOutAt: timestamp("opted_out_at").defaultNow().notNull(),
+    // Set when they text START again; an opted-back-in row no longer blocks.
+    optedInAt: timestamp("opted_in_at"),
+  },
+  (table) => [uniqueIndex("sms_opt_outs_engagement_phone_uidx").on(table.engagementId, table.phoneKey)]
+);
+
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer
 // is asking) that a nightly cron HEAD-checks so stale/broken doc links

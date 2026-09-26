@@ -8,6 +8,7 @@ import { processWinBackSmsSequence } from "@/inngest/win-back-sms";
 import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
+import { processSmsReply } from "@/inngest/sms-reply";
 import {
   processWhopWebhookEvent,
   whopReceiverHealthSweepCron,
@@ -67,6 +68,7 @@ export const maxDuration = 60;
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
+    processSmsReply,
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
     // Fanned-out per-prospect worker for pre-call-read — see the fan-out
     // note in brief-service.ts's executeNightlyBriefingCycle. Invoked via

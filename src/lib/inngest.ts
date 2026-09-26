@@ -307,10 +307,17 @@ export type InboundReplyReceivedData = {
   fromEmail: string;
   subject: string | null;
   textBody: string | null;
-  source: "native" | "forwarding";
+  source: "native" | "forwarding" | "sms";
 };
 export const inboundReplyReceived = eventType("win-back/inbound-reply-received", {
   schema: staticSchema<InboundReplyReceivedData>(),
+});
+
+// A prospect texted a client's number (api/webhooks/twilio-inbound). The
+// reply is already stored; this sorts it and acts on it (inngest/sms-reply.ts).
+export type SmsReplyReceivedData = { engagementId: string; replyId: string };
+export const smsReplyReceived = eventType("sms/reply-received", {
+  schema: staticSchema<SmsReplyReceivedData>(),
 });
 
 /**

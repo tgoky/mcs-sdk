@@ -35,6 +35,7 @@ import {
   skillRuns,
   engagementSkills,
   coldOpenReplies,
+  smsReplies,
   type EngagementStack,
 } from "@/models/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -42,6 +43,7 @@ import { ACTION_TYPE_LABELS, BLOCKER_TYPE_LABELS, bookingPlatformLabel } from "@
 import { anySkillDisplayName as skillDisplayName } from "@/lib/any-skill";
 import { needsWebhookSetupNudge } from "@/lib/booking-sync-status";
 import { classifyRunError, type StackSection } from "@/lib/error-classification";
+import { SMS_REPLY_QUEUE_TITLES, type SmsReplyIntent } from "@/lib/sms-replies";
 
 const REPLY_DISPOSITION_LABELS: Record<string, string> = {
   interested: "Interested reply",
@@ -59,7 +61,7 @@ const REPLY_DISPOSITION_LABELS: Record<string, string> = {
 const RETRIGGERABLE_SKILLS = new Set(["pre-call-read", "leak-map"]);
 
 export type QueueCategory = "approve" | "action_needed" | "alert" | "fyi";
-export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply";
+export type QueueSource = "action" | "blocker" | "notification" | "sync_setup" | "run_failure" | "cold_open_reply" | "sms_reply";
 
 export interface QueueItem {
   id: string;
@@ -206,6 +208,53 @@ async function coldOpenReplyQueueItems(
     runId: null,
     createdAt: r.classifiedAt.toISOString(),
     fixHref: `/dashboard/engagements/${r.engagementId}/skills/cold-open`,
+  }));
+}
+
+/**
+ * Texts prospects sent back that a person should answer (lib/sms-replies.ts
+ * needsPerson): reschedule and cancel requests, questions, anything unclear.
+ * Same "mark handled" lifecycle as a Cold Open reply.
+ */
+async function smsReplyQueueItems(engagementRows: { engagementId: string; buyer: string }[]): Promise<QueueItem[]> {
+  if (engagementRows.length === 0) return [];
+  const buyerByEngagement = new Map(engagementRows.map((r) => [r.engagementId, r.buyer]));
+  const rows = await db
+    .select({
+      id: smsReplies.id,
+      engagementId: smsReplies.engagementId,
+      fromPhone: smsReplies.fromPhone,
+      prospectName: smsReplies.prospectName,
+      prospectEmail: smsReplies.prospectEmail,
+      intent: smsReplies.intent,
+      body: smsReplies.body,
+      receivedAt: smsReplies.receivedAt,
+    })
+    .from(smsReplies)
+    .where(
+      and(
+        inArray(smsReplies.engagementId, engagementRows.map((r) => r.engagementId)),
+        eq(smsReplies.routedToQueue, true),
+        isNull(smsReplies.queueResolvedAt)
+      )
+    )
+    .orderBy(desc(smsReplies.receivedAt))
+    .limit(200);
+
+  return rows.map((r): QueueItem => ({
+    id: r.id,
+    source: "sms_reply",
+    category: "action_needed",
+    title: SMS_REPLY_QUEUE_TITLES[(r.intent ?? "other") as SmsReplyIntent] ?? SMS_REPLY_QUEUE_TITLES.other,
+    subtitle: `${r.prospectName ?? r.prospectEmail ?? r.fromPhone} · "${r.body}"`,
+    engagementId: r.engagementId,
+    buyer: buyerByEngagement.get(r.engagementId) ?? null,
+    runId: null,
+    createdAt: r.receivedAt.toISOString(),
+    fixHref: `/dashboard/engagements/${r.engagementId}`,
+    // Replies to the texts Showtime's sequences send, so a Showtime-scoped
+    // queue keeps them.
+    skillName: "pile-on",
   }));
 }
 
@@ -422,7 +471,7 @@ export async function getQueueItems(
   );
 
   const failureItems = await failedRunQueueItems(engagementStackRows);
-  const coldOpenReplyItems = await coldOpenReplyQueueItems(engagementStackRows);
+  const [coldOpenReplyItems, smsReplyItems] = await Promise.all([coldOpenReplyQueueItems(engagementStackRows), smsReplyQueueItems(engagementStackRows)]);
 
   const items: QueueItem[] = [
     ...actionRows.map((a): QueueItem => {
@@ -478,6 +527,7 @@ export async function getQueueItems(
     ...syncSetupQueueItems(engagementStackRows),
     ...failureItems,
     ...coldOpenReplyItems,
+    ...smsReplyItems,
   ].map((item) => ({
     ...item,
     engagementPausedAt: item.engagementId ? pausedByEngagement.get(item.engagementId) ?? null : null,
@@ -697,6 +747,7 @@ export async function getQueueActionableCount(whopUserId: string, workspaceId: s
 
   const failureCount = (await failedRunQueueItems(engagementStackRows)).length;
   const coldOpenReplyCount = (await coldOpenReplyQueueItems(engagementStackRows)).length;
+  const smsReplyCount = (await smsReplyQueueItems(engagementStackRows)).length;
 
-  return pendingCount.length + blockerCount.length + syncSetupCount + failureCount + coldOpenReplyCount;
+  return pendingCount.length + blockerCount.length + syncSetupCount + failureCount + coldOpenReplyCount + smsReplyCount;
 }

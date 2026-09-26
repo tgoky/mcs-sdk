@@ -78,6 +78,7 @@ export function useQueueItemActions(onResolved: (itemId: string) => void) {
       // No decision body — a queue-worthy reply has exactly one terminal
       // state (handled), not an approve/reject or resolve/abandon choice.
       if (item.source === "cold_open_reply") return runMutation(item, `/api/cold-open-replies/${item.id}/resolve`);
+      if (item.source === "sms_reply") return runMutation(item, `/api/sms-replies/${item.id}/resolve`);
       return runMutation(item, `/api/notifications/${item.id}/read`);
     },
     [runMutation]

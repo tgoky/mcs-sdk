@@ -1306,7 +1306,7 @@ function QueueItemQuickActions({
             <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">Couldn&apos;t start the run. Try again from the Queue.</p>
           )}
         </>
-      ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (
+      ) : item.category === "action_needed" && (item.source === "cold_open_reply" || item.source === "sms_reply") ? (
         // A reply has one terminal state (handled) — Resolve and Dismiss
         // both called the same endpoint, so only one action is offered.
         <button type="button" disabled={isBusy} onClick={() => decide(item, "resolved")} className={`${btnBase} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200`}>

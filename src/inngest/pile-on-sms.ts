@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { sendSmsForTenant } from "@/lib/platforms/sms";
 import { receiptColumns, twilioStatusCallbackUrl } from "@/lib/delivery-receipts";
+import { isOptedOut } from "@/lib/sms-replies";
 import { maybeNotifySequenceFailure } from "@/lib/sequence-notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 
@@ -155,6 +156,11 @@ export const processPileOnSmsSequence = inngest.createFunction(
 
       // Durably park the function run context until the next absolute milestone date arrives
       await step.sleepUntil(`delay-until-${msg.id}`, new Date(msg.targetTimestamp).toISOString());
+
+      // Checked after the wait, right before sending: they may have texted
+      // STOP while this was asleep (lib/sms-replies.ts).
+      const optedOut = await step.run(`check-opt-out-${msg.id}`, () => isOptedOut(engagementId, prospectPhone));
+      if (optedOut) return { sent, reason: "the prospect texted STOP (stopping)" };
 
       // Execute out-of-band message delivery step safely
       try {

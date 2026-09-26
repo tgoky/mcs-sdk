@@ -427,7 +427,7 @@ export function OverviewStatsPanel({
                               </p>
                             )}
                           </>
-                        ) : item.category === "action_needed" && item.source === "cold_open_reply" ? (
+                        ) : item.category === "action_needed" && (item.source === "cold_open_reply" || item.source === "sms_reply") ? (
                           // One terminal state for a reply — see queue-panel.tsx.
                           <button
                             type="button"
