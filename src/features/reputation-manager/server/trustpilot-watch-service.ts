@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { labelReviews } from "./review-labels";
 import { repIdentityGraphs, repTrustpilotReviews, type RepFindingSentiment } from "@/models/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
@@ -174,13 +175,15 @@ async function processNewReviews(
   if (newRaw.length === 0) return { newCount: 0, flaggedCount: 0 };
 
   const scored = await scoreReviews(operatorName, newRaw, runId);
+  const labels = await labelReviews(engagementId, scored.map((s) => ({ text: s.reviewText, rating: s.rating })), runId);
 
   const actuallyInserted = await db.transaction(async (tx) => {
     const rows = await tx
       .insert(repTrustpilotReviews)
       .values(
-        scored.map((s) => ({
+        scored.map((s, i) => ({
           engagementId,
+          labels: labels[i],
           externalReviewId: s.externalReviewId,
           reviewerName: s.reviewerName,
           rating: s.rating,

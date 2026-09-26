@@ -62,4 +62,12 @@ export class InstantlyAdapter extends ESPAdapter {
     const { status, data } = await this.request("POST", `${this.baseUrl()}/leads`, await this.headers(), payload);
     return { statusCode: status, detail: { id: Array.isArray(data) ? undefined : data.id } };
   }
+
+  // POST /api/v2/campaigns/{id}/pause and /activate, no body (Instantly's
+  // own SDK, CampaignApi.pauseCampaign / activateCampaign).
+  async setCampaignPaused(campaignId: string, paused: boolean): Promise<boolean> {
+    await this.throttle();
+    await this.request("POST", `${this.baseUrl()}/campaigns/${encodeURIComponent(campaignId)}/${paused ? "pause" : "activate"}`, await this.headers());
+    return true;
+  }
 }

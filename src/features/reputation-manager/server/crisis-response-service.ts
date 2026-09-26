@@ -4,6 +4,7 @@ import { and, eq, gt, gte, desc } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { notifyUser } from "@/lib/notify";
+import { proposeCrisisPause } from "@/features/cold-open/server/crisis-pause";
 import {
   resolveCrisisScoreFloor,
   SEVERITY_COMPOSITION_WEIGHTS,
@@ -424,6 +425,14 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     const { incidentId } = await (step
       ? step.run("declare-incident", () => declareIncident(declareParams))
       : declareIncident(declareParams));
+
+    // Cold email shouldn't keep going out under the client's name mid-crisis:
+    // propose pausing Cold Open (approval first). Nothing when it isn't sending.
+    const proposePause = () => proposeCrisisPause(engagementId, incidentId, summaryText).catch((e) => {
+      console.error("[rep-crisis-response] cold open pause proposal failed:", e);
+      return null;
+    });
+    await (step ? step.run("propose-cold-open-pause", proposePause) : proposePause());
 
     // Routes every contributing finding to its response tier (auto-draft,
     // pause-for-posture, or external escalation) — see response-routing.ts.

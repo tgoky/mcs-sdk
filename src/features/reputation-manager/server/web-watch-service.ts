@@ -15,6 +15,7 @@
 // client; items that aren't are dropped, never stored.
 
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { labelReviews } from "./review-labels";
 import type { GetStepTools, Inngest } from "inngest";
 import { db } from "@/lib/db";
 import { callClaude } from "@/lib/llm";
@@ -153,14 +154,16 @@ export async function processWebItems(
   const scored = await scoreItems(source, whoOf(graph), fresh, runId);
   const keep = scored.filter((s) => s.relevant);
   if (keep.length === 0) return { newCount: 0, flaggedCount: 0, dropped: scored.length };
+  const labels = source === "google_reviews" ? await labelReviews(engagementId, keep.map((s) => ({ text: s.text, rating: s.rating ?? null })), runId) : null;
 
   const inserted = await db.transaction(async (tx) => {
     const rows = await tx
       .insert(repWebFindings)
       .values(
-        keep.map((s) => ({
+        keep.map((s, i) => ({
           engagementId,
           source,
+          labels: labels ? labels[i] : null,
           externalId: s.externalId,
           title: s.title ?? null,
           text: s.text,

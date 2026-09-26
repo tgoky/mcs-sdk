@@ -236,6 +236,15 @@ export type EngagementStack = {
   // {product}, {amount}, {link}. Unset uses DEFAULT_RECOVERY_MESSAGE in
   // payment-recovery-service.ts; every message is still approved first.
   whop_recovery_message?: string;
+  // Review requests (features/reputation-manager/server/review-requests.ts).
+  // The client's own review link (e.g. Google Business Profile's "Ask for
+  // reviews" link); unset means nothing is sent. Everyone who showed or
+  // paid is asked the same way: no filtering by how they feel.
+  rep_review_link?: string;
+  rep_review_request_message?: string; // tokens: {name}, {link}
+  rep_review_request_subject?: string;
+  rep_review_request_delay_hours?: number; // default 2
+  rep_review_request_channel?: "email" | "sms"; // tried first; the other is the fallback. Default email.
   // Whop Agent Playbook 5.12 (Whop-to-External Bridge Manager). No
   // sane default for a destination the operator owns — unset means the
   // bridge is configured to do nothing, not "route somewhere guessed."
@@ -2584,6 +2593,8 @@ export const repTrustpilotReviews = pgTable(
     sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
     flagged: boolean("flagged").notNull().default(false),
     flagReason: text("flag_reason"),
+    // What the review is about, read by Jev (review-labels.ts). Null before labels existed.
+    labels: jsonb("labels").$type<string[]>(),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -2703,6 +2714,8 @@ export const repWebFindings = pgTable(
     sentiment: text("sentiment").$type<RepFindingSentiment>().notNull(),
     flagged: boolean("flagged").notNull().default(false),
     flagReason: text("flag_reason"),
+    // Google reviews only: what the review is about, read by Jev (review-labels.ts).
+    labels: jsonb("labels").$type<string[]>(),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -2733,6 +2746,42 @@ export const repWebFindings = pgTable(
 // that a human was notified — see runRepCrisisResponse's own comment for
 // why the notification goes to the workspace operator, not literally to
 // soleAuthorityName as a delivery address.
+// One review request per trigger (a call they showed up to, a payment).
+// The message itself is logged in sequence_message_log with its receipt.
+export const reviewRequests = pgTable(
+  "review_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    trigger: text("trigger").notNull(), // "showed" | "paid"
+    refId: text("ref_id").notNull(), // booking id or Whop payment id
+    personName: text("person_name"),
+    email: text("email"),
+    phone: text("phone"),
+    // "scheduled" | "sent" | "skipped" | "failed" | "cancelled"
+    status: text("status").notNull().default("scheduled"),
+    detail: text("detail"),
+    channel: text("channel"), // "email" | "sms"
+    messageLogId: uuid("message_log_id"),
+    sendAt: timestamp("send_at").notNull(),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("review_requests_trigger_uidx").on(table.engagementId, table.trigger, table.refId),
+    index("review_requests_engagement_email_idx").on(table.engagementId, table.email),
+  ]
+);
+
+export interface ColdOpenSendingPause {
+  incidentId: string;
+  pausedAt: string;
+  campaigns: { id: string; result: "paused" | "not_supported" | "failed"; detail?: string }[];
+}
+
 export const repIncidents = pgTable("rep_incidents", {
   id: uuid("id").defaultRandom().primaryKey(),
   engagementId: text("engagement_id")
@@ -3127,6 +3176,11 @@ export const coldOpenConfig = pgTable(
     // CHOICE only, same convention pin-down's own bookingPlatform takes.
     sendPlatform: jsonb("send_platform").$type<{ platform: ColdOpenSendPlatformId; baseUrl?: string } | null>(),
     campaignMap: jsonb("campaign_map").$type<Record<string, string>>().notNull().default({}),
+    // Set while sending is paused for a reputation incident
+    // (features/cold-open/server/crisis-pause.ts): which incident, when, and
+    // what each campaign's sending tool said. Daily Send pushes nothing
+    // while this is set.
+    sendingPause: jsonb("sending_pause").$type<ColdOpenSendingPause | null>(),
     autoPushIcps: jsonb("auto_push_icps").$type<string[]>().notNull().default([]),
 
     // ── daily-send ────────────────────────────────────────────────────

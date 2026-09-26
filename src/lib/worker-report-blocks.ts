@@ -29,7 +29,9 @@ import {
   repRedditMentions,
   repTwitterMentions, repWebFindings, type RepWebFindingSource,
   repIncidents,
+  reviewRequests,
 } from "@/models/schema";
+import { REVIEW_LABELS, topComplaint } from "@/features/reputation-manager/server/review-labels";
 import { and, eq, gte } from "drizzle-orm";
 import type { WorkerId } from "@/lib/worker-registry";
 
@@ -157,12 +159,36 @@ const repEnginePanelBlocks: ReportBlockResolver = async (engagementId, { start }
   return [mentionBlock("rep-engine-panel", "AI engine mentions", rows)];
 };
 
+/** "What bad reviews mention most", from Jev's labels. Nothing when no bad review was labelled. */
+function complaintBlock(workerId: WorkerId, rows: { labels: string[] | null; rating: number | null; sentiment: string | null }[]): WorkerReportBlock[] {
+  const top = topComplaint(rows);
+  if (!top) return [];
+  return [
+    {
+      workerId,
+      label: "Most mentioned in bad reviews",
+      value: top.count,
+      displayValue: `${REVIEW_LABELS[top.label].name} (${top.count} of ${top.of})`,
+      tone: "warning",
+    },
+  ];
+}
+
 const repTrustpilotWatchBlocks: ReportBlockResolver = async (engagementId, { start }) => {
   const rows = await db
-    .select({ sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged })
+    .select({ sentiment: repTrustpilotReviews.sentiment, flagged: repTrustpilotReviews.flagged, rating: repTrustpilotReviews.rating, labels: repTrustpilotReviews.labels })
     .from(repTrustpilotReviews)
     .where(and(eq(repTrustpilotReviews.engagementId, engagementId), start ? gte(repTrustpilotReviews.createdAt, start) : undefined));
-  return [mentionBlock("rep-trustpilot-watch", "Trustpilot reviews", rows)];
+  return [mentionBlock("rep-trustpilot-watch", "Trustpilot reviews", rows), ...complaintBlock("rep-trustpilot-watch", rows)];
+};
+
+const repReviewRequestBlocks: ReportBlockResolver = async (engagementId, { start }) => {
+  const rows = await db
+    .select({ status: reviewRequests.status })
+    .from(reviewRequests)
+    .where(and(eq(reviewRequests.engagementId, engagementId), start ? gte(reviewRequests.createdAt, start) : undefined));
+  const sent = rows.filter((r) => r.status === "sent").length;
+  return [{ workerId: "rep-review-requests", label: "Review requests sent", value: sent, displayValue: String(sent), tone: sent > 0 ? "positive" : "neutral" }];
 };
 
 const repRedditWatchBlocks: ReportBlockResolver = async (engagementId, { start }) => {
@@ -184,10 +210,10 @@ const repTwitterWatchBlocks: ReportBlockResolver = async (engagementId, { start 
 function repWebWatchBlocks(workerId: WorkerId, source: RepWebFindingSource, label: string): ReportBlockResolver {
   return async (engagementId, { start }) => {
     const rows = await db
-      .select({ sentiment: repWebFindings.sentiment, flagged: repWebFindings.flagged })
+      .select({ sentiment: repWebFindings.sentiment, flagged: repWebFindings.flagged, rating: repWebFindings.rating, labels: repWebFindings.labels })
       .from(repWebFindings)
       .where(and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.source, source), start ? gte(repWebFindings.createdAt, start) : undefined));
-    return [mentionBlock(workerId, label, rows)];
+    return [mentionBlock(workerId, label, rows), ...(source === "google_reviews" ? complaintBlock(workerId, rows) : [])];
   };
 }
 
@@ -222,6 +248,7 @@ export const WORKER_REPORT_RESOLVERS: Partial<Record<WorkerId, ReportBlockResolv
   "rep-news-watch": repWebWatchBlocks("rep-news-watch", "news", "News articles"),
   "rep-search-watch": repWebWatchBlocks("rep-search-watch", "search_results", "Search results"),
   "rep-crisis-response": repCrisisResponseBlocks,
+  "rep-review-requests": repReviewRequestBlocks,
 };
 
 export interface ReportBlockWithTrend extends WorkerReportBlock {

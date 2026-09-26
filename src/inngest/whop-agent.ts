@@ -18,8 +18,9 @@ import { runWhopAdsDraft } from "@/features/whop-agent/server/whop-ads-service";
 import { runBatchLive } from "@/features/whop-agent/server/bulk-promo-codes-service";
 import { getDisabledEngagementIdsForSkill, isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
-import { eq } from "drizzle-orm";
+import { engagements, whopPayments, type EngagementStack } from "@/models/schema";
+import { and, eq } from "drizzle-orm";
+import { scheduleReviewRequest } from "@/features/reputation-manager/server/review-requests";
 import { startRun } from "@/lib/run-log";
 import { PAYMENT_EVENT_TYPES, recordWhopPaymentEvent } from "@/lib/whop-payments";
 import { handlePaymentFailed } from "@/features/whop-agent/server/payment-recovery-service";
@@ -47,6 +48,14 @@ export const processWhopWebhookEvent = inngest.createFunction(
     const payment = PAYMENT_EVENT_TYPES.has(envelope.type)
       ? await step.run("record-payment", () => recordWhopPaymentEvent(engagementId, envelope.type, envelope.data, new Date(occurredAtIso)))
       : null;
+
+    // Reputation: ask a new buyer for a review (once per payment; everyone, no filtering).
+    if (envelope.type === "payment.succeeded" && payment?.outcome === "paid") {
+      await step.run("schedule-review-request", async () => {
+        const [row] = await db.select({ email: whopPayments.email, phone: whopPayments.phone, name: whopPayments.buyerName }).from(whopPayments).where(and(eq(whopPayments.engagementId, engagementId), eq(whopPayments.paymentId, payment.paymentId))).limit(1);
+        if (row) await scheduleReviewRequest(engagementId, { trigger: "paid", refId: payment.paymentId, name: row.name, email: row.email, phone: row.phone });
+      });
+    }
 
     // A failed payment: draft the buyer a message with the link to fix it,
     // for approval. Only for the payment's current state, so a late

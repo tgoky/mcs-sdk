@@ -252,6 +252,13 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
 
     const config = await (step ? step.run("load-cold-open-config", () => getColdOpenConfig(engagementId)) : getColdOpenConfig(engagementId));
     if (!config?.dailySendSettings || !config.sendPlatform) throw new Error("Daily Send settings or sending platform missing.");
+    if (config.sendingPause) {
+      const why = "Sending is paused during a reputation incident. Nothing was pushed. It restarts once the incident is resolved and the restart is approved.";
+      await logStep(runId, { phase: "daily_send_precondition", status: "skipped", detail: why });
+      summary.openItems.push(why);
+      await finishRun(runId, { summary, status: "skipped" });
+      return;
+    }
 
     const volume = config.dailySendSettings.volume;
     summary.whatWasAttempted.push(`Fetching up to ${volume} lead(s) across ${config.leadSources.length} source(s).`);

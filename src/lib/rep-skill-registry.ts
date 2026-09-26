@@ -70,6 +70,8 @@ export const REP_SKILL_REGISTRY: Record<RepSkillId, RepSkillDefinition> = {
     ...REP_SKILL_MANIFEST["rep-crisis-response"],
     execute: (tenant, runId, step) => runRepCrisisResponse(tenant, runId, step),
   },
+  // Event-driven (a show or a payment schedules each request); no run of its own.
+  "rep-review-requests": { ...REP_SKILL_MANIFEST["rep-review-requests"] },
   "rep-digest": {
     ...REP_SKILL_MANIFEST["rep-digest"],
     execute: (tenant, runId, step) => runRepDigest(tenant, runId, step),

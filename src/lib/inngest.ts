@@ -320,6 +320,13 @@ export const smsReplyReceived = eventType("sms/reply-received", {
   schema: staticSchema<SmsReplyReceivedData>(),
 });
 
+// A review request was scheduled (features/reputation-manager/server/
+// review-requests.ts); inngest/review-requests.ts waits until sendAt, then sends.
+export type ReviewRequestScheduledData = { engagementId: string; requestId: string; sendAt: string };
+export const reviewRequestScheduled = eventType("reputation/review-request.scheduled", {
+  schema: staticSchema<ReviewRequestScheduledData>(),
+});
+
 /**
  * Global Inngest Client
  * Used by API routes to publish events, and by workers to handle jobs.

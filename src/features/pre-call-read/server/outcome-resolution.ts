@@ -29,6 +29,7 @@
 // booking.no-showed webhook — it goes through the identical classifier,
 // the identical approval gate, the identical skill-enabled check.
 import crypto from "crypto";
+import { cancelReviewRequest, scheduleReviewRequest } from "@/features/reputation-manager/server/review-requests";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -510,6 +511,14 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
     result.cohort = outcome !== "rescheduled" ? "skipped_no_email" : "none";
     result.reason = "No prospect email on file for this booking. Cannot enroll or sync a cohort.";
     return result;
+  }
+
+  // Reputation: ask everyone who showed for a review (after the client's
+  // delay); a show corrected away cancels a request that hasn't gone yet.
+  if (outcome === "showed") {
+    await scheduleReviewRequest(engagementId, { trigger: "showed", refId: bookingId, name: identity.name, email: identity.email, phone: identity.phone }).catch((e) => console.error("[outcome] review request scheduling failed:", e));
+  } else if (prior === "showed") {
+    await cancelReviewRequest(engagementId, "showed", bookingId, `Outcome changed to ${outcome}.`).catch(() => undefined);
   }
 
   // ── Decide side effects from the (prior → next) transition ─────────

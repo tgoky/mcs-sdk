@@ -1,0 +1,1 @@
+ALTER TABLE "cold_open_config" ADD COLUMN "sending_pause" jsonb;

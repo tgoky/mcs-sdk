@@ -9,6 +9,7 @@ import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
 import { processSmsReply } from "@/inngest/sms-reply";
+import { sendScheduledReviewRequest } from "@/inngest/review-requests";
 import { reportFailedFunctions } from "@/inngest/function-failed";
 import {
   processWhopWebhookEvent,
@@ -71,6 +72,7 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     processSmsReply,
+    sendScheduledReviewRequest,
     reportFailedFunctions,
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
     // Fanned-out per-prospect worker for pre-call-read — see the fan-out

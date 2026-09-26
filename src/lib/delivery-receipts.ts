@@ -123,10 +123,13 @@ export async function recordDeliveryStatus(
 // ── Per-skill proof, for the skills list ─────────────────────────────────
 
 /** Which skill each logged sequence belongs to. */
-export const SEQUENCE_SKILL: Record<string, "pile-on" | "win-back"> = {
+export type ProvenSkill = "pile-on" | "win-back" | "rep-review-requests";
+export const SEQUENCE_SKILL: Record<string, ProvenSkill> = {
   pile_on_sms: "pile-on",
   win_back_sms: "win-back",
   win_back_email_smtp: "win-back",
+  review_request_email: "rep-review-requests",
+  review_request_sms: "rep-review-requests",
 };
 
 /** A provider that confirms delivery; for the others a receipt (the id
@@ -146,8 +149,8 @@ export function isFailedSend(row: { status: string; deliveryStatus: string | nul
 export function summarizeDeliveryProof(
   rows: { sequenceType: string; channel: string; status: string; provider: string | null; providerMessageId: string | null; deliveryStatus: string | null; deliveryError: string | null; error: string | null; sentAt: Date; deliveredAt: Date | null }[],
   windowStart: Date
-): Partial<Record<"pile-on" | "win-back", SkillDeliveryProof>> {
-  const out: Partial<Record<"pile-on" | "win-back", SkillDeliveryProof>> = {};
+): Partial<Record<ProvenSkill, SkillDeliveryProof>> {
+  const out: Partial<Record<ProvenSkill, SkillDeliveryProof>> = {};
   const sorted = [...rows].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
   for (const row of sorted) {
     const skill = SEQUENCE_SKILL[row.sequenceType];
@@ -171,7 +174,7 @@ export function summarizeDeliveryProof(
 const PROOF_LOOKBACK_DAYS = 30;
 const FAILURE_WINDOW_HOURS = 24;
 
-export async function deliveryProofForEngagement(engagementId: string, now = new Date()): Promise<Partial<Record<"pile-on" | "win-back", SkillDeliveryProof>>> {
+export async function deliveryProofForEngagement(engagementId: string, now = new Date()): Promise<Partial<Record<ProvenSkill, SkillDeliveryProof>>> {
   const since = new Date(now.getTime() - PROOF_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db
     .select({

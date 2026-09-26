@@ -9,10 +9,10 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/models/schema", () => {
   const table = (name: string) => new Proxy({ __t: name }, { get: (o, k) => (k in o ? (o as Record<string, unknown>)[k as string] : { table: name, col: k }) });
   return Object.fromEntries(
-    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "whopPayments", "winBackEnrollments"].map((n) => [n, table(n)])
+    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "reviewRequests", "whopPayments", "winBackEnrollments"].map((n) => [n, table(n)])
   );
 });
-vi.mock("drizzle-orm", () => ({ and: () => ({}), gte: () => ({}), lt: () => ({}), inArray: () => ({}) }));
+vi.mock("drizzle-orm", () => ({ and: () => ({}), eq: () => ({}), gte: () => ({}), lt: () => ({}), inArray: () => ({}) }));
 
 import { getClientResults, offerPriceValue, productResults, emptyCounts, addCounts, portfolioShowRate, type ClientResults } from "@/features/reports/server/client-results";
 
@@ -38,6 +38,11 @@ describe("client results", () => {
       { engagementId: "e1", at: daysAgo(2), source: "google_reviews", rating: 1, ownerAnswered: true, sentiment: "negative" },
       { engagementId: "e1", at: daysAgo(2), source: "google_reviews", rating: 5, ownerAnswered: false, sentiment: "positive" },
       { engagementId: "e1", at: daysAgo(2), source: "news", rating: null, ownerAnswered: null, sentiment: "neutral" },
+      { engagementId: "e1", at: daysAgo(1), source: "google_reviews", rating: 5, ownerAnswered: false, sentiment: "positive", author: "Sam  Lee", publishedAt: daysAgo(3) },
+    ];
+    rows.reviewRequests = [
+      { engagementId: "e1", at: daysAgo(8), name: "sam lee" },
+      { engagementId: "e1", at: daysAgo(6), name: "Jo Park" },
     ];
     rows.pendingActions = [
       { engagementId: "e1", at: daysAgo(6), actionType: "whop_cancellation_offer_create", status: "approved" },
@@ -60,8 +65,11 @@ describe("client results", () => {
     expect(metric("cold-open", "contacted").current).toBe(20);
     expect(metric("cold-open", "replyRate").current).toBeCloseTo(2 / 20);
     expect(metric("cold-open", "interested").current).toBe(1);
-    expect(metric("reputation", "newReviews").current).toBe(2);
-    expect(metric("reputation", "avgRating").current).toBe(3);
+    expect(metric("reputation", "newReviews").current).toBe(3);
+    expect(metric("reputation", "reviewAsks").current).toBe(2);
+    // Sam was asked 8 days ago and reviewed 3 days ago; Jo hasn't reviewed.
+    expect(metric("reputation", "reviewsAfterAsking").current).toBe(1);
+    expect(metric("reputation", "avgRating").current).toBeCloseTo(11 / 3);
     expect(metric("reputation", "badAnswered").current).toBe(1);
     expect(metric("reputation", "mentions").current).toBe(1);
     // Only approved offers were sent; only a cancellation turned off counts as staying.

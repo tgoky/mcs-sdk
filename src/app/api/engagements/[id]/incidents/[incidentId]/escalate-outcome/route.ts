@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { proposeCrisisResume } from "@/features/cold-open/server/crisis-pause";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
@@ -72,6 +73,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .update(repIncidents)
     .set({ status: "resolved", resolvedAt: new Date(), resolvedBy: session.email })
     .where(eq(repIncidents.id, incidentId));
+
+  await proposeCrisisResume(engagementId, incidentId).catch((err) => console.error("[incident escalate-outcome] cold open resume proposal failed:", err));
 
   return NextResponse.json({ ok: true });
 }

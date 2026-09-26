@@ -124,6 +124,15 @@ function missing(key: string, label: string, reason: string): MissingField {
   return { key, label, reason };
 }
 
+const checkRepReviewRequests: Checker = async (engagementId) => {
+  const stack = await loadStack(engagementId);
+  const out: MissingField[] = [];
+  if (!stack?.rep_review_link) out.push(missing("rep_review_link", "Review link", "Not set. Nothing is sent until the client's review link is saved."));
+  const canText = stack?.sms_platform === "twilio" || stack?.sms_platform === "ghl_sms";
+  if (!canText && !(await hasCredential(engagementId, "smtp"))) out.push(missing("reviewRequestChannel", "Email or texting tool", "Connect an email sender (SMTP or Resend) or Twilio/GoHighLevel texting, or nobody can be asked."));
+  return out;
+};
+
 const checkPileOn: Checker = async (engagementId) => {
   const stack = await loadStack(engagementId);
   if (!stack) return [missing("stack", "Client setup", "No stack configuration found for this client at all.")];
@@ -392,6 +401,7 @@ const CHECKERS: Partial<Record<WorkerId, Checker>> = {
   "rep-search-watch": checkRepOnboarding,
   "rep-crisis-response": checkRepOnboarding,
   "rep-digest": checkRepOnboarding,
+  "rep-review-requests": checkRepReviewRequests,
   "icp-lock": checkIcpLock,
   "voice-capture": checkVoiceCapture,
   "source-connect": checkSourceConnect,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { proposeCrisisResume } from "@/features/cold-open/server/crisis-pause";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isAdminEmail, isAuthorizedForEngagement } from "@/lib/whop-access";
@@ -60,6 +61,9 @@ export async function POST(
     .update(repIncidents)
     .set({ status: "resolved", resolvedAt: new Date(), resolvedBy: session.email })
     .where(and(eq(repIncidents.id, incidentId), ne(repIncidents.status, "resolved")));
+
+  // Cold Open was paused for this incident: propose the restart.
+  await proposeCrisisResume(engagementId, incidentId).catch((e) => console.error("[incident resolve] cold open resume proposal failed:", e));
 
   return NextResponse.json({ ok: true });
 }

@@ -456,6 +456,27 @@
       "when": 1790445297868,
       "tag": "0064_whop_payment_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790446143934,
+      "tag": "0065_cold_open_sending_pause",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790446306043,
+      "tag": "0066_review_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790446730654,
+      "tag": "0067_review_labels",
+      "breakpoints": true
     }
   ]
 }

@@ -77,6 +77,10 @@ export async function releaseHeldLead(engagementId: string, leadId: string, acti
     await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
     return { error: "No sending platform configured for this engagement anymore. Reconnect Send Connect first." };
   }
+  if (config.sendingPause) {
+    await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));
+    return { error: "Cold Open is paused during a reputation incident. This lead stays held until the incident is resolved and sending restarts." };
+  }
   const copy = (lead.statusDetail as { copy?: AssembledCopy } | null)?.copy;
   if (!copy) {
     await db.update(coldOpenLeads).set({ status: "held" }).where(eq(coldOpenLeads.id, leadId));

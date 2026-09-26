@@ -29,6 +29,10 @@ export interface RawCounts {
   disputesAnswered: number;
   /** Failed payments that were paid after the recovery message (Whop's record). */
   paymentsRecovered: number;
+  /** Review requests sent (delivered per the provider where it reports). */
+  reviewRequestsSent: number;
+  /** New Google reviews whose author's full name matches someone asked in the 30 days before. */
+  reviewsAfterAsking: number;
 }
 
 export type Product = "showtime" | "cold-open" | "reputation" | "whop";

@@ -36,6 +36,7 @@ export type RepSkillId =
   | "rep-news-watch"
   | "rep-search-watch"
   | "rep-crisis-response"
+  | "rep-review-requests"
   | "rep-digest";
 
 export const REP_SKILL_IDS: RepSkillId[] = [
@@ -48,6 +49,7 @@ export const REP_SKILL_IDS: RepSkillId[] = [
   "rep-news-watch",
   "rep-search-watch",
   "rep-crisis-response",
+  "rep-review-requests",
   "rep-digest",
 ];
 
@@ -160,6 +162,14 @@ export const REP_SKILL_MANIFEST: Record<RepSkillId, RepSkillManifestEntry> = {
       "Reads everything the other Reputation Manager skills flagged and pages the operator the moment the cumulative severity crosses this client's threshold. Never publishes anything on its own.",
     runOnSetup: false,
     hasHingesPanel: false,
+  },
+  "rep-review-requests": {
+    id: "rep-review-requests",
+    name: "Review Requests",
+    description:
+      "Asks everyone who shows up to a call or pays for a review, by email or text through the client's own tools, with delivery receipts. Nobody is filtered by how they feel. One ask per person every 90 days.",
+    runOnSetup: false,
+    hasHingesPanel: true,
   },
   "rep-digest": {
     id: "rep-digest",

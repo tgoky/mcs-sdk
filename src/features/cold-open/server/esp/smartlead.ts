@@ -54,4 +54,13 @@ export class SmartleadAdapter extends ESPAdapter {
     }
     return { statusCode: status, detail: { added: obj.added_count } };
   }
+
+  // POST /campaigns/{id}/status with PAUSED or START (Smartlead's own CLI,
+  // campaigns set-status; values as its API takes them).
+  async setCampaignPaused(campaignId: string, paused: boolean): Promise<boolean> {
+    const key = await this.credential();
+    await this.throttle();
+    await this.request("POST", `${this.baseUrl()}/campaigns/${encodeURIComponent(campaignId)}/status?api_key=${encodeURIComponent(key)}`, {}, { status: paused ? "PAUSED" : "START" });
+    return true;
+  }
 }

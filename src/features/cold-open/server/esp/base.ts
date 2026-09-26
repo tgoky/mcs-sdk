@@ -198,6 +198,18 @@ export abstract class ESPAdapter {
     return null;
   }
 
+  /**
+   * Pause or restart one campaign in the sending tool (Reputation's crisis
+   * pause). False when this tool's campaigns can't be paused from here, so
+   * the client is told to do it themselves. Throws ESPError when the tool
+   * refuses.
+   */
+  async setCampaignPaused(campaignId: string, paused: boolean): Promise<boolean> {
+    void campaignId;
+    void paused;
+    return false;
+  }
+
   /** The one push entry point (minus the review gate and idempotency
    * check — see this file's header for why those live in the caller).
    * Returns "dry_run" | "pushed". */
@@ -229,7 +241,8 @@ export abstract class ESPAdapter {
     try {
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": BROWSER_UA, ...headers },
+        // No Content-Type without a body: some tools refuse an empty JSON body.
+        headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), Accept: "application/json", "User-Agent": BROWSER_UA, ...headers },
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });

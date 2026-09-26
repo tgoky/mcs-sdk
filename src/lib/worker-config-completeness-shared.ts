@@ -38,6 +38,7 @@ export const CONFIG_CHECKED_WORKER_IDS: readonly WorkerId[] = [
   "rep-search-watch",
   "rep-crisis-response",
   "rep-digest",
+  "rep-review-requests",
   "icp-lock",
   "voice-capture",
   "source-connect",

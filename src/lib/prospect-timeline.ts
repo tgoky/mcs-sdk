@@ -95,6 +95,8 @@ const SEQUENCE_LABEL: Record<string, string> = {
   pile_on_sms: "Reminder text",
   win_back_sms: "Recovery text",
   win_back_email_smtp: "Recovery email",
+  review_request_email: "Asked for a review",
+  review_request_sms: "Asked for a review",
 };
 
 const REPLY_LABEL: Record<string, string> = {
@@ -147,6 +149,7 @@ export function assembleTimeline(src: TimelineSources, products: ReadonlySet<Tim
       if (b.status === "cancelled") events.push({ at: iso(b.updatedAt), product: "showtime", kind: "cancelled", title: "Cancelled the call", proof: "From the booking tool", warn: true });
     }
     for (const m of src.messages) {
+      if (m.sequenceType.startsWith("review_request_")) continue; // Reputation's, below
       const { proof, warn } = messageProof(m);
       events.push({ at: iso(m.sentAt), product: "showtime", kind: "message", title: `${SEQUENCE_LABEL[m.sequenceType] ?? "Message"} (${m.channel === "email" ? "email" : "text"})`, proof, warn });
     }
@@ -160,6 +163,13 @@ export function assembleTimeline(src: TimelineSources, products: ReadonlySet<Tim
     for (const r of src.recoveries) {
       events.push({ at: iso(r.enrolledAt), product: "showtime", kind: "recovery", title: "Booking recovery started" });
       if (r.exitedAt) events.push({ at: iso(r.exitedAt), product: "showtime", kind: "recovery", title: r.status === "rebooked" ? "Rebooked through recovery" : r.status === "reply_exited" ? "Answered the recovery, handed to the team" : "Booking recovery ended", detail: r.exitReason ?? undefined });
+    }
+  }
+
+  if (products.has("reputation-manager")) {
+    for (const m of src.messages.filter((x) => x.sequenceType.startsWith("review_request_"))) {
+      const { proof, warn } = messageProof(m);
+      events.push({ at: iso(m.sentAt), product: "reputation-manager", kind: "message", title: `Asked for a review (${m.channel === "email" ? "email" : "text"})`, proof, warn });
     }
   }
 
@@ -259,7 +269,7 @@ export async function loadProspectTimeline(engagementId: string, key: { bookingI
     email && products.has("cold-open")
       ? db.select({ classifiedAt: coldOpenReplies.classifiedAt, disposition: coldOpenReplies.disposition, rawBody: coldOpenReplies.rawBody, campaignId: coldOpenReplies.campaignId }).from(coldOpenReplies).where(and(eq(coldOpenReplies.engagementId, engagementId), eq(coldOpenReplies.leadEmail, email)))
       : [],
-    products.has("showtime") && (email || bookingIds.length)
+    (products.has("showtime") || products.has("reputation-manager")) && (email || bookingIds.length)
       ? db
           .select({ sentAt: sequenceMessageLog.sentAt, channel: sequenceMessageLog.channel, sequenceType: sequenceMessageLog.sequenceType, status: sequenceMessageLog.status, provider: sequenceMessageLog.provider, providerMessageId: sequenceMessageLog.providerMessageId, deliveryStatus: sequenceMessageLog.deliveryStatus, deliveryError: sequenceMessageLog.deliveryError, error: sequenceMessageLog.error })
           .from(sequenceMessageLog)

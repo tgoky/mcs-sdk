@@ -9,7 +9,8 @@
 // same arithmetic over summed counts (a rate across clients is summed
 // numerators over summed denominators, not an average of rates).
 
-import { and, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { REVIEW_MATCH_DAYS, reviewsAfterAsking } from "@/features/reputation-manager/server/review-request-message";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
@@ -26,6 +27,7 @@ import {
   repWebFindings,
   whopChangeLedger,
   whopPayments,
+  reviewRequests,
   winBackEnrollments,
 } from "@/models/schema";
 import { RESULTS_WINDOW_DAYS, type ClientResults, type ProductResults, type RawCounts, type ShowRateThenNow } from "@/lib/client-results-shape";
@@ -58,6 +60,8 @@ export const emptyCounts = (): RawCounts => ({
   membersStayed: 0,
   disputesAnswered: 0,
   paymentsRecovered: 0,
+  reviewRequestsSent: 0,
+  reviewsAfterAsking: 0,
 });
 
 export function addCounts(a: RawCounts, b: RawCounts): RawCounts {
@@ -79,7 +83,7 @@ function median(xs: number[]): number | null {
 
 const hasShowtime = (c: RawCounts) => c.booked + c.showed + c.noShow + c.winBackRebooked + c.winBackLost + c.textLatenciesMs.length > 0;
 const hasColdOpen = (c: RawCounts) => c.contacted + c.humanReplies > 0;
-const hasReputation = (c: RawCounts) => c.newReviews + c.mentions + c.incidents > 0;
+const hasReputation = (c: RawCounts) => c.newReviews + c.mentions + c.incidents + c.reviewRequestsSent > 0;
 const hasWhop = (c: RawCounts) => c.saveOffersSent + c.membersStayed + c.disputesAnswered + c.paymentsRecovered > 0;
 
 /** The per-product numbers for one client (or a whole portfolio's summed
@@ -115,6 +119,12 @@ export function productResults(cur: RawCounts, prev: RawCounts): ProductResults[
         { key: "avgRating", label: "Average rating", current: cur.ratingCount ? cur.ratingSum / cur.ratingCount : null, previous: prev.ratingCount ? prev.ratingSum / prev.ratingCount : null, format: "rating", better: "up" },
         { key: "badAnswered", label: "Bad reviews answered", current: rate(cur.badAnswered, cur.badReviews), previous: rate(prev.badAnswered, prev.badReviews), format: "percent", better: "up" },
         { key: "mentions", label: "Mentions caught", current: cur.mentions, previous: prev.mentions, format: "count", better: "up" },
+        ...(cur.reviewRequestsSent + prev.reviewRequestsSent > 0
+          ? [
+              { key: "reviewAsks", label: "Review requests sent", current: cur.reviewRequestsSent, previous: prev.reviewRequestsSent, format: "count" as const, better: "up" as const },
+              { key: "reviewsAfterAsking", label: "Reviews from people asked (name match)", current: cur.reviewsAfterAsking, previous: prev.reviewsAfterAsking, format: "count" as const, better: "up" as const },
+            ]
+          : []),
       ],
     });
   }
@@ -168,14 +178,14 @@ export async function getClientResults(
   // Both windows at once: the 30 days before the last 30, and the last 30.
   const windowed = (engagementCol: AnyPgColumn, at: AnyPgColumn) => and(inArray(engagementCol, ids), gte(at, prevStart), lt(at, now));
 
-  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger, recovered] = await Promise.all([
+  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger, recovered, asks] = await Promise.all([
     db.select({ engagementId: bookingRoster.engagementId, at: bookingRoster.createdAt }).from(bookingRoster).where(windowed(bookingRoster.engagementId, bookingRoster.createdAt)),
     db.select({ engagementId: briefOutcomeLog.engagementId, at: briefOutcomeLog.loggedAt, outcome: briefOutcomeLog.outcome }).from(briefOutcomeLog).where(inArray(briefOutcomeLog.engagementId, ids)),
     db.select({ engagementId: winBackEnrollments.engagementId, at: winBackEnrollments.enrolledAt, status: winBackEnrollments.status }).from(winBackEnrollments).where(windowed(winBackEnrollments.engagementId, winBackEnrollments.enrolledAt)),
     db.select({ engagementId: pileOnSendLog.engagementId, at: pileOnSendLog.createdAt, latencyMs: pileOnSendLog.latencyMs, error: pileOnSendLog.error }).from(pileOnSendLog).where(windowed(pileOnSendLog.engagementId, pileOnSendLog.createdAt)),
     db.select({ engagementId: coldOpenLeads.engagementId, at: coldOpenLeads.pushedAt, status: coldOpenLeads.status }).from(coldOpenLeads).where(windowed(coldOpenLeads.engagementId, coldOpenLeads.pushedAt)),
     db.select({ engagementId: coldOpenReplies.engagementId, at: coldOpenReplies.classifiedAt, disposition: coldOpenReplies.disposition }).from(coldOpenReplies).where(windowed(coldOpenReplies.engagementId, coldOpenReplies.classifiedAt)),
-    db.select({ engagementId: repWebFindings.engagementId, at: repWebFindings.createdAt, source: repWebFindings.source, rating: repWebFindings.rating, ownerAnswered: repWebFindings.ownerAnswered, sentiment: repWebFindings.sentiment }).from(repWebFindings).where(windowed(repWebFindings.engagementId, repWebFindings.createdAt)),
+    db.select({ engagementId: repWebFindings.engagementId, at: repWebFindings.createdAt, source: repWebFindings.source, rating: repWebFindings.rating, ownerAnswered: repWebFindings.ownerAnswered, sentiment: repWebFindings.sentiment, author: repWebFindings.author, publishedAt: repWebFindings.publishedAt }).from(repWebFindings).where(windowed(repWebFindings.engagementId, repWebFindings.createdAt)),
     db.select({ engagementId: repTrustpilotReviews.engagementId, at: repTrustpilotReviews.createdAt, rating: repTrustpilotReviews.rating }).from(repTrustpilotReviews).where(windowed(repTrustpilotReviews.engagementId, repTrustpilotReviews.createdAt)),
     db.select({ engagementId: repRedditMentions.engagementId, at: repRedditMentions.createdAt, sentiment: repRedditMentions.sentiment }).from(repRedditMentions).where(windowed(repRedditMentions.engagementId, repRedditMentions.createdAt)),
     db.select({ engagementId: repTwitterMentions.engagementId, at: repTwitterMentions.createdAt, sentiment: repTwitterMentions.sentiment }).from(repTwitterMentions).where(windowed(repTwitterMentions.engagementId, repTwitterMentions.createdAt)),
@@ -183,6 +193,11 @@ export async function getClientResults(
     db.select({ engagementId: pendingActions.engagementId, at: pendingActions.createdAt, actionType: pendingActions.actionType, status: pendingActions.status }).from(pendingActions).where(windowed(pendingActions.engagementId, pendingActions.createdAt)),
     db.select({ engagementId: whopChangeLedger.engagementId, at: whopChangeLedger.occurredAt, eventType: whopChangeLedger.eventType, changedFields: whopChangeLedger.changedFields }).from(whopChangeLedger).where(windowed(whopChangeLedger.engagementId, whopChangeLedger.occurredAt)),
     db.select({ engagementId: whopPayments.engagementId, at: whopPayments.recoveredAt }).from(whopPayments).where(windowed(whopPayments.engagementId, whopPayments.recoveredAt)),
+    // From a month before the earlier window, so a review early in it can match an ask before it.
+    db
+      .select({ engagementId: reviewRequests.engagementId, at: reviewRequests.sentAt, name: reviewRequests.personName })
+      .from(reviewRequests)
+      .where(and(inArray(reviewRequests.engagementId, ids), eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, new Date(prevStart.getTime() - REVIEW_MATCH_DAYS * DAY)), lt(reviewRequests.sentAt, now))),
   ]);
 
   const counts = new Map<string, { cur: RawCounts; prev: RawCounts }>(ids.map((id) => [id, { cur: emptyCounts(), prev: emptyCounts() }]));
@@ -280,6 +295,23 @@ export async function getClientResults(
     if (!c || r.status !== "approved") continue;
     if (r.actionType === "whop_cancellation_offer_create") c.saveOffersSent++;
     if (r.actionType === "whop_dispute_evidence_submit") c.disputesAnswered++;
+  }
+  for (const r of asks) {
+    const c = bucket(r);
+    if (c) c.reviewRequestsSent++;
+  }
+  // Reviews matched to asks by the reviewer's full name: counted in the
+  // window the review landed in.
+  const googleReviews = reviews.filter((r) => r.source === "google_reviews");
+  for (const id of ids) {
+    const asked = asks.filter((a) => a.engagementId === id && a.at).map((a) => ({ name: a.name, sentAt: a.at! }));
+    if (!asked.length) continue;
+    for (const r of googleReviews) {
+      if (r.engagementId !== id) continue;
+      const postedAt = r.publishedAt ?? r.at;
+      const c = postedAt ? bucket({ engagementId: id, at: postedAt }) : null;
+      if (c && reviewsAfterAsking(asked, [{ author: r.author, postedAt: postedAt! }]) > 0) c.reviewsAfterAsking++;
+    }
   }
   for (const r of recovered) {
     const c = bucket(r);

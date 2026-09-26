@@ -43,6 +43,7 @@ import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
 import { Popover, relativeTime } from "./review-kit";
 import { RepRunNow, hasRepRunNow } from "./rep-run-now";
+import { ReviewRequestSettings } from "./review-request-settings";
 import { cn } from "@/lib/utils";
 
 // ── Skills ─────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ const REP_SETUP_SKILLS: RepSkillId[] = [
   "rep-news-watch",
   "rep-search-watch",
   "rep-crisis-response",
+  "rep-review-requests",
   "rep-digest",
 ];
 
@@ -68,6 +70,7 @@ const SKILL_BLURB: Partial<Record<RepSkillId, string>> = {
   "rep-news-watch": "News articles about you, your founder or your products.",
   "rep-search-watch": "What Google's first page shows next to \"reviews\" or \"scam\".",
   "rep-crisis-response": "Pages you the moment serious findings add up. Never posts anything.",
+  "rep-review-requests": "Asks everyone who shows up or pays for a review, with your link.",
   "rep-digest": "One daily summary of the quieter findings.",
 };
 
@@ -127,6 +130,12 @@ const REP_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolean
     todos: [],
     save: true,
     about: "The questions we ask each AI engine on a schedule, then watch the answers.",
+  },
+  "rep-review-requests": {
+    rows: [],
+    todos: [],
+    save: false,
+    about: "Everyone who shows up to a call or pays gets the same message asking for a review. Nothing is filtered by how they feel.",
   },
   "rep-digest": {
     rows: [],
@@ -1580,6 +1589,7 @@ function Review({
         />
         {shown.length > 0 && <ul className="divide-y">{shown}</ul>}
         {hasRepRunNow(focus) && <RepRunNow engagementId={data.engagementId} skill={focus} />}
+        {focus === "rep-review-requests" && <ReviewRequestSettings engagementId={data.engagementId} />}
         {f.todos.length > 0 && (
           <section className="space-y-2 border-t pt-5">
             <h2 className="text-[13px] font-medium text-[var(--text-secondary)]">Still needed</h2>
@@ -1663,6 +1673,12 @@ function Review({
         open={showMissing}
         onToggle={() => setShowMissing(!showMissing)}
       />
+
+      {skills.includes("rep-review-requests") && data.configured && (
+        <div className="border-t pt-5">
+          <ReviewRequestSettings engagementId={data.engagementId} />
+        </div>
+      )}
 
       {skills.includes("rep-digest") && (
         <p className="border-t pt-5 text-[13px] text-[var(--text-muted)]">

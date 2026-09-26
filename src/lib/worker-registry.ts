@@ -809,6 +809,11 @@ const REP_CONFIG_FIELDS: Partial<Record<RepSkillId, WorkerConfigField[]>> = {
   "rep-search-watch": [],
   "rep-crisis-response": [],
   "rep-digest": [],
+  "rep-review-requests": [
+    { key: "rep_review_link", label: "Review link", kind: "ask", description: "The client's own review page (Google Business Profile's \"Ask for reviews\" link, or any review site). Unset means nothing is sent. Blocks.", tier: "blocking" },
+    { key: "rep_review_request_message", label: "Message", kind: "ask", description: "What people get, with {name} and {link}. A default is used when unset. Doesn't block.", tier: "visible-default" },
+    { key: "rep_review_request_delay_hours", label: "Wait before asking (hours)", kind: "ask", description: "Default 2 hours after the call or payment. Doesn't block.", tier: "visible-default" },
+  ],
 };
 
 // Traced against the Cold Open skill pack's own config schema (see
@@ -1196,6 +1201,7 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "rep-search-watch": "Monitoring",
   "rep-crisis-response": "Crisis & Recovery",
   "rep-digest": "Monitoring",
+  "rep-review-requests": "Outreach & Sequences",
   "icp-lock": "Setup",
   "voice-capture": "Setup",
   "source-connect": "Setup",

@@ -52,4 +52,14 @@ export class ReplyIoAdapter extends ESPAdapter {
     const { status } = await this.request("POST", `${this.baseUrl()}/actions/addandpushtocampaign`, await this.headers(), payload);
     return { statusCode: status, detail: {} };
   }
+
+  // POST /v3/sequences/{id}/pause and /start (Reply.io's own n8n node,
+  // sequence pause/start operations; same X-Api-Key). v1 "campaigns" are
+  // Reply's sequences, so the ids carry over.
+  async setCampaignPaused(campaignId: string, paused: boolean): Promise<boolean> {
+    const v3 = this.baseUrl().replace(/\/v1$/, "/v3");
+    await this.throttle();
+    await this.request("POST", `${v3}/sequences/${encodeURIComponent(campaignId)}/${paused ? "pause" : "start"}`, await this.headers());
+    return true;
+  }
 }

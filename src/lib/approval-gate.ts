@@ -68,6 +68,10 @@ export type PendingActionType =
   | "whop_promo_code_remove"
   | "whop_dispute_evidence_submit"
   | "whop_payment_recovery_send"
+  // Reputation crisis → Cold Open pause and the restart after it
+  // (features/cold-open/server/crisis-pause.ts). Always gated.
+  | "cold_open_crisis_pause"
+  | "cold_open_crisis_resume"
   | "whop_ads_flip_to_active";
 
 export { OPT_IN_GATED_ACTIONS, OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
@@ -504,6 +508,15 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     }
     const { executeDisputeEvidenceSubmit } = await import("@/features/whop-agent/server/dispute-response-service");
     await executeDisputeEvidenceSubmit(engagementId, payload.disputeId, payload.draft);
+  },
+
+  cold_open_crisis_pause: async (engagementId, payload) => {
+    const { executeCrisisPause } = await import("@/features/cold-open/server/crisis-pause");
+    await executeCrisisPause(engagementId, payload);
+  },
+  cold_open_crisis_resume: async (engagementId, payload) => {
+    const { executeCrisisResume } = await import("@/features/cold-open/server/crisis-pause");
+    await executeCrisisResume(engagementId, payload);
   },
 
   // Failed-payment recovery: a message to a paying customer in the
