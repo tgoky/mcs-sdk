@@ -5,6 +5,7 @@
 // the client report (one client). Types only from client-results.ts, so
 // this renders inside client components too.
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, TriangleAlert } from "lucide-react";
 import type { ClientResults, HoldoutComparison, Metric, Product, ProductResults, ShowRateThenNow } from "@/lib/client-results-shape";
@@ -62,10 +63,11 @@ function Change({ metric }: { metric: Metric }) {
   );
 }
 
-function ProductCard({ result }: { result: ProductResults }) {
+function ProductCard({ product, result, extra }: { product: Product; result?: ProductResults; extra?: ReactNode }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 p-4 space-y-3">
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PRODUCT_NAME[result.product]}</p>
+      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PRODUCT_NAME[product]}</p>
+      {result && (
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {result.metrics.map((m) => (
           <div key={m.key} className="min-w-0">
@@ -77,15 +79,23 @@ function ProductCard({ result }: { result: ProductResults }) {
           </div>
         ))}
       </div>
+      )}
+      {extra && <div className={result ? "border-t border-zinc-200 dark:border-zinc-800/80 pt-3" : undefined}>{extra}</div>}
     </div>
   );
 }
 
-export function ProductResultsGrid({ products }: { products: ProductResults[] }) {
+const PRODUCT_ORDER: Product[] = ["showtime", "cold-open", "reputation", "whop"];
+
+/** One card per product. `extras` adds a section inside a product's card
+ * (the client report puts that product's skill numbers there); a product
+ * with only extras still gets its card. */
+export function ProductResultsGrid({ products, extras = {} }: { products: ProductResults[]; extras?: Partial<Record<Product, ReactNode>> }) {
+  const shown = PRODUCT_ORDER.filter((p) => products.some((r) => r.product === p) || extras[p]);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {products.map((p) => (
-        <ProductCard key={p.product} result={p} />
+      {shown.map((p) => (
+        <ProductCard key={p} product={p} result={products.find((r) => r.product === p)} extra={extras[p]} />
       ))}
     </div>
   );
