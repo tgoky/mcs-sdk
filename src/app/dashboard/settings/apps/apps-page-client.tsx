@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { CheckCircle2, AlertCircle, X, RotateCw, Trash2, LayoutGrid } from "lucide-react";
 import { PlatformLogo } from "@/components/platform-logo";
 import { isComposioManagedProvider } from "@/lib/composio-providers";
-import { otherGhlProvider } from "@/lib/ghl-location";
+import { otherGhlProvider } from "@/lib/ghl-providers";
 
 interface VaultItem {
   id: string;

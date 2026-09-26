@@ -20,16 +20,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq, inArray } from "drizzle-orm";
 import { fetchWithTimeout } from "@/lib/http";
 
-export const GHL_PROVIDERS = ["ghl_calendar", "ghl"] as const;
-
-export function isGhlProvider(provider: string): boolean {
-  return (GHL_PROVIDERS as readonly string[]).includes(provider);
-}
-
-/** The other half of GoHighLevel: one token covers booking and email/CRM. */
-export function otherGhlProvider(provider: string): string | null {
-  return provider === "ghl" ? "ghl_calendar" : provider === "ghl_calendar" ? "ghl" : null;
-}
+export { GHL_PROVIDERS, isGhlProvider, otherGhlProvider } from "@/lib/ghl-providers";
 
 type StackWithEmailMeta = Partial<EngagementStack> & { email_platform_meta?: { location_id?: string } };
 
