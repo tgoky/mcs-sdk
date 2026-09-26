@@ -23,6 +23,40 @@ import type { ColdOpenSendPlatformId } from "@/models/schema";
 
 export const MERGE_FIELDS = ["subject", "body1", "body2", "body3"] as const;
 
+/**
+ * Where each field Daily Send pushes has to appear in the client's
+ * campaign, or the email tool sends its own written text instead and the
+ * copy Cold Open wrote is silently unused: the subject line of email 1
+ * uses {{subject}}, and emails 1, 2 and 3 use {{body1}}, {{body2}},
+ * {{body3}}.
+ */
+export const PLACEHOLDER_GUIDE = [
+  { field: "subject", where: "the subject line of email 1" },
+  { field: "body1", where: "the body of email 1" },
+  { field: "body2", where: "the body of email 2" },
+  { field: "body3", where: "the body of email 3" },
+] as const;
+
+export interface CampaignStepCopy {
+  /** Every variant's subject and body for this step (A/B variants). */
+  subjects: string[];
+  bodies: string[];
+}
+
+const hasToken = (texts: string[], field: string) => texts.some((t) => new RegExp(`\\{\\{\\s*${field}\\s*\\}\\}`, "i").test(t ?? ""));
+
+/** Which placeholders a campaign's steps are missing, in plain words.
+ * Empty when the campaign will send what Cold Open wrote. */
+export function missingPlaceholders(steps: CampaignStepCopy[]): string[] {
+  const gaps: string[] = [];
+  if (steps.length < 3) gaps.push(`the campaign has ${steps.length} email step${steps.length === 1 ? "" : "s"}; Cold Open writes 3`);
+  if (!hasToken(steps[0]?.subjects ?? [], "subject")) gaps.push("{{subject}} isn't in the subject line of email 1");
+  (["body1", "body2", "body3"] as const).forEach((field, i) => {
+    if (steps[i] && !hasToken(steps[i].bodies, field)) gaps.push(`{{${field}}} isn't in the body of email ${i + 1}`);
+  });
+  return gaps;
+}
+
 // Instantly's Cloudflare rejects fetch's default UA with error 1010 —
 // same browser-shaped UA fix the source module ported from its own
 // reference pusher.
@@ -152,6 +186,16 @@ export abstract class ESPAdapter {
       return [`could not list campaigns: ${err instanceof Error ? err.message : String(err)}`];
     }
     return campaignIds.filter((id) => !known.has(String(id))).map((id) => `campaign id '${id}' not found in the ${this.espType} account`);
+  }
+
+  /**
+   * Whether this campaign's emails use the placeholders the pushed copy
+   * fills (see PLACEHOLDER_GUIDE). Null when this tool's campaign steps
+   * can't be read here, so the check can't be made.
+   */
+  async checkCopyPlaceholders(campaignId: string): Promise<string[] | null> {
+    void campaignId;
+    return null;
   }
 
   /** The one push entry point (minus the review gate and idempotency

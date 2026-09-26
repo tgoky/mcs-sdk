@@ -3,7 +3,7 @@
 // Instantly v2 adapter. Port of the Cold Open skill pack's esp/instantly.py.
 // Auth: Bearer key. Push: POST /leads with campaign + custom_variables.
 
-import { ESPAdapter, extractArray, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
+import { ESPAdapter, extractArray, missingPlaceholders, type EspLead, type EspMergeFields, type EspCampaign, espApiBase } from "./base";
 import { coldOpenCredentialProvider } from "../source-connect";
 
 
@@ -24,6 +24,22 @@ export class InstantlyAdapter extends ESPAdapter {
   async listCampaigns(): Promise<EspCampaign[]> {
     const { data } = await this.request("GET", `${this.baseUrl()}/campaigns?limit=100`, await this.headers());
     return extractArray(data, "items").map((c) => ({ id: String(c.id ?? ""), name: c.name ?? "" }));
+  }
+
+  /** Instantly's campaign carries its copy at sequences[0].steps[].variants[]
+   * ({ subject, body }), per Instantly's own API SDK; only the first
+   * sequence is used. */
+  async checkCopyPlaceholders(campaignId: string): Promise<string[] | null> {
+    const { data } = await this.request("GET", `${this.baseUrl()}/campaigns/${encodeURIComponent(campaignId)}`, await this.headers());
+    const campaign = (Array.isArray(data) ? null : data) as { sequences?: { steps?: { variants?: { subject?: string; body?: string; v_disabled?: boolean }[] }[] }[] } | null;
+    const steps = campaign?.sequences?.[0]?.steps;
+    if (!Array.isArray(steps)) return null;
+    return missingPlaceholders(
+      steps.map((step) => {
+        const live = (step.variants ?? []).filter((v) => !v.v_disabled);
+        return { subjects: live.map((v) => v.subject ?? ""), bodies: live.map((v) => v.body ?? "") };
+      })
+    );
   }
 
   async buildPayload(lead: EspLead, campaignId: string, mergeFields: EspMergeFields): Promise<Record<string, unknown>> {

@@ -70,4 +70,7 @@ export interface ColdOpenSetupState {
   buyers: BuyerProfile | null;
   proposal: ColdOpenProposal;
   leadSources: { icp: string; rows: number }[];
+  /** Where the sending tool posts each reply as it arrives
+   * (api/webhooks/cold-open-replies), tokened per client. Set by the route. */
+  replyWebhookUrl?: string;
 }

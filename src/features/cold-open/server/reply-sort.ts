@@ -49,12 +49,14 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
     summary.whatWasAttempted.push(`Polling the ${config.sendPlatform.platform} reply feed.`);
 
     if (config.sendPlatform.platform !== "instantly") {
+      // Only Instantly has a reply feed to poll. The other tools send each
+      // reply to this app as it arrives (api/webhooks/cold-open-replies).
       await logStep(runId, {
         phase: "reply_fetch",
         status: "skipped",
-        detail: `Reply feed for ${config.sendPlatform.platform} is not yet built. Instantly is the only supported feed today.`,
+        detail: `${config.sendPlatform.platform} sends replies to this app by webhook as they arrive; there's no feed to poll.`,
       });
-      summary.openItems.push(`Reply feed for ${config.sendPlatform.platform} is real, separately-scoped follow-up work.`);
+      summary.openItems.push(`Replies from ${config.sendPlatform.platform} arrive by webhook. If none have come in, check the reply webhook address is set in ${config.sendPlatform.platform} (Cold Open setup shows it).`);
       await finishRun(runId, { summary });
       return;
     }
@@ -68,47 +70,13 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
     const byDisposition: Partial<Record<ColdOpenReplyDisposition, number>> = {};
 
     for (const reply of replies) {
-      const [existing] = await db
-        .select({ id: coldOpenReplies.id })
-        .from(coldOpenReplies)
-        .where(and(eq(coldOpenReplies.engagementId, engagementId), eq(coldOpenReplies.externalReplyId, reply.replyId)))
-        .limit(1);
-      if (existing) {
-        skippedDuplicate++;
-        continue;
-      }
-
-      const result = await classifyReply({ subject: reply.subject, bodyText: reply.bodyText }, config.productIdentity, DEFAULT_TAXONOMY);
-      // onConflictDoNothing against the real unique index on
-      // (engagementId, externalReplyId): the check above has no lock
-      // between its SELECT and this INSERT, so two overlapping runs (or
-      // a whole-function Inngest retry racing a still-finishing prior
-      // attempt) could both pass the dedupe check for the same reply.
-      // Without this, the loser's insert threw an unhandled unique-
-      // violation error that crashed the entire run instead of quietly
-      // losing the race — same fix shape as coldOpenLeads' own push
-      // insert already uses.
-      const [inserted] = await db
-        .insert(coldOpenReplies)
-        .values({
-          engagementId,
-          leadEmail: reply.leadEmail,
-          campaignId: reply.campaignId || null,
-          externalReplyId: reply.replyId,
-          disposition: result.disposition,
-          classificationSource:
-            result.method === "heuristic" ? "heuristic" : result.method === "empty_body" ? "none" : result.method === "error" ? "error" : "model",
-          rawBody: reply.bodyText,
-          routedToQueue: QUEUE_WORTHY.includes(result.disposition),
-        })
-        .onConflictDoNothing()
-        .returning({ id: coldOpenReplies.id });
-      if (!inserted) {
+      const stored = await storeColdOpenReply(engagementId, reply, config.productIdentity);
+      if (stored.status === "duplicate") {
         skippedDuplicate++;
         continue;
       }
       classified++;
-      byDisposition[result.disposition] = (byDisposition[result.disposition] ?? 0) + 1;
+      byDisposition[stored.disposition] = (byDisposition[stored.disposition] ?? 0) + 1;
     }
 
     await logStep(runId, {
@@ -125,6 +93,47 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
     await failRun(runId, err, { summary }).catch(() => {});
     throw err;
   }
+}
+
+/**
+ * Sorts and stores one reply, whichever way it arrived (this poller, or a
+ * sending tool's webhook: api/webhooks/cold-open-replies). A reply already
+ * on file (same external id) is left alone, so a re-poll or a retried
+ * webhook never sorts or routes it twice.
+ */
+export async function storeColdOpenReply(
+  engagementId: string,
+  reply: { leadEmail: string; campaignId?: string | null; replyId: string; subject?: string; bodyText: string },
+  productIdentity?: { name?: string; valueProp?: string } | null
+): Promise<{ status: "stored"; id: string; disposition: ColdOpenReplyDisposition } | { status: "duplicate" }> {
+  const [existing] = await db
+    .select({ id: coldOpenReplies.id })
+    .from(coldOpenReplies)
+    .where(and(eq(coldOpenReplies.engagementId, engagementId), eq(coldOpenReplies.externalReplyId, reply.replyId)))
+    .limit(1);
+  if (existing) return { status: "duplicate" };
+
+  const result = await classifyReply({ subject: reply.subject, bodyText: reply.bodyText }, productIdentity, DEFAULT_TAXONOMY);
+  // onConflictDoNothing against the unique index on (engagementId,
+  // externalReplyId): the check above has no lock, so two overlapping
+  // deliveries can both pass it; the loser quietly loses the race.
+  const [inserted] = await db
+    .insert(coldOpenReplies)
+    .values({
+      engagementId,
+      leadEmail: reply.leadEmail,
+      campaignId: reply.campaignId || null,
+      externalReplyId: reply.replyId,
+      disposition: result.disposition,
+      classificationSource:
+        result.method === "heuristic" ? "heuristic" : result.method === "empty_body" ? "none" : result.method === "error" ? "error" : "model",
+      rawBody: reply.bodyText,
+      routedToQueue: QUEUE_WORTHY.includes(result.disposition),
+    })
+    .onConflictDoNothing()
+    .returning({ id: coldOpenReplies.id });
+  if (!inserted) return { status: "duplicate" };
+  return { status: "stored", id: inserted.id, disposition: result.disposition };
 }
 
 /** Same shape as human-blockers.ts's getBlockerEngagementId — the resolve

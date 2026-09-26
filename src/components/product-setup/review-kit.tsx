@@ -9,7 +9,7 @@
 // and one Approve.
 
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, Copy } from "lucide-react";
 import { AnchoredCard } from "./anchored-card";
 import { cn } from "@/lib/utils";
 
@@ -419,4 +419,26 @@ export function relativeTime(iso: string | null): string | null {
   const d = Math.round(h / 24);
   if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** An address or value to copy into another tool, with a Copy button. */
+export function CopyValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-start gap-2 rounded-lg bg-[var(--accent-dim)] p-2.5">
+      <code className="min-w-0 flex-1 break-all text-[12px] text-[var(--text-secondary)]">{value}</code>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard
+            ?.writeText(value)
+            .then(() => setCopied(true))
+            .catch(() => undefined);
+        }}
+        className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+      >
+        <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
 }

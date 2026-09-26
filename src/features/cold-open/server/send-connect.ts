@@ -15,6 +15,7 @@ import { hasCredential } from "@/lib/credentials";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { ColdOpenSendPlatformId } from "@/models/schema";
 import type { GetStepTools, Inngest } from "inngest";
+import { PLACEHOLDER_GUIDE } from "./esp/base";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -79,6 +80,28 @@ export async function runSendConnect(tenant: any, runId: string, step: StepTools
       const detail = err instanceof Error ? err.message : String(err);
       await logStep(runId, { phase: "campaign_verify", status: "failed", detail });
       summary.whatFailed.push(`Could not verify campaigns: ${detail}`);
+    }
+
+    // The pushed copy only reaches anyone if the campaign's emails use the
+    // placeholders it fills; otherwise the email tool sends its own text.
+    for (const [icp, campaignId] of Object.entries(config.campaignMap)) {
+      try {
+        const gaps = await adapter.checkCopyPlaceholders(campaignId);
+        if (gaps === null) {
+          summary.openItems.push(
+            `Check campaign ${campaignId} (${icp}) in ${config.sendPlatform.platform}: ${PLACEHOLDER_GUIDE.map((g) => `{{${g.field}}} in ${g.where}`).join(", ")}. Without them your own campaign text is sent instead of what Cold Open writes.`
+          );
+        } else if (gaps.length > 0) {
+          const detail = `Campaign ${campaignId} (${icp}): ${gaps.join("; ")}. Until fixed, ${config.sendPlatform.platform} sends the campaign's own text instead of what Cold Open writes.`;
+          await logStep(runId, { phase: "placeholder_check", status: "failed", detail });
+          summary.whatFailed.push(detail);
+        } else {
+          await logStep(runId, { phase: "placeholder_check", status: "success", detail: `Campaign ${campaignId} (${icp}) uses all four placeholders.` });
+          summary.whatWorked.push(`Campaign ${campaignId} (${icp}) sends the copy Cold Open writes.`);
+        }
+      } catch (err) {
+        summary.openItems.push(`Couldn't read campaign ${campaignId} (${icp}) to check its placeholders: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     // Advisory DNS gap check against the product's own domain — the

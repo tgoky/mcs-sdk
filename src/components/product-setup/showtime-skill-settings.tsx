@@ -17,12 +17,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Copy } from "lucide-react";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { CredentialRow } from "@/app/dashboard/engagements/[id]/update-credentials-form";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
-import { ApproveBar, FeedRow, Labeled, SettingsHeader, inputCls, type FeedEntry } from "./review-kit";
+import { ApproveBar, CopyValue, FeedRow, Labeled, SettingsHeader, inputCls, type FeedEntry } from "./review-kit";
 import { ChoiceList } from "./fact-token";
 import { BackButton } from "./back-button";
 
@@ -102,26 +101,6 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
 }
 
 /** An address a client's tool is pointed at, with a copy button. */
-function CopyAddress({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="flex items-start gap-2 rounded-lg bg-[var(--accent-dim)] p-2.5">
-      <code className="min-w-0 flex-1 break-all text-[12px] text-[var(--text-secondary)]">{value}</code>
-      <button
-        type="button"
-        onClick={() => {
-          navigator.clipboard
-            ?.writeText(value)
-            .then(() => setCopied(true))
-            .catch(() => undefined);
-        }}
-        className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
-      >
-        <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
-}
 
 // ── Funnel Audit (leak-map) ─────────────────────────────────────────────
 
@@ -422,7 +401,7 @@ function useWinBack(engagementId: string, loaded: Record<string, unknown>): Sect
           </>
         ),
       source: v.inboundReplyMode === "forwarding" ? "Point the client's inbound-parse bridge (Postmark, SendGrid) at this address:" : undefined,
-      body: v.inboundReplyMode === "forwarding" && replyCatcherUrl ? <CopyAddress value={replyCatcherUrl} /> : undefined,
+      body: v.inboundReplyMode === "forwarding" && replyCatcherUrl ? <CopyValue value={replyCatcherUrl} /> : undefined,
       editor: (close) => (
         <div className="space-y-3">
           <ChoiceList
@@ -481,7 +460,7 @@ function useWinBack(engagementId: string, loaded: Record<string, unknown>): Sect
         </>
       ),
       source: deliveryWebhookUrl ? `Optional. Add this address as a webhook in ${esp} to switch it on:` : "Optional. Save once to get this client's address.",
-      body: deliveryWebhookUrl ? <CopyAddress value={deliveryWebhookUrl} /> : undefined,
+      body: deliveryWebhookUrl ? <CopyValue value={deliveryWebhookUrl} /> : undefined,
       editLabel: emailPlatform === "convertkit" ? undefined : "Signing",
       editor:
         emailPlatform === "convertkit"
@@ -889,7 +868,7 @@ function usePileOn(engagementId: string, loaded: Record<string, unknown>): Secti
             text: <>Replies to these texts come back to the Queue</>,
             source:
               "In Twilio, open the Messaging Service (or the number) and set \"A message comes in\" to this address. STOP stops every text to that person; reschedule requests and questions land in the Queue.",
-            body: <CopyAddress value={replyUrl} />,
+            body: <CopyValue value={replyUrl} />,
           } satisfies FeedEntry,
         ]
       : []),

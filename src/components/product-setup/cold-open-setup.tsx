@@ -25,7 +25,7 @@ import type { ColdOpenSetupState, TrustTier } from "@/lib/cold-open-setup/types"
 import type { ColdOpenSkillId } from "@/lib/cold-open-skill-manifest";
 import { ToolAvatar, type ToolActions } from "./tool-avatar";
 import { ChoiceList } from "./fact-token";
-import { ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, relativeTime, type FeedEntry } from "./review-kit";
+import { CopyValue, ApproveBar, ChipRow, Pill, Popover, FeedRow, Labeled, SettingsHeader, Todos, ToggleList, inputCls, pick, relativeTime, type FeedEntry } from "./review-kit";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { cn } from "@/lib/utils";
@@ -805,6 +805,32 @@ function Review({
         text: <>{i.label} go into <b>{c?.name ?? "a campaign"}</b></>,
         source: p.campaignMap[i.slug]?.id === draft.campaignMap[i.slug] ? "Matched by Jev" : "",
         editor: (close) => <CampaignPicker campaigns={campaigns} value={draft.campaignMap[i.slug]} onPick={(v) => (set((d) => ({ ...d, campaignMap: { ...d.campaignMap, [i.slug]: v } })), close())} />,
+      });
+    }
+    if (data.replyWebhookUrl) {
+      const tool = out?.platform ?? data.proposal.platform;
+      entries.push({
+        key: "campaign-replies",
+        text: <>Replies come straight to the Queue as they arrive</>,
+        source: `In ${platformName ?? "your email tool"}, add a webhook for replies to this address${tool === "instantly" ? " (webhooks need Instantly's Hypergrowth plan; without it replies are checked every 4 hours)" : ""}. Interested replies and objections land in the Queue.`,
+        body: <CopyValue value={data.replyWebhookUrl} />,
+      });
+    }
+    if (Object.keys(draft.campaignMap).length > 0) {
+      // Without these the email tool sends the campaign's own text and the
+      // emails written here never go out (esp/base.ts PLACEHOLDER_GUIDE).
+      entries.push({
+        key: "campaign-placeholders",
+        warn: true,
+        text: (
+          <>
+            In {platformName ?? "your email tool"}, each campaign&apos;s emails must use <b>{"{{subject}}"}</b> as email 1&apos;s subject and <b>{"{{body1}}"}</b>, <b>{"{{body2}}"}</b>, <b>{"{{body3}}"}</b> as the bodies of emails 1 to 3
+          </>
+        ),
+        source:
+          (out?.platform ?? data.proposal.platform) === "instantly"
+            ? "Otherwise the campaign sends its own text instead of these emails. Checked each time the connection is verified."
+            : "Otherwise the campaign sends its own text instead of these emails. We can't check this automatically for this tool, so check it once yourself.",
       });
     }
   }
