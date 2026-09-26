@@ -18,7 +18,7 @@
 
 import { db } from "@/lib/db";
 import { coldOpenReplies, type ColdOpenReplyDisposition } from "@/models/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, gte, isNull } from "drizzle-orm";
 import { getColdOpenConfig } from "./config";
 import { preconditionCheck } from "./config";
 import { InstantlyReplyFetcher } from "./replies/instantly";
@@ -95,6 +95,15 @@ export async function runReplySort(tenant: any, runId: string, step: StepTools |
   }
 }
 
+const SAME_REPLY_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Same words, ignoring spacing and case (HTML-stripped and plain text of one email differ only there). */
+export function sameReplyText(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 2000);
+  const x = norm(a);
+  return x.length > 0 && x === norm(b);
+}
+
 /**
  * Sorts and stores one reply, whichever way it arrived (this poller, or a
  * sending tool's webhook: api/webhooks/cold-open-replies). A reply already
@@ -112,6 +121,14 @@ export async function storeColdOpenReply(
     .where(and(eq(coldOpenReplies.engagementId, engagementId), eq(coldOpenReplies.externalReplyId, reply.replyId)))
     .limit(1);
   if (existing) return { status: "duplicate" };
+  // The same reply through the webhook and the poller can carry different
+  // ids: the same lead sending the same text within a few days is one reply.
+  const since = new Date(Date.now() - SAME_REPLY_WINDOW_MS);
+  const recent = await db
+    .select({ rawBody: coldOpenReplies.rawBody })
+    .from(coldOpenReplies)
+    .where(and(eq(coldOpenReplies.engagementId, engagementId), eq(coldOpenReplies.leadEmail, reply.leadEmail), gte(coldOpenReplies.classifiedAt, since)));
+  if (recent.some((r) => sameReplyText(r.rawBody, reply.bodyText))) return { status: "duplicate" };
 
   const result = await classifyReply({ subject: reply.subject, bodyText: reply.bodyText }, productIdentity, DEFAULT_TAXONOMY, { engagementId });
   // onConflictDoNothing against the unique index on (engagementId,

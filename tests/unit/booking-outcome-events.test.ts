@@ -8,7 +8,7 @@ describe("outcomes the booking tool reports", () => {
       event: "invitee_no_show.created",
       payload: { uri: "https://api.calendly.com/invitee_no_shows/NS1", invitee: "https://api.calendly.com/scheduled_events/EV1/invitees/INV1", created_at: "2026-09-26T10:00:00Z" },
     };
-    expect(detectPlatformOutcome("calendly", payload)).toEqual({ outcome: "no_show", bookingIds: ["INV1", "EV1"] });
+    expect(detectPlatformOutcome("calendly", payload)).toEqual({ outcome: "no_show", bookingIds: ["INV1", "EV1"], version: "2026-09-26T10:00:00Z" });
   });
 
   it("leaves Calendly's ordinary booking events to the booking path", () => {
@@ -46,6 +46,7 @@ vi.mock("@/lib/engagement-skills", () => ({ isSkillEnabledForEngagement: vi.fn(a
 let rosterIds: string[] = [];
 const inserted: Record<string, unknown>[] = [];
 let duplicate = false;
+let deleted = 0;
 vi.mock("@/lib/db", () => ({
   db: {
     select: () => ({
@@ -57,12 +58,17 @@ vi.mock("@/lib/db", () => ({
       }),
     }),
     insert: () => ({
-      values: async (v: Record<string, unknown>) => {
-        if (duplicate) throw Object.assign(new Error("dup"), { code: "23505" });
-        inserted.push(v);
+      values: (v: Record<string, unknown>) => {
+        const write = async () => {
+          if (duplicate) throw Object.assign(new Error("dup"), { code: "23505" });
+          inserted.push(v);
+          return [{ id: "dedup-1" }];
+        };
+        // Lazy, so only the path the route awaits runs the write.
+        return { returning: write, then: (ok: (v: unknown) => unknown, bad: (e: unknown) => unknown) => write().then(() => undefined).then(ok, bad) };
       },
     }),
-    delete: () => ({ where: async () => undefined }),
+    delete: () => ({ where: async () => void deleted++ }),
   },
 }));
 vi.mock("@/models/schema", () => ({ engagements: { __name: "engagements" }, webhookEvents: { __name: "webhook_events" }, bookingRoster: { __name: "booking_roster", externalCallId: "x", engagementId: "y" } }));
@@ -82,6 +88,7 @@ describe("booking webhook: a Calendly no-show mark", () => {
     vi.clearAllMocks();
     inserted.length = 0;
     duplicate = false;
+    deleted = 0;
     rosterIds = [];
   });
 
@@ -91,7 +98,23 @@ describe("booking webhook: a Calendly no-show mark", () => {
     const res = await POST(signedCalendly(noShow));
     expect(await res.json()).toMatchObject({ success: true, outcome: "no_show", recorded: true });
     expect(resolveCallOutcome).toHaveBeenCalledWith({ engagementId: "e1", bookingId: "EV1", outcome: "no_show", source: "booking_platform" });
-    expect(inserted[0]).toMatchObject({ idempotencyKey: "outcome:EV1:no_show", eventKind: "outcome" });
+    expect(inserted[0]).toMatchObject({ eventKind: "outcome" });
+    expect(String(inserted[0].idempotencyKey)).toMatch(/^outcome:EV1:no_show(:|$)/);
+  });
+
+  it("lets the booking tool's retry through when recording failed", async () => {
+    rosterIds = ["EV1"];
+    resolveCallOutcome.mockRejectedValueOnce(new Error("db down"));
+    const { POST } = await import("@/app/api/webhooks/booking-event/route");
+    const res = await POST(signedCalendly(noShow));
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(deleted).toBe(1);
+  });
+
+  it("tells a later change back apart from a retry, by the tool's change time", () => {
+    const a = detectPlatformOutcome("ghl_calendar", { appointment: { id: "A1", appointmentStatus: "showed", dateUpdated: "2026-09-26T10:00:00Z" } });
+    const b = detectPlatformOutcome("ghl_calendar", { appointment: { id: "A1", appointmentStatus: "showed", dateUpdated: "2026-09-26T12:00:00Z" } });
+    expect(a?.version).not.toEqual(b?.version);
   });
 
   it("ignores a redelivery of the same mark", async () => {

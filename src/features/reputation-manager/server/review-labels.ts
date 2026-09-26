@@ -41,8 +41,10 @@ export interface ReviewToLabel {
 /** Labels for each review, in order. An empty list when it couldn't be read. */
 export async function labelReviews(engagementId: string, reviews: ReviewToLabel[], runId?: string): Promise<ReviewLabel[][]> {
   const questions = Object.fromEntries(REVIEW_LABEL_IDS.map((id) => [id, { type: "noul" as const, instructions: REVIEW_LABELS[id].question }]));
-  return Promise.all(
-    reviews.map(async (r) => {
+  return mapLimited(
+    reviews,
+    LABEL_CONCURRENCY,
+    async (r) => {
       if (!r.text.trim()) return [];
       try {
         const result = await askJev({
@@ -55,8 +57,24 @@ export async function labelReviews(engagementId: string, reviews: ReviewToLabel[
         console.warn(`[review-labels] couldn't label a review for ${engagementId}:`, err instanceof Error ? err.message : err);
         return [];
       }
-    })
+    }
   );
+}
+
+/** A first watch run can bring dozens of reviews; this many are read at once. */
+const LABEL_CONCURRENCY = 5;
+
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 /** The topic bad reviews (1-2 stars, or scored negative) mention most. */

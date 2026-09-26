@@ -21,6 +21,9 @@ export type PlatformOutcome = {
   outcome: "showed" | "no_show";
   /** The ids this booking may be stored under, most specific first. */
   bookingIds: string[];
+  /** When the tool says this change happened, if it says (tells a real
+   * later change apart from a retried delivery of the same one). */
+  version?: string;
 };
 
 const lastSegment = (uri: unknown): string | null => {
@@ -45,7 +48,8 @@ export function detectPlatformOutcome(platform: string | undefined, payload: unk
     // of the invitee URI); the scheduled event's id is the fallback.
     const eventId = /scheduled_events\/([^/]+)/.exec(inviteeUri)?.[1] ?? null;
     const ids = [lastSegment(inviteeUri), eventId].filter((x): x is string => Boolean(x));
-    return ids.length ? { outcome: "no_show", bookingIds: [...new Set(ids)] } : null;
+    const version = typeof body?.created_at === "string" ? body.created_at : typeof p.created_at === "string" ? p.created_at : undefined;
+    return ids.length ? { outcome: "no_show", bookingIds: [...new Set(ids)], ...(version ? { version } : {}) } : null;
   }
 
   if (platform === "ghl_calendar") {
@@ -54,7 +58,9 @@ export function detectPlatformOutcome(platform: string | undefined, payload: unk
     const outcome = status === "showed" ? "showed" : status === "noshow" ? "no_show" : null;
     if (!outcome) return null;
     const ids = [appointment.id, appointment.appointmentId, p.id].filter((x): x is string => typeof x === "string" && x.length > 0);
-    return ids.length ? { outcome, bookingIds: [...new Set(ids)] } : null;
+    const stamp = appointment.dateUpdated ?? appointment.updatedAt ?? p.dateUpdated ?? p.timestamp;
+    const version = typeof stamp === "string" && stamp ? stamp : undefined;
+    return ids.length ? { outcome, bookingIds: [...new Set(ids)], ...(version ? { version } : {}) } : null;
   }
 
   return null;

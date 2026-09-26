@@ -39,6 +39,19 @@ describe("Twilio status callback", () => {
     expect(recordDeliveryStatus).toHaveBeenCalledWith("e1", "SM1", "delivered", null);
   });
 
+  it("looks again when the report beats the send's log entry", async () => {
+    vi.useFakeTimers();
+    try {
+      recordDeliveryStatus.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      const pending = call({ MessageSid: "SM2", MessageStatus: "delivered" });
+      await vi.runAllTimersAsync();
+      expect((await pending).status).toBe(204);
+      expect(recordDeliveryStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps Twilio's error code on a failed delivery", async () => {
     await call({ MessageSid: "SM1", MessageStatus: "undelivered", ErrorCode: "30006", ErrorMessage: "Landline or unreachable carrier" });
     expect(recordDeliveryStatus).toHaveBeenCalledWith("e1", "SM1", "undelivered", "Twilio error 30006: Landline or unreachable carrier");

@@ -24,7 +24,8 @@ export type TwilioWebhookCheck =
 
 export async function verifyTwilioWebhook(req: Request, engagementId: string, path: string): Promise<TwilioWebhookCheck> {
   if (checkWebhookToken(engagementId, req.url) !== "valid") return { ok: false, status: 401 };
-  // Twilio retries a 429 later, so a flood is spread out rather than lost.
+  // Well above real traffic for one client; a flood past it is dropped
+  // (Twilio doesn't retry status reports) rather than let through.
   if (!(await hitRateLimit(RATE_LIMITS.twilioWebhook, engagementId)).allowed) return { ok: false, status: 429 };
 
   const [tenant] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);

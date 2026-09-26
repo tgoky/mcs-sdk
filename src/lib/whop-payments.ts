@@ -15,7 +15,7 @@
 
 import { db } from "@/lib/db";
 import { whopPayments } from "@/models/schema";
-import { and, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 export type PaymentOutcome = "failed" | "paid" | "refunded" | "disputed";
 
@@ -126,13 +126,16 @@ export async function recordWhopPaymentEvent(engagementId: string, type: string,
 /** A successful payment after a recovery message counts as recovered: the
  * same payment going through on a retry, or a new payment on the same
  * membership (the buyer updated their card and paid). Only payments that
- * were actually messaged are credited, and each only once. */
+ * were actually messaged are credited, each only once, and only within
+ * RECOVERY_CREDIT_DAYS of the message: a routine renewal months later
+ * isn't the message working. */
+export const RECOVERY_CREDIT_DAYS = 30;
 async function creditRecovery(engagementId: string, paymentId: string, membershipId: string | null, amount: number | null, paidAt: Date): Promise<void> {
   const samePerson = membershipId ? or(eq(whopPayments.paymentId, paymentId), eq(whopPayments.membershipId, membershipId)) : eq(whopPayments.paymentId, paymentId);
   await db
     .update(whopPayments)
     .set({ recoveredAt: paidAt, recoveredByPaymentId: paymentId, recoveredAmount: amount, updatedAt: new Date() })
-    .where(and(eq(whopPayments.engagementId, engagementId), samePerson, isNotNull(whopPayments.recoverySentAt), isNull(whopPayments.recoveredAt), lte(whopPayments.recoverySentAt, paidAt)));
+    .where(and(eq(whopPayments.engagementId, engagementId), samePerson, isNotNull(whopPayments.recoverySentAt), isNull(whopPayments.recoveredAt), lte(whopPayments.recoverySentAt, paidAt), gte(whopPayments.recoverySentAt, new Date(paidAt.getTime() - RECOVERY_CREDIT_DAYS * 24 * 60 * 60 * 1000))));
 }
 
 export interface BuyerPayment {

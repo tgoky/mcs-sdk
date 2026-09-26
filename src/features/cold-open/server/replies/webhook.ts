@@ -85,7 +85,9 @@ export function parseReplyWebhook(payload: unknown, receivedAt = new Date()): Pa
 
   const toolId = str(reply.message_id, body.message_id, body.reply_id, body.email_id, body.sl_email_lead_id && body.message_id ? `${body.sl_email_lead_id}:${body.message_id}` : null, body.id);
   const when = str(reply.received_at, body.timestamp, body.received_at, body.date) ?? receivedAt.toISOString();
-  const replyId = toolId ? `wh:${toolId}` : `wh:${crypto.createHash("sha1").update(`${email.toLowerCase()}|${when}|${text.slice(0, 500)}`).digest("hex")}`;
+  // The tool's own id as is, so a reply that also comes through the poller
+  // (which stores that same id) is recognised as the same reply.
+  const replyId = toolId ? toolId : `wh:${crypto.createHash("sha1").update(`${email.toLowerCase()}|${when}|${text.slice(0, 500)}`).digest("hex")}`;
 
   return {
     reply: {

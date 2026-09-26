@@ -171,15 +171,28 @@ async function recordPlatformOutcome(engagementId: string, platform: string, fou
     .limit(1);
   const bookingId = known?.id ?? found.bookingIds[0];
 
+  // The tool's own change time (when it sends one) is part of the key, so a
+  // later change back (showed → no-show → showed) isn't taken for a retry.
+  let dedupId: string | null = null;
   try {
-    await db.insert(webhookEvents).values({ engagementId, eventSource: platform, idempotencyKey: `outcome:${bookingId}:${found.outcome}`, eventKind: "outcome" });
+    const [row] = await db
+      .insert(webhookEvents)
+      .values({ engagementId, eventSource: platform, idempotencyKey: `outcome:${bookingId}:${found.outcome}${found.version ? `:${found.version}` : ""}`, eventKind: "outcome" })
+      .returning({ id: webhookEvents.id });
+    dedupId = row?.id ?? null;
   } catch (err: unknown) {
     if (isUniqueConstraintViolation(err)) return NextResponse.json({ success: true, deduplicated: true });
     throw err;
   }
 
-  const result = await resolveCallOutcome({ engagementId, bookingId, outcome: found.outcome, source: "booking_platform" });
-  return NextResponse.json({ success: true, outcome: found.outcome, recorded: result.recorded, winBack: result.winBack });
+  try {
+    const result = await resolveCallOutcome({ engagementId, bookingId, outcome: found.outcome, source: "booking_platform" });
+    return NextResponse.json({ success: true, outcome: found.outcome, recorded: result.recorded, winBack: result.winBack });
+  } catch (err) {
+    // Not recorded: free the key so the tool's retry is processed, not skipped.
+    if (dedupId) await db.delete(webhookEvents).where(eq(webhookEvents.id, dedupId)).catch(() => undefined);
+    throw err;
+  }
 }
 
 // ── Route handler ──────────────────────────────────────────────────────────

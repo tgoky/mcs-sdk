@@ -39,7 +39,7 @@ describe("reply webhooks", () => {
   it("reads Smartlead's EMAIL_REPLY, using its message id to recognise retries", () => {
     const payload = { event_type: "EMAIL_REPLY", campaign_id: 42, lead: { email: "sam@b.io", first_name: "Sam" }, reply: { body: "Interested. What's the price?", received_at: "2026-09-26T10:00:00Z", message_id: "<m1@b.io>" } };
     const r = parseReplyWebhook(payload, at);
-    expect(r).toMatchObject({ reply: { leadEmail: "sam@b.io", bodyText: "Interested. What's the price?", replyId: "wh:<m1@b.io>" } });
+    expect(r).toMatchObject({ reply: { leadEmail: "sam@b.io", bodyText: "Interested. What's the price?", replyId: "<m1@b.io>" } });
     expect(parseReplyWebhook(payload, new Date())).toEqual(r);
   });
 
@@ -109,3 +109,4 @@ describe("cold open reply endpoint", () => {
     expect(storeColdOpenReply).not.toHaveBeenCalled();
   });
 });
+
