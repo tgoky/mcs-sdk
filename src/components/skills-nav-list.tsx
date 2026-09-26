@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
+import { ActionMenu, ActionMenuSection } from "@/components/action-menu";
+import { hasWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 
 interface SkillEntry {
   skillId: WorkerId;
@@ -53,14 +55,25 @@ export function productForPath(pathname: string): ProductId | null {
 
 /**
  * "Enabled Skills": one row per product with how many of its skills are on
- * ("Whop Agent · 15 on"), and a red dot when one of them failed its last
- * run. A row opens to its skills as plain links, each to that skill's own
- * page; the product being looked at starts open. The sidebar stays the
- * same height however many skills a client runs.
+ * ("Whop Agent · 15 on"), tinted red with a count when one of them failed
+ * its last run — no separate dot/pill, just the same status-error color
+ * the rest of the app already uses for a failed run. A row opens to its
+ * skills as plain links, each to that skill's own page; the product being
+ * looked at starts open. The sidebar stays the same height however many
+ * skills a client runs.
+ *
+ * Each product row also carries a "…" kebab (visible whenever at least one
+ * of its skills has a real config form) that opens the same surface-glass-3
+ * dropdown used elsewhere in the app (ActionMenu — see the client switcher
+ * and workspace card menu), listing that product's skills with "View
+ * setup," straight to that skill's own setup page (bridges/[workerId]).
+ * Setup is inherently per-skill, not per-product (config-form-registry.tsx),
+ * so there's no single "configure this product" destination to collapse
+ * that list into.
  *
  * Nothing is switched on or off here: that's the client page and the
  * Library, which show what each switch does. This is for getting to a
- * skill.
+ * skill, or to its setup.
  */
 function InstalledSkillsList({
   entries,
@@ -127,29 +140,76 @@ function InstalledSkillsList({
                 const open = toggled[productId] ?? productId === current;
                 const failing = skills.filter((s) => needsAttentionWorkerIds?.has(s.skillId)).length;
                 const name = product?.name ?? productId;
+                const setupTargets = skills.filter((s) => hasWorkerConfigForm(s.skillId));
                 return (
                   <li key={productId}>
-                    <button
-                      type="button"
-                      onClick={() => setToggled((t) => ({ ...t, [productId]: !open }))}
-                      aria-expanded={open}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60 cursor-pointer"
-                    >
-                      <ChevronRight className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-90" : ""}`} />
-                      {product?.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's
-                        <img src={product.image} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
-                      ) : null}
-                      <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-                      <span className="shrink-0 text-[12px] tabular-nums text-zinc-400">{skills.length} on</span>
-                      {failing > 0 && (
-                        <span
-                          title={`${failing} ${failing === 1 ? "skill" : "skills"} failed their last run`}
-                          aria-label={`${failing} failing`}
-                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500"
-                        />
+                    <div className="flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-zinc-100 dark:hover:bg-zinc-800/60">
+                      <button
+                        type="button"
+                        onClick={() => setToggled((t) => ({ ...t, [productId]: !open }))}
+                        aria-expanded={open}
+                        className="flex flex-1 min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                      >
+                        <ChevronRight className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-90" : ""}`} />
+                        {product?.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's
+                          <img src={product.image} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                        <span className="shrink-0 text-[12px] tabular-nums text-zinc-400">
+                          {skills.length} on
+                          {failing > 0 && (
+                            <span
+                              title={`${failing} ${failing === 1 ? "skill" : "skills"} failed their last run`}
+                              aria-label={`${failing} failing`}
+                              className="text-status-error"
+                            >
+                              {" "}
+                              · {failing} failing
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      {engagementId && setupTargets.length > 0 && (
+                        <ActionMenu
+                          align="end"
+                          panelWidth={240}
+                          trigger={({ toggle, open: menuOpen }) => (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggle();
+                              }}
+                              aria-expanded={menuOpen}
+                              aria-haspopup="menu"
+                              aria-label={`Setup for ${name}`}
+                              title="Setup"
+                              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        >
+                          <ActionMenuSection label={`${name} setup`}>
+                            {setupTargets.map((s) => (
+                              <Link
+                                key={s.skillId}
+                                href={`/dashboard/engagements/${engagementId}/bridges/${s.skillId}`}
+                                className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
+                              >
+                                <AnySkillBadge skill={s.skillId} size={18} />
+                                <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-zinc-700 dark:text-zinc-200">{s.label}</span>
+                                <span className="shrink-0 text-[11px] text-zinc-400 group-hover/setup:text-zinc-700 dark:group-hover/setup:text-zinc-200">
+                                  View setup
+                                </span>
+                              </Link>
+                            ))}
+                          </ActionMenuSection>
+                        </ActionMenu>
                       )}
-                    </button>
+                    </div>
                     {open && (
                       <ul className="mb-1 ml-[22px] border-l border-zinc-200 pl-2 dark:border-zinc-800">
                         {skills.map((entry) => {
@@ -158,8 +218,8 @@ function InstalledSkillsList({
                           const needsAttention = needsAttentionWorkerIds?.has(entry.skillId) ?? false;
                           const label = (
                             <>
-                              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-                              {needsAttention && <span title={`${entry.label} failed its last run`} className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />}
+                              <AnySkillBadge skill={entry.skillId} size={16} />
+                              <span className={`min-w-0 flex-1 truncate ${needsAttention ? "text-status-error" : ""}`}>{entry.label}</span>
                             </>
                           );
                           return (
@@ -168,6 +228,7 @@ function InstalledSkillsList({
                                 <Link
                                   href={href}
                                   aria-current={here ? "page" : undefined}
+                                  title={needsAttention ? `${entry.label} failed its last run` : undefined}
                                   className={`flex items-center gap-2 rounded-md px-2 py-1 text-[12.5px] transition-colors ${
                                     here
                                       ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800/70 dark:text-white"
@@ -177,7 +238,12 @@ function InstalledSkillsList({
                                   {label}
                                 </Link>
                               ) : (
-                                <span className="flex items-center gap-2 px-2 py-1 text-[12.5px] text-zinc-500">{label}</span>
+                                <span
+                                  title={needsAttention ? `${entry.label} failed its last run` : undefined}
+                                  className="flex items-center gap-2 px-2 py-1 text-[12.5px] text-zinc-500"
+                                >
+                                  {label}
+                                </span>
                               )}
                             </li>
                           );

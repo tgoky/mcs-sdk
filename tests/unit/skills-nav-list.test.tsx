@@ -26,7 +26,9 @@ describe("the sidebar's enabled skills", () => {
   it("opens the product being looked at, and a row opens to its skills as links", () => {
     pathname = "/dashboard/engagements/e1/skills/win-back";
     render(<SkillsNavList layout="grid" productIds={["showtime", "whop-agent"]} enabledWorkerIds={enabled} engagementId="e1" needsAttentionWorkerIds={new Set(["leak-map"])} />);
-    const showtime = screen.getByRole("button", { name: /Showtime/ });
+    // Distinct from the row's own "…" setup kebab, whose accessible name
+    // ("Setup for Showtime") also contains the product name.
+    const showtime = screen.getByRole("button", { name: /Showtime\s*3 on/ });
     expect(showtime).toHaveAttribute("aria-expanded", "true");
     expect(within(showtime).getByLabelText("1 failing")).toBeInTheDocument();
     const here = screen.getByRole("link", { current: "page" });
@@ -34,8 +36,17 @@ describe("the sidebar's enabled skills", () => {
 
     fireEvent.click(showtime);
     expect(showtime).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(screen.getByRole("button", { name: /Whop Agent/ }));
-    expect(screen.getByRole("button", { name: /Whop Agent/ })).toHaveAttribute("aria-expanded", "true");
+    const whopToggle = screen.getByRole("button", { name: new RegExp(`Whop Agent\\s*${WHOP_AGENT_SKILL_IDS.length} on`) });
+    fireEvent.click(whopToggle);
+    expect(whopToggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("the setup kebab lists each of the product's skills, linking to its own setup page", () => {
+    pathname = "/dashboard";
+    render(<SkillsNavList layout="grid" productIds={["showtime"]} enabledWorkerIds={enabled} engagementId="e1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Setup for Showtime" }));
+    const winBackSetup = screen.getByRole("link", { name: /Booking Recovery/ });
+    expect(winBackSetup).toHaveAttribute("href", "/dashboard/engagements/e1/bridges/win-back");
   });
 
   it("says so when nothing is on", () => {
