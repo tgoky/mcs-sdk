@@ -23,7 +23,7 @@ export const AT_RISK_SEQUENCE = "at_risk_sms";
 
 /** Called when a call is scored. Schedules the check-in when the client
  * turned it on and the estimate is under their threshold. */
-export async function maybeScheduleCheckIn(engagementId: string, stack: EngagementStack | null, call: { bookingId: string; callTime: Date; probability: number }, now = new Date()): Promise<boolean> {
+export async function maybeScheduleCheckIn(engagementId: string, stack: Pick<EngagementStack, "at_risk_check_in" | "at_risk_threshold"> | null, call: { bookingId: string; callTime: Date; probability: number }, now = new Date()): Promise<boolean> {
   if (!stack?.at_risk_check_in) return false;
   if (!isAtRisk(call.probability, stack.at_risk_threshold, null)) return false;
   const sendAt = checkInSendAt(call.callTime, now);
