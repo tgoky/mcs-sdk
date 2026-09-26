@@ -21,6 +21,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { startRun } from "@/lib/run-log";
+import { PAYMENT_EVENT_TYPES, recordWhopPaymentEvent } from "@/lib/whop-payments";
 
 /**
  * Section 7.7's handler discipline applies here exactly as it does for
@@ -39,6 +40,14 @@ export const processWhopWebhookEvent = inngest.createFunction(
     const { engagementId, whopWebhookId, envelope, occurredAtIso, replay } = event.data;
 
     await step.run("mark-delivery-received", () => markWebhookDeliveryReceived(engagementId, whopWebhookId));
+
+    // Every payment, refund and dispute lands on the buyer's record,
+    // whichever workers are on (lib/whop-payments.ts).
+    if (PAYMENT_EVENT_TYPES.has(envelope.type)) {
+      await step.run("record-payment", async () => {
+        await recordWhopPaymentEvent(engagementId, envelope.type, envelope.data, new Date(occurredAtIso));
+      });
+    }
 
     if (isUpdatedShapedEvent(envelope.type)) {
       await step.run("record-change-ledger-entry", () =>

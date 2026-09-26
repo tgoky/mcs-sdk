@@ -34,6 +34,7 @@ import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { RunActivityPanel } from "@/app/dashboard/runs/[id]/_shared/run-activity-panel";
 import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import type { RosterEntry } from "@/app/api/engagements/[id]/roster/route";
+import { ProspectJourney } from "./prospect-journey";
 import type { PileOnPipelineItem } from "@/app/api/engagements/[id]/pile-on-pipeline/route";
 import type { WinBackPipelineItem } from "@/app/api/engagements/[id]/win-back-pipeline/route";
 import type { ActivityEvent, ActivitySkill } from "@/app/api/engagements/[id]/activity/route";
@@ -136,7 +137,9 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
   const [filterText, setFilterText] = useState("");
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [activeTab, setActiveTab] = useState<"brief" | "pile_on" | "win_back">("brief");
+  // The journey first: everything that happened with this person, across
+  // the products this client has on.
+  const [activeTab, setActiveTab] = useState<"journey" | "brief" | "pile_on" | "win_back">("journey");
   const [showUpcomingInMonth, setShowUpcomingInMonth] = useState(false);
 
   // Per-Stream State
@@ -997,6 +1000,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                   <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
                     <button
                       type="button"
+                      onClick={() => setActiveTab("journey")}
+                      className={cn(
+                        "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                        activeTab === "journey" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      )}
+                    >
+                      Journey
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setActiveTab("brief")}
                       className={cn(
                         "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
@@ -1026,6 +1039,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                       Win-Back
                     </button>
                   </div>
+
+                  {activeTab === "journey" && <ProspectJourney engagementId={engagementId} bookingId={selectedEntry.externalCallId} />}
 
                   {activeTab === "brief" && (
                     <div className="space-y-3 text-xs font-sans">
@@ -1604,6 +1619,16 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
                   <button
                     type="button"
+                    onClick={() => setActiveTab("journey")}
+                    className={cn(
+                      "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
+                      activeTab === "journey" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    )}
+                  >
+                    Journey
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setActiveTab("brief")}
                     className={cn(
                       "hover-lift press-settle flex-1 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-center text-[11px] font-sans",
@@ -1633,6 +1658,8 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     Win-Back
                   </button>
                 </div>
+
+                {activeTab === "journey" && <ProspectJourney engagementId={engagementId} bookingId={selectedEntry.externalCallId} />}
 
                 {activeTab === "brief" && (
                   <div className="space-y-3 text-xs font-sans">

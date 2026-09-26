@@ -16,8 +16,13 @@ export const SKILL_EVENTS: Record<string, string[]> = {
   "whop-bridge-manager": ["payment.succeeded", "membership.activated", "membership.deactivated", "membership.cancel_at_period_end_changed", "refund.created", "dispute.created"],
 };
 
+/** Payments, refunds and disputes: always on while Whop is connected, so
+ * every sale lands on the buyer's timeline (lib/whop-payments.ts) and a
+ * failed or past-due payment can be recovered, whichever workers are on. */
+export const PAYMENT_EVENTS = ["payment.succeeded", "payment.failed", "refund.created", "dispute.created", "invoice.past_due"];
+
 export function eventsFor(skills: string[]): string[] {
-  return [...new Set(skills.flatMap((s) => SKILL_EVENTS[s] ?? []))].sort();
+  return [...new Set([...PAYMENT_EVENTS, ...skills.flatMap((s) => SKILL_EVENTS[s] ?? [])])].sort();
 }
 
 const mostCommon = (xs: string[]) => {

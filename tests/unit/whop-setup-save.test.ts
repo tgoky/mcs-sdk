@@ -35,7 +35,8 @@ describe("saveWhopSetup", () => {
   it("saves the settings, switches workers and syncs the one webhook", async () => {
     const sync = vi.fn(async () => ({ whopWebhookId: "hook_1", action: "created" as const }));
     const r = await saveWhopSetup("e1", input(), sync);
-    expect(r).toEqual({ ok: true, webhook: { action: "created", events: ["dispute.created", "dispute_alert.created"] } });
+    // Payments, refunds and disputes are always subscribed (lib/whop-payments.ts).
+    expect(r).toEqual({ ok: true, webhook: { action: "created", events: ["dispute.created", "dispute_alert.created", "invoice.past_due", "payment.failed", "payment.succeeded", "refund.created"] } });
     expect(patch.mock.calls[0][1]).toMatchObject({ refund_dispute_rate_threshold: 0.06, dispute_rate_threshold: 0.006, dispute_alert_threshold: 2, min_payment_sample_size: 10 });
     // No offer: any saved one is cleared, never left half set.
     expect(patch.mock.calls[0][1]).toHaveProperty("whop_save_offer_discount_percentage", undefined);

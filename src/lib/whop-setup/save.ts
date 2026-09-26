@@ -11,7 +11,7 @@ import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { syncAgentWebhookEvents } from "@/features/whop-agent/server/webhook-subscription-service";
-import { SKILL_EVENTS, eventsFor } from "./analyze";
+import { PAYMENT_EVENTS, SKILL_EVENTS, eventsFor } from "./analyze";
 
 export interface WhopSetupInput {
   skills: string[];
@@ -85,7 +85,7 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
 /** The events the chosen workers can actually use: the save offer needs
  * an offer to make, the bridge needs somewhere to send. */
 /** Every event the setup's workers can ask for. */
-const SETUP_EVENTS = new Set(Object.values(SKILL_EVENTS).flat());
+const SETUP_EVENTS = new Set([...PAYMENT_EVENTS, ...Object.values(SKILL_EVENTS).flat()]);
 
 export function webhookEventsFor(input: WhopSetupInput): string[] {
   const usable = input.skills.filter((s) => (s !== "whop-cancellation-save-offer" || input.saveOffer) && (s !== "whop-bridge-manager" || input.bridgeUrl));

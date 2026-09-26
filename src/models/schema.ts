@@ -1816,6 +1816,45 @@ export const rateLimitBuckets = pgTable("rate_limit_buckets", {
   count: integer("count").notNull(),
 });
 
+// ── Whop payments (lib/whop-payments.ts) ─────────────────────────────────
+// Every payment Whop reports for a client's store, kept by payment id and
+// updated as it succeeds, fails, is refunded or disputed. The buyer's email
+// (Whop's user.email, which needs the member:email:read permission) is what
+// ties a payment to the person who booked and showed (lib/prospect-timeline.ts).
+export const whopPayments = pgTable(
+  "whop_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    paymentId: text("payment_id").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    buyerName: text("buyer_name"),
+    membershipId: text("membership_id"),
+    productTitle: text("product_title"),
+    // Whop's receipt status: "paid" | "open" | "pending" | "void" | ...
+    status: text("status"),
+    // What happened last, in plain terms: "paid" | "failed" | "refunded" | "disputed".
+    outcome: text("outcome").notNull(),
+    // Whop's total shown to the creator, in the payment's currency.
+    amount: doublePrecision("amount"),
+    currency: text("currency"),
+    usdAmount: doublePrecision("usd_amount"),
+    refundedAmount: doublePrecision("refunded_amount"),
+    failureMessage: text("failure_message"),
+    nextPaymentAttemptAt: timestamp("next_payment_attempt_at"),
+    paidAt: timestamp("paid_at"),
+    occurredAt: timestamp("occurred_at").notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("whop_payments_engagement_payment_uidx").on(table.engagementId, table.paymentId),
+    index("whop_payments_engagement_email_idx").on(table.engagementId, table.email),
+  ]
+);
+
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer
 // is asking) that a nightly cron HEAD-checks so stale/broken doc links

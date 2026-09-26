@@ -442,6 +442,13 @@
       "when": 1790435592172,
       "tag": "0062_rate_limit_buckets",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790436845105,
+      "tag": "0063_whop_payments",
+      "breakpoints": true
     }
   ]
 }

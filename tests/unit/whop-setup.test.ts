@@ -162,9 +162,10 @@ describe("analysis", () => {
     expect(problems.map((p) => p.kind).sort()).toEqual(["duplicate", "failing", "unpinned"]);
   });
 
-  it("asks Whop only for the events the chosen workers use", () => {
-    expect(eventsFor(["whop-weekly-ops-report"])).toEqual([]);
-    expect(eventsFor(["whop-cancellation-save-offer", "whop-dispute-response"])).toEqual(["dispute.created", "dispute_alert.created", "membership.cancel_at_period_end_changed"]);
+  it("asks Whop for payments always, plus only the events the chosen workers use", () => {
+    const payments = ["dispute.created", "invoice.past_due", "payment.failed", "payment.succeeded", "refund.created"];
+    expect(eventsFor(["whop-weekly-ops-report"])).toEqual(payments);
+    expect(eventsFor(["whop-cancellation-save-offer", "whop-dispute-response"])).toEqual(["dispute.created", "dispute_alert.created", "invoice.past_due", "membership.cancel_at_period_end_changed", "payment.failed", "payment.succeeded", "refund.created"]);
   });
 });
 
@@ -216,7 +217,8 @@ describe("parseWhopSetup", () => {
 
   it("only subscribes the save offer and bridge when they have something to do", () => {
     const base = { skills: ["whop-cancellation-save-offer", "whop-bridge-manager"], alerts, saveOffer: null, bridgeUrl: "" };
-    expect(webhookEventsFor(base)).toEqual([]);
-    expect(webhookEventsFor({ ...base, bridgeUrl: "https://hooks.example.com" })).toContain("payment.succeeded");
+    expect(webhookEventsFor(base)).toEqual(["dispute.created", "invoice.past_due", "payment.failed", "payment.succeeded", "refund.created"]);
+    expect(webhookEventsFor(base)).not.toContain("membership.cancel_at_period_end_changed");
+    expect(webhookEventsFor({ ...base, bridgeUrl: "https://hooks.example.com" })).toContain("membership.activated");
   });
 });
