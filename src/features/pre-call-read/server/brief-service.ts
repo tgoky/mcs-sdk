@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { maybeScheduleCheckIn } from "@/features/pile-on/server/at-risk-check-in";
 import { briefedCallsLog, engagements, conversationIntelligenceSessions } from "@/models/schema";
 import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
@@ -320,7 +321,8 @@ async function processSingleBriefCall(
     // documented heuristic, not a validated model, before this gets
     // surfaced to a buyer as more authoritative than it is.
     let showRateLine: string | null = null;
-    if (stack.show_rate_scoring_enabled) {
+    // Scored when the client asked for scores or for at-risk check-ins.
+    if (stack.show_rate_scoring_enabled || stack.at_risk_check_in) {
       await run(`show-rate-score-${call.id}`, async () => {
         const features = await deriveShowRateFeatures({
           engagementId: tenant.engagementId,
@@ -338,6 +340,7 @@ async function processSingleBriefCall(
           features,
           predictedShowProbability: probability,
         });
+        await maybeScheduleCheckIn(tenant.engagementId, stack, { bookingId: call.id, callTime: call.callTime, probability });
       });
     }
 

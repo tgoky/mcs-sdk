@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings2, KeyRound, Trash2, FileEdit } from "lucide-react";
+import { Settings2, KeyRound, Trash2, FileEdit, Share2 } from "lucide-react";
 import { ActionMenu, ActionMenuSection, ActionMenuDivider, ActionMenuItem } from "@/components/action-menu";
 import { Modal } from "@/components/modal";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
@@ -13,8 +13,9 @@ import { DeleteClientSection } from "./delete-client-section";
 import { ClientDetailsDrawer, type ClientDetailsDrawerData } from "./client-details-drawer";
 import type { EngagementStack } from "@/models/schema";
 import { useToast } from "@/components/toast/toast-provider";
+import { ShareResultsLink } from "./share-results-link";
 
-type ActiveModal = "stack" | "credentials" | "delete" | "details" | null;
+type ActiveModal = "stack" | "credentials" | "delete" | "details" | "share" | null;
 
 /**
  * Single "Modify" entry point for client configuration: automation mode,
@@ -120,6 +121,15 @@ export function EngagementActionsMenu({
 
             <ActionMenuSection label="Client management">
               <ActionMenuItem
+                icon={Share2}
+                label="Share results link"
+                description="A page the client opens without signing in"
+                onClick={() => {
+                  setActiveModal("share");
+                  close();
+                }}
+              />
+              <ActionMenuItem
                 icon={FileEdit}
                 label="Edit client details"
                 description="Offer, voice, prospect research, notifications"
@@ -189,6 +199,12 @@ export function EngagementActionsMenu({
             embedded
             onRequestClose={() => setActiveModal(null)}
           />
+        </Modal>
+      )}
+
+      {activeModal === "share" && (
+        <Modal title="Share results link" icon={Share2} onClose={() => setActiveModal(null)}>
+          <ShareResultsLink engagementId={engagementId} buyerName={buyerName} />
         </Modal>
       )}
 

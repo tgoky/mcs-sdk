@@ -537,6 +537,17 @@ export type EngagementStack = {
   // starts logging show_rate_features rows for every scored call, which
   // is the data a future trained model would train against.
   show_rate_scoring_enabled?: boolean;
+  // Acting on the score (lib/at-risk.ts): one extra check-in text a few
+  // hours before a call whose estimated show chance is under the
+  // threshold (default 50). Off unless the client turns it on; turning it
+  // on also turns scoring on.
+  at_risk_check_in?: boolean;
+  at_risk_threshold?: number;
+  at_risk_check_in_message?: string; // tokens: {name}, {time}
+  // Holdout proof (lib/reminder-holdout.ts): this share of bookings (0-20%)
+  // gets no reminder texts, so the show rate with and without reminders
+  // can be compared on the client's own calls. Off (unset) by default.
+  reminder_holdout_percent?: number;
 
   // ── Slack interactive brief buttons (Leak Map / Pre-Call Read Tier 4) ──
   // Needed only when brief_landing_destination is "slack" AND the operator
@@ -2774,6 +2785,43 @@ export const reviewRequests = pgTable(
     uniqueIndex("review_requests_trigger_uidx").on(table.engagementId, table.trigger, table.refId),
     index("review_requests_engagement_email_idx").on(table.engagementId, table.email),
   ]
+);
+
+// A no-login link to one client's results page (app/results/[token]).
+// Only the token's hash is stored; making a new link retires the old one.
+export const resultsShareLinks = pgTable(
+  "results_share_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    tokenHash: text("token_hash").notNull(),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    viewCount: integer("view_count").notNull().default(0),
+    lastViewedAt: timestamp("last_viewed_at"),
+  },
+  (table) => [uniqueIndex("results_share_links_token_uidx").on(table.tokenHash), index("results_share_links_engagement_idx").on(table.engagementId)]
+);
+
+// Which bookings were held out of reminder texts while the holdout was on
+// (lib/reminder-holdout.ts), so reminded and held-out show rates compare
+// like with like. One row per booking considered.
+export const reminderHoldouts = pgTable(
+  "reminder_holdouts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: text("engagement_id")
+      .notNull()
+      .references(() => engagements.engagementId),
+    bookingId: text("booking_id").notNull(),
+    heldOut: boolean("held_out").notNull(),
+    percent: integer("percent").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("reminder_holdouts_booking_uidx").on(table.engagementId, table.bookingId)]
 );
 
 export interface ColdOpenSendingPause {

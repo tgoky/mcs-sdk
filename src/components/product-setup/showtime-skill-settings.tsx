@@ -23,6 +23,7 @@ import { anySkillDisplayName } from "@/lib/any-skill";
 import { SMS_PLATFORM_LABELS, AD_DATA_PLATFORM_LABELS } from "@/lib/copy";
 import { ApproveBar, CopyValue, FeedRow, Labeled, SettingsHeader, inputCls, type FeedEntry } from "./review-kit";
 import { ChoiceList } from "./fact-token";
+import { CHECK_IN_HOURS_BEFORE, DEFAULT_AT_RISK_THRESHOLD, DEFAULT_CHECK_IN_MESSAGE, renderCheckIn } from "@/lib/at-risk";
 import { BackButton } from "./back-button";
 
 export const SHOWTIME_SETTINGS_SKILLS = ["pile-on", "win-back", "pre-call-read", "leak-map"] as const;
@@ -791,6 +792,9 @@ function usePreCallRead(engagementId: string, loaded: Record<string, unknown>): 
 type PileOnValues = {
   smsPlatform: string;
   adDataPlatform: string;
+  atRiskCheckIn: boolean;
+  atRiskThreshold: number;
+  holdoutPercent: number;
   smsPlatformMeta: { twilio_account_sid: string; twilio_messaging_service_sid: string; twilio_from_number: string; ghl_location_id: string };
 };
 
@@ -801,6 +805,9 @@ function usePileOn(engagementId: string, loaded: Record<string, unknown>): Secti
       // Never chosen stays unchosen, rather than looking like "none" was picked.
       smsPlatform: String(loaded.smsPlatform ?? ""),
       adDataPlatform: String(loaded.adDataPlatform ?? ""),
+      atRiskCheckIn: Boolean(loaded.atRiskCheckIn),
+      atRiskThreshold: typeof loaded.atRiskThreshold === "number" ? loaded.atRiskThreshold : DEFAULT_AT_RISK_THRESHOLD,
+      holdoutPercent: typeof loaded.holdoutPercent === "number" ? loaded.holdoutPercent : 0,
       smsPlatformMeta: {
         twilio_account_sid: meta.twilio_account_sid ?? "",
         twilio_messaging_service_sid: meta.twilio_messaging_service_sid ?? "",
@@ -869,6 +876,62 @@ function usePileOn(engagementId: string, loaded: Record<string, unknown>): Secti
             source:
               "In Twilio, open the Messaging Service (or the number) and set \"A message comes in\" to this address. STOP stops every text to that person; reschedule requests and questions land in the Queue.",
             body: <CopyValue value={replyUrl} />,
+          } satisfies FeedEntry,
+        ]
+      : []),
+    ...(v.smsPlatform === "twilio" || v.smsPlatform === "ghl_sms"
+      ? [
+          {
+            key: "at-risk",
+            text: v.atRiskCheckIn ? (
+              <>
+                Calls with an estimated show chance under <b>{v.atRiskThreshold}%</b> get <b>one extra check-in text</b> {CHECK_IN_HOURS_BEFORE} hours before
+              </>
+            ) : (
+              <>
+                <b>No extra check-in</b> for calls that look at risk
+              </>
+            ),
+            source: "The chance is an estimate from booking signals (lead time, time of day, past no-shows), not yet trained on this client's own calls. At-risk calls are marked on the calendar either way.",
+            editor: (close: () => void) => (
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                  <input type="checkbox" checked={v.atRiskCheckIn} onChange={(e) => setV((x) => ({ ...x, atRiskCheckIn: e.target.checked }))} />
+                  Send one check-in text to at-risk calls
+                </label>
+                <Labeled label={`At risk under ${v.atRiskThreshold}%`}>
+                  <input type="range" min={10} max={90} step={5} value={v.atRiskThreshold} onChange={(e) => setV((x) => ({ ...x, atRiskThreshold: Number(e.target.value) }))} className="w-full" aria-label="At-risk level" />
+                </Labeled>
+                <p className="text-[12px] text-[var(--text-muted)]">&quot;{renderCheckIn(DEFAULT_CHECK_IN_MESSAGE, "Sam", new Date(Date.now() + 86_400_000))}&quot; Replies come back like any other text: YES confirms, a new time lands in the Queue.</p>
+                <Done close={close} />
+              </div>
+            ),
+          } satisfies FeedEntry,
+          {
+            key: "holdout",
+            text: v.holdoutPercent > 0 ? (
+              <>
+                <b>{v.holdoutPercent}%</b> of bookings get no reminder texts, to prove what reminders are worth
+              </>
+            ) : (
+              <>
+                <b>Every</b> booking gets reminder texts
+              </>
+            ),
+            source: "A holdout compares show rates with and without reminders on this client's own calls, in the same weeks. The result shows on the client report once each group has 20 outcomes.",
+            editor: (close: () => void) => (
+              <div className="space-y-3">
+                <ChoiceList
+                  options={[
+                    { value: "0", label: "Remind everyone" },
+                    { value: "10", label: "Hold out 10% of bookings", hint: "No reminder texts for them. Proof in a few weeks at typical volume." },
+                  ]}
+                  value={String(v.holdoutPercent)}
+                  onPick={(x) => setV((y) => ({ ...y, holdoutPercent: Number(x) }))}
+                />
+                <Done close={close} />
+              </div>
+            ),
           } satisfies FeedEntry,
         ]
       : []),

@@ -10,6 +10,7 @@
 // numerators over summed denominators, not an average of rates).
 
 import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { compareHoldout } from "@/lib/reminder-holdout";
 import { REVIEW_MATCH_DAYS, reviewsAfterAsking } from "@/features/reputation-manager/server/review-request-message";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
@@ -28,6 +29,7 @@ import {
   whopChangeLedger,
   whopPayments,
   reviewRequests,
+  reminderHoldouts,
   winBackEnrollments,
 } from "@/models/schema";
 import { RESULTS_WINDOW_DAYS, type ClientResults, type ProductResults, type RawCounts, type ShowRateThenNow } from "@/lib/client-results-shape";
@@ -178,9 +180,9 @@ export async function getClientResults(
   // Both windows at once: the 30 days before the last 30, and the last 30.
   const windowed = (engagementCol: AnyPgColumn, at: AnyPgColumn) => and(inArray(engagementCol, ids), gte(at, prevStart), lt(at, now));
 
-  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger, recovered, asks] = await Promise.all([
+  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger, recovered, asks, holdouts] = await Promise.all([
     db.select({ engagementId: bookingRoster.engagementId, at: bookingRoster.createdAt }).from(bookingRoster).where(windowed(bookingRoster.engagementId, bookingRoster.createdAt)),
-    db.select({ engagementId: briefOutcomeLog.engagementId, at: briefOutcomeLog.loggedAt, outcome: briefOutcomeLog.outcome }).from(briefOutcomeLog).where(inArray(briefOutcomeLog.engagementId, ids)),
+    db.select({ engagementId: briefOutcomeLog.engagementId, at: briefOutcomeLog.loggedAt, outcome: briefOutcomeLog.outcome, bookingId: briefOutcomeLog.bookingId }).from(briefOutcomeLog).where(inArray(briefOutcomeLog.engagementId, ids)),
     db.select({ engagementId: winBackEnrollments.engagementId, at: winBackEnrollments.enrolledAt, status: winBackEnrollments.status }).from(winBackEnrollments).where(windowed(winBackEnrollments.engagementId, winBackEnrollments.enrolledAt)),
     db.select({ engagementId: pileOnSendLog.engagementId, at: pileOnSendLog.createdAt, latencyMs: pileOnSendLog.latencyMs, error: pileOnSendLog.error }).from(pileOnSendLog).where(windowed(pileOnSendLog.engagementId, pileOnSendLog.createdAt)),
     db.select({ engagementId: coldOpenLeads.engagementId, at: coldOpenLeads.pushedAt, status: coldOpenLeads.status }).from(coldOpenLeads).where(windowed(coldOpenLeads.engagementId, coldOpenLeads.pushedAt)),
@@ -198,6 +200,8 @@ export async function getClientResults(
       .select({ engagementId: reviewRequests.engagementId, at: reviewRequests.sentAt, name: reviewRequests.personName })
       .from(reviewRequests)
       .where(and(inArray(reviewRequests.engagementId, ids), eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, new Date(prevStart.getTime() - REVIEW_MATCH_DAYS * DAY)), lt(reviewRequests.sentAt, now))),
+    // Every booking decided while a holdout ran: the comparison spans the whole holdout, not one window.
+    db.select({ engagementId: reminderHoldouts.engagementId, bookingId: reminderHoldouts.bookingId, heldOut: reminderHoldouts.heldOut }).from(reminderHoldouts).where(inArray(reminderHoldouts.engagementId, ids)),
   ]);
 
   const counts = new Map<string, { cur: RawCounts; prev: RawCounts }>(ids.map((id) => [id, { cur: emptyCounts(), prev: emptyCounts() }]));
@@ -333,6 +337,10 @@ export async function getClientResults(
       previous: prev,
       products: productResults(cur, prev),
       showRate: showRateThenNow(baselines.get(client.engagementId), cur, client.offerPrice ?? null),
+      holdout: compareHoldout(
+        holdouts.filter((h) => h.engagementId === client.engagementId),
+        outcomes.filter((o) => o.engagementId === client.engagementId && o.bookingId && o.at).map((o) => ({ bookingId: o.bookingId!, outcome: o.outcome, at: o.at! }))
+      ),
     };
   });
 }

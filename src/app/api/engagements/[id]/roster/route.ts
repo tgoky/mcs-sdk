@@ -35,8 +35,9 @@
 // join because "latest row per bookingId" isn't a natural join shape here;
 // same reduce-to-a-Map approach the roster route below already uses.
 import { NextResponse } from "next/server";
+import { isAtRisk } from "@/lib/at-risk";
 import { db } from "@/lib/db";
-import { engagements, bookingRoster, briefedCallsLog, showRateFeatures, briefOutcomeLog } from "@/models/schema";
+import { engagements, bookingRoster, briefedCallsLog, showRateFeatures, briefOutcomeLog, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq, gte, lt, inArray, desc } from "drizzle-orm";
@@ -92,6 +93,8 @@ export interface RosterEntry {
   // show_rate_scoring_enabled was on for this booking — null just means
   // scoring wasn't enabled, not that anything failed.
   predictedShowProbability: number | null;
+  /** Estimated show chance under the client's threshold, call not over and no outcome yet (lib/at-risk.ts). */
+  atRisk: boolean;
   // Fix: this used to read from showRateFeatures.actualOutcome, which is
   // only ever written when show-rate scoring is enabled for the booking
   // — so on any engagement without that feature on, this was null even
@@ -134,7 +137,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const activeWorkspace = await getActiveWorkspace(session.whopUserId);
 
     const [tenant] = await db
-      .select({ engagementId: engagements.engagementId })
+      .select({ engagementId: engagements.engagementId, stack: engagements.stack })
       .from(engagements)
       .where(
         and(
@@ -256,6 +259,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         researchStatus: (r.researchStatus as ResearchStatus) ?? null,
         synthesisStatus: (r.aiSynthesisStatus as SynthesisStatus) ?? null,
         predictedShowProbability: r.predictedShowProbability,
+        atRisk: r.callTime.getTime() > requestNow.getTime() - 60 * 60 * 1000 && isAtRisk(r.predictedShowProbability, (tenant.stack as EngagementStack | null)?.at_risk_threshold, outcome),
         actualOutcome: outcome,
         outcomeSource: latestSourceByBooking.get(r.externalCallId) ?? null,
         outcomeStatus: deriveOutcomeStatus({

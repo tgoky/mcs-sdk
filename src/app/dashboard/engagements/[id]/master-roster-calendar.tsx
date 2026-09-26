@@ -796,6 +796,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                 <StatusPill tone={entry.status === "brief_delivered" ? "success" : entry.status === "brief_failed" ? "danger" : "neutral"}>
                                   Brief: {entry.status.replace("_", " ")}
                                 </StatusPill>
+                                {entry.atRisk && (
+                                  <StatusPill tone="warning">
+                                    At risk · {entry.predictedShowProbability}% est.
+                                  </StatusPill>
+                                )}
                                 {entry.outcomeStatus === "resolved" && entry.actualOutcome && (
                                   <StatusPill tone={OUTCOME_META[entry.actualOutcome].tone}>
                                     {OUTCOME_META[entry.actualOutcome].label}
@@ -1369,6 +1374,11 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                                       the future. Now says so plainly, and
                                       distinguishes a real logged outcome from
                                       one nobody has confirmed yet. */}
+                                  {entry.atRisk && (
+                                    <StatusPill tone="warning">
+                                      At risk · {entry.predictedShowProbability}% est.
+                                    </StatusPill>
+                                  )}
                                   {entry.outcomeStatus === "resolved" && entry.actualOutcome && (
                                     <StatusPill tone={OUTCOME_META[entry.actualOutcome].tone} className="shrink-0">
                                       {OUTCOME_META[entry.actualOutcome].label}

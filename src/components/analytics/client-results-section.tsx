@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, TriangleAlert } from "lucide-react";
-import type { ClientResults, Metric, Product, ProductResults, ShowRateThenNow } from "@/lib/client-results-shape";
+import type { ClientResults, HoldoutComparison, Metric, Product, ProductResults, ShowRateThenNow } from "@/lib/client-results-shape";
 
 export const PRODUCT_NAME: Record<Product, string> = {
   showtime: "Showtime",
@@ -199,6 +199,24 @@ export function ClientResultsTable({ rows }: { rows: ClientRow[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Reminders on vs off, on the client's own calls in the same weeks. */
+export function HoldoutCard({ holdout }: { holdout: HoldoutComparison }) {
+  const rate = (s: { showed: number; total: number }) => (s.total ? `${Math.round((s.showed / s.total) * 100)}%` : "—");
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 p-4 space-y-2">
+      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Proof: with reminders vs without</p>
+      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        Reminded: <b className="text-zinc-900 dark:text-zinc-100">{rate(holdout.reminded)}</b> showed ({holdout.reminded.showed} of {holdout.reminded.total}) · No reminders: <b className="text-zinc-900 dark:text-zinc-100">{rate(holdout.heldOut)}</b> ({holdout.heldOut.showed} of {holdout.heldOut.total})
+      </p>
+      <p className="text-xs text-zinc-500">
+        {holdout.liftPoints !== null
+          ? `Reminders added ${holdout.liftPoints >= 0 ? "+" : ""}${holdout.liftPoints} points of show rate. A small, random share of bookings got no reminders, so both groups ran in the same weeks.`
+          : "Still collecting: the comparison counts once each group has at least 20 calls with an outcome."}
+      </p>
     </div>
   );
 }

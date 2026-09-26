@@ -71,6 +71,15 @@ export interface ClientResults {
   previous: RawCounts;
   products: ProductResults[];
   showRate: ShowRateThenNow | null;
+  /** Reminded vs held-out show rate, while the client runs a holdout (lib/reminder-holdout.ts). */
+  holdout: HoldoutComparison | null;
+}
+
+export interface HoldoutComparison {
+  reminded: { showed: number; total: number };
+  heldOut: { showed: number; total: number };
+  /** Show-rate points the reminders added; null until both sides have enough outcomes. */
+  liftPoints: number | null;
 }
 
 /** What the products a client has on did together in the window: the

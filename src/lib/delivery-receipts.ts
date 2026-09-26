@@ -126,6 +126,7 @@ export async function recordDeliveryStatus(
 export type ProvenSkill = "pile-on" | "win-back" | "rep-review-requests";
 export const SEQUENCE_SKILL: Record<string, ProvenSkill> = {
   pile_on_sms: "pile-on",
+  at_risk_sms: "pile-on",
   win_back_sms: "win-back",
   win_back_email_smtp: "win-back",
   review_request_email: "rep-review-requests",

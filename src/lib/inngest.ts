@@ -320,6 +320,13 @@ export const smsReplyReceived = eventType("sms/reply-received", {
   schema: staticSchema<SmsReplyReceivedData>(),
 });
 
+// A call looks at risk of a no-show; inngest/at-risk-check-in.ts sends one
+// check-in text at sendAt if it still should.
+export type AtRiskCheckInData = { engagementId: string; bookingId: string; sendAt: string };
+export const atRiskCheckInScheduled = eventType("showtime/at-risk-check-in.scheduled", {
+  schema: staticSchema<AtRiskCheckInData>(),
+});
+
 // A review request was scheduled (features/reputation-manager/server/
 // review-requests.ts); inngest/review-requests.ts waits until sendAt, then sends.
 export type ReviewRequestScheduledData = { engagementId: string; requestId: string; sendAt: string };

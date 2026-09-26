@@ -10,6 +10,7 @@ import { processConversationIntelligenceTranscript } from "@/inngest/conversatio
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
 import { processSmsReply } from "@/inngest/sms-reply";
 import { sendScheduledReviewRequest } from "@/inngest/review-requests";
+import { sendAtRiskCheckIn } from "@/inngest/at-risk-check-in";
 import { reportFailedFunctions } from "@/inngest/function-failed";
 import {
   processWhopWebhookEvent,
@@ -73,6 +74,7 @@ export const { GET, POST, PUT } = serve({
   functions: [
     processSmsReply,
     sendScheduledReviewRequest,
+    sendAtRiskCheckIn,
     reportFailedFunctions,
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
     // Fanned-out per-prospect worker for pre-call-read — see the fan-out

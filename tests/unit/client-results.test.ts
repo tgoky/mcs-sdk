@@ -9,7 +9,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/models/schema", () => {
   const table = (name: string) => new Proxy({ __t: name }, { get: (o, k) => (k in o ? (o as Record<string, unknown>)[k as string] : { table: name, col: k }) });
   return Object.fromEntries(
-    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "reviewRequests", "whopPayments", "winBackEnrollments"].map((n) => [n, table(n)])
+    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "reminderHoldouts", "reviewRequests", "whopPayments", "winBackEnrollments"].map((n) => [n, table(n)])
   );
 });
 vi.mock("drizzle-orm", () => ({ and: () => ({}), eq: () => ({}), gte: () => ({}), lt: () => ({}), inArray: () => ({}) }));
@@ -111,6 +111,7 @@ describe("client results", () => {
       previous: emptyCounts(),
       products: [],
       showRate: { baseline, current: showed / (showed + noShow), extraShows, estimatedValue, offerPrice: null },
+      holdout: null,
     });
     const none: ClientResults = { ...client(1, 0, 0, 0, null), showRate: null };
     expect(portfolioShowRate([none])).toBeNull();

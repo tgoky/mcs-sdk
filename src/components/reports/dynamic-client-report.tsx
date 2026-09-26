@@ -21,7 +21,7 @@ import { WorkerReportBlockGrid } from "./worker-report-block-grid";
 import { CompareView } from "./compare-view";
 import { WORKER_REGISTRY, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { RESULTS_WINDOW_DAYS, type ClientResults, type ConnectedResults } from "@/lib/client-results-shape";
-import { ProductResultsGrid, ShowRateThenNowCard } from "@/components/analytics/client-results-section";
+import { HoldoutCard, ProductResultsGrid, ShowRateThenNowCard } from "@/components/analytics/client-results-section";
 import { ConnectedResultsCard } from "@/components/analytics/connected-results-card";
 
 const PERIOD_TABS: { key: ReportPeriod; label: string }[] = [
@@ -130,6 +130,7 @@ export function DynamicClientReport({
           </p>
           <ProductResultsGrid products={results.products} />
           {results.showRate && <ShowRateThenNowCard showRate={results.showRate} />}
+          {results.holdout && <HoldoutCard holdout={results.holdout} />}
         </div>
       )}
 

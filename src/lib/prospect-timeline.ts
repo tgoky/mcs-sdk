@@ -93,6 +93,7 @@ export interface TimelineSources {
 
 const SEQUENCE_LABEL: Record<string, string> = {
   pile_on_sms: "Reminder text",
+  at_risk_sms: "Check-in text (call looked at risk)",
   win_back_sms: "Recovery text",
   win_back_email_smtp: "Recovery email",
   review_request_email: "Asked for a review",

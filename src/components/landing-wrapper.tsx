@@ -119,13 +119,13 @@ export function LandingWrapper({
         <h1 className={`text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] max-w-3xl text-white transition-all duration-700 ease-out ${
           isExiting ? "opacity-0 scale-105" : "opacity-100 scale-100"
         }`}>
-         Your entire stack, unified.
+         Every lead, followed to paid.
         </h1>
 
         <p className={`text-lg sm:text-2xl text-zinc-300 max-w-xl font-normal leading-relaxed transition-all duration-500 ease-out ${
           isExiting ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
         }`}> 
-         Access an expanding ecosystem of tools built to automate and scale your operations.
+         Keep the tools you already pay for. We connect them so every lead is followed from first email to paid, and we prove it in dollars.
         </p>
 
         {membershipRequired && (

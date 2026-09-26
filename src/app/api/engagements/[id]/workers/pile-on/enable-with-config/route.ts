@@ -6,6 +6,9 @@
 // calls, so the two surfaces can't produce different results.
 
 import { NextResponse } from "next/server";
+import { DEFAULT_AT_RISK_THRESHOLD } from "@/lib/at-risk";
+import { MAX_HOLDOUT_PERCENT } from "@/lib/reminder-holdout";
+import { patchEngagementStack } from "@/lib/engagement-stack";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { enablePileOnForEngagement } from "@/lib/enable-pile-on";
@@ -59,6 +62,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // Where the client's Twilio number sends the texts prospects reply
     // with (api/webhooks/twilio-inbound), tokened per client.
     twilioReplyUrl: stack.sms_platform === "twilio" ? webhookUrl(process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin, TWILIO_INBOUND_PATH, engagementId) : null,
+    // One extra check-in text for calls that look at risk (lib/at-risk.ts).
+    atRiskCheckIn: Boolean(stack.at_risk_check_in),
+    atRiskThreshold: stack.at_risk_threshold ?? DEFAULT_AT_RISK_THRESHOLD,
+    holdoutPercent: stack.reminder_holdout_percent ?? 0,
   });
 }
 
@@ -93,6 +100,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { error: result.error, bridgeHref: result.bridgeHref, productId: result.productId, onboardingWorkerName: result.onboardingWorkerName },
         { status }
       );
+    }
+    // At-risk check-ins, saved once Pile-On itself saved. Optional: older
+    // callers don't send these, and leave them as saved.
+    if (typeof body?.atRiskCheckIn === "boolean") {
+      const threshold = Number(body.atRiskThreshold ?? DEFAULT_AT_RISK_THRESHOLD);
+      if (!Number.isFinite(threshold) || threshold < 10 || threshold > 90) return NextResponse.json({ error: "The at-risk level must be between 10% and 90%." }, { status: 400 });
+      await patchEngagementStack(engagementId, {
+        at_risk_check_in: body.atRiskCheckIn || undefined,
+        at_risk_threshold: Math.round(threshold) === DEFAULT_AT_RISK_THRESHOLD ? undefined : Math.round(threshold),
+        // A score is needed to act on; turning check-ins on turns scoring on.
+        ...(body.atRiskCheckIn ? { show_rate_scoring_enabled: true } : {}),
+      });
+    }
+    if (body?.holdoutPercent !== undefined) {
+      const pct = Number(body.holdoutPercent);
+      if (!Number.isFinite(pct) || pct < 0 || pct > MAX_HOLDOUT_PERCENT) return NextResponse.json({ error: `The holdout must be between 0% and ${MAX_HOLDOUT_PERCENT}%.` }, { status: 400 });
+      await patchEngagementStack(engagementId, { reminder_holdout_percent: pct > 0 ? Math.round(pct) : undefined });
     }
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { decideHoldout } from "@/lib/reminder-holdout";
 import { winBackEnrollments, engagements } from "@/models/schema";
 import { and, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
@@ -321,7 +322,11 @@ export async function handleInboundBookingEvent(
           summary.whatWorked.push(`Tagged ${prospectEmail} for HubSpot's SMS automation to pick up.`);
           await logStep(runId, { phase: "sms_enrollment", status: "success", detail: "HubSpot SMS tag set" });
         } else if (stack.sms_platform === "twilio" || stack.sms_platform === "ghl_sms") {
-          if (!prospectPhone) {
+          const heldOut = await run("reminder-holdout", () => decideHoldout(tenant.engagementId, bookingId, stack.reminder_holdout_percent));
+          if (heldOut) {
+            summary.decisionsMade.push(`Held out of reminder texts (the ${stack.reminder_holdout_percent}% holdout that proves what reminders are worth).`);
+            await logStep(runId, { phase: "sms_enrollment", status: "skipped", detail: "Holdout: no reminder texts for this booking" });
+          } else if (!prospectPhone) {
             summary.openItems.push(`SMS sequence configured (${stack.sms_platform}) but no phone number was captured for ${prospectEmail}. SMS skipped for this booking.`);
             await logStep(runId, { phase: "sms_enrollment", status: "skipped", detail: "No phone number on payload" });
           } else {
