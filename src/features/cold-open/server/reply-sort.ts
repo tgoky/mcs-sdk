@@ -113,7 +113,7 @@ export async function storeColdOpenReply(
     .limit(1);
   if (existing) return { status: "duplicate" };
 
-  const result = await classifyReply({ subject: reply.subject, bodyText: reply.bodyText }, productIdentity, DEFAULT_TAXONOMY);
+  const result = await classifyReply({ subject: reply.subject, bodyText: reply.bodyText }, productIdentity, DEFAULT_TAXONOMY, { engagementId });
   // onConflictDoNothing against the unique index on (engagementId,
   // externalReplyId): the check above has no lock, so two overlapping
   // deliveries can both pass it; the loser quietly loses the race.
