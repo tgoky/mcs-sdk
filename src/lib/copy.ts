@@ -572,6 +572,8 @@ export function outcomeSourceLabel(source: string | null | undefined, outcome: s
       return "Confirmed via Slack";
     case "recall_bot":
       return "Confirmed automatically from the call recording";
+    case "booking_platform":
+      return "Marked in your booking tool";
     case "auto_sweep":
       return outcome === "showed"
         ? "Confirmed automatically: activity found in your CRM"

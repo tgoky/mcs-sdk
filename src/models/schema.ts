@@ -1579,7 +1579,7 @@ export const webhookEvents = pgTable(
       .references(() => engagements.engagementId),
     eventSource: text("event_source").notNull(), // e.g. "calendly", "cal_com", "ghl_calendar", "oncehub", "poll:<platform>"
     idempotencyKey: text("idempotency_key").notNull(),
-    eventKind: text("event_kind"), // "created" | "cancelled" | "unknown" — informational, not part of the uniqueness key
+    eventKind: text("event_kind"), // "created" | "cancelled" | "unknown" | "outcome" — informational, not part of the uniqueness key
     receivedAt: timestamp("received_at").defaultNow().notNull(),
     processedAt: timestamp("processed_at"),
   },
@@ -2070,7 +2070,8 @@ export const briefOutcomeLog = pgTable("brief_outcome_log", {
   outcome: text("outcome").notNull(), // "showed" | "no_show" | "rescheduled"
   loggedBySlackUserId: text("logged_by_slack_user_id"),
   // Win-Back no-show gap fix — which of the four resolution paths logged
-  // this row: "dashboard" | "slack" | "recall_bot" | "auto_sweep". Null on
+  // this row: "dashboard" | "slack" | "recall_bot" | "auto_sweep" |
+  // "booking_platform" (lib/booking-outcome-events.ts). Null on
   // rows written before this column existed. Distinct from
   // loggedBySlackUserId (which only ever tells you "was this a Slack
   // click" for the pre-existing two sources) now that Recall bot

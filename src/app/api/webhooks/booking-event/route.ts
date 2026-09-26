@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, webhookEvents, type EngagementStack } from "@/models/schema";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { engagements, webhookEvents, bookingRoster, type EngagementStack } from "@/models/schema";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { classifyBookingEvent } from "@/features/pile-on/server/enrollment-service";
 import { upsertBookingRoster } from "@/lib/booking-roster";
 import { deriveWebhookIdempotencyKey } from "@/lib/platforms/booking";
@@ -13,6 +13,8 @@ import { isUniqueConstraintViolation } from "@/lib/db-errors";
 import crypto from "crypto";
 import { getSigningSecret } from "@/lib/signing-secrets";
 import { patchEngagementStack } from "@/lib/engagement-stack";
+import { detectPlatformOutcome, type PlatformOutcome } from "@/lib/booking-outcome-events";
+import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 
 // Reliability fix: this route now only does DB-only work (signature verify,
 // idempotency insert, rate-limit check, startRun, an Inngest event send) —
@@ -153,6 +155,33 @@ function verifyGhlOrOnceHubSignature(
   return safeEqual(provided, expected);
 }
 
+// ── Outcomes marked in the booking tool ─────────────────────────────────────
+
+/**
+ * Records a show/no-show the booking tool reported. Deduplicated on the
+ * booking and the outcome (not the delivery), so a retry is ignored but a
+ * later correction ("noshow" changed to "showed") still lands. The booking
+ * is matched to the roster under whichever id it was stored with.
+ */
+async function recordPlatformOutcome(engagementId: string, platform: string, found: PlatformOutcome): Promise<Response> {
+  const [known] = await db
+    .select({ id: bookingRoster.externalCallId })
+    .from(bookingRoster)
+    .where(and(eq(bookingRoster.engagementId, engagementId), inArray(bookingRoster.externalCallId, found.bookingIds)))
+    .limit(1);
+  const bookingId = known?.id ?? found.bookingIds[0];
+
+  try {
+    await db.insert(webhookEvents).values({ engagementId, eventSource: platform, idempotencyKey: `outcome:${bookingId}:${found.outcome}`, eventKind: "outcome" });
+  } catch (err: unknown) {
+    if (isUniqueConstraintViolation(err)) return NextResponse.json({ success: true, deduplicated: true });
+    throw err;
+  }
+
+  const result = await resolveCallOutcome({ engagementId, bookingId, outcome: found.outcome, source: "booking_platform" });
+  return NextResponse.json({ success: true, outcome: found.outcome, recorded: result.recorded, winBack: result.winBack });
+}
+
 // ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -271,6 +300,15 @@ export async function POST(request: Request) {
 
     // ── 5. NOW parse the verified payload and process ──
     const payload = JSON.parse(rawBody);
+
+    // ── 5a. An outcome marked in the booking tool itself (a Calendly
+    // no-show mark, a GoHighLevel "showed"/"noshow" status): record it the
+    // same way a Slack tap or the dashboard would, instead of treating it
+    // as a new booking. See lib/booking-outcome-events.ts.
+    const platformOutcome = detectPlatformOutcome(platform, payload);
+    if (platformOutcome) {
+      return await recordPlatformOutcome(tenant.engagementId, platform, platformOutcome);
+    }
 
     const eventKind = classifyBookingEvent(payload);
     const skillName = eventKind === "cancelled" ? "win-back" : "pile-on";

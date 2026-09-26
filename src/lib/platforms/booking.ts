@@ -463,7 +463,9 @@ export class CalendlyClient {
     return results;
   }
 
-  /** Registers a webhook subscription for invitee.created and invitee.canceled. */
+  /** Registers a webhook subscription for new, cancelled and no-show
+   * invitees. invitee_no_show.created is how a host's no-show mark in
+   * Calendly reaches this app (lib/booking-outcome-events.ts). */
   async subscribeWebhook(
     organizationUri: string,
     receiverUrl: string
@@ -473,7 +475,7 @@ export class CalendlyClient {
       headers: this.headers,
       body: JSON.stringify({
         url: receiverUrl,
-        events: ["invitee.created", "invitee.canceled"],
+        events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
         organization: organizationUri,
         scope: "organization",
       }),

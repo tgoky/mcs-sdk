@@ -50,7 +50,9 @@ import { exitWinBackSequence } from "@/lib/platforms/email";
 import { resolveCredential } from "@/lib/credentials";
 
 export type CallOutcome = "showed" | "no_show" | "rescheduled";
-export type OutcomeSource = "dashboard" | "slack" | "recall_bot" | "auto_sweep";
+// "booking_platform": marked in the client's own booking tool (Calendly's
+// no-show mark, GoHighLevel's appointment status), read from its webhook.
+export type OutcomeSource = "dashboard" | "slack" | "recall_bot" | "auto_sweep" | "booking_platform";
 
 export interface ResolveCallOutcomeParams {
   engagementId: string;

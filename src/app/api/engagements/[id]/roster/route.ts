@@ -54,7 +54,7 @@ export const revalidate = 0;
 export type ResearchStatus = "completed" | "skipped_low_confidence" | "failed" | null;
 export type SynthesisStatus = "completed" | "failed" | null;
 export type CallOutcome = "showed" | "no_show" | "rescheduled" | "cancelled" | null;
-export type OutcomeSource = "dashboard" | "slack" | "recall_bot" | "auto_sweep" | null;
+export type OutcomeSource = "dashboard" | "slack" | "recall_bot" | "auto_sweep" | "booking_platform" | null;
 // Whether the sales-call outcome (not the brief-delivery pipeline status
 // above — a distinct concern) is known yet. "awaiting_outcome" is new:
 // the call's estimated end time has passed and nothing — not a manual
