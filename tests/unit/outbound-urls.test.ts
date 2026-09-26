@@ -19,8 +19,9 @@ describe("addresses the server calls", () => {
 });
 
 describe("mailchimpDatacenter", () => {
-  it("reads the datacenter off a real key", () => {
-    expect(mailchimpDatacenter("0123456789abcdef0123456789abcdef-us21")).toBe("us21");
+  it("reads the datacenter off the end of a key", () => {
+    // Only the part after the last dash is read, so a plain placeholder tests it.
+    expect(mailchimpDatacenter("placeholder-us21")).toBe("us21");
     expect(mailchimpDatacenter(" abc-US6 ")).toBe("us6");
   });
 
