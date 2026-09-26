@@ -232,6 +232,10 @@ export type EngagementStack = {
   whop_save_offer_message?: string; // supports {discount}/{months} template tokens
   whop_save_offer_min_tenure_days?: number; // defaults to 30 if unset
   whop_save_offer_cooldown_days?: number; // defaults to 90 if unset
+  // Failed-payment recovery's message to the buyer. Tokens: {name},
+  // {product}, {amount}, {link}. Unset uses DEFAULT_RECOVERY_MESSAGE in
+  // payment-recovery-service.ts; every message is still approved first.
+  whop_recovery_message?: string;
   // Whop Agent Playbook 5.12 (Whop-to-External Bridge Manager). No
   // sane default for a destination the operator owns — unset means the
   // bridge is configured to do nothing, not "route somewhere guessed."
@@ -1846,12 +1850,26 @@ export const whopPayments = pgTable(
     failureMessage: text("failure_message"),
     nextPaymentAttemptAt: timestamp("next_payment_attempt_at"),
     paidAt: timestamp("paid_at"),
+    // The buyer's Whop user id (user.id), the surest way to message them.
+    buyerUserId: text("buyer_user_id"),
+    // Failed-payment recovery (features/whop-agent/server/payment-recovery-service.ts):
+    // "queued" (waiting for approval) | "sent" | "send_failed" | "skipped".
+    recoveryStatus: text("recovery_status"),
+    recoveryMessageId: text("recovery_message_id"),
+    recoveryError: text("recovery_error"),
+    recoverySentAt: timestamp("recovery_sent_at"),
+    // Set on the failed payment when a later successful payment on the same
+    // membership (or this same payment, retried) arrives after the message.
+    recoveredAt: timestamp("recovered_at"),
+    recoveredByPaymentId: text("recovered_by_payment_id"),
+    recoveredAmount: doublePrecision("recovered_amount"),
     occurredAt: timestamp("occurred_at").notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("whop_payments_engagement_payment_uidx").on(table.engagementId, table.paymentId),
     index("whop_payments_engagement_email_idx").on(table.engagementId, table.email),
+    index("whop_payments_engagement_membership_idx").on(table.engagementId, table.membershipId),
   ]
 );
 

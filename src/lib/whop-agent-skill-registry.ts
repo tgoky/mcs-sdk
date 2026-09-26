@@ -55,6 +55,7 @@ export const WHOP_AGENT_SKILL_REGISTRY: Record<WhopAgentSkillId, WhopAgentSkillD
     execute: (tenant, runId, step) => runPortfolioRollup(tenant, runId, step),
   },
   "whop-cancellation-save-offer": { ...WHOP_AGENT_SKILL_MANIFEST["whop-cancellation-save-offer"] },
+  "whop-payment-recovery": { ...WHOP_AGENT_SKILL_MANIFEST["whop-payment-recovery"] },
   "whop-refund-dispute-velocity": { ...WHOP_AGENT_SKILL_MANIFEST["whop-refund-dispute-velocity"] },
   "whop-bulk-promo-codes": { ...WHOP_AGENT_SKILL_MANIFEST["whop-bulk-promo-codes"] },
   "whop-payout-hold-kit": { ...WHOP_AGENT_SKILL_MANIFEST["whop-payout-hold-kit"] },
@@ -79,6 +80,8 @@ const OWN_ROUTE_SKILLS = new Set<WhopAgentSkillId>([
   // Webhook-driven, dispatched from processWhopWebhookEvent
   // (src/inngest/whop-agent.ts), not the generic manual/scheduled path.
   "whop-cancellation-save-offer",
+  // Webhook-driven too (payment.failed), same dispatch point.
+  "whop-payment-recovery",
   // Own scheduled cron dispatch (src/inngest/whop-agent.ts) rather than
   // the generic skillRunExecute path.
   "whop-drift-monitor",

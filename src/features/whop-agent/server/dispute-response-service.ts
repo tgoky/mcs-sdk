@@ -9,6 +9,7 @@ import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
 import { queuePendingAction } from "@/lib/approval-gate";
 import { callClaude } from "@/lib/llm";
+import { gatherCallEvidence, type CallEvidence } from "./dispute-call-evidence";
 
 export interface WhopDisputeAlert {
   id: string;
@@ -85,7 +86,7 @@ async function gatherCourseCompletionEvidence(client: WhopAgentClient, membershi
   }
 }
 
-async function draftNarrative(runId: string, dispute: WhopDispute, alert: WhopDisputeAlert | null, courseCompletionSummary: string | null): Promise<string> {
+async function draftNarrative(runId: string, dispute: WhopDispute, alert: WhopDisputeAlert | null, courseCompletionSummary: string | null, calls: CallEvidence | null): Promise<string> {
   const result = await callClaude({
     model: "SYNTHESIS",
     runId,
@@ -98,6 +99,7 @@ async function draftNarrative(runId: string, dispute: WhopDispute, alert: WhopDi
       `Product: ${dispute.product_id ?? "unknown"}`,
       `Payment id: ${dispute.payment_id ?? "unknown"}`,
       courseCompletionSummary ? `Course completion evidence: ${courseCompletionSummary}` : "No course completion evidence available.",
+      calls ? `Calls with the customer (from the seller's booking and call records):\n${calls.lines.join("\n")}` : "",
       alert?.card_brand ? `Card brand: ${alert.card_brand}, issuer: ${alert.issuer ?? "unknown"}` : "",
     ]
       .filter(Boolean)
@@ -144,6 +146,13 @@ export async function assembleDisputeResponse(engagementId: string, disputeId: s
     if (courseCompletionSummary === null) gatheredManually.push("Course completion records");
     await logStep(runId, { phase: "course_evidence_gather", status: courseCompletionSummary ? "success" : "skipped" });
 
+    // The buyer's calls: booked, reminded, attended, recorded. Proof the
+    // service was delivered, from this app's own records.
+    await logStep(runId, { phase: "call_evidence_gather", status: "running" });
+    const calls = await gatherCallEvidence(engagementId, dispute.payment_id).catch(() => null);
+    if (!calls) gatheredManually.push("Call attendance records");
+    await logStep(runId, { phase: "call_evidence_gather", status: calls ? "success" : "skipped", detail: calls ? `${calls.lines.length} facts, ${calls.attended} attended ${calls.attended === 1 ? "call" : "calls"}` : "No calls on file for this buyer" });
+
     // Chat/forum activity iteration across experiences and shipments
     // records are named in Section 5.10's API sequence but need a real
     // experience-enumeration pass this build doesn't have yet — flagged
@@ -160,20 +169,23 @@ export async function assembleDisputeResponse(engagementId: string, disputeId: s
       await logStep(runId, { phase: "narrative_draft", status: "success", detail: "Whop had already generated a draft. Using it as the starting point." });
     } else {
       await logStep(runId, { phase: "narrative_draft", status: "running" });
-      notes = await draftNarrative(runId, dispute, alert, courseCompletionSummary);
+      notes = await draftNarrative(runId, dispute, alert, courseCompletionSummary, calls);
       await logStep(runId, { phase: "narrative_draft", status: "success" });
     }
 
     const draft: DisputeEvidenceDraft = {
       notes,
       product_description: dispute.product_id,
-      service_date: undefined, // Section 5.1's own field name: earliest confirmed access timestamp — needs the course/access data this pass gathers only partially
+      // Whop's field: when the service was delivered. The first call the
+      // buyer attended, when there was one; otherwise left for the operator.
+      service_date: calls?.serviceDate ?? undefined,
+      access_activity_log: calls?.lines.join("\n"),
     };
 
     await finishRun(runId, {
       summary: {
-        whatWasAttempted: ["Evidence window check", "Course completion gather", "Narrative draft"],
-        whatWorked: [usedGeneratedResponse ? "Improved Whop's own generated draft" : "Drafted narrative from scratch", courseCompletionSummary ? "Course completion evidence included" : ""].filter(Boolean),
+        whatWasAttempted: ["Evidence window check", "Course completion gather", "Call evidence gather", "Narrative draft"],
+        whatWorked: [usedGeneratedResponse ? "Improved Whop's own generated draft" : "Drafted narrative from scratch", courseCompletionSummary ? "Course completion evidence included" : "", calls ? `Call evidence included (${calls.attended} attended)` : ""].filter(Boolean),
         whatFailed: [],
         openItems: gatheredManually.map((g) => `${g} (attach manually before submitting)`),
         decisionsMade: [],

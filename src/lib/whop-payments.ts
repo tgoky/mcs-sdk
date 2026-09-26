@@ -15,7 +15,7 @@
 
 import { db } from "@/lib/db";
 import { whopPayments } from "@/models/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 export type PaymentOutcome = "failed" | "paid" | "refunded" | "disputed";
 
@@ -63,6 +63,7 @@ export function paymentUpdateFromEvent(type: string, data: unknown): PaymentUpda
       fields: {
         email: text(user?.email)?.toLowerCase() ?? null,
         buyerName: text(user?.name),
+        buyerUserId: text(user?.id),
         phone: text(member?.phone),
         membershipId: text(obj(d.membership)?.id),
         productTitle: text(product?.title),
@@ -118,7 +119,20 @@ export async function recordWhopPaymentEvent(engagementId: string, type: string,
       target: [whopPayments.engagementId, whopPayments.paymentId],
       set: { ...fields, outcome, occurredAt, updatedAt: new Date() },
     });
+  if (outcome === "paid") await creditRecovery(engagementId, update.paymentId, update.fields.membershipId ?? null, update.fields.amount ?? null, occurredAt);
   return { ...update, outcome };
+}
+
+/** A successful payment after a recovery message counts as recovered: the
+ * same payment going through on a retry, or a new payment on the same
+ * membership (the buyer updated their card and paid). Only payments that
+ * were actually messaged are credited, and each only once. */
+async function creditRecovery(engagementId: string, paymentId: string, membershipId: string | null, amount: number | null, paidAt: Date): Promise<void> {
+  const samePerson = membershipId ? or(eq(whopPayments.paymentId, paymentId), eq(whopPayments.membershipId, membershipId)) : eq(whopPayments.paymentId, paymentId);
+  await db
+    .update(whopPayments)
+    .set({ recoveredAt: paidAt, recoveredByPaymentId: paymentId, recoveredAmount: amount, updatedAt: new Date() })
+    .where(and(eq(whopPayments.engagementId, engagementId), samePerson, isNotNull(whopPayments.recoverySentAt), isNull(whopPayments.recoveredAt), lte(whopPayments.recoverySentAt, paidAt)));
 }
 
 export interface BuyerPayment {
@@ -132,6 +146,10 @@ export interface BuyerPayment {
   paidAt: Date | null;
   occurredAt: Date;
   failureMessage: string | null;
+  recoveryStatus?: string | null;
+  recoverySentAt?: Date | null;
+  recoveredAt?: Date | null;
+  recoveredAmount?: number | null;
 }
 
 /** Payments by these buyers' emails, newest first. */
@@ -150,6 +168,10 @@ export async function paymentsForEmails(engagementId: string, emails: string[]):
       paidAt: whopPayments.paidAt,
       occurredAt: whopPayments.occurredAt,
       failureMessage: whopPayments.failureMessage,
+      recoveryStatus: whopPayments.recoveryStatus,
+      recoverySentAt: whopPayments.recoverySentAt,
+      recoveredAt: whopPayments.recoveredAt,
+      recoveredAmount: whopPayments.recoveredAmount,
     })
     .from(whopPayments)
     .where(and(eq(whopPayments.engagementId, engagementId), inArray(whopPayments.email, wanted)))

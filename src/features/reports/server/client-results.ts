@@ -25,6 +25,7 @@ import {
   repTwitterMentions,
   repWebFindings,
   whopChangeLedger,
+  whopPayments,
   winBackEnrollments,
 } from "@/models/schema";
 import { RESULTS_WINDOW_DAYS, type ClientResults, type ProductResults, type RawCounts, type ShowRateThenNow } from "@/lib/client-results-shape";
@@ -56,6 +57,7 @@ export const emptyCounts = (): RawCounts => ({
   saveOffersSent: 0,
   membersStayed: 0,
   disputesAnswered: 0,
+  paymentsRecovered: 0,
 });
 
 export function addCounts(a: RawCounts, b: RawCounts): RawCounts {
@@ -78,7 +80,7 @@ function median(xs: number[]): number | null {
 const hasShowtime = (c: RawCounts) => c.booked + c.showed + c.noShow + c.winBackRebooked + c.winBackLost + c.textLatenciesMs.length > 0;
 const hasColdOpen = (c: RawCounts) => c.contacted + c.humanReplies > 0;
 const hasReputation = (c: RawCounts) => c.newReviews + c.mentions + c.incidents > 0;
-const hasWhop = (c: RawCounts) => c.saveOffersSent + c.membersStayed + c.disputesAnswered > 0;
+const hasWhop = (c: RawCounts) => c.saveOffersSent + c.membersStayed + c.disputesAnswered + c.paymentsRecovered > 0;
 
 /** The per-product numbers for one client (or a whole portfolio's summed
  * counts). A product appears only when it has activity in either window. */
@@ -123,6 +125,7 @@ export function productResults(cur: RawCounts, prev: RawCounts): ProductResults[
         { key: "saveOffers", label: "Save offers sent", current: cur.saveOffersSent, previous: prev.saveOffersSent, format: "count", better: "up" },
         { key: "stayed", label: "Members who stayed", current: cur.membersStayed, previous: prev.membersStayed, format: "count", better: "up" },
         { key: "disputes", label: "Disputes answered", current: cur.disputesAnswered, previous: prev.disputesAnswered, format: "count", better: "up" },
+        { key: "recovered", label: "Failed payments recovered", current: cur.paymentsRecovered, previous: prev.paymentsRecovered, format: "count", better: "up" },
       ],
     });
   }
@@ -165,7 +168,7 @@ export async function getClientResults(
   // Both windows at once: the 30 days before the last 30, and the last 30.
   const windowed = (engagementCol: AnyPgColumn, at: AnyPgColumn) => and(inArray(engagementCol, ids), gte(at, prevStart), lt(at, now));
 
-  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger] = await Promise.all([
+  const [booked, outcomes, winBack, texts, leads, replies, reviews, trustpilot, reddit, twitter, incidents, actions, ledger, recovered] = await Promise.all([
     db.select({ engagementId: bookingRoster.engagementId, at: bookingRoster.createdAt }).from(bookingRoster).where(windowed(bookingRoster.engagementId, bookingRoster.createdAt)),
     db.select({ engagementId: briefOutcomeLog.engagementId, at: briefOutcomeLog.loggedAt, outcome: briefOutcomeLog.outcome }).from(briefOutcomeLog).where(inArray(briefOutcomeLog.engagementId, ids)),
     db.select({ engagementId: winBackEnrollments.engagementId, at: winBackEnrollments.enrolledAt, status: winBackEnrollments.status }).from(winBackEnrollments).where(windowed(winBackEnrollments.engagementId, winBackEnrollments.enrolledAt)),
@@ -179,6 +182,7 @@ export async function getClientResults(
     db.select({ engagementId: repIncidents.engagementId, at: repIncidents.declaredAt }).from(repIncidents).where(windowed(repIncidents.engagementId, repIncidents.declaredAt)),
     db.select({ engagementId: pendingActions.engagementId, at: pendingActions.createdAt, actionType: pendingActions.actionType, status: pendingActions.status }).from(pendingActions).where(windowed(pendingActions.engagementId, pendingActions.createdAt)),
     db.select({ engagementId: whopChangeLedger.engagementId, at: whopChangeLedger.occurredAt, eventType: whopChangeLedger.eventType, changedFields: whopChangeLedger.changedFields }).from(whopChangeLedger).where(windowed(whopChangeLedger.engagementId, whopChangeLedger.occurredAt)),
+    db.select({ engagementId: whopPayments.engagementId, at: whopPayments.recoveredAt }).from(whopPayments).where(windowed(whopPayments.engagementId, whopPayments.recoveredAt)),
   ]);
 
   const counts = new Map<string, { cur: RawCounts; prev: RawCounts }>(ids.map((id) => [id, { cur: emptyCounts(), prev: emptyCounts() }]));
@@ -276,6 +280,10 @@ export async function getClientResults(
     if (!c || r.status !== "approved") continue;
     if (r.actionType === "whop_cancellation_offer_create") c.saveOffersSent++;
     if (r.actionType === "whop_dispute_evidence_submit") c.disputesAnswered++;
+  }
+  for (const r of recovered) {
+    const c = bucket(r);
+    if (c) c.paymentsRecovered++;
   }
   for (const r of ledger) {
     const c = bucket(r);

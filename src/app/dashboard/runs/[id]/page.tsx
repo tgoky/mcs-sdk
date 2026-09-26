@@ -187,6 +187,7 @@ function SkillView({ detail, steps, onRefreshDetail }: { detail: RunDetailPayloa
     case "whop-weekly-ops-report":
     case "whop-portfolio-rollup":
     case "whop-cancellation-save-offer":
+    case "whop-payment-recovery":
     case "whop-refund-dispute-velocity":
     case "whop-bulk-promo-codes":
     case "whop-payout-hold-kit":

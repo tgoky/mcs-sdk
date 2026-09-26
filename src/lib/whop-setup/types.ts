@@ -104,6 +104,8 @@ export interface WhopSetupState {
     evidence: string[];
   };
   alerts: AlertProposal & { saved: boolean };
+  /** Failed-payment recovery's message: the client's own, or null for the default shown. */
+  recovery: { message: string | null; defaultMessage: string };
   /** signingSecret: shown once a destination is saved, so it can check X-Whop-Agent-Signature. */
   /** fieldMapping: renames Whop's field names in what's forwarded (Whop name -> theirs). */
   bridge: { url: string; ghlConnected: boolean; signingSecret: string | null; fieldMapping: Record<string, string> };

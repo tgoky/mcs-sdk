@@ -22,6 +22,7 @@ import { PlatformLogo } from "@/components/platform-logo";
 import type { ActivationStep } from "@/lib/showtime-setup/types";
 import type { WhopSetupState } from "@/lib/whop-setup/types";
 import { SKILL_EVENTS, eventsFor } from "@/lib/whop-setup/analyze";
+import { renderRecoveryMessage } from "@/features/whop-agent/server/recovery-message";
 import { ActivationProgress, type ActivationStage } from "./activation-steps";
 import { SkillSwitchRow } from "./skill-switch";
 import { ApproveBar, Feed, Labeled, Pill, Popover, ReviewCard, SettingsHeader, Todos, ToggleList, inputCls, pick, type FeedEntry, type TodoItem } from "./review-kit";
@@ -33,6 +34,7 @@ import { BackButton } from "./back-button";
 
 const ON_THEIR_OWN: { id: string; blurb: string }[] = [
   { id: "whop-cancellation-save-offer", blurb: "Drafts your save offer for each member who sets their plan to cancel. You approve every one." },
+  { id: "whop-payment-recovery", blurb: "When a payment fails, drafts a message to the buyer with the link to fix their card. You approve each one." },
   { id: "whop-dispute-response", blurb: "Gathers evidence and drafts a response the moment a dispute or dispute alert arrives." },
   { id: "whop-refund-dispute-velocity", blurb: "Warns you when refunds, disputes or dispute alerts jump above normal." },
   { id: "whop-daily-change-digest", blurb: "A daily summary of what changed on your Whop: prices, visibility, statuses." },
@@ -57,6 +59,7 @@ const WHOP_FOCUS: Record<string, { rows: string[]; todos: string[]; save: boolea
   "whop-connect": { rows: ["breaker", "plans", "lock-", "events", "hook-"], todos: ["key", "version"], save: false },
   "whop-cancellation-save-offer": { rows: ["canceling", "offer"], todos: ["offer"], save: true },
   "whop-refund-dispute-velocity": { rows: ["alerts"], todos: [], save: true },
+  "whop-payment-recovery": { rows: ["recovery"], todos: [], save: true },
   "whop-bridge-manager": { rows: ["bridge"], todos: ["bridge"], save: true },
 };
 const NOTHING_TO_SET = { rows: ["breaker", "lock-"], todos: ["key"], save: false };
@@ -83,6 +86,8 @@ interface Draft {
   bridgeUrl: string;
   /** Field renames, one "whop_name = their_name" per line. */
   bridgeMapping: string;
+  /** Failed-payment recovery's message; empty means the default. */
+  recoveryMessage: string;
 }
 
 function draftFrom(s: WhopSetupState): Draft {
@@ -100,6 +105,7 @@ function draftFrom(s: WhopSetupState): Draft {
     sample: String(s.alerts.minSample),
     bridgeUrl: s.bridge.url,
     bridgeMapping: mappingText(s.bridge.fieldMapping),
+    recoveryMessage: s.recovery.message ?? "",
   };
 }
 
@@ -246,6 +252,7 @@ export function WhopSetup({
       alerts: { refundRate: Number(draft.refundPct) / 100, disputeRate: Number(draft.disputePct) / 100, alertThreshold: Number(draft.alerts), minSample: Number(draft.sample) },
       bridgeUrl: draft.bridgeUrl,
       bridgeFieldMapping: parseMapping(draft.bridgeMapping).mapping,
+      recoveryMessage: draft.recoveryMessage.trim() || null,
     };
     try {
       const res = await fetch(`/api/engagements/${engagementId}/setup/whop/save`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -713,6 +720,19 @@ function Review({
     });
   }
 
+  if (on("whop-payment-recovery")) {
+    const custom = draft.recoveryMessage.trim();
+    const preview = renderRecoveryMessage(custom || data.recovery.defaultMessage, { buyerName: "Sam Lee", productTitle: data.read?.plans?.[0]?.productTitle ?? null, amount: 99, currency: "usd" }, "https://whop.com/…");
+    feed.push({
+      key: "recovery",
+      text: <>When a payment fails, draft the buyer a Whop message with the link to update their card. You approve each one.</>,
+      source: custom ? (custom === found.recoveryMessage.trim() ? "Your message" : "Changed by you") : "Our default message",
+      body: <p className="rounded-lg bg-black/[0.03] px-2 py-1.5 text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-white/[0.05]">{preview}</p>,
+      editor: (close) => <RecoveryEditor data={data} draft={draft} set={set} close={close} />,
+      undo: draft.recoveryMessage !== found.recoveryMessage ? () => set((d) => ({ ...d, recoveryMessage: found.recoveryMessage })) : undefined,
+    });
+  }
+
   if (on("whop-refund-dispute-velocity")) {
     const changed = (["refundPct", "disputePct", "alerts", "sample"] as const).some((k) => draft[k] !== found[k]);
     feed.push({
@@ -998,6 +1018,26 @@ function OfferEditor({ draft, set, close }: { draft: Draft; set: (fn: (d: Draft)
         <Labeled label="At most once every (days)">{numberInput(draft.cooldown, up("cooldown"), "Days between offers", "90")}</Labeled>
       </div>
       <EditorFoot close={close} onClear={draft.discount || draft.months || draft.message ? () => set((d) => ({ ...d, discount: "", months: "", message: "" })) : undefined} />
+    </div>
+  );
+}
+
+function RecoveryEditor({ data, draft, set, close }: { data: WhopSetupState; draft: Draft; set: (fn: (d: Draft) => Draft) => void; close: () => void }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-[var(--text-secondary)]">Sent as a Whop message from your account, only after you approve it. Nothing is sent if they pay first.</p>
+      <Labeled label="What the buyer sees">
+        <textarea
+          aria-label="Payment recovery message"
+          rows={4}
+          maxLength={1000}
+          value={draft.recoveryMessage || data.recovery.defaultMessage}
+          onChange={(e) => set((d) => ({ ...d, recoveryMessage: e.target.value === data.recovery.defaultMessage ? "" : e.target.value }))}
+          className={`${inputCls} resize-y py-2 leading-relaxed`}
+        />
+      </Labeled>
+      <p className="text-[12px] text-[var(--text-muted)]">You can use {"{name}"}, {"{product}"}, {"{amount}"} and {"{link}"}. The link is Whop&apos;s own page for updating their card.</p>
+      <EditorFoot close={close} onClear={draft.recoveryMessage ? () => set((d) => ({ ...d, recoveryMessage: "" })) : undefined} />
     </div>
   );
 }

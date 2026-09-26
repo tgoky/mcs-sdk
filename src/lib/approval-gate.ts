@@ -67,6 +67,7 @@ export type PendingActionType =
   | "whop_bulk_promo_codes_confirm"
   | "whop_promo_code_remove"
   | "whop_dispute_evidence_submit"
+  | "whop_payment_recovery_send"
   | "whop_ads_flip_to_active";
 
 export { OPT_IN_GATED_ACTIONS, OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
@@ -503,6 +504,18 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
     }
     const { executeDisputeEvidenceSubmit } = await import("@/features/whop-agent/server/dispute-response-service");
     await executeDisputeEvidenceSubmit(engagementId, payload.disputeId, payload.draft);
+  },
+
+  // Failed-payment recovery: a message to a paying customer in the
+  // client's name, so always approved first. Skips itself (no send) when
+  // the payment went through while it waited.
+  whop_payment_recovery_send: async (engagementId, payload) => {
+    const { isSkillEnabledForEngagement } = await import("@/lib/engagement-skills");
+    if (!(await isSkillEnabledForEngagement(engagementId, "whop-payment-recovery"))) {
+      throw new Error("Failed Payment Recovery is turned off for this engagement. Approve after re-enabling it, if that's intended.");
+    }
+    const { executePaymentRecoverySend } = await import("@/features/whop-agent/server/payment-recovery-service");
+    await executePaymentRecoverySend(engagementId, payload);
   },
 
   // Whop Agent — Playbook 5.11. Needs the elevated credential the

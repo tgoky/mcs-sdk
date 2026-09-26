@@ -70,6 +70,7 @@ export async function loadWhopSetupState(engagementId: string): Promise<WhopSetu
     snapshot: proposal.snapshot,
     saveOffer: proposal.saveOffer,
     alerts: proposal.alerts,
+    recovery: proposal.recovery,
     bridge: { ...proposal.bridge, signingSecret: stack.whop_bridge_destination_url ? await getOrCreateBridgeSigningSecret(engagementId).catch(() => null) : null },
     webhook: proposal.webhook,
   };

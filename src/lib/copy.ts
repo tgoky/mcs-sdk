@@ -382,6 +382,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   whop_bulk_promo_codes_confirm: "Confirm bulk Whop promo codes",
   whop_promo_code_remove: "Remove a Whop promo code",
   whop_dispute_evidence_submit: "Submit Whop dispute evidence",
+  whop_payment_recovery_send: "Message a buyer whose payment failed",
   whop_ads_flip_to_active: "Flip a Whop ad to active",
 };
 

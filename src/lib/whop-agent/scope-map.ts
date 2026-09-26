@@ -69,6 +69,10 @@ export type WhopEndpoint =
   | "chat_channels.list"
   | "dm_channels.list"
   | "support_channels.list"
+  | "payments.get"
+  | "memberships.get"
+  | "dm_channels.create"
+  | "messages.create"
   | "app.users";
 
 export const WHOP_SCOPE_MAP: Record<WhopEndpoint, WhopEndpointScope> = {
@@ -146,6 +150,16 @@ export const WHOP_SCOPE_MAP: Record<WhopEndpoint, WhopEndpointScope> = {
   "chat_channels.list": { param: "company_id" },
   "dm_channels.list": { param: "none" }, // user-context, not account-scoped — probed to name the missing dms:read scope
   "support_channels.list": { param: "none" },
+
+  // Failed-payment recovery (payment-recovery-service.ts), per @whop/sdk:
+  // GET /payments/{id} (recovery_url), GET /memberships/{id} (manage_url),
+  // POST /dm_channels (dms:channel:manage; returns the existing channel if
+  // there is one), POST /messages (chat:message:create or dms:message:manage).
+  // All scoped by a resource id or by who the message is to.
+  "payments.get": { param: "none" },
+  "memberships.get": { param: "none" },
+  "dm_channels.create": { param: "none" },
+  "messages.create": { param: "none" },
 
   // Section 2.1: identifies credential type, not account-scoped.
   "app.users": { param: "none" },

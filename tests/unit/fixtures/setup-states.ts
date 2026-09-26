@@ -66,6 +66,7 @@ export const whopState: WhopSetupState = {
   snapshot: { mrr: { value: 5880, currency: "usd", source: "stats" }, members: 120, canceling: { count: 4, more: false }, newMembers30d: { count: 10, more: false }, refundRate: 0.02, disputeRate: 0.004, payments90d: 300, churn: 0.03 },
   saveOffer: { discount: null, months: null, message: "", minTenureDays: 30, cooldownDays: 90, source: null, evidence: [] },
   alerts: { refundRate: 0.08, disputeRate: 0.0075, alertThreshold: 3, minSample: 20, why: { refund: "Your refunds ran 2% over 90 days.", dispute: "Disputes ran 0.4%.", alerts: "None in 90 days.", sample: "About 23 payments a week." }, fromData: true, saved: false },
+  recovery: { message: null, defaultMessage: "Hi {name}, your payment of {amount} for {product} didn't go through. Update your card here: {link}." },
   bridge: { url: "", ghlConnected: false, signingSecret: null, fieldMapping: {} },
   webhook: { current: null, receiverUrl: "https://example.com/hook", problems: [] },
 };

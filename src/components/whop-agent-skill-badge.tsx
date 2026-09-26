@@ -16,6 +16,7 @@ import {
   Waypoints,
   History,
   Users,
+  CreditCard,
 } from "lucide-react";
 import type { WhopAgentSkillId } from "@/lib/whop-agent-skill-manifest";
 
@@ -29,6 +30,7 @@ export const WHOP_AGENT_SKILL_SQUISHY_CONFIG: Record<WhopAgentSkillId, { bgClass
   "whop-weekly-ops-report": { bgClass: "bg-[#93c5fd]", icon: BarChart3 }, // blue — reporting
   "whop-portfolio-rollup": { bgClass: "bg-[#a5b4fc]", icon: LayoutGrid }, // indigo — cross-account
   "whop-cancellation-save-offer": { bgClass: "bg-[#5eead4]", icon: HeartHandshake }, // teal — retention
+  "whop-payment-recovery": { bgClass: "bg-[#86efac]", icon: CreditCard }, // green — money back
   "whop-refund-dispute-velocity": { bgClass: "bg-[#fca5a5]", icon: TrendingDown }, // red — velocity alert
   "whop-bulk-promo-codes": { bgClass: "bg-[#bef264]", icon: Ticket }, // lime — codes
   "whop-payout-hold-kit": { bgClass: "bg-[#fca5a5]", icon: ShieldAlert }, // red — hold/suspension

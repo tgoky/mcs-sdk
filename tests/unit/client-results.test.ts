@@ -9,7 +9,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/models/schema", () => {
   const table = (name: string) => new Proxy({ __t: name }, { get: (o, k) => (k in o ? (o as Record<string, unknown>)[k as string] : { table: name, col: k }) });
   return Object.fromEntries(
-    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "winBackEnrollments"].map((n) => [n, table(n)])
+    ["bookingRoster", "briefOutcomeLog", "coldOpenLeads", "coldOpenReplies", "pendingActions", "pileOnSendLog", "repIncidents", "repRedditMentions", "repTrustpilotReviews", "repTwitterMentions", "repWebFindings", "whopChangeLedger", "whopPayments", "winBackEnrollments"].map((n) => [n, table(n)])
   );
 });
 vi.mock("drizzle-orm", () => ({ and: () => ({}), gte: () => ({}), lt: () => ({}), inArray: () => ({}) }));
@@ -48,6 +48,7 @@ describe("client results", () => {
       { engagementId: "e1", at: daysAgo(5), eventType: "membership.cancel_at_period_end_changed", changedFields: { cancel_at_period_end: { previous: false, current: true } } },
     ];
     rows.pileOnSendLog = [{ engagementId: "e1", at: daysAgo(1), latencyMs: 40_000, error: null }];
+    rows.whopPayments = [{ engagementId: "e1", at: daysAgo(2) }, { engagementId: "e1", at: daysAgo(45) }];
 
     const [r] = await getClientResults([{ engagementId: "e1", buyer: "Mudd", offerPrice: "$1,500" }], now);
     const metric = (product: string, key: string) => r.products.find((p) => p.product === product)!.metrics.find((m) => m.key === key)!;
@@ -66,6 +67,7 @@ describe("client results", () => {
     // Only approved offers were sent; only a cancellation turned off counts as staying.
     expect(metric("whop", "saveOffers").current).toBe(1);
     expect(metric("whop", "stayed").current).toBe(1);
+    expect(metric("whop", "recovered")).toMatchObject({ current: 1, previous: 1 });
 
     // Then vs now: 50% in the first month, 80% now, over 10 outcomes = 3 extra shows at $1,500.
     expect(r.showRate).toMatchObject({ baseline: 0.5, current: 0.8, extraShows: 3, estimatedValue: 4500, offerPrice: "$1,500" });

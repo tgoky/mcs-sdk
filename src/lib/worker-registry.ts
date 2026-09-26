@@ -1210,6 +1210,7 @@ const WORKER_CATEGORIES: Record<WorkerId, WorkerCategory> = {
   "whop-weekly-ops-report": "Analysis & Briefing",
   "whop-portfolio-rollup": "Analysis & Briefing",
   "whop-cancellation-save-offer": "Crisis & Recovery",
+  "whop-payment-recovery": "Crisis & Recovery",
   "whop-refund-dispute-velocity": "Monitoring",
   "whop-bulk-promo-codes": "Setup",
   "whop-payout-hold-kit": "Crisis & Recovery",

@@ -5,6 +5,7 @@
 // discount is only ever the client's own (saved, or already set on their
 // Whop plans) and the message is never written for them.
 
+import { DEFAULT_RECOVERY_MESSAGE } from "@/features/whop-agent/server/recovery-message";
 import type { EngagementStack } from "@/models/schema";
 import { DEFAULT_ALERTS, existingCancelDiscount, proposeAlerts, snapshotOf, topReasons, webhookProblems } from "./analyze";
 import { EXPECTED_LOCKED, PROBE_LABELS } from "./probe-labels";
@@ -20,7 +21,7 @@ export interface ProposalInput {
   groupKey: (url: string, events: string[]) => string;
 }
 
-export function buildWhopProposal(input: ProposalInput): Pick<WhopSetupState, "snapshot" | "saveOffer" | "alerts" | "webhook"> & { bridge: Omit<WhopSetupState["bridge"], "signingSecret">; locked: WhopSetupState["connection"]["locked"] } {
+export function buildWhopProposal(input: ProposalInput): Pick<WhopSetupState, "snapshot" | "saveOffer" | "alerts" | "webhook" | "recovery"> & { bridge: Omit<WhopSetupState["bridge"], "signingSecret">; locked: WhopSetupState["connection"]["locked"] } {
   const { read, stack } = input;
   const snapshot = read ? snapshotOf(read) : null;
 
@@ -70,6 +71,7 @@ export function buildWhopProposal(input: ProposalInput): Pick<WhopSetupState, "s
     snapshot,
     saveOffer,
     alerts,
+    recovery: { message: stack.whop_recovery_message ?? null, defaultMessage: DEFAULT_RECOVERY_MESSAGE },
     bridge: { url: stack.whop_bridge_destination_url ?? "", ghlConnected: input.ghlConnected, fieldMapping: stack.whop_bridge_field_mapping ?? {} },
     webhook: {
       current: input.agentEvents,

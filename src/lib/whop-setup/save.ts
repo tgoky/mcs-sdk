@@ -22,6 +22,9 @@ export interface WhopSetupInput {
   /** Field renames for what's forwarded: an object replaces the saved one,
    * null clears it, undefined (an older caller) leaves it as saved. */
   bridgeFieldMapping?: Record<string, string> | null;
+  /** Failed-payment recovery's message. A string replaces the saved one,
+   * null goes back to the default, undefined leaves it as saved. */
+  recoveryMessage?: string | null;
 }
 
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
@@ -59,6 +62,14 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
   if (!Number.isInteger(alertThreshold) || alertThreshold < 1 || alertThreshold > 100) return { error: "Dispute alerts must be a whole number from 1 to 100." };
   if (!Number.isInteger(minSample) || minSample < 1 || minSample > 1000) return { error: "Payments needed before a rate counts must be a whole number from 1 to 1,000." };
 
+  let recoveryMessage: string | null | undefined;
+  if (b.recoveryMessage !== undefined) {
+    if (b.recoveryMessage === null || (typeof b.recoveryMessage === "string" && !b.recoveryMessage.trim())) recoveryMessage = null;
+    else if (typeof b.recoveryMessage !== "string") return { error: "The payment recovery message must be text." };
+    else if (b.recoveryMessage.trim().length > 1000) return { error: "Keep the payment recovery message under 1,000 characters." };
+    else recoveryMessage = b.recoveryMessage.trim();
+  }
+
   // Field renames: each key a Whop field name, each value the name the
   // receiving tool expects. Only plain strings, and not too many.
   let parsedMapping: Record<string, string> | null = null;
@@ -79,6 +90,7 @@ export function parseWhopSetup(body: unknown): WhopSetupInput | { error: string 
     alerts: { refundRate, disputeRate, alertThreshold, minSample },
     bridgeUrl: typeof b.bridgeUrl === "string" ? b.bridgeUrl.trim() : "",
     ...(b.bridgeFieldMapping === undefined ? {} : { bridgeFieldMapping: parsedMapping }),
+    ...(recoveryMessage === undefined ? {} : { recoveryMessage }),
   };
 }
 
@@ -113,6 +125,7 @@ export async function saveWhopSetup(engagementId: string, input: WhopSetupInput,
     dispute_alert_threshold: input.alerts.alertThreshold,
     min_payment_sample_size: input.alerts.minSample,
     whop_bridge_destination_url: bridgeUrl,
+    ...(input.recoveryMessage === undefined ? {} : { whop_recovery_message: input.recoveryMessage ?? undefined }),
     ...(input.bridgeFieldMapping === undefined ? {} : { whop_bridge_field_mapping: input.bridgeFieldMapping && Object.keys(input.bridgeFieldMapping).length ? input.bridgeFieldMapping : undefined }),
     ...(input.saveOffer
       ? {

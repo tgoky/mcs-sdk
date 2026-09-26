@@ -27,6 +27,8 @@ export interface RawCounts {
   saveOffersSent: number;
   membersStayed: number;
   disputesAnswered: number;
+  /** Failed payments that were paid after the recovery message (Whop's record). */
+  paymentsRecovered: number;
 }
 
 export type Product = "showtime" | "cold-open" | "reputation" | "whop";

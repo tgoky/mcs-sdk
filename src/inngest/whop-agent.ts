@@ -22,6 +22,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { startRun } from "@/lib/run-log";
 import { PAYMENT_EVENT_TYPES, recordWhopPaymentEvent } from "@/lib/whop-payments";
+import { handlePaymentFailed } from "@/features/whop-agent/server/payment-recovery-service";
 
 /**
  * Section 7.7's handler discipline applies here exactly as it does for
@@ -43,9 +44,17 @@ export const processWhopWebhookEvent = inngest.createFunction(
 
     // Every payment, refund and dispute lands on the buyer's record,
     // whichever workers are on (lib/whop-payments.ts).
-    if (PAYMENT_EVENT_TYPES.has(envelope.type)) {
-      await step.run("record-payment", async () => {
-        await recordWhopPaymentEvent(engagementId, envelope.type, envelope.data, new Date(occurredAtIso));
+    const payment = PAYMENT_EVENT_TYPES.has(envelope.type)
+      ? await step.run("record-payment", () => recordWhopPaymentEvent(engagementId, envelope.type, envelope.data, new Date(occurredAtIso)))
+      : null;
+
+    // A failed payment: draft the buyer a message with the link to fix it,
+    // for approval. Only for the payment's current state, so a late
+    // "failed" delivery for a payment that has since gone through is ignored.
+    if (envelope.type === "payment.failed" && payment?.outcome === "failed") {
+      await step.run("handle-payment-failed", async () => {
+        if (!(await isSkillEnabledForEngagement(engagementId, "whop-payment-recovery"))) return;
+        await handlePaymentFailed(engagementId, payment.paymentId);
       });
     }
 

@@ -11,6 +11,7 @@ import type { AlertProposal, Snapshot, WhopAccountRead, WhopPlanRead } from "./t
 export const SKILL_EVENTS: Record<string, string[]> = {
   "whop-cancellation-save-offer": ["membership.cancel_at_period_end_changed"],
   "whop-dispute-response": ["dispute_alert.created", "dispute.created"],
+  "whop-payment-recovery": ["payment.failed", "payment.succeeded"],
   // The digest records every .updated delta (webhook-envelope-service.ts).
   "whop-daily-change-digest": ["plan.updated", "product.updated", "membership.cancel_at_period_end_changed", "dispute.updated", "refund.updated", "payout.updated"],
   "whop-bridge-manager": ["payment.succeeded", "membership.activated", "membership.deactivated", "membership.cancel_at_period_end_changed", "refund.created", "dispute.created"],

@@ -20,6 +20,7 @@ export type WhopAgentSkillId =
   | "whop-weekly-ops-report"
   | "whop-portfolio-rollup"
   | "whop-cancellation-save-offer"
+  | "whop-payment-recovery"
   | "whop-refund-dispute-velocity"
   | "whop-bulk-promo-codes"
   | "whop-payout-hold-kit"
@@ -37,6 +38,7 @@ export const WHOP_AGENT_SKILL_IDS: WhopAgentSkillId[] = [
   "whop-weekly-ops-report",
   "whop-portfolio-rollup",
   "whop-cancellation-save-offer",
+  "whop-payment-recovery",
   "whop-refund-dispute-velocity",
   "whop-bulk-promo-codes",
   "whop-payout-hold-kit",
@@ -130,6 +132,15 @@ export const WHOP_AGENT_SKILL_MANIFEST: Record<WhopAgentSkillId, WhopAgentSkillM
     description: "Configures Whop's native cancel-discount first, then proposes a save offer on every genuine cancel-intent (never an un-cancel) using previous_attributes for direction. Operator approves every offer.",
     runOnSetup: false,
     hasHingesPanel: true,
+    requiredCredentials: ["bot"],
+    implemented: true,
+  },
+  "whop-payment-recovery": {
+    id: "whop-payment-recovery",
+    name: "Failed Payment Recovery",
+    description: "When a payment fails, drafts a Whop message to the buyer with the link to fix their card. You approve each one. A later payment on the same membership is counted as recovered, in Whop's own dollars.",
+    runOnSetup: false,
+    hasHingesPanel: false,
     requiredCredentials: ["bot"],
     implemented: true,
   },

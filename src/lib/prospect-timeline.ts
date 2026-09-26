@@ -168,8 +168,12 @@ export function assembleTimeline(src: TimelineSources, products: ReadonlySet<Tim
       const money = p.amount != null && p.currency ? { value: p.amount, currency: p.currency } : undefined;
       if (p.outcome === "failed") {
         events.push({ at: iso(p.occurredAt), product: "whop-agent", kind: "payment_failed", title: "Payment failed", detail: p.failureMessage ?? undefined, proof: `Whop payment ${p.paymentId}`, amount: money, warn: true });
-        continue;
       }
+      if (p.recoverySentAt) events.push({ at: iso(p.recoverySentAt), product: "whop-agent", kind: "recovery", title: "Sent a message to fix the payment", proof: "Whop direct message" });
+      if (p.recoveredAt) {
+        events.push({ at: iso(p.recoveredAt), product: "whop-agent", kind: "recovery", title: "Payment recovered", proof: `Paid after the message`, amount: p.recoveredAmount != null && p.currency ? { value: p.recoveredAmount, currency: p.currency } : undefined });
+      }
+      if (p.outcome === "failed") continue;
       events.push({ at: iso(p.paidAt ?? p.occurredAt), product: "whop-agent", kind: "paid", title: `Paid${p.productTitle ? ` for ${p.productTitle}` : ""}`, proof: `Whop payment ${p.paymentId}`, amount: money });
       if (p.outcome === "refunded") events.push({ at: iso(p.occurredAt), product: "whop-agent", kind: "refunded", title: "Refunded", proof: `Whop payment ${p.paymentId}`, amount: p.refundedAmount != null && p.currency ? { value: p.refundedAmount, currency: p.currency } : undefined, warn: true });
       if (p.outcome === "disputed") events.push({ at: iso(p.occurredAt), product: "whop-agent", kind: "disputed", title: "Disputed the payment", proof: `Whop payment ${p.paymentId}`, warn: true });
