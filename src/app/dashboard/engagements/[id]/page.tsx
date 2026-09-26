@@ -26,8 +26,6 @@ import {
   ChevronLeft,
   Megaphone
 } from "lucide-react";
-import { computeBookingSyncStatus } from "@/lib/booking-sync-status";
-import { BookingSyncChip } from "@/components/booking-sync-chip";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { getActiveWorkspace } from "@/lib/workspace";
 import type { ReportPeriod } from "@/features/reports/server/report-service";
@@ -312,13 +310,8 @@ export default async function EngagementDetailPage({
               </div>
             </div>
 
-            {/* Right Column: Sync Status & Top Action Controls */}
+            {/* Right Column: Top Action Controls */}
             <div className="flex flex-col sm:items-end gap-2.5 shrink-0 self-start sm:self-auto">
-              {stack?.booking_platform && (
-                <BookingSyncChip
-                  status={computeBookingSyncStatus(engagement.engagementId, engagement.stack as EngagementStack | null)}
-                />
-              )}
               <div className="flex items-center gap-2" data-tour="engagement-pause-control">
                 <PeriodTabs />
                 <EngagementPauseControl

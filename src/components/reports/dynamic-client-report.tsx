@@ -143,7 +143,7 @@ export function DynamicClientReport({
       {/* Targeting sits above the results cards — who this offer is for,
           read before the numbers those cards report on. */}
       {offerIcp && (
-        <div className="text-[15px] text-zinc-800 dark:text-zinc-200 leading-relaxed max-w-3xl">
+        <div className="text-[15px] text-zinc-800 dark:text-zinc-200 leading-relaxed">
           <span className="font-semibold text-zinc-900 dark:text-zinc-200">Targeting: </span>
           {offerIcp}
         </div>
