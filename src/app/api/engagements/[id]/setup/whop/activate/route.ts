@@ -9,6 +9,7 @@ import { snapshotOf } from "@/lib/whop-setup/analyze";
 import { loadWhopConnection, WHOP_READ_FACT } from "@/lib/whop-setup/state";
 import type { ActivationStep } from "@/lib/showtime-setup/types";
 import { authorizeProductSetup } from "../../showtime/access";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -27,6 +28,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const access = await authorizeProductSetup(id, "whop-agent", { requireInstalled: true });
   if (!access.ok) return access.response;
+  // Each run reads the site and calls AI models: cap how often one person can start it.
+  const limited = await rateLimitResponse(RATE_LIMITS.setupActivate, access.whopUserId, "Too many setup runs in a short time. Wait a few minutes and try again.");
+  if (limited) return limited;
   const body = (await req.json().catch(() => ({}))) as { apiKey?: unknown };
   const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   if (!apiKey && !(await loadWhopConnection(id))) return NextResponse.json({ error: "Paste the Whop API key first." }, { status: 400 });

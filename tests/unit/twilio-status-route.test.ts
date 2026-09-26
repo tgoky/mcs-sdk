@@ -4,6 +4,7 @@ let tenant: { stack: Record<string, unknown> } | undefined;
 vi.mock("@/lib/db", () => ({
   db: { select: () => ({ from: () => ({ where: () => ({ limit: async () => (tenant ? [tenant] : []) }) }) }) },
 }));
+vi.mock("@/lib/rate-limit", () => ({ hitRateLimit: async () => ({ allowed: true, count: 1, retryAfterSeconds: 0 }), RATE_LIMITS: { twilioWebhook: { name: "t", limit: 1, windowSeconds: 1 } } }));
 vi.mock("@/lib/credentials", () => ({ resolveCredential: vi.fn(async () => "auth-token") }));
 const recordDeliveryStatus = vi.fn(async () => true);
 vi.mock("@/lib/delivery-receipts", async (orig) => ({ ...(await orig<typeof import("@/lib/delivery-receipts")>()), recordDeliveryStatus: (...a: unknown[]) => (recordDeliveryStatus as (...x: unknown[]) => Promise<boolean>)(...a) }));

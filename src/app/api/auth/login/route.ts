@@ -3,8 +3,11 @@ import crypto from "crypto";
 import { generateAuthUrl } from "@/lib/whop";
 import { encryptOAuthState, OAUTH_NONCE_COOKIE, OAUTH_STATE_MAX_AGE_MS } from "@/lib/oauth-state";
 import { buildOAuthRedirectHtml, safeRelativePath } from "@/lib/oauth-redirect-html";
+import { clientIp, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
+  const limited = await rateLimitResponse(RATE_LIMITS.authLogin, clientIp(request), "Too many sign-in attempts. Wait a minute and try again.");
+  if (limited) return limited;
   const codeVerifier = crypto.randomBytes(32).toString("base64url");
   const nonce = crypto.randomBytes(16).toString("base64url");
   // Separate from the OpenID nonce above, which travels in the URL.

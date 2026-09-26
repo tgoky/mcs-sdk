@@ -14,6 +14,7 @@ vi.mock("@/lib/db", () => ({
     }),
   },
 }));
+vi.mock("@/lib/rate-limit", () => ({ hitRateLimit: async () => ({ allowed: true, count: 1, retryAfterSeconds: 0 }), RATE_LIMITS: { twilioWebhook: { name: "t", limit: 1, windowSeconds: 1 } } }));
 vi.mock("@/lib/credentials", () => ({ resolveCredential: vi.fn(async () => "auth-token") }));
 const send = vi.fn(async () => undefined);
 vi.mock("@/lib/inngest", () => ({ inngest: { send: (...a: unknown[]) => (send as (...x: unknown[]) => Promise<void>)(...a) }, smsReplyReceived: { create: (d: unknown) => ({ name: "sms/reply-received", data: d }) } }));

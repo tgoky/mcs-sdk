@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { RotateCcw } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { reportClientError } from "@/lib/report-client-error";
 
 /**
  * Catches any error thrown while rendering dashboard/page.tsx or any other
@@ -23,6 +24,7 @@ export default function DashboardError({
 }) {
   useEffect(() => {
     console.error("[dashboard]", error);
+    reportClientError(error);
   }, [error]);
 
   return (

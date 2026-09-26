@@ -50,6 +50,7 @@ import { isSkillEnabledForEngagement, getDisabledEngagementIdsForSkill } from "@
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 import { hasPostCallCrmActivity, describeCrmCheck } from "@/features/pre-call-read/server/crm-activity-check";
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
+import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -569,6 +570,15 @@ export const processHubspotDeliveryPollEngagementCron = inngest.createFunction(
  * checked into platform_docs_links so the dashboard can flag staleness
  * inline instead of 404ing when an operator clicks through.
  */
+/** Rate-limit windows older than a day can't affect any limit; clear them daily. */
+export const rateLimitCleanupCron = inngest.createFunction(
+  { id: "rate-limit-cleanup-cron", triggers: [{ cron: "TZ=UTC 30 6 * * *" }], retries: 1 }, // 06:30 UTC daily
+  async ({ step }) => {
+    const deleted = await step.run("delete-expired-rate-limit-buckets", () => deleteExpiredRateLimitBuckets());
+    return { deleted };
+  }
+);
+
 export const docsLinksValidatorCron = inngest.createFunction(
   { id: "docs-links-validator-cron", triggers: [{ cron: "TZ=UTC 0 6 * * *" }], retries: 1 }, // 06:00 UTC daily
   async ({ step }) => {

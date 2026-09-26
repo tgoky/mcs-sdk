@@ -9,6 +9,7 @@ import { processWinBackEmailSmtpSequence } from "@/inngest/win-back-email-smtp";
 import { processConversationIntelligenceTranscript } from "@/inngest/conversation-intelligence";
 import { processBookingWebhookEvent } from "@/inngest/booking-webhook";
 import { processSmsReply } from "@/inngest/sms-reply";
+import { reportFailedFunctions } from "@/inngest/function-failed";
 import {
   processWhopWebhookEvent,
   whopReceiverHealthSweepCron,
@@ -45,6 +46,7 @@ import {
   bookingPollCron,
   processBookingPollEngagementCron,
   docsLinksValidatorCron,
+  rateLimitCleanupCron,
   dynamicBriefCron,
   processDynamicBriefEngagementCron,
   assumedNoShowSweepCron,
@@ -69,6 +71,7 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     processSmsReply,
+    reportFailedFunctions,
     executeSkillRun, // ✅ Registers your worker function into the serverless endpoint mesh
     // Fanned-out per-prospect worker for pre-call-read — see the fan-out
     // note in brief-service.ts's executeNightlyBriefingCycle. Invoked via
@@ -120,6 +123,7 @@ export const { GET, POST, PUT } = serve({
     // HEAD-validates canonical platform docs URLs nightly — see
     // src/features/pin-down/server/docs-link-validator.ts (Pin-Down recovery gap 9).
     docsLinksValidatorCron,
+    rateLimitCleanupCron,
     // Durable multi-message SMS sequence for direct-send SMS platforms —
     // see src/inngest/pile-on-sms.ts (Pile-On recovery gap 1).
     processPileOnSmsSequence,

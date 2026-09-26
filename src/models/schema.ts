@@ -1806,6 +1806,16 @@ export const smsOptOuts = pgTable(
   (table) => [uniqueIndex("sms_opt_outs_engagement_phone_uidx").on(table.engagementId, table.phoneKey)]
 );
 
+// ── Rate limits (lib/rate-limit.ts) ─────────────────────────────────────
+// One row per limited thing (a route + a client, user or IP): how many
+// requests arrived in the current window. Fixed windows, counted in
+// Postgres so every server instance shares the same count.
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start").notNull(),
+  count: integer("count").notNull(),
+});
+
 // Pin-Down recovery gap 9. A single global table (not per-engagement — the
 // canonical docs URL for "webflow" is the same regardless of which buyer
 // is asking) that a nightly cron HEAD-checks so stale/broken doc links

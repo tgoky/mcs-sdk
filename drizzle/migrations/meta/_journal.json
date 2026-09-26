@@ -435,6 +435,13 @@
       "when": 1790434880600,
       "tag": "0061_sms_replies_and_opt_outs",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790435592172,
+      "tag": "0062_rate_limit_buckets",
+      "breakpoints": true
     }
   ]
 }

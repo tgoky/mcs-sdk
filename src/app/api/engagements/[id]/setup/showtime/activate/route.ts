@@ -17,6 +17,7 @@ import { INTEL_PROVIDERS, runAccountIntel, runAccountReadings } from "@/lib/acco
 import { intelSteps } from "@/lib/showtime-setup/intel-steps";
 import { ghlLocationIdOf, isGhlProvider, loadStack } from "@/lib/ghl-location";
 import { authorizeShowtimeSetup } from "../access";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -56,6 +57,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const access = await authorizeShowtimeSetup(id, { requireInstalled: true });
   if (!access.ok) return access.response;
+  // Each run reads the site and calls AI models: cap how often one person can start it.
+  const limited = await rateLimitResponse(RATE_LIMITS.setupActivate, access.whopUserId, "Too many setup runs in a short time. Wait a few minutes and try again.");
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as { domain?: unknown; skills?: unknown };
   // Which skills the person switched on; only their ids get picked. No list

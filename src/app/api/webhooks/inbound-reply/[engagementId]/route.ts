@@ -10,6 +10,7 @@ import { checkAndApplyAutoPause } from "@/features/win-back/server/esp-delivery-
 import { checkWebhookToken } from "@/lib/webhook-url-token";
 import { noticeLegacyWebhookAddress } from "@/lib/webhook-legacy-notice";
 import { afterResponse } from "@/lib/after-response";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * Win-Back recovery gap 6 — forwarding path. The operator sets up an
@@ -50,6 +51,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ engagem
     return NextResponse.json({ error: "This webhook address isn't valid. Copy the current one from Win-Back's settings." }, { status: 401 });
   }
   if (token === "legacy") afterResponse(() => noticeLegacyWebhookAddress(engagementId, "reply forwarding"));
+
+  // A forwarding loop or a replayed bridge can't flood the reply handling.
+  const limited = await rateLimitResponse(RATE_LIMITS.inboundReply, engagementId);
+  if (limited) return limited;
 
   const contentType = req.headers.get("content-type") ?? "";
   let body: any;

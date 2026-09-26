@@ -16,13 +16,16 @@ import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { checkWebhookToken, webhookUrl } from "@/lib/webhook-url-token";
 import { isValidTwilioSignature } from "@/lib/delivery-receipts";
+import { hitRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export type TwilioWebhookCheck =
   | { ok: true; fields: Record<string, string>; stack: EngagementStack | null }
-  | { ok: false; status: 204 | 401 | 403 };
+  | { ok: false; status: 204 | 401 | 403 | 429 };
 
 export async function verifyTwilioWebhook(req: Request, engagementId: string, path: string): Promise<TwilioWebhookCheck> {
   if (checkWebhookToken(engagementId, req.url) !== "valid") return { ok: false, status: 401 };
+  // Twilio retries a 429 later, so a flood is spread out rather than lost.
+  if (!(await hitRateLimit(RATE_LIMITS.twilioWebhook, engagementId)).allowed) return { ok: false, status: 429 };
 
   const [tenant] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   const stack = (tenant?.stack as EngagementStack | null) ?? null;
