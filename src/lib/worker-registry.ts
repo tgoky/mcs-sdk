@@ -473,7 +473,7 @@ const SHOWTIME_CONFIG_FIELDS: Partial<Record<SkillId, WorkerConfigField[]>> = {
       key: "showRateScoringEnabled",
       label: "Show-rate scoring",
       kind: "ask",
-      description: "Real opt-in boolean, read by the roster route but with no UI path to enable it yet. Ask, flagged unbuilt. Defaults off.",
+      description: "Opt-in, set in Call Brief settings (or turned on by Pile-On's at-risk check-ins). Scores each call's show chance from booking signals, read in the client's time zone. Defaults off.",
       tier: "hidden-default",
     },
     {

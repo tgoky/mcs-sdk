@@ -156,3 +156,17 @@ describe("share links", () => {
     expect(await openShareLink("A".repeat(43))).toBe("e1");
   });
 });
+
+describe("show-rate scoring reads the client's clock", () => {
+  it("takes hour and weekday in the client's time zone, and leaves them out without one", async () => {
+    const { localHourAndDay, scoreShowRate } = await import("@/features/pre-call-read/show-rate-scorer");
+    // Friday 7pm in New York is Saturday 00:00 UTC.
+    const call = new Date("2026-10-03T00:00:00Z");
+    expect(localHourAndDay(call, "America/New_York")).toEqual({ bookingHourLocal: 20, bookingDayOfWeek: 5 });
+    expect(localHourAndDay(call, "UTC")).toEqual({ bookingHourLocal: 0, bookingDayOfWeek: 6 });
+    expect(localHourAndDay(call, null)).toEqual({});
+    expect(localHourAndDay(call, "Not/AZone")).toEqual({});
+    // A weekday evening call isn't punished as a weekend one.
+    expect(scoreShowRate({ ...localHourAndDay(new Date("2026-10-02T22:00:00Z"), "America/New_York") })).toBe(70);
+  });
+});

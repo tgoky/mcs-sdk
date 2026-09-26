@@ -330,6 +330,7 @@ async function processSingleBriefCall(
           prospectName: call.name,
           callTime: call.callTime,
           personMatchScore: matchResult!.totalScore,
+          timeZone: stack.timezone,
         });
         const probability = scoreShowRate(features);
         showRateLine = `Predicted show probability: ${probability}% (heuristic model, not yet validated against actual outcomes for this engagement)`;

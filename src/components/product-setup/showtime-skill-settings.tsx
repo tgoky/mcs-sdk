@@ -543,6 +543,7 @@ type PreCallValues = {
   videoEngagementWistiaVideoId: string;
   videoEngagementYoutubeChannelId: string;
   prospectResearchSourcesUsed: string[];
+  showRateScoringEnabled: boolean;
 };
 
 function usePreCallRead(engagementId: string, loaded: Record<string, unknown>): Section {
@@ -559,12 +560,14 @@ function usePreCallRead(engagementId: string, loaded: Record<string, unknown>): 
       videoEngagementWistiaVideoId: String(loaded.videoEngagementWistiaVideoId ?? ""),
       videoEngagementYoutubeChannelId: String(loaded.videoEngagementYoutubeChannelId ?? ""),
       prospectResearchSourcesUsed: Array.isArray(loaded.prospectResearchSourcesUsed) ? (loaded.prospectResearchSourcesUsed as string[]) : [],
+      showRateScoringEnabled: Boolean(loaded.showRateScoringEnabled),
     }),
     [loaded]
   );
   const [v, setV] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const set = <K extends keyof PreCallValues>(k: K, value: PreCallValues[K]) => setV((x) => ({ ...x, [k]: value }));
+  const atRiskOn = Boolean(loaded.atRiskCheckInOn);
 
   // Slack signed in through Composio: the channels it can post to.
   const [slack, setSlack] = useState({ connected: Boolean(loaded.slackConnected), channels: (loaded.slackChannels as { id: string; name: string }[] | undefined) ?? [] });
@@ -759,6 +762,30 @@ function usePreCallRead(engagementId: string, loaded: Record<string, unknown>): 
         </div>
       ),
     },
+    {
+      key: "show-rate",
+      text: v.showRateScoringEnabled ? (
+        <>
+          Each brief shows an <b>estimated show chance</b> for the call
+        </>
+      ) : (
+        <>
+          Briefs <b>don&apos;t show</b> an estimated show chance
+        </>
+      ),
+      source: atRiskOn
+        ? "On while Pile-On sends at-risk check-ins, which need it. Turn those off in Pile-On to turn this off."
+        : "An estimate from booking signals (earlier no-shows, lead time, time of day in the client's time zone), not yet trained on this client's own calls. Calls under 50% are marked at risk on the calendar.",
+      editor: (close: () => void) => (
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+            <input type="checkbox" checked={v.showRateScoringEnabled} disabled={atRiskOn} onChange={(e) => set("showRateScoringEnabled", e.target.checked)} />
+            Score each call&apos;s chance of showing
+          </label>
+          <Done close={close} />
+        </div>
+      ),
+    },
   ];
 
   return {
@@ -773,6 +800,7 @@ function usePreCallRead(engagementId: string, loaded: Record<string, unknown>): 
         videoEngagementWistiaVideoId: v.videoEngagementWistiaVideoId,
         videoEngagementYoutubeChannelId: v.videoEngagementYoutubeChannelId,
         prospectResearchSourcesUsed: v.prospectResearchSourcesUsed,
+        showRateScoringEnabled: v.showRateScoringEnabled,
         briefLandingDestination: v.briefLandingDestination || undefined,
         // Only the chosen Slack setup is sent; the other is cleared so briefs
         // don't keep going somewhere the person moved away from.

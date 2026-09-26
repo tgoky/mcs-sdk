@@ -44,6 +44,28 @@ const CONSUMER_EMAIL_DOMAINS = new Set([
   "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "aol.com", "live.com", "protonmail.com",
 ]);
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * The call's hour (0-23) and weekday (0 = Sunday) in the client's time
+ * zone. Reading them off the server clock (UTC) put a 7pm New York call at
+ * 11pm and some Friday-evening US calls on Saturday. Without a time zone
+ * (or with an unknown one) both are left out, so they add nothing rather
+ * than something wrong.
+ */
+export function localHourAndDay(when: Date, timeZone: string | null | undefined): { bookingHourLocal?: number; bookingDayOfWeek?: number } {
+  if (!timeZone) return {};
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(when);
+    const hour = Number(parts.find((p) => p.type === "hour")?.value);
+    const day = WEEKDAYS.indexOf(parts.find((p) => p.type === "weekday")?.value ?? "");
+    if (!Number.isInteger(hour) || day < 0) return {};
+    return { bookingHourLocal: hour % 24, bookingDayOfWeek: day };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Gathers the features this pass can actually derive from existing data.
  * emailEngagementScore and applicationCompletenessRatio are left
@@ -59,6 +81,8 @@ export async function deriveShowRateFeatures(input: {
   personMatchScore?: number;
   emailEngagementScore?: number; // 0-1, pass through from getProfileEngagement's event count if the caller has already fetched it
   applicationCompletenessRatio?: number;
+  /** The client's IANA time zone (stack.timezone). Hour and weekday are read there. */
+  timeZone?: string | null;
   now?: Date;
 }): Promise<ShowRateFeatures> {
   const now = input.now ?? new Date();
@@ -97,8 +121,7 @@ export async function deriveShowRateFeatures(input: {
   return {
     personMatchScore: input.personMatchScore,
     leadTimeHours,
-    bookingHourLocal: input.callTime.getHours(),
-    bookingDayOfWeek: input.callTime.getDay(),
+    ...localHourAndDay(input.callTime, input.timeZone),
     isConsumerEmailDomain: domain ? CONSUMER_EMAIL_DOMAINS.has(domain) : undefined,
     priorNoShowCount: winBackRows.length,
     priorShowCount,

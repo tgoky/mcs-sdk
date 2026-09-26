@@ -42,6 +42,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     buyer: row.buyer,
     briefTriggerType: row.stack?.brief_trigger_type ?? "nightly",
+    // Show-rate scores on each brief (show-rate-scorer.ts). Pile-On's at-risk
+    // check-ins need them too, so they're on while those are.
+    showRateScoringEnabled: Boolean(row.stack?.show_rate_scoring_enabled || row.stack?.at_risk_check_in),
+    atRiskCheckInOn: Boolean(row.stack?.at_risk_check_in),
     videoEngagementPlatform: row.stack?.video_engagement_platform ?? "none",
     heroVideoId: row.stack?.hero_video_id ?? "",
     videoEngagementWistiaVideoId: row.stack?.video_engagement_meta?.wistia_video_id ?? "",
@@ -149,6 +153,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ...(briefLandingDestination ? { brief_landing_destination: briefLandingDestination } : {}),
       ...(slackWebhookUrl !== undefined ? { slack_webhook_url: slackWebhookUrl || undefined } : {}),
       ...(slackChannelId !== undefined ? slackChannelPatch : {}),
+      ...(typeof body.showRateScoringEnabled === "boolean" ? { show_rate_scoring_enabled: body.showRateScoringEnabled || undefined } : {}),
     } as EngagementStack;
 
     await db

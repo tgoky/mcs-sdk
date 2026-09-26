@@ -500,6 +500,15 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
     return result;
   }
 
+  // Reputation: ask everyone who showed for a review (after the client's
+  // delay); a show corrected away cancels a request that hasn't gone yet.
+  // Before the email check: a phone number alone is enough to text them.
+  if (outcome === "showed") {
+    await scheduleReviewRequest(engagementId, { trigger: "showed", refId: bookingId, name: identity.name, email: identity.email, phone: identity.phone }).catch((e) => console.error("[outcome] review request scheduling failed:", e));
+  } else if (prior === "showed") {
+    await cancelReviewRequest(engagementId, "showed", bookingId, `Outcome changed to ${outcome}.`).catch(() => undefined);
+  }
+
   if (!identity.email) {
     // Genuinely nothing to act on without an email — this is the
     // pre-existing identity gap (see briefedCallsLog's prospectEmail
@@ -511,14 +520,6 @@ export async function resolveCallOutcome(params: ResolveCallOutcomeParams): Prom
     result.cohort = outcome !== "rescheduled" ? "skipped_no_email" : "none";
     result.reason = "No prospect email on file for this booking. Cannot enroll or sync a cohort.";
     return result;
-  }
-
-  // Reputation: ask everyone who showed for a review (after the client's
-  // delay); a show corrected away cancels a request that hasn't gone yet.
-  if (outcome === "showed") {
-    await scheduleReviewRequest(engagementId, { trigger: "showed", refId: bookingId, name: identity.name, email: identity.email, phone: identity.phone }).catch((e) => console.error("[outcome] review request scheduling failed:", e));
-  } else if (prior === "showed") {
-    await cancelReviewRequest(engagementId, "showed", bookingId, `Outcome changed to ${outcome}.`).catch(() => undefined);
   }
 
   // ── Decide side effects from the (prior → next) transition ─────────
