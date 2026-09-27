@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Settings2, TrendingUp, PauseCircle, X } from "lucide-react";
+import { TrendingUp, PauseCircle } from "lucide-react";
 import { type ModuleStatus, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { WORKER_REGISTRY, workerPrimaryHref, skillToggleEndpoint, type WorkerId } from "@/lib/worker-registry";
-import { hasWorkerConfigForm, renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { SkillConfigureMenu } from "./skill-configure-menu";
 import { type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { TriggerSkillButton } from "./trigger-skill-button";
@@ -159,7 +159,6 @@ export function WorkersPanel({
   // asked to extend to. The bridges/[workerId] routes themselves stay —
   // still real, bookmarkable pages — this just stops Configure from being
   // the only way to reach them.
-  const [expandedWorker, setExpandedWorker] = useState<WorkerId | null>(null);
 
   async function handleToggle(workerId: WorkerId) {
     const nextState = !states[workerId];
@@ -259,36 +258,11 @@ export function WorkersPanel({
         </div>
       </div>
 
-      {/* Same in-place swap OverviewStatsPanel's Tasks/Issues tiles use —
-          configuring a worker hides the whole card grid and renders the
-          form in its exact place, instead of appending a second block
-          below every card the user would have to scroll past. Transparent,
-          no card chrome — the form is the content, not a widget floating
-          on top of one. */}
-      {expandedWorker ? (
-        <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
-          <button
-            type="button"
-            onClick={() => setExpandedWorker(null)}
-            className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" /> Back to all skills
-          </button>
-
-          {renderWorkerConfigForm(expandedWorker, {
-            engagementId,
-            onClose: () => setExpandedWorker(null),
-            // A setup form that started a run goes to that run; any other
-            // save just closes the form.
-            onSaved: (result) => (result.runId ? router.push(`/dashboard/runs/${result.runId}`) : setExpandedWorker(null)),
-            cancelLabel: "Close",
-          })}
-        </div>
-      ) : (
-        // One row per skill, grouped by product: the page doesn't grow a card
-        // per skill switched on, and every row reads the same way (name, how
-        // it's doing, when it last ran, then Configure, Run and its switch).
-        <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+      {/* One row per skill, grouped by product: the page doesn't grow a card
+          per skill switched on, and every row reads the same way (name, how
+          it's doing, when it last ran, then Configure, Run and its switch).
+          Configure opens the skill's own settings in place. */}
+      <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
           {PRODUCT_IDS.map((productId) => ({ productId, ids: workerIds.filter((id) => WORKER_REGISTRY[id].productId === productId) }))
             .filter((g) => g.ids.length > 0)
             .map(({ productId, ids }) => (
@@ -338,17 +312,7 @@ export function WorkersPanel({
                           )}
                         </span>
                         <div className="flex shrink-0 items-center gap-3">
-                          {hasWorkerConfigForm(workerId) && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedWorker(workerId)}
-                              title="Configure"
-                              aria-label={`Configure ${worker.name}`}
-                              className="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
-                            >
-                              <Settings2 size={14} />
-                            </button>
-                          )}
+                          <SkillConfigureMenu skillId={workerId} engagementId={engagementId} iconSize={14} triggerClassName="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer" />
                           <Link href={`/dashboard/analytics/${workerId}`} title="Analytics" aria-label={`${worker.name} analytics`} className="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
                             <TrendingUp size={14} />
                           </Link>
@@ -378,8 +342,7 @@ export function WorkersPanel({
                 </ul>
               </section>
             ))}
-        </div>
-      )}
+      </div>
 
       {gateWorkerId && (() => {
         const worker = WORKER_REGISTRY[gateWorkerId];

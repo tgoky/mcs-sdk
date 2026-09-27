@@ -21,10 +21,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Search, Download, Trash2, Loader2 } from "lucide-react";
-import { WORKER_CATEGORY_LIST, workerSettingsFormId, type WorkerCategory, type WorkerDefinition } from "@/lib/worker-registry";
+import { WORKER_CATEGORY_LIST, type WorkerCategory, type WorkerDefinition } from "@/lib/worker-registry";
 import type { WorkerOverviewStat } from "@/lib/worker-analytics";
 import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
-import { hasWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 import { WorkerCard, WORKER_CARD_ICON_BUTTON_CLASS } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
@@ -268,8 +267,9 @@ export function ProductDetailClient({
         ) : (
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" data-tour="product-skill-list">
             {filteredWorkers.map((worker, i) => {
-              const formId = workerSettingsFormId(worker.id);
-              const canConfigure = Boolean(engagementId && formId && hasWorkerConfigForm(formId));
+              // Every skill opens its own settings (components/skill-settings).
+              const formId = worker.id;
+              const canConfigure = Boolean(engagementId);
               return (
                 <WorkerCard
                   key={worker.id}

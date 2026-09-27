@@ -24,7 +24,7 @@ import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import Link from "next/link";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
 import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
-import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
 import type { ColdOpenLeadStatus, ColdOpenReplyDisposition, ColdOpenPhaseKey, ColdOpenPhaseState, ColdOpenRunSummary } from "@/models/schema";
 
 type ConfigurableColdOpenSkill = "icp-lock" | "voice-capture" | "source-connect" | "send-connect" | "daily-send";
@@ -303,7 +303,9 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
         >
           <X className="w-3.5 h-3.5" /> Back to Cold Open
         </button>
-        {renderWorkerConfigForm(configuringSkill, { engagementId, onClose: close, onSaved: close, cancelLabel: "Close" })}
+        <div className="max-w-lg rounded-sm surface-glass-landing animate-glass-drop-in">
+          <SkillSettingsPanel skillId={configuringSkill} engagementId={engagementId} onClose={close} onSaved={close} />
+        </div>
       </div>
     );
   }

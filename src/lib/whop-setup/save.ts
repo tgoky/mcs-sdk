@@ -158,3 +158,22 @@ export async function saveWhopSetup(engagementId: string, input: WhopSetupInput,
     return { ok: true, webhook: { error: err instanceof Error ? err.message : "Whop didn't accept the webhook.", events } };
   }
 }
+
+/**
+ * After a skill's own settings change (components/skill-settings), the
+ * webhook is brought in line with what the workers that are on can now use
+ * (a save offer set for the first time needs cancel events). Same rule as a
+ * full setup save; events other tools added stay.
+ */
+export async function resyncWhopWebhook(engagementId: string, stack: Partial<EngagementStack>, enabledSkills: string[], sync = syncAgentWebhookEvents): Promise<{ action: string; events: string[] }> {
+  const offerSet = Boolean(stack.whop_save_offer_discount_percentage && stack.whop_save_offer_duration_months && stack.whop_save_offer_message);
+  const input: WhopSetupInput = {
+    skills: enabledSkills,
+    saveOffer: offerSet ? { discount: stack.whop_save_offer_discount_percentage!, months: stack.whop_save_offer_duration_months!, message: stack.whop_save_offer_message!, minTenureDays: null, cooldownDays: null } : null,
+    alerts: { refundRate: 0, disputeRate: 0, alertThreshold: 0, minSample: 0 },
+    bridgeUrl: stack.whop_bridge_destination_url ?? "",
+  };
+  const events = webhookEventsFor(input);
+  const { action } = await sync(engagementId, events, { keep: (e) => !SETUP_EVENTS.has(e) });
+  return { action, events };
+}

@@ -2,6 +2,9 @@
 
 // src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
 //
+// Configure: the skill's own settings (components/skill-settings), not its
+// product's setup. Tools and connections stay in setup, linked from the panel.
+//
 // "Configure" was only reachable from the Library or the Skills panel on
 // the main engagement page (bridges/[skill]/page.tsx, a full page nav
 // away) — a skill's own dedicated page (skills/[skill]/page.tsx) had no
@@ -15,7 +18,7 @@
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { FloatingPanel } from "@/components/floating-panel";
-import { renderWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
+import { SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -50,7 +53,7 @@ export function SkillConfigureMenu({
     <FloatingPanel
       align="end"
       defaultOpen={defaultOpen}
-      panelWidth={560}
+      panelWidth={440}
       trigger={({ toggle, open }) => (
         <button
           type="button"
@@ -81,9 +84,7 @@ export function SkillConfigureMenu({
           toast.success(`${WORKER_REGISTRY[skillId].name} configuration saved.`);
         };
         return (
-          <div className="p-2.5">
-            {renderWorkerConfigForm(skillId, { engagementId, onClose: closeAndRefresh, onSaved: savedAndRefresh })}
-          </div>
+          <SkillSettingsPanel skillId={skillId} engagementId={engagementId} onClose={closeAndRefresh} onSaved={savedAndRefresh} />
         );
       }}
     </FloatingPanel>

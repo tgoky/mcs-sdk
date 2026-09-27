@@ -106,13 +106,13 @@ export function FloatingPanel({
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
               style={{ position: "fixed", top: coords.top, left: coords.left, width: resolvedWidth }}
-              className="z-50 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 motion-safe:origin-top-right"
+              className="z-50 animate-glass-drop-in origin-top-right"
             >
               <div
                 ref={panelRef}
                 role="dialog"
                 style={{ maxHeight: coords.maxHeight }}
-                className="rounded-lg surface-glass-3 text-zinc-900 dark:text-zinc-100 overflow-y-auto font-sans antialiased"
+                className="rounded-sm surface-glass-landing text-zinc-900 dark:text-zinc-100 overflow-y-auto font-sans antialiased"
               >
                 {typeof children === "function" ? children(close) : children}
               </div>
