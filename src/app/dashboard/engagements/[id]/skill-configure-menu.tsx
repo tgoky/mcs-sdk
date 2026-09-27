@@ -3,7 +3,8 @@
 // src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
 //
 // Configure: the skill's own settings (components/skill-settings), with the
-// tools it runs on picked and connected in the panel itself.
+// tools it runs on picked and connected in the panel itself. Skills with
+// nothing to set don't get one.
 //
 // "Configure" was only reachable from the Library or the Skills panel on
 // the main engagement page (bridges/[skill]/page.tsx, a full page nav
@@ -20,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { FloatingPanel } from "@/components/floating-panel";
 import { REOPEN_KEY, SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
+import { hasSkillSettings } from "@/lib/skill-settings/schema";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -74,6 +76,9 @@ export function SkillConfigureMenu({
     setReturning(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engagementId, skillId]);
+
+  // A skill with nothing to set runs on its own: its switch is all it gets.
+  if (!hasSkillSettings(skillId)) return null;
 
   return (
     <FloatingPanel

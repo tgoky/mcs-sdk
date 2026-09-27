@@ -20,9 +20,10 @@ import { DEFAULT_REVIEW_MESSAGE, DEFAULT_REVIEW_SUBJECT, DEFAULT_REVIEW_DELAY_HO
 
 /** Where a value lives: the engagement's stack, Cold Open's config row,
  * Reputation Manager's identity graph, or a column on the engagement
- * itself. `path` may be nested ("a.b"). "none" is for rows that store
+ * itself. `path` may be nested ("a.b"). "fact" is a confirmed client fact
+ * with its own save (the sales-call event). "none" is for rows that store
  * nothing of their own (a connection, an address to copy, a secret). */
-export type SettingStore = "stack" | "coldOpen" | "rep" | "engagement" | "none";
+export type SettingStore = "stack" | "coldOpen" | "rep" | "engagement" | "fact" | "none";
 
 /** One logo in a tool row. `tool` is what gets connected, null when the
  * choice has nothing to connect ("No texts", "A note in the CRM"). */
@@ -37,7 +38,21 @@ export interface ToolChoice {
 }
 
 /** Addresses a client pastes into another tool, made per client. */
-export type CopyId = "twilioReplyUrl" | "replyCatcherUrl" | "deliveryWebhookUrl" | "recallWebhookUrl";
+export type CopyId =
+  | "twilioReplyUrl"
+  | "replyCatcherUrl"
+  | "deliveryWebhookUrl"
+  | "recallWebhookUrl"
+  | "slackInteractionsUrl"
+  | "bookingWebhookUrl"
+  | "bookingWebhookSecret"
+  | "whopBridgeSecret";
+
+/** A live list, and the values from other fields (or the client) it needs. */
+export interface PickSource {
+  resource: string;
+  params?: Record<string, string>;
+}
 
 interface FieldBase {
   store: SettingStore;
@@ -68,8 +83,9 @@ export type SettingField =
   | (FieldBase & {
       kind: "select";
       options: { value: string; label: string; hint?: string }[];
-      /** Choices read for this client instead (the connected Slack's channels). */
-      optionsFrom?: "slackChannels";
+      /** Choices read for this client instead (the connected Slack's
+       * channels, the booking tool's event types). */
+      optionsFrom?: "slackChannels" | "bookingEventTypes";
       numeric?: boolean;
       default: string | null;
     })
@@ -83,7 +99,7 @@ export type SettingField =
     })
   | (FieldBase & { kind: "textarea"; maxLength: number; tokens?: string[]; requiredTokens?: string[]; default: string | null })
   /** Several of a fixed or loaded list. `optionsFrom` loads them per client. */
-  | (FieldBase & { kind: "multi"; options?: { value: string; label: string }[]; optionsFrom?: "coldOpenIcps"; allWhenEmpty?: boolean; default: string[] | null })
+  | (FieldBase & { kind: "multi"; options?: { value: string; label: string; hint?: string }[]; optionsFrom?: "coldOpenIcps" | "notificationPack"; allWhenEmpty?: boolean; default: string[] | null })
   /** A short list of phrases the client types. */
   | (FieldBase & { kind: "list"; maxItems: number; maxLength: number; placeholder?: string; default: string[] | null })
   /** The tool the skill runs on, as a row of logos; `multi` for several at once. */
@@ -93,21 +109,38 @@ export type SettingField =
   /** One of a list read live from the connected account (stack-options). */
   | (FieldBase & {
       kind: "pick";
-      resource: string;
-      /** Query values the list needs, from other fields (Twilio's Account SID). */
+      /** The list. Query values come from other fields, or from what's
+       * known about the client (`ghl_location_id`, `activecampaign_base_url`). */
+      resource?: string;
       params?: Record<string, string>;
-      /** The connection the list is read through. */
-      needs: string;
+      /** A different list per tool: the email tool's lists, its workflows... */
+      sourceBy?: { path: string; map: Record<string, PickSource> };
       default: string | null;
     })
-  /** An address to paste into another tool. Read only. */
-  | (FieldBase & { kind: "copy"; from: CopyId; default: null })
+  /** An address (or a secret) to paste into another tool. Read only. */
+  | (FieldBase & { kind: "copy"; from: CopyId; secret?: boolean; default: null })
   /** A secret that's saved but never shown back (a webhook signing secret). */
-  | (FieldBase & { kind: "secret"; secret: { credential: string } | { signing: "recall" }; placeholder?: string; default: null })
+  | (FieldBase & { kind: "secret"; secret: { credential: string } | { signing: "recall" | "slack" }; placeholder?: string; default: null })
   /** One choice per key: a campaign for each Cold Open customer type. */
-  | (FieldBase & { kind: "map"; keysFrom: "coldOpenIcps"; optionsFrom: "coldOpenCampaigns"; default: null });
+  | (FieldBase & { kind: "map"; keysFrom: "coldOpenIcps"; optionsFrom: "coldOpenCampaigns"; default: null })
+  /** Renames, one pair per row: a Whop field and the name the destination wants. */
+  | (FieldBase & { kind: "pairs"; maxItems: number; fromLabel: string; toLabel: string; default: null })
+  /** Email sequences sent as written: a subject and three emails each. */
+  | (FieldBase & { kind: "sequences"; minItems: number; maxItems: number; default: null })
+  /** Cold Open's lead list for each customer type, saved as it's added. */
+  | (FieldBase & { kind: "leadLists"; default: null })
+  /** The client's Google listing, found by search and confirmed. */
+  | (FieldBase & { kind: "listing"; default: null });
 
-export type SettingValue = string | number | boolean | string[] | Record<string, string> | null;
+export type SettingValue = string | number | boolean | string[] | Record<string, unknown> | Record<string, unknown>[] | null;
+
+/** One sequence sent as written (Cold Open's body variants). */
+export interface Touchset {
+  subject: string;
+  body1: string;
+  body2: string;
+  body3: string;
+}
 export type SettingValues = Record<string, SettingValue>;
 
 export interface SkillSettingsSpec {
@@ -130,7 +163,15 @@ const emailTool = (provider: string) => groupTools("email").find((t) => t.provid
 const choices = (tools: SetupTool[]): ToolChoice[] => tools.map((t) => ({ value: t.provider, tool: t }));
 
 /** Changing one of these sets Showtime up again (webhooks, the page). */
-export const SHOWTIME_CORE_TOOLS = ["booking_platform", "email_platform", "hosting_platform"] as const;
+export const SHOWTIME_CORE_TOOLS = [
+  "booking_platform",
+  "email_platform",
+  "hosting_platform",
+  "hosting_platform_meta.webflow_site_id",
+  "hosting_platform_meta.vercel_project_name",
+  "existing_confirmation_page_reuse",
+  "existing_confirmation_page_url",
+] as const;
 const CORE_NOTE = "Every Showtime skill uses this. Saving a different one sets Showtime up again with it.";
 
 const BOOKING_TOOL: SettingField = { kind: "tool", store: "stack", path: "booking_platform", label: "Bookings from", help: CORE_NOTE, choices: choices(groupTools("booking")), default: null };
@@ -162,7 +203,6 @@ const TWILIO_FIELDS: SettingField[] = [
     label: "Messaging Service",
     resource: "twilio-messaging-services",
     params: { accountSid: "sms_platform_meta.twilio_account_sid" },
-    needs: "twilio",
     default: null,
     showIf: onTwilio,
     help: "Texts go out from its numbers, and its A2P registration is checked before anything sends.",
@@ -174,7 +214,6 @@ const TWILIO_FIELDS: SettingField[] = [
     label: "Or send from one number",
     resource: "twilio-phone-numbers",
     params: { accountSid: "sms_platform_meta.twilio_account_sid" },
-    needs: "twilio",
     default: null,
     showIf: onTwilio,
   },
@@ -206,6 +245,92 @@ const RECALL_REGIONS = [
 const onRecall = { path: "conversation_intelligence_provider", equals: ["recall_ai"] };
 const DELIVERY_EMAIL = ["klaviyo", "activecampaign", "mailchimp", "convertkit"];
 
+// The email tool's lists and workflows (showtime-setup/picks.ts has the
+// same map for setup). ActiveCampaign needs its account address and
+// GoHighLevel its Location ID, both known once the tool is connected.
+const AC = { baseUrl: "activecampaign_base_url" };
+const GHL = { locationId: "ghl_location_id" };
+const LIST_TOOLS = ["klaviyo", "mailchimp", "convertkit", "activecampaign"];
+const PILE_ON_TARGETS: SettingField[] = [
+  {
+    kind: "pick",
+    store: "stack",
+    path: "target_list_id",
+    label: "Add booked leads to",
+    help: "The list (a form in Kit) whose emails keep them warm before the call.",
+    sourceBy: {
+      path: "email_platform",
+      map: {
+        klaviyo: { resource: "klaviyo-lists" },
+        mailchimp: { resource: "mailchimp-lists" },
+        convertkit: { resource: "convertkit-forms" },
+        activecampaign: { resource: "activecampaign-lists", params: AC },
+      },
+    },
+    default: null,
+    showIf: { path: "email_platform", equals: LIST_TOOLS },
+  },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "target_workflow_id",
+    label: "Start this workflow for booked leads",
+    resource: "ghl-workflows",
+    params: GHL,
+    default: null,
+    showIf: { path: "email_platform", equals: ["ghl"] },
+  },
+];
+const WIN_BACK_TARGETS: SettingField[] = [
+  {
+    kind: "pick",
+    store: "stack",
+    path: "recovery_list_id",
+    label: "Add no-shows to",
+    help: "The list (a tag in Kit) whose emails ask them to rebook.",
+    sourceBy: {
+      path: "email_platform",
+      map: {
+        klaviyo: { resource: "klaviyo-lists" },
+        mailchimp: { resource: "mailchimp-lists" },
+        convertkit: { resource: "convertkit-tags" },
+        activecampaign: { resource: "activecampaign-lists", params: AC },
+      },
+    },
+    default: null,
+    showIf: { path: "email_platform", equals: LIST_TOOLS },
+  },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "recovery_workflow_id",
+    label: "Start this workflow for no-shows",
+    sourceBy: { path: "email_platform", map: { ghl: { resource: "ghl-workflows", params: GHL }, hubspot: { resource: "hubspot-workflows" } } },
+    default: null,
+    showIf: { path: "email_platform", equals: ["ghl", "hubspot"] },
+  },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "recovery_automation_id",
+    label: "Stop this automation when they rebook",
+    resource: "activecampaign-automations",
+    params: AC,
+    default: null,
+    showIf: { path: "email_platform", equals: ["activecampaign"] },
+  },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "long_term_nurture_list_id",
+    label: "After the window ends, move them to",
+    help: "People who never rebooked keep hearing from the client here. Leave empty to stop there.",
+    resource: "klaviyo-lists",
+    default: null,
+    showIf: { path: "email_platform", equals: ["klaviyo"] },
+  },
+];
+
 /** Cold Open's sending tool. Values are Cold Open's platform ids. */
 const SEND_TOOL: SettingField = {
   kind: "tool",
@@ -222,8 +347,37 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   "pin-down": {
     fields: [
       BOOKING_TOOL,
+      {
+        kind: "select",
+        store: "fact",
+        path: "salesCallEventType",
+        label: "The sales call",
+        help: "The event prospects book before they buy. Only its bookings get the page and the follow-up.",
+        options: [],
+        optionsFrom: "bookingEventTypes",
+        default: null,
+      },
+      { kind: "text", store: "stack", path: "booking_standing_link", label: "Booking link", format: "url", maxLength: 500, placeholder: "https://…", default: null, help: "Where rebooking and reminder messages send people." },
+      {
+        kind: "select",
+        store: "stack",
+        path: "webhook_receiver_mode",
+        label: "New bookings come in",
+        options: [
+          { value: "polling", label: "Checked every few minutes", hint: "Nothing to set up in the booking tool." },
+          { value: "webhook", label: "The moment they're booked", hint: "Paste the address and secret below into the booking tool's webhook." },
+        ],
+        default: null,
+      },
+      { kind: "number", store: "stack", path: "webhook_poll_interval_minutes", label: "Check every", unit: "minutes", min: 5, max: 120, integer: true, default: 25, showIf: { path: "webhook_receiver_mode", equals: ["polling"] } },
+      { kind: "copy", store: "none", path: "copy:bookingWebhookUrl", label: "Webhook address", from: "bookingWebhookUrl", default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] } },
+      { kind: "copy", store: "none", path: "copy:bookingWebhookSecret", label: "Webhook signing secret", from: "bookingWebhookSecret", secret: true, default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] } },
       EMAIL_TOOL,
       HOSTING_TOOL,
+      { kind: "pick", store: "stack", path: "hosting_platform_meta.webflow_site_id", label: "Webflow site", resource: "webflow-sites", default: null, showIf: { path: "hosting_platform", equals: ["webflow"] } },
+      { kind: "pick", store: "stack", path: "hosting_platform_meta.vercel_project_name", label: "Vercel project", resource: "vercel-projects", default: null, showIf: { path: "hosting_platform", equals: ["nextjs_vercel"] } },
+      { kind: "toggle", store: "stack", path: "existing_confirmation_page_reuse", label: "Keep the client's own confirmation page", help: "We check it for gaps and publish nothing.", default: false },
+      { kind: "text", store: "stack", path: "existing_confirmation_page_url", label: "Their page", format: "url", maxLength: 500, default: null, showIf: { path: "existing_confirmation_page_reuse", equals: [true] } },
       {
         kind: "select",
         store: "engagement",
@@ -243,6 +397,8 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   },
   "pile-on": {
     fields: [
+      EMAIL_TOOL,
+      ...PILE_ON_TARGETS,
       SMS_TOOL,
       ...TWILIO_FIELDS,
       { kind: "toggle", store: "stack", path: "at_risk_check_in", label: "Check in with at-risk calls", help: "One extra text 3 hours before a call whose estimated show chance is low. Replies come back like any text: YES confirms, a new time lands in the Queue.", default: false, showIf: { path: "sms_platform", equals: TEXTING } },
@@ -295,7 +451,6 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         path: "ad_data_platform_meta.google_sheets_spreadsheet_id",
         label: "Spreadsheet",
         resource: "google-sheets-spreadsheets",
-        needs: "google_sheets",
         default: null,
         showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
       },
@@ -306,9 +461,18 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         label: "Tab",
         resource: "google-sheets-tabs",
         params: { spreadsheetId: "ad_data_platform_meta.google_sheets_spreadsheet_id" },
-        needs: "google_sheets",
         default: null,
         showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
+      },
+      {
+        kind: "text",
+        store: "stack",
+        path: "ad_data_cohort_id",
+        label: "Audience name",
+        maxLength: 100,
+        default: "showtime_pile_on_cohort",
+        showIf: { path: "ad_data_platform", equals: ["hyros", "google_sheets"] },
+        help: "What booked leads are tagged as, so your ads can target or exclude them.",
       },
     ],
     check: (v) =>
@@ -319,6 +483,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   "win-back": {
     fields: [
       EMAIL_TOOL,
+      ...WIN_BACK_TARGETS,
       SMS_TOOL,
       ...TWILIO_FIELDS,
       {
@@ -407,6 +572,26 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         default: null,
       },
       ...slackFields({ path: "brief_landing_destination", equals: ["slack"] }),
+      {
+        kind: "copy",
+        store: "none",
+        path: "copy:slackInteractionsUrl",
+        label: "Slack interactivity address",
+        from: "slackInteractionsUrl",
+        default: null,
+        showIf: { path: "brief_landing_destination", equals: ["slack"] },
+        help: "For the Approve and Reject buttons: in your Slack app, turn on Interactivity and paste this as the Request URL.",
+      },
+      {
+        kind: "secret",
+        store: "none",
+        path: "secret:slack",
+        label: "Slack signing secret",
+        secret: { signing: "slack" },
+        default: null,
+        showIf: { path: "brief_landing_destination", equals: ["slack"] },
+        help: "From your Slack app's Basic Information page. Without it, button presses are refused.",
+      },
       {
         kind: "select",
         store: "stack",
@@ -498,6 +683,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
       ...slackFields({ path: "audit_output_format", equals: ["slack"] }),
       { kind: "number", store: "stack", path: "sample_size_minimum", label: "Trust a number only after", unit: "calls", min: 1, max: 200, integer: true, default: 5 },
       { kind: "number", store: "stack", path: "aging_threshold_days", label: "Deals count as stuck after", unit: "days", min: 1, max: 365, integer: true, default: 30 },
+      { kind: "multi", store: "stack", path: "notification_pack_selections", label: "Alert me when", optionsFrom: "notificationPack", default: null, help: "Each one watches a number from the latest audit and alerts you when it crosses its line." },
     ],
   },
 
@@ -552,8 +738,16 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
     ],
   },
 
+  "rep-google-reviews-watch": {
+    fields: [{ kind: "listing", store: "rep", path: "googleListing", label: "Google listing", default: null, help: "The listing whose reviews are watched. Search by the business's name and city." }],
+  },
+
   // ── Cold Open ──────────────────────────────────────────────────────────
   "daily-send": {
+    check: (v) =>
+      v["dailySendSettings.copyMode"] === "upload" && (!Array.isArray(v["bodyVariantPools.default"]) || (v["bodyVariantPools.default"] as unknown[]).length < 2)
+        ? "Sending your own sequences needs at least two of them."
+        : null,
     fields: [
       SEND_TOOL,
       { kind: "toggle", store: "coldOpen", path: "dailySendSettings.liveSendEnabled", label: "Send for real", help: "Off, each run only shows what it would push.", default: false },
@@ -567,31 +761,35 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         label: "Email copy",
         options: [
           { value: "generate", label: "Written for each lead" },
-          { value: "upload", label: "From the variants you uploaded" },
+          { value: "upload", label: "Your own sequences, as written" },
         ],
         default: "generate",
       },
+      { kind: "sequences", store: "coldOpen", path: "bodyVariantPools.default", label: "Your sequences", minItems: 2, maxItems: 10, default: null, showIf: { path: "dailySendSettings.copyMode", equals: ["upload"] }, help: "Each lead gets one, the same one every time. {company_name} works in the subject." },
     ],
   },
   "send-connect": {
     fields: [
       SEND_TOOL,
+      { kind: "text", store: "coldOpen", path: "sendPlatform.baseUrl", label: "API address (optional)", format: "url", maxLength: 300, default: null, help: "Only if the sending tool gave this account its own API address. Empty uses the standard one." },
       { kind: "map", store: "coldOpen", path: "campaignMap", label: "Campaign for each customer type", keysFrom: "coldOpenIcps", optionsFrom: "coldOpenCampaigns", default: null, help: "Leads go into this campaign in the sending tool." },
       { kind: "multi", store: "coldOpen", path: "autoPushIcps", label: "Push without review", optionsFrom: "coldOpenIcps", help: "Leads for these customer types go straight to the sending tool, even if they're marked for review.", default: null },
     ],
   },
+  "source-connect": {
+    fields: [{ kind: "leadLists", store: "none", path: "leadLists", label: "Lead list for each customer type", default: null, help: "Saved as soon as it's added. A CSV's columns are matched for you." }],
+  },
   "icp-lock": {
     fields: [
       { kind: "multi", store: "coldOpen", path: "reviewRequiredIcps", label: "Hold for review", optionsFrom: "coldOpenIcps", help: "Leads for these customer types wait in the Queue before they're pushed.", default: null },
-      { kind: "toggle", store: "coldOpen", path: "trackingDefaults.openTracking", label: "Track opens", default: true },
-      { kind: "toggle", store: "coldOpen", path: "trackingDefaults.linkTracking", label: "Track link clicks", default: true },
     ],
   },
   "voice-capture": {
     fields: [
-      { kind: "text", store: "coldOpen", path: "voiceProfile.greeting", label: "Greeting", maxLength: 80, placeholder: "Hi {first_name},", default: null },
-      { kind: "text", store: "coldOpen", path: "voiceProfile.signOff", label: "Sign-off", maxLength: 120, placeholder: "Cheers, Sam", default: null },
-      { kind: "text", store: "coldOpen", path: "voiceProfile.tone", label: "Tone", maxLength: 200, placeholder: "Direct, warm, no jargon", default: null },
+      { kind: "text", store: "coldOpen", path: "voiceProfile.greeting", label: "Greeting", maxLength: 80, placeholder: "Hi", required: true, default: null, help: "Emails open with this and the lead's first name." },
+      { kind: "text", store: "coldOpen", path: "voiceProfile.signOff", label: "Sign-off", maxLength: 120, placeholder: "Cheers, Sam", required: true, default: null },
+      { kind: "text", store: "coldOpen", path: "voiceProfile.tone", label: "Tone", maxLength: 200, placeholder: "Direct, warm, no jargon", required: true, default: null },
+      { kind: "list", store: "coldOpen", path: "subjectVariants", label: "Subject lines", maxItems: 20, maxLength: 150, placeholder: "Quick question about {company_name}", default: null, help: "Each lead gets one of these. Empty means each email's own subject." },
     ],
   },
   "send-report": {
@@ -621,7 +819,11 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
     ],
   },
   "whop-bridge-manager": {
-    fields: [{ kind: "text", store: "stack", path: "whop_bridge_destination_url", label: "Forward events to", format: "url", maxLength: 500, placeholder: "https://…", default: null, help: "A public https address. Verified Whop events are posted there as they arrive." }],
+    fields: [
+      { kind: "text", store: "stack", path: "whop_bridge_destination_url", label: "Forward events to", format: "url", maxLength: 500, placeholder: "https://…", default: null, help: "A public https address. Verified Whop events are posted there as they arrive." },
+      { kind: "copy", store: "none", path: "copy:whopBridgeSecret", label: "Signing secret", from: "whopBridgeSecret", secret: true, default: null, help: "Each post is signed with this, so the destination can check it came from here." },
+      { kind: "pairs", store: "stack", path: "whop_bridge_field_mapping", label: "Rename fields", fromLabel: "Whop field", toLabel: "Name it", maxItems: 30, default: null, help: "Only if the destination expects different names. Everything else is sent as Whop names it." },
+    ],
   },
   "whop-payment-recovery": {
     fields: [{ kind: "textarea", store: "stack", path: "whop_recovery_message", label: "Message to the buyer", maxLength: 1000, tokens: ["{name}", "{product}", "{amount}", "{link}"], default: DEFAULT_RECOVERY_MESSAGE, help: "Sent as a Whop message, only after you approve it. Nothing is sent if they pay first." }],
@@ -652,7 +854,19 @@ export function isShown(f: SettingField, values: SettingValues, fields?: Setting
 }
 
 /** Rows that store nothing of their own: not sent, not saved as values. */
-export const isValueless = (f: SettingField) => f.kind === "connect" || f.kind === "copy";
+export const isValueless = (f: SettingField) => f.kind === "connect" || f.kind === "copy" || f.kind === "leadLists";
+
+/** Which live list a pick reads right now, given the values on screen. */
+export function pickSource(f: Extract<SettingField, { kind: "pick" }>, values: SettingValues): PickSource | null {
+  if (f.sourceBy) return f.sourceBy.map[String(values[f.sourceBy.path] ?? "")] ?? null;
+  return f.resource ? { resource: f.resource, params: f.params } : null;
+}
+
+/** Whether a skill has anything to configure. Skills without settings run
+ * on their own and get only their on/off switch, no Configure. */
+export function hasSkillSettings(skillId: string): boolean {
+  return (settingsFor(skillId)?.fields.length ?? 0) > 0;
+}
 
 const TIMEZONE_OK = (tz: string) => {
   try {
@@ -711,8 +925,37 @@ export function cleanValue(f: SettingField, raw: unknown): { value: SettingValue
       if (typeof raw !== "object" || Array.isArray(raw) || Object.values(raw as object).some((x) => typeof x !== "string")) return { error: `${f.label}: pick a campaign for each.` };
       return { value: Object.fromEntries(Object.entries(raw as Record<string, string>).filter(([, id]) => id)) };
     }
+    case "pairs": {
+      if (empty) return { value: null };
+      if (typeof raw !== "object" || Array.isArray(raw)) return { error: `${f.label}: one name per row.` };
+      const rows = Object.entries(raw as Record<string, unknown>).map(([k, v]) => [k.trim(), typeof v === "string" ? v.trim() : ""] as const);
+      if (rows.some(([k, v]) => !k || !v)) return { error: `${f.label}: fill in both names on each row, or remove it.` };
+      if (rows.length > f.maxItems) return { error: `${f.label}: ${f.maxItems} at most.` };
+      if (rows.some(([k, v]) => k.length > 100 || v.length > 100)) return { error: `${f.label}: keep each name under 100 characters.` };
+      return { value: rows.length ? Object.fromEntries(rows) : null };
+    }
+    case "sequences": {
+      if (empty) return { value: null };
+      if (!Array.isArray(raw)) return { error: `${f.label}: add them one at a time.` };
+      const list = (raw as unknown[]).map((t) => {
+        const o = (t ?? {}) as Record<string, unknown>;
+        const str = (k: string) => (typeof o[k] === "string" ? (o[k] as string).trim() : "");
+        return { subject: str("subject"), body1: str("body1"), body2: str("body2"), body3: str("body3") };
+      });
+      if (list.some((t) => !t.subject || !t.body1)) return { error: `${f.label}: each needs a subject and a first email.` };
+      if (list.some((t) => t.subject.length > 200 || [t.body1, t.body2, t.body3].some((b) => b.length > 5000))) return { error: `${f.label}: keep subjects under 200 characters and each email under 5,000.` };
+      if (list.length > f.maxItems) return { error: `${f.label}: ${f.maxItems} at most.` };
+      return { value: list.length ? list : null };
+    }
+    case "listing": {
+      if (empty) return { value: null };
+      const o = raw as Record<string, unknown>;
+      if (typeof o !== "object" || Array.isArray(o) || typeof o.placeId !== "string" || typeof o.name !== "string") return { error: `${f.label}: pick one from the search.` };
+      return { value: o };
+    }
     case "connect":
     case "copy":
+    case "leadLists":
       return { value: null };
     case "text": {
       if (empty) return f.required ? { error: `${f.label} is needed.` } : { value: null };

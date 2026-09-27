@@ -13,24 +13,7 @@ import { activeCampaignApiBase, mailchimpDatacenter, ACTIVECAMPAIGN_URL_HINT } f
 export type StackOption = { id: string; name: string };
 type Option = StackOption;
 
-export const PROVIDER_BY_RESOURCE: Record<string, string> = {
-  "klaviyo-lists": "klaviyo",
-  "mailchimp-lists": "mailchimp",
-  "convertkit-forms": "convertkit",
-  "convertkit-tags": "convertkit",
-  "activecampaign-lists": "activecampaign",
-  "activecampaign-automations": "activecampaign",
-  "hubspot-workflows": "hubspot",
-  "ghl-workflows": "ghl",
-  "webflow-sites": "webflow",
-  "webflow-collections": "webflow",
-  "vercel-projects": "nextjs_vercel",
-  "vercel-teams": "nextjs_vercel",
-  "twilio-messaging-services": "twilio",
-  "twilio-phone-numbers": "twilio",
-  "google-sheets-spreadsheets": "google_sheets",
-  "google-sheets-tabs": "google_sheets",
-};
+export { PROVIDER_BY_RESOURCE } from "./stack-option-providers";
 
 export async function fetchStackOptions(resource: string, credential: string, params: URLSearchParams): Promise<Option[]> {
   switch (resource) {

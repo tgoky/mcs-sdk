@@ -1228,7 +1228,7 @@ function describeSource(s: LeadSource): string {
   return "from a Sales Navigator export";
 }
 
-function LeadLists({ engagementId, icps }: { engagementId: string; icps: { slug: string; label: string }[] }) {
+export function LeadLists({ engagementId, icps }: { engagementId: string; icps: { slug: string; label: string }[] }) {
   const toast = useToast();
   const url = `/api/engagements/${engagementId}/bridges/source-connect`;
   const [state, setState] = useState<{ sources: LeadSource[]; apifyConnected: boolean } | null>(null);

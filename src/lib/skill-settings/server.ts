@@ -46,6 +46,13 @@ import { webhookUrl } from "@/lib/webhook-url-token";
 import { TWILIO_INBOUND_PATH } from "@/lib/sms-replies";
 import { pullSender } from "@/lib/cold-open-setup/sender";
 import type { Outbound } from "@/lib/cold-open-setup/types";
+import { ghlLocationIdOf } from "@/lib/ghl-location";
+import { buildWebhookReceiverUrl } from "@/lib/booking-sync-status";
+import { bookingSyncPatch } from "@/lib/booking-sync-mode";
+import { getSigningSecret } from "@/lib/signing-secrets";
+import { recordSalesCallChoice } from "@/lib/account-intel/decisions";
+import { NOTIFICATION_PACK, activateNotificationPackAlert, deactivateNotificationPackAlert } from "@/features/leak-map/server/notification-pack";
+import { getOrCreateBridgeSigningSecret } from "@/features/whop-agent/server/bridge-manager-service";
 import { cleanSettings, defaultValue, fieldKey, isValueless, settingsFor, SHOWTIME_CORE_TOOLS, storedValue, toShown, type CopyId, type SettingField, type SettingValue, type SettingValues } from "./schema";
 
 type Obj = Record<string, unknown>;
@@ -69,7 +76,9 @@ export interface SkillSettingsView {
   options: Record<string, { value: string; label: string }[]>;
   /** The keys a map field has a choice for (Cold Open's customer types). */
   mapKeys: Record<string, { value: string; label: string }[]>;
-  /** Other settings a field's lock depends on. */
+  /** Other settings a field's lock depends on, and what's known about the
+   * client that a live list needs (GoHighLevel's Location ID,
+   * ActiveCampaign's account address). */
   context: SettingValues;
   /** Every tool this skill's rows offer: connected here, or saved in the workspace. */
   tools: ToolState[];
@@ -111,9 +120,23 @@ interface Stores {
   engagement: EngagementColumns;
   coldOpen: ColdOpenConfigRow | null;
   rep: RepGraph | null;
+  /** Confirmed client facts a setting stands for, by key (the chosen id). */
+  facts: Record<string, string | null>;
 }
 
-async function loadStores(engagementId: string, need: { coldOpen: boolean; rep: boolean }): Promise<Stores | null> {
+/** The sales-call event, as its id; a rejected suggestion reads as unset. */
+async function factIds(engagementId: string, fields: SettingField[]): Promise<Record<string, string | null>> {
+  const out: Record<string, string | null> = {};
+  for (const f of fields) {
+    if (f.store !== "fact") continue;
+    const fact = await getClientFact(engagementId, f.path);
+    const id = fact && fact.status !== "rejected" ? (fact.value as { id?: unknown } | null)?.id : null;
+    out[f.path] = typeof id === "string" || typeof id === "number" ? String(id) : null;
+  }
+  return out;
+}
+
+async function loadStores(engagementId: string, need: { coldOpen: boolean; rep: boolean; fields?: SettingField[] }): Promise<Stores | null> {
   const [row] = await db
     .select({
       stack: engagements.stack,
@@ -144,6 +167,7 @@ async function loadStores(engagementId: string, need: { coldOpen: boolean; rep: 
     engagement: { ...(engagement as unknown as EngagementColumns), confirmationPageTemplate: template },
     coldOpen,
     rep,
+    facts: need.fields ? await factIds(engagementId, need.fields) : {},
   };
 }
 
@@ -173,12 +197,8 @@ function factsFor(skillId: WorkerId, s: Stores): { label: string; value: string 
         ...(skillId === "rep-onboarding" ? [{ label: "Competitors", value: String(rep.competitors.length) }, { label: "Domains", value: rep.operatorDomains.join(", ") || "None" }] : []),
       ];
     }
-    case "rep-google-reviews-watch":
-      return [{ label: "Google listing", value: rep?.googleListing ? `${rep.googleListing.name}${rep.googleListing.address ? `, ${rep.googleListing.address}` : ""}` : "None confirmed" }];
     case "icp-lock":
       return co ? [{ label: "Customer types", value: co.icps.map((i) => i.label || i.slug).join(", ") || "None yet" }] : [];
-    case "source-connect":
-      return co ? [{ label: "Lead sources", value: co.leadSources.length ? co.leadSources.map((l) => `${l.icp} (${l.fetcherType})`).join(", ") : "None yet" }] : [];
     case "daily-send":
     case "reply-sort":
       return co ? [{ label: "Campaigns mapped", value: String(new Set(Object.values(co.campaignMap)).size) }] : [];
@@ -217,6 +237,8 @@ function storeOf(f: SettingField, s: Stores): unknown {
       return s.rep;
     case "engagement":
       return s.engagement;
+    case "fact":
+      return s.facts;
     default:
       return null;
   }
@@ -232,8 +254,17 @@ function toolsOf(fields: SettingField[]): SetupTool[] {
   return [...out.values()];
 }
 
-function copyValue(id: CopyId, engagementId: string, st: EngagementStack | null, origin: string): string | null {
+async function copyValue(id: CopyId, engagementId: string, st: EngagementStack | null, origin: string): Promise<string | null> {
   switch (id) {
+    case "slackInteractionsUrl":
+      return `${origin.replace(/\/+$/, "")}/api/slack/interactions`;
+    case "bookingWebhookUrl":
+      return st?.webhook_receiver_mode === "webhook" ? buildWebhookReceiverUrl(engagementId, origin.replace(/\/+$/, "")) : null;
+    case "bookingWebhookSecret":
+      return st?.webhook_receiver_mode === "webhook" ? getSigningSecret(engagementId, "booking_webhook") : null;
+    case "whopBridgeSecret":
+      // Made the first time there's somewhere to send to.
+      return st?.whop_bridge_destination_url ? getOrCreateBridgeSigningSecret(engagementId) : null;
     case "twilioReplyUrl":
       return webhookUrl(origin, TWILIO_INBOUND_PATH, engagementId);
     case "replyCatcherUrl":
@@ -255,7 +286,9 @@ const DELIVERY_WEBHOOK_PATHS: Record<string, string> = {
   convertkit: "convertkit-delivery",
 };
 
-const secretProvider = (f: Extract<SettingField, { kind: "secret" }>) => ("credential" in f.secret ? f.secret.credential : "recall_webhook_signing_secret");
+// Where each secret is kept (signing-secrets.ts keeps the signing ones).
+const SIGNING_PROVIDER = { recall: "recall_webhook_signing_secret", slack: "slack_signing_secret" } as const;
+const secretProvider = (f: Extract<SettingField, { kind: "secret" }>) => ("credential" in f.secret ? f.secret.credential : SIGNING_PROVIDER[f.secret.signing]);
 
 /** The sending tool's campaigns: from its last read, or read now (bounded). */
 async function coldOpenCampaigns(engagementId: string, platform: ColdOpenSendPlatformId | null): Promise<{ value: string; label: string }[]> {
@@ -278,8 +311,9 @@ export async function loadSkillSettings(engagementId: string, skillId: WorkerId,
   const fields = spec?.fields ?? [];
   const product = WORKER_REGISTRY[skillId].productId;
   const stores = await loadStores(engagementId, {
-    coldOpen: fields.some((f) => f.store === "coldOpen") || product === "cold-open",
+    coldOpen: fields.some((f) => f.store === "coldOpen") || fields.some((f) => f.kind === "leadLists") || product === "cold-open",
     rep: fields.some((f) => f.store === "rep") || product === "reputation-manager",
+    fields,
   });
   if (!stores) return null;
 
@@ -298,6 +332,14 @@ export async function loadSkillSettings(engagementId: string, skillId: WorkerId,
   const icps = (stores.coldOpen?.icps ?? []).map((i) => ({ value: i.slug, label: i.label || i.slug }));
   for (const f of fields) {
     if (f.kind === "multi" && f.optionsFrom === "coldOpenIcps") options[fieldKey(f)] = icps;
+    if (f.kind === "multi" && f.optionsFrom === "notificationPack") {
+      options[fieldKey(f)] = NOTIFICATION_PACK.map((p) => ({ value: p.id, label: p.label, hint: `${p.comparison === "below" ? "Below" : "Above"} ${p.defaultThreshold}. ${p.watches}` }));
+    }
+    if (f.kind === "select" && f.optionsFrom === "bookingEventTypes") {
+      const types = ((await getClientFact(engagementId, "bookingEventTypes"))?.value as { types?: { id: string; name: string; durationMin?: number | null; active?: boolean }[] } | undefined)?.types ?? [];
+      options[fieldKey(f)] = types.filter((t) => t.active !== false).map((t) => ({ value: String(t.id), label: t.name, ...(t.durationMin ? { hint: `${t.durationMin} min` } : {}) }));
+    }
+    if (f.kind === "leadLists") mapKeys[fieldKey(f)] = icps;
     if (f.kind === "select" && f.optionsFrom === "slackChannels") {
       const channels = ((await getClientFact(engagementId, "slackChannels"))?.value as { id: string; name: string }[] | undefined) ?? [];
       options[fieldKey(f)] = channels.map((c) => ({ value: c.id, label: c.name.startsWith("#") ? c.name : `#${c.name}` }));
@@ -310,6 +352,10 @@ export async function loadSkillSettings(engagementId: string, skillId: WorkerId,
 
   const context: SettingValues = {};
   for (const f of fields) if (f.lockedIf) context[f.lockedIf.path] = (readPath(stores.stack, f.lockedIf.path) as SettingValue) ?? null;
+  if (fields.some((f) => f.kind === "pick")) {
+    context.ghl_location_id = ghlLocationIdOf(stores.stack);
+    context.activecampaign_base_url = stores.stack?.activecampaign_base_url ?? null;
+  }
 
   const toolList = toolsOf(fields);
   const workspaceId = stores.engagement.workspaceId ?? ctx.workspaceId;
@@ -318,7 +364,7 @@ export async function loadSkillSettings(engagementId: string, skillId: WorkerId,
   const copies: SkillSettingsView["copies"] = {};
   const secretsSet: string[] = [];
   for (const f of fields) {
-    if (f.kind === "copy") copies[f.from] = copyValue(f.from, engagementId, stores.stack, ctx.origin);
+    if (f.kind === "copy") copies[f.from] = await copyValue(f.from, engagementId, stores.stack, ctx.origin);
     if (f.kind === "secret" && (await hasCredential(engagementId, secretProvider(f)))) secretsSet.push(fieldKey(f));
   }
 
@@ -361,7 +407,7 @@ function setNested(patch: Obj, top: string, rest: string[], base: unknown, value
 export async function saveSkillSettings(engagementId: string, skillId: WorkerId, raw: Record<string, unknown>, ctx: SettingsContext): Promise<SaveResult> {
   const spec = settingsFor(skillId);
   if (!spec) return { ok: false, error: "This skill has no settings of its own." };
-  const stores = await loadStores(engagementId, { coldOpen: spec.fields.some((f) => f.store === "coldOpen"), rep: spec.fields.some((f) => f.store === "rep") });
+  const stores = await loadStores(engagementId, { coldOpen: spec.fields.some((f) => f.store === "coldOpen"), rep: spec.fields.some((f) => f.store === "rep"), fields: spec.fields });
   if (!stores) return { ok: false, error: "Client not found." };
   const blocked = blockedReason(spec.fields, stores);
   if (blocked) return { ok: false, error: blocked };
@@ -410,8 +456,10 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
     if (f.store === "stack") {
       if (rest.length === 0) stackPatch[top] = storedValue(f, v) ?? undefined;
       else setNested(stackPatch, top, rest, readPath(stores.stack, top), v ?? defaultValue(f));
+    } else if (f.store === "fact") {
+      continue; // Its own save, below.
     } else if (f.store === "coldOpen") {
-      if (f.path === "sendPlatform.platform" || f.path === "campaignMap") continue; // Send Connect's own save, below.
+      if (f.path.startsWith("sendPlatform.") || f.path === "campaignMap") continue; // Send Connect's own save, below.
       const full = v ?? defaultValue(f) ?? (f.kind === "multi" || f.kind === "list" ? [] : null);
       if (rest.length === 0) coldOpenPatch[top] = full;
       else setNested(coldOpenPatch, top, rest, readPath(stores.coldOpen, top), full);
@@ -441,10 +489,12 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
       return { ok: false, error: "Connect Slack and pick a channel, or paste an incoming-webhook address.", field: "slack_channel_id" };
     }
   }
-  if (typeof next.heroVideoUrl === "string" && next.heroVideoUrl && !sanitizeVideoEmbedUrl(next.heroVideoUrl)) {
+  const videoField = spec.fields.find((f) => f.path === "heroVideoUrl");
+  if (videoField && changed(videoField) && typeof next.heroVideoUrl === "string" && next.heroVideoUrl && !sanitizeVideoEmbedUrl(next.heroVideoUrl)) {
     return { ok: false, error: "That video link can't be shown on the page. Use a YouTube, Vimeo or Loom share link.", field: "heroVideoUrl" };
   }
-  if (typeof next.whop_bridge_destination_url === "string" && next.whop_bridge_destination_url) {
+  const bridgeField = spec.fields.find((f) => f.path === "whop_bridge_destination_url");
+  if (bridgeField && changed(bridgeField) && typeof next.whop_bridge_destination_url === "string" && next.whop_bridge_destination_url) {
     try {
       stackPatch.whop_bridge_destination_url = (await assertPublicUrl(next.whop_bridge_destination_url, { httpsOnly: true })).toString();
     } catch (err) {
@@ -452,10 +502,32 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
     }
   }
 
+  // How bookings come in: the same switch as the sync-mode route (a signing
+  // secret made for webhooks, the watermark rewound for polling).
+  if ("webhook_receiver_mode" in stackPatch || "webhook_poll_interval_minutes" in stackPatch) {
+    if (!stores.stack?.booking_platform) return { ok: false, error: "Pick the booking tool first.", field: "webhook_receiver_mode" };
+    const mode = (next.webhook_receiver_mode ?? stores.stack.webhook_receiver_mode) as "webhook" | "polling" | undefined;
+    const interval = typeof next.webhook_poll_interval_minutes === "number" ? next.webhook_poll_interval_minutes : undefined;
+    delete stackPatch.webhook_receiver_mode;
+    delete stackPatch.webhook_poll_interval_minutes;
+    const { patch } = await bookingSyncPatch(engagementId, stores.stack, { mode: "webhook_receiver_mode" in next && mode ? mode : undefined, pollIntervalMinutes: interval });
+    Object.assign(stackPatch, patch);
+  }
+
+  // The sales call: recorded as the confirmed choice, and its id put where
+  // the booking tool's code reads it.
+  const salesField = spec.fields.find((f) => f.store === "fact" && f.path === "salesCallEventType");
+  const salesChanged = Boolean(salesField && changed(salesField) && typeof next.salesCallEventType === "string" && next.salesCallEventType);
+  if (salesChanged) {
+    const known = ((await getClientFact(engagementId, "bookingEventTypes"))?.value as { types?: { id: string }[] } | undefined)?.types ?? [];
+    if (!known.some((t) => String(t.id) === next.salesCallEventType)) return { ok: false, error: "That event isn't in the booking tool's list.", field: "salesCallEventType" };
+  }
+
   // Cold Open's sending tool and campaigns: Send Connect's own save, which
   // checks the key is connected and every campaign's customer type exists.
   const sendField = spec.fields.find((f) => f.path === "sendPlatform.platform");
-  if (sendField && (changed(sendField) || spec.fields.some((f) => f.path === "campaignMap" && changed(f)))) {
+  const baseField = spec.fields.find((f) => f.path === "sendPlatform.baseUrl");
+  if (sendField && (changed(sendField) || (baseField && changed(baseField)) || spec.fields.some((f) => f.path === "campaignMap" && changed(f)))) {
     const platform = (next["sendPlatform.platform"] ?? stores.coldOpen?.sendPlatform?.platform) as ColdOpenSendPlatformId | null;
     if (!platform) return { ok: false, error: "Pick the sending tool.", field: "sendPlatform.platform" };
     const samePlatform = platform === stores.coldOpen?.sendPlatform?.platform;
@@ -468,7 +540,7 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
     }
     const result = await saveSendConnect(engagementId, {
       platform,
-      baseUrl: samePlatform ? stores.coldOpen?.sendPlatform?.baseUrl : undefined,
+      baseUrl: baseField && changed(baseField) ? ((next["sendPlatform.baseUrl"] as string | null) ?? undefined) : samePlatform ? stores.coldOpen?.sendPlatform?.baseUrl : undefined,
       campaignMap,
       autoPushIcps: (coldOpenPatch.autoPushIcps as string[] | undefined) ?? stores.coldOpen?.autoPushIcps ?? [],
     });
@@ -500,6 +572,14 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
 
   // ── What the change needs done ──
   const notices: string[] = [];
+  const packField = spec.fields.find((f) => f.path === "notification_pack_selections");
+  if (packField && changed(packField)) {
+    const before = new Set(stores.stack?.notification_pack_selections ?? []);
+    const after = new Set((next.notification_pack_selections as string[] | null) ?? []);
+    for (const id of after) if (!before.has(id)) await activateNotificationPackAlert(engagementId, id);
+    for (const id of before) if (!after.has(id)) await deactivateNotificationPackAlert(engagementId, id);
+  }
+  if (salesChanged) await recordSalesCallChoice(engagementId, next.salesCallEventType as string);
   const chosen = spec.fields.filter((f) => f.kind === "tool" && f.store === "stack").flatMap((f) => [next[fieldKey(f)]].flat()) as (string | null | undefined)[];
   if (chosen.length) await syncMarkersForChosenPlatforms(engagementId, chosen);
 
@@ -512,7 +592,7 @@ export async function saveSkillSettings(engagementId: string, skillId: WorkerId,
     );
   }
 
-  const coreChanged = spec.fields.some((f) => (SHOWTIME_CORE_TOOLS as readonly string[]).includes(f.path) && changed(f));
+  const coreChanged = salesChanged || spec.fields.some((f) => (SHOWTIME_CORE_TOOLS as readonly string[]).includes(f.path) && changed(f));
   const pageChanged = spec.fields.some((f) => f.store === "engagement" && ["confirmationPageTemplate", "heroVideoUrl", "offerDetails.hybrid_mode_enabled", "confirmationPageAnimationsEnabled", "topCallQuestions"].includes(f.path) && changed(f));
   if (coreChanged) {
     await dispatchSkillRun(engagementId, "pin-down", stores.engagement.buyer);

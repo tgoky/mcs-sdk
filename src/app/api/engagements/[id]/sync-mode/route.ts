@@ -4,9 +4,8 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
-import crypto from "crypto";
 import { buildWebhookReceiverUrl } from "@/lib/booking-sync-status";
-import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
+import { bookingSyncPatch } from "@/lib/booking-sync-mode";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -101,59 +100,11 @@ export async function PATCH(
       );
     }
 
-    const nextStack: EngagementStack = { ...stack };
-    // The signing secret lives in the vault (lib/signing-secrets.ts); read
-    // it from there, moving an old plaintext one over, and never write it
-    // back into the stack below.
-    let signingSecret = await getSigningSecret(id, "booking_webhook");
+    // The signing secret lives in the vault (lib/signing-secrets.ts) and
+    // is never written back into the stack.
+    const { patch, signingSecret } = await bookingSyncPatch(id, stack, { mode, pollIntervalMinutes, dismissSetupNudge });
+    const nextStack: EngagementStack = { ...stack, ...patch };
     delete nextStack.webhook_signing_secret;
-
-    if (mode === "webhook") {
-      // Generate a signing secret if this engagement somehow doesn't have
-      // one yet (older engagements onboarded before this was pre-generated
-      // — see onboarding-service.ts). Never overwrite an existing secret:
-      // the buyer may have already pasted the current one into their
-      // platform's workflow.
-      if (!signingSecret) {
-        signingSecret = crypto.randomBytes(32).toString("hex");
-        await setSigningSecret(id, "booking_webhook", signingSecret);
-        nextStack.webhook_signing_secret_set = true;
-      }
-      nextStack.webhook_receiver_mode = "webhook";
-    } else if (mode === "polling") {
-      nextStack.webhook_receiver_mode = "polling";
-      // CHANGED: hoisted into a local const. Assigning into the optional
-      // `nextStack.webhook_poll_interval_minutes` field doesn't narrow it,
-      // so the watermark math below needs a definitely-number binding.
-      const intervalMinutes =
-        pollIntervalMinutes ?? nextStack.webhook_poll_interval_minutes ?? 25;
-      nextStack.webhook_poll_interval_minutes = intervalMinutes;
-      // First cycle after switching back looks one interval behind
-      // instead of from whatever stale watermark was left over, same
-      // "don't backfill the buyer's entire history" reasoning
-      // pollBookingsForEngagement uses for a brand-new polling tenant.
-      nextStack.webhook_receiver_last_polled_at = new Date(
-        Date.now() - intervalMinutes * 60_000
-      ).toISOString();
-    } else if (pollIntervalMinutes !== undefined && stack.webhook_receiver_mode === "polling") {
-      // Already in polling mode and only the interval is changing — same
-      // watermark-rewind logic as above, without requiring the caller to
-      // also re-send mode: "polling".
-      nextStack.webhook_poll_interval_minutes = pollIntervalMinutes;
-      nextStack.webhook_receiver_last_polled_at = new Date(
-        Date.now() - pollIntervalMinutes * 60_000
-      ).toISOString();
-    }
-
-    if (dismissSetupNudge) {
-      nextStack.webhook_receiver_setup_dismissed = true;
-    } else if (mode === "webhook") {
-      // Switching TO webhook mode is itself an explicit resolution of the
-      // nudge — clear any stale dismissal so a future switch back to
-      // polling shows the nudge fresh again instead of staying silently
-      // suppressed forever.
-      nextStack.webhook_receiver_setup_dismissed = false;
-    }
 
     await db
       .update(engagements)

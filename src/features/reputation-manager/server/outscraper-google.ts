@@ -89,6 +89,15 @@ export async function findGoogleListing(opts: { name: string; domain: string; ci
   return pickOwnListing(firstQueryRows(body), opts.domain);
 }
 
+/** Listings matching a search, for a person to pick theirs from. */
+export async function searchGoogleListings(query: string, limit = 6): Promise<RepGoogleListing[]> {
+  if (!query.trim()) return [];
+  const body = await outscraper("/google-maps-search", { query: query.trim(), limit });
+  return firstQueryRows(body)
+    .map(toListing)
+    .filter((l): l is RepGoogleListing => l !== null);
+}
+
 export interface GoogleReview {
   externalId: string;
   author: string | null;

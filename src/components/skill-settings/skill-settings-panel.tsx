@@ -14,13 +14,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Check, ChevronDown, Copy, Loader2, NotebookPen, Plus, Tag, X, Ban } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, EyeOff, Loader2, NotebookPen, Plus, Search, Star, Tag, X, Ban } from "lucide-react";
 import { Switch } from "@/components/product-setup/skill-switch";
 import { ToolAvatar, type ToolActions } from "@/components/product-setup/tool-avatar";
 import { AnchoredCard } from "@/components/product-setup/anchored-card";
 import { PlatformLogo } from "@/components/platform-logo";
 import { cn } from "@/lib/utils";
-import { fieldKey, isShown, isValueless, settingsFor, toShown, type SettingField, type SettingValue, type SettingValues, type ToolChoice } from "@/lib/skill-settings/schema";
+import { fieldKey, isShown, isValueless, pickSource, settingsFor, toShown, type SettingField, type SettingValue, type SettingValues, type ToolChoice, type Touchset } from "@/lib/skill-settings/schema";
+import { PROVIDER_BY_RESOURCE } from "@/lib/stack-option-providers";
+import { LeadLists } from "@/components/product-setup/cold-open-setup";
+import type { RepGoogleListing } from "@/models/schema";
 import type { SkillSettingsView } from "@/lib/skill-settings/server";
 import type { SetupTool } from "@/lib/showtime-setup/catalog";
 
@@ -360,7 +363,21 @@ function Control(p: RowProps) {
     case "pick":
       return <LivePick {...p} field={f} />;
     case "copy":
-      return <CopyValue value={view.copies[f.from] ?? null} />;
+      return <CopyValue value={view.copies[f.from] ?? null} secret={f.secret} />;
+    case "pairs":
+      return <PairsEditor field={f} value={value} onChange={onChange} />;
+    case "sequences":
+      return <SequencesEditor field={f} value={value} onChange={onChange} />;
+    case "leadLists": {
+      const icps = (view.mapKeys[fieldKey(f)] ?? []).map((k) => ({ slug: k.value, label: k.label }));
+      return (
+        <ol className="space-y-1">
+          <LeadLists engagementId={p.engagementId} icps={icps} />
+        </ol>
+      );
+    }
+    case "listing":
+      return <ListingPicker engagementId={p.engagementId} value={value} onChange={onChange} />;
     case "secret": {
       const isSet = view.secretsSet.includes(fieldKey(f));
       return (
@@ -425,9 +442,38 @@ function Control(p: RowProps) {
         </span>
       );
     case "multi": {
-      const choices = f.options ?? view.options[fieldKey(f)] ?? [];
-      const picked = Array.isArray(value) ? value : [];
+      const choices: { value: string; label: string; hint?: string }[] = f.options ?? view.options[fieldKey(f)] ?? [];
+      const picked = (Array.isArray(value) ? value : []) as string[];
       if (choices.length === 0) return <span className="block text-[12.5px] text-zinc-500">Nothing to choose from yet.</span>;
+      // Choices that need explaining read as a checklist.
+      if (choices.some((o) => o.hint)) {
+        return (
+          <ul className="space-y-1">
+            {choices.map((o) => {
+              const on = picked.includes(o.value);
+              return (
+                <li key={o.value}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    onClick={() => onChange(on ? picked.filter((x) => x !== o.value) : [...picked, o.value])}
+                    className="flex w-full items-start gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-zinc-900/[0.03] dark:hover:bg-white/[0.03] cursor-pointer"
+                  >
+                    <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border", on ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-300 dark:border-white/20")}>
+                      {on && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] text-zinc-900 dark:text-zinc-100">{o.label}</span>
+                      {o.hint && <span className="block text-[11.5px] leading-relaxed text-zinc-500 dark:text-zinc-400">{o.hint}</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        );
+      }
       return (
         <span className="block space-y-1">
           <span className="flex flex-wrap gap-1.5">
@@ -454,7 +500,7 @@ function Control(p: RowProps) {
       );
     }
     case "list": {
-      const items = Array.isArray(value) ? value : [];
+      const items = (Array.isArray(value) ? value : []) as string[];
       return (
         <span className="block space-y-1.5">
           {items.map((item, i) => (
@@ -482,7 +528,7 @@ function Control(p: RowProps) {
  * there if it isn't yet); a choice with nothing to connect is picked by a click. */
 function ToolRow(p: RowProps & { field: Extract<SettingField, { kind: "tool" }> }) {
   const { field: f, value, onChange, view } = p;
-  const picked = f.multi ? (Array.isArray(value) ? value : []) : typeof value === "string" ? [value] : [];
+  const picked = (f.multi ? (Array.isArray(value) ? value : []) : typeof value === "string" ? [value] : []) as string[];
   const pick = (c: ToolChoice) => {
     if (f.multi) onChange(picked.includes(c.value) ? picked.filter((x) => x !== c.value) : [...picked, c.value]);
     else onChange(c.value);
@@ -608,17 +654,29 @@ export function ChoiceSelect({
 /** One of a list read from the connected account, once it's connected. */
 function LivePick(p: RowProps & { field: Extract<SettingField, { kind: "pick" }> }) {
   const { field: f, value, onChange, view, draft, engagementId } = p;
-  const connected = Boolean(view.tools.find((t) => t.provider === f.needs)?.linked);
-  const params = useMemo(() => Object.fromEntries(Object.entries(f.params ?? {}).map(([k, path]) => [k, typeof draft[path] === "string" ? (draft[path] as string) : ""])), [f.params, draft]);
+  const source = pickSource(f, draft);
+  const provider = source ? PROVIDER_BY_RESOURCE[source.resource] : undefined;
+  const connected = Boolean(provider && view.tools.find((t) => t.provider === provider)?.linked);
+  // A value typed above (Twilio's Account SID), else what's known about the client.
+  const params = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(source?.params ?? {}).map(([k, path]) => {
+          const v = draft[path] ?? view.context[path];
+          return [k, typeof v === "string" ? v : ""];
+        })
+      ),
+    [source, draft, view.context]
+  );
   const missing = Object.entries(params).find(([, v]) => !v);
   const qs = new URLSearchParams(params).toString();
   const [state, setState] = useState<{ key: string; options?: { value: string; label: string }[]; error?: string } | null>(null);
-  const key = `${f.resource}?${qs}`;
+  const key = `${source?.resource}?${qs}`;
 
   useEffect(() => {
-    if (!connected || missing) return;
+    if (!source || !connected || missing) return;
     let live = true;
-    fetch(`/api/engagements/${encodeURIComponent(engagementId)}/stack-options/${f.resource}${qs ? `?${qs}` : ""}`)
+    fetch(`/api/engagements/${encodeURIComponent(engagementId)}/stack-options/${source.resource}${qs ? `?${qs}` : ""}`)
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as { options?: { id: string; name: string }[]; error?: string };
         if (!live) return;
@@ -629,10 +687,14 @@ function LivePick(p: RowProps & { field: Extract<SettingField, { kind: "pick" }>
     return () => {
       live = false;
     };
-  }, [connected, missing, engagementId, f.resource, qs, key]);
+  }, [source, connected, missing, engagementId, qs, key]);
 
-  if (!connected) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Connect it above and the list shows here.</p>;
-  if (missing) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Fill in the field above first.</p>;
+  if (!source) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Pick the tool above first.</p>;
+  if (!connected) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Connect the tool above and its list shows here.</p>;
+  if (missing) {
+    const need = missing[0] === "locationId" ? "GoHighLevel's Location ID (in its card above)" : missing[0] === "baseUrl" ? "ActiveCampaign's account address (in its card above)" : "the field above";
+    return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Add {need} first.</p>;
+  }
   const current = state?.key === key ? state : null;
   if (!current) {
     return (
@@ -647,14 +709,26 @@ function LivePick(p: RowProps & { field: Extract<SettingField, { kind: "pick" }>
   return <ChoiceSelect label={f.label} value={typeof value === "string" ? value : null} options={[{ value: "", label: "None" }, ...options]} onChange={(v) => onChange(v || null)} />;
 }
 
-function CopyValue({ value }: { value: string | null }) {
+function CopyValue({ value, secret }: { value: string | null; secret?: boolean }) {
   const [copied, setCopied] = useState(false);
-  if (!value) return <p className="text-[12.5px] text-zinc-500">Not available for this tool.</p>;
+  const [shown, setShown] = useState(false);
+  if (!value) return <p className="text-[12.5px] text-zinc-500">{secret ? "Made once this is saved." : "Not available for this tool."}</p>;
+  const hidden = secret && !shown;
   return (
     <div className="flex items-center gap-1.5">
-      <code className="min-w-0 flex-1 truncate rounded-md border border-zinc-200 bg-white/60 px-2.5 py-1.5 font-mono text-[11.5px] text-zinc-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300" title={value}>
-        {value}
+      <code className="min-w-0 flex-1 truncate rounded-md border border-zinc-200 bg-white/60 px-2.5 py-1.5 font-mono text-[11.5px] text-zinc-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300" title={hidden ? undefined : value}>
+        {hidden ? "•".repeat(24) : value}
       </code>
+      {secret && (
+        <button
+          type="button"
+          onClick={() => setShown((x) => !x)}
+          aria-label={shown ? "Hide" : "Show"}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-zinc-500 hover:bg-zinc-900/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-zinc-100 cursor-pointer"
+        >
+          {shown ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => {
@@ -669,5 +743,175 @@ function CopyValue({ value }: { value: string | null }) {
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+/** Rename rows: a field as Whop sends it, and the name the destination wants. */
+function PairsEditor({ field: f, value, onChange }: { field: Extract<SettingField, { kind: "pairs" }>; value: SettingValue; onChange: (v: SettingValue) => void }) {
+  // Rows are kept in order while typing; an object can't hold a blank key.
+  const [rows, setRows] = useState<[string, string][]>(() => Object.entries((value && typeof value === "object" && !Array.isArray(value) ? value : {}) as Record<string, string>));
+  const update = (next: [string, string][]) => {
+    setRows(next);
+    onChange(next.length ? (Object.fromEntries(next) as Record<string, unknown>) : null);
+  };
+  return (
+    <div className="space-y-1.5">
+      {rows.map(([from, to], i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input value={from} onChange={(e) => update(rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} placeholder={f.fromLabel} aria-label={`${f.fromLabel} ${i + 1}`} className={cn(inputCls, "h-8 font-mono")} />
+          <span className="shrink-0 text-zinc-400">→</span>
+          <input value={to} onChange={(e) => update(rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} placeholder={f.toLabel} aria-label={`${f.toLabel} ${i + 1}`} className={cn(inputCls, "h-8 font-mono")} />
+          <button type="button" onClick={() => update(rows.filter((_, j) => j !== i))} aria-label="Remove" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-zinc-400 hover:bg-zinc-900/5 hover:text-zinc-700 dark:hover:bg-white/5 dark:hover:text-zinc-200 cursor-pointer">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+      {rows.length < f.maxItems && (
+        <button type="button" onClick={() => setRows([...rows, ["", ""]])} className="inline-flex items-center gap-1 text-[12.5px] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">
+          <Plus className="h-3 w-3" /> Add a rename
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Sequences sent as written: a subject and up to three emails each. */
+function SequencesEditor({ field: f, value, onChange }: { field: Extract<SettingField, { kind: "sequences" }>; value: SettingValue; onChange: (v: SettingValue) => void }) {
+  const list = (Array.isArray(value) ? value : []) as unknown as Touchset[];
+  const [writing, setWriting] = useState<Touchset | null>(null);
+  const set = (next: Touchset[]) => onChange(next.length ? (next as unknown as Record<string, unknown>[]) : null);
+  return (
+    <div className="space-y-2">
+      {list.length > 0 && (
+        <ul className="space-y-1">
+          {list.map((t, i) => (
+            <li key={i} className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 dark:border-white/10">
+              <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-800 dark:text-zinc-200">{t.subject}</span>
+              <span className="shrink-0 text-[11.5px] text-zinc-400">{[t.body1, t.body2, t.body3].filter(Boolean).length} emails</span>
+              <button type="button" onClick={() => set(list.filter((_, j) => j !== i))} aria-label={`Remove ${t.subject}`} className="grid h-6 w-6 shrink-0 place-items-center rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.length < f.minItems && <p className="text-[12px] text-amber-700 dark:text-amber-300">Add at least {f.minItems}.</p>}
+      {writing ? (
+        <div className="space-y-1.5 rounded-md border border-zinc-200 p-2.5 dark:border-white/10">
+          <input value={writing.subject} onChange={(e) => setWriting({ ...writing, subject: e.target.value })} placeholder="Subject" aria-label="Subject" className={cn(inputCls, "h-8")} />
+          {(["body1", "body2", "body3"] as const).map((k, i) => (
+            <textarea key={k} rows={3} value={writing[k]} onChange={(e) => setWriting({ ...writing, [k]: e.target.value })} placeholder={i === 0 ? "First email" : `Follow-up ${i}${i === 2 ? " (optional)" : " (optional)"}`} aria-label={i === 0 ? "First email" : `Follow-up ${i}`} className={cn(inputCls, "resize-y py-2 leading-relaxed")} />
+          ))}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setWriting(null)} className="h-7 rounded-md px-2.5 text-[12.5px] text-zinc-600 hover:bg-zinc-900/5 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer">
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!writing.subject.trim() || !writing.body1.trim()}
+              onClick={() => {
+                set([...list, writing]);
+                setWriting(null);
+              }}
+              className="h-7 rounded-md bg-zinc-900 px-2.5 text-[12.5px] font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 cursor-pointer"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      ) : (
+        list.length < f.maxItems && (
+          <button type="button" onClick={() => setWriting({ subject: "", body1: "", body2: "", body3: "" })} className="inline-flex items-center gap-1 text-[12.5px] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">
+            <Plus className="h-3 w-3" /> Write one
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+/** The Google listing: what's confirmed now, and a search to pick another. */
+function ListingPicker({ engagementId, value, onChange }: { engagementId: string; value: SettingValue; onChange: (v: SettingValue) => void }) {
+  const current = (value && typeof value === "object" && !Array.isArray(value) ? value : null) as RepGoogleListing | null;
+  const [query, setQuery] = useState("");
+  const [state, setState] = useState<{ busy: boolean; results?: RepGoogleListing[]; error?: string }>({ busy: false });
+
+  async function search() {
+    if (query.trim().length < 2) return;
+    setState({ busy: true });
+    try {
+      const res = await fetch(`/api/engagements/${encodeURIComponent(engagementId)}/google-listings?q=${encodeURIComponent(query.trim())}`);
+      const body = (await res.json().catch(() => ({}))) as { listings?: RepGoogleListing[]; error?: string };
+      setState(res.ok ? { busy: false, results: body.listings ?? [] } : { busy: false, error: body.error ?? "Couldn't search." });
+    } catch {
+      setState({ busy: false, error: "Couldn't search. Check the connection and try again." });
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {current ? (
+        <div className="flex items-start gap-2 rounded-md border border-zinc-200 px-2.5 py-2 dark:border-white/10">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{current.name}</p>
+            <ListingLine l={current} />
+          </div>
+          <button type="button" onClick={() => onChange(null)} className="shrink-0 text-[12px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer">
+            Not us
+          </button>
+        </div>
+      ) : (
+        <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">None confirmed yet. Reviews aren&apos;t watched until one is.</p>
+      )}
+      <form
+        className="flex items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search();
+        }}
+      >
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Business name, city" aria-label="Search Google listings" className={cn(inputCls, "h-8")} />
+        <button type="submit" disabled={state.busy || query.trim().length < 2} aria-label="Search" className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-900/5 disabled:opacity-40 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer">
+          {state.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+        </button>
+      </form>
+      {state.error && <p className="text-[12px] text-rose-600 dark:text-rose-400">{state.error}</p>}
+      {state.results && state.results.length === 0 && <p className="text-[12px] text-zinc-500">No listings found. Try the name as it shows on Google, with the city.</p>}
+      {state.results && state.results.length > 0 && (
+        <ul className="space-y-1">
+          {state.results.map((l) => (
+            <li key={l.placeId}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(l as unknown as Record<string, unknown>);
+                  setState({ busy: false });
+                  setQuery("");
+                }}
+                className="w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-900/[0.04] dark:hover:bg-white/[0.04] cursor-pointer"
+              >
+                <span className="block text-[13px] text-zinc-900 dark:text-zinc-100">{l.name}</span>
+                <ListingLine l={l} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ListingLine({ l }: { l: RepGoogleListing }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-zinc-500 dark:text-zinc-400">
+      {l.rating != null && (
+        <span className="inline-flex items-center gap-0.5">
+          <Star className="h-3 w-3" /> {l.rating}
+          {l.reviews != null ? ` (${l.reviews})` : ""}
+        </span>
+      )}
+      {l.address && <span className="truncate">{l.address}</span>}
+      {l.site && <span className="truncate">{l.site.replace(/^https?:\/\//, "")}</span>}
+    </span>
   );
 }

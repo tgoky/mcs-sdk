@@ -52,7 +52,22 @@ vi.mock("@/lib/showtime-setup/tool-states", () => ({
   loadToolStates: async (_id: string, _ws: string, tools: { provider: string; group: string }[]) => tools.map((t) => ({ provider: t.provider, group: t.group, linked: credentials.has(t.provider), seenOnSite: false, saved: [], accountCheck: null })),
 }));
 const signing: Record<string, string> = {};
-vi.mock("@/lib/signing-secrets", () => ({ setSigningSecret: async (_id: string, kind: string, v: string) => void (signing[kind] = v) }));
+vi.mock("@/lib/signing-secrets", () => ({
+  setSigningSecret: async (_id: string, kind: string, v: string) => void (signing[kind] = v),
+  getSigningSecret: async (_id: string, kind: string) => signing[kind] ?? null,
+}));
+const salesChoices: string[] = [];
+vi.mock("@/lib/account-intel/decisions", () => ({ recordSalesCallChoice: async (_id: string, eventId: string) => void salesChoices.push(eventId) }));
+const packs: string[] = [];
+vi.mock("@/features/leak-map/server/notification-pack", () => ({
+  NOTIFICATION_PACK: [
+    { id: "show_rate_drop", label: "Booking show-rate falling", watches: "Show-rate.", defaultThreshold: 50, comparison: "below" },
+    { id: "email_open_rate_drop", label: "Email open-rate falling", watches: "Open-rate.", defaultThreshold: 25, comparison: "below" },
+  ],
+  activateNotificationPackAlert: async (_id: string, pack: string) => void packs.push(`+${pack}`),
+  deactivateNotificationPackAlert: async (_id: string, pack: string) => void packs.push(`-${pack}`),
+}));
+vi.mock("@/features/whop-agent/server/bridge-manager-service", () => ({ getOrCreateBridgeSigningSecret: async () => "bridge-secret" }));
 vi.mock("@/lib/paste-key-harvest", () => ({ harvestTwilioA2PStatus: async () => undefined }));
 vi.mock("@/lib/after-response", () => ({ afterResponse: () => undefined }));
 const dispatched: string[] = [];
@@ -70,7 +85,7 @@ vi.mock("@/lib/safe-fetch", () => ({
 vi.mock("@/lib/webhook-url-token", () => ({ webhookUrl: (origin: string, path: string, id: string) => `${origin}/api/webhooks/${path}/${id}?token=t` }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/engagements/e1" }));
 
-import { cleanSettings, cleanValue, isShown, settingsFor, storedValue, SKILL_SETTINGS, defaultValue, type SettingField } from "@/lib/skill-settings/schema";
+import { cleanSettings, cleanValue, hasSkillSettings, isShown, settingsFor, storedValue, SKILL_SETTINGS, defaultValue, type SettingField } from "@/lib/skill-settings/schema";
 import { loadSkillSettings, saveSkillSettings, type SkillSettingsView } from "@/lib/skill-settings/server";
 import { SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
 
@@ -98,6 +113,8 @@ beforeEach(() => {
   phases.length = 0;
   markers.length = 0;
   dispatched.length = 0;
+  salesChoices.length = 0;
+  packs.length = 0;
   credentials.clear();
   for (const k of Object.keys(storedSecrets)) delete storedSecrets[k];
   for (const k of Object.keys(signing)) delete signing[k];
@@ -292,6 +309,98 @@ describe("saving", () => {
     expect(await saveSkillSettings("e1", "whop-bridge-manager", { whop_bridge_destination_url: "https://hooks.example.com/whop" }, ctx)).toEqual({ ok: true });
     expect(stackPatches.at(-1)).toMatchObject({ whop_bridge_destination_url: "https://hooks.example.com/whop" });
     expect(resync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("what the audit found missing", () => {
+  it("gives Configure only to skills with something to set", () => {
+    expect(hasSkillSettings("rep-digest")).toBe(false);
+    expect(hasSkillSettings("rep-reddit-watch")).toBe(false);
+    expect(hasSkillSettings("rep-google-reviews-watch")).toBe(true);
+    expect(hasSkillSettings("source-connect")).toBe(true);
+    // The two tracking switches nothing read are gone.
+    expect(settingsFor("icp-lock")!.fields.map((f) => f.path)).not.toContain("trackingDefaults.openTracking");
+  });
+
+  it("offers the email tool's own lists, with what the list needs from the client", async () => {
+    tables.set(engagements, [engagementRow({ email_platform: "ghl", booking_platform_meta: { location_id: "loc1" }, target_workflow_id: "wf1" })]);
+    const view = (await loadSkillSettings("e1", "pile-on", ctx))!;
+    expect(view.values.target_workflow_id).toBe("wf1");
+    expect(view.context.ghl_location_id).toBe("loc1");
+    tables.set(engagements, [engagementRow({ email_platform: "klaviyo" })]);
+    expect(await saveSkillSettings("e1", "win-back", { recovery_list_id: "L9", long_term_nurture_list_id: "L10" }, ctx)).toEqual({ ok: true });
+    expect(stackPatches[0]).toEqual({ recovery_list_id: "L9", long_term_nurture_list_id: "L10" });
+  });
+
+  it("records the sales call as the confirmed choice and sets Showtime up again", async () => {
+    tables.set(engagements, [engagementRow({ booking_platform: "calendly" })]);
+    facts.bookingEventTypes = { value: { provider: "calendly", types: [{ id: "ev1", name: "Strategy call", durationMin: 30 }] } };
+    const view = (await loadSkillSettings("e1", "pin-down", ctx))!;
+    expect(view.options.salesCallEventType).toEqual([{ value: "ev1", label: "Strategy call", hint: "30 min" }]);
+    expect(await saveSkillSettings("e1", "pin-down", { salesCallEventType: "nope" }, ctx)).toMatchObject({ ok: false, field: "salesCallEventType" });
+    expect(await saveSkillSettings("e1", "pin-down", { salesCallEventType: "ev1" }, ctx)).toMatchObject({ ok: true });
+    expect(salesChoices).toEqual(["ev1"]);
+    expect(dispatched).toEqual(["pin-down"]);
+  });
+
+  it("switches bookings to a webhook the same way the sync-mode route does, and shows its address and secret", async () => {
+    tables.set(engagements, [engagementRow({ booking_platform: "calendly", webhook_receiver_mode: "polling" })]);
+    expect(await saveSkillSettings("e1", "pin-down", { webhook_receiver_mode: "webhook" }, ctx)).toEqual({ ok: true });
+    expect(stackPatches[0]).toMatchObject({ webhook_receiver_mode: "webhook", webhook_signing_secret_set: true, webhook_receiver_setup_dismissed: false });
+    expect(signing.booking_webhook).toMatch(/^[0-9a-f]{64}$/);
+    tables.set(engagements, [engagementRow({ booking_platform: "calendly", webhook_receiver_mode: "webhook" })]);
+    const view = (await loadSkillSettings("e1", "pin-down", ctx))!;
+    expect(view.copies.bookingWebhookUrl).toBe("https://app.test/api/webhooks/booking-event?engagement_id=e1");
+    expect(view.copies.bookingWebhookSecret).toBe(signing.booking_webhook);
+  });
+
+  it("turns Funnel Audit's alerts on and off", async () => {
+    tables.set(engagements, [engagementRow({ notification_pack_selections: ["show_rate_drop"] })]);
+    expect(await saveSkillSettings("e1", "leak-map", { notification_pack_selections: ["email_open_rate_drop"] }, ctx)).toEqual({ ok: true });
+    expect(packs).toEqual(["+email_open_rate_drop", "-show_rate_drop"]);
+  });
+
+  it("keeps Voice Capture's voice complete, and saves subject lines and sequences where the copy engine reads them", async () => {
+    tables.set(engagements, [engagementRow({})]);
+    coldOpen = { icps: [], voiceProfile: { greeting: "Hi", signOff: "Sam", tone: "Warm" }, subjectVariants: [], bodyVariantPools: { agencies: [{ subject: "a", body1: "b", body2: "", body3: "" }] }, dailySendSettings: { volume: 25, localHour: 9, copyMode: "generate", liveSendEnabled: false }, campaignMap: {}, leadSources: [] };
+    expect(await saveSkillSettings("e1", "voice-capture", { "voiceProfile.greeting": "" }, ctx)).toMatchObject({ ok: false, field: "voiceProfile.greeting" });
+    expect(await saveSkillSettings("e1", "voice-capture", { subjectVariants: ["Quick question"] }, ctx)).toEqual({ ok: true });
+    expect(coldOpenPatches.at(-1)).toEqual({ subjectVariants: ["Quick question"] });
+
+    const one = { subject: "Hello", body1: "First", body2: "", body3: "" };
+    expect(await saveSkillSettings("e1", "daily-send", { "dailySendSettings.copyMode": "upload", "bodyVariantPools.default": [one] }, ctx)).toMatchObject({ ok: false, error: expect.stringContaining("two") });
+    expect(await saveSkillSettings("e1", "daily-send", { "dailySendSettings.copyMode": "upload", "bodyVariantPools.default": [one, { ...one, subject: "Again" }] }, ctx)).toEqual({ ok: true });
+    expect(coldOpenPatches.at(-1)!.bodyVariantPools).toEqual({ agencies: coldOpen.bodyVariantPools && (coldOpen.bodyVariantPools as Record<string, unknown>).agencies, default: [one, { ...one, subject: "Again" }] });
+  });
+
+  it("saves Send Connect's own API address through Send Connect", async () => {
+    tables.set(engagements, [engagementRow({})]);
+    coldOpen = { icps: [{ slug: "agencies", label: "Agencies" }], sendPlatform: { platform: "instantly" }, campaignMap: { agencies: "c1" }, autoPushIcps: [], leadSources: [] };
+    expect(await saveSkillSettings("e1", "send-connect", { "sendPlatform.baseUrl": "https://api.example.com/v2" }, ctx)).toEqual({ ok: true });
+    expect(sendConnect).toHaveBeenCalledWith("e1", { platform: "instantly", baseUrl: "https://api.example.com/v2", campaignMap: { agencies: "c1" }, autoPushIcps: [] });
+  });
+
+  it("confirms a Google listing for Google Reviews Watch", async () => {
+    tables.set(engagements, [engagementRow({})]);
+    tables.set(repIdentityGraphs, [{ engagementId: "e1", googleListing: null, operatorName: "Mudd", operatorAliases: [], entities: [], competitors: [], operatorDomains: [] }]);
+    const listing = { placeId: "p1", name: "Mudd Ventures", address: "Austin, TX" };
+    expect(await saveSkillSettings("e1", "rep-google-reviews-watch", { googleListing: listing }, ctx)).toEqual({ ok: true });
+    expect(updates.find((u) => u.table === repIdentityGraphs)!.set).toMatchObject({ googleListing: listing });
+    expect(await saveSkillSettings("e1", "rep-google-reviews-watch", { googleListing: { name: "no id" } }, ctx)).toMatchObject({ ok: false });
+  });
+
+  it("renames Whop fields for the bridge, and shows the secret it signs with", async () => {
+    tables.set(engagements, [engagementRow({ whop_bridge_destination_url: "https://hooks.example.com/whop" })]);
+    expect(await saveSkillSettings("e1", "whop-bridge-manager", { whop_bridge_field_mapping: { email: "customer_email" } }, ctx)).toEqual({ ok: true });
+    expect(stackPatches.at(-1)).toEqual({ whop_bridge_field_mapping: { email: "customer_email" } });
+    expect(await saveSkillSettings("e1", "whop-bridge-manager", { whop_bridge_field_mapping: { email: "" } }, ctx)).toMatchObject({ ok: false });
+    expect((await loadSkillSettings("e1", "whop-bridge-manager", ctx))!.copies.whopBridgeSecret).toBe("bridge-secret");
+  });
+
+  it("saves the Slack signing secret where the Slack buttons check it", async () => {
+    tables.set(engagements, [engagementRow({ brief_landing_destination: "slack", slack_webhook_url: "https://hooks.slack.com/services/x" })]);
+    expect(await saveSkillSettings("e1", "pre-call-read", { "secret:slack": "abc" }, ctx)).toEqual({ ok: true });
+    expect(signing.slack).toBe("abc");
   });
 });
 
