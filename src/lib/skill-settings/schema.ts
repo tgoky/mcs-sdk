@@ -61,6 +61,12 @@ interface FieldBase {
   help?: string;
   /** Shown only when another field has one of these values (and is shown itself). */
   showIf?: { path: string; equals: (string | number | boolean)[] };
+  /** Drawn indented under the field it depends on (showIf), as part of it:
+   * Twilio's number under Twilio, the Slack channel under Slack. */
+  detail?: boolean;
+  /** Set once and left alone (webhook addresses, signing secrets): in the
+   * closed Advanced group at the bottom. */
+  advanced?: boolean;
   /** Can't be changed while another field has this value (and why). */
   lockedIf?: { path: string; equals: string | number | boolean; reason: string; value: string | number | boolean };
 }
@@ -195,7 +201,7 @@ const SMS_TOOL: SettingField = {
 };
 const onTwilio = { path: "sms_platform", equals: ["twilio"] };
 const TWILIO_FIELDS: SettingField[] = [
-  { kind: "text", store: "stack", path: "sms_platform_meta.twilio_account_sid", label: "Twilio Account SID", placeholder: "Starts with AC", maxLength: 64, default: null, showIf: onTwilio, help: "On the Twilio Console home, beside the Auth Token." },
+  { kind: "text", store: "stack", path: "sms_platform_meta.twilio_account_sid", label: "Twilio Account SID", placeholder: "Starts with AC", maxLength: 64, default: null, showIf: onTwilio, detail: true, help: "On the Twilio Console home, beside the Auth Token." },
   {
     kind: "pick",
     store: "stack",
@@ -205,6 +211,7 @@ const TWILIO_FIELDS: SettingField[] = [
     params: { accountSid: "sms_platform_meta.twilio_account_sid" },
     default: null,
     showIf: onTwilio,
+    detail: true,
     help: "Texts go out from its numbers, and its A2P registration is checked before anything sends.",
   },
   {
@@ -216,24 +223,28 @@ const TWILIO_FIELDS: SettingField[] = [
     params: { accountSid: "sms_platform_meta.twilio_account_sid" },
     default: null,
     showIf: onTwilio,
+    detail: true,
   },
   {
     kind: "copy",
     store: "none",
     path: "copy:twilioReplyUrl",
-    label: "Replies come back to",
+    label: "Twilio reply address",
     from: "twilioReplyUrl",
     default: null,
     showIf: onTwilio,
+    advanced: true,
     help: "In Twilio, set \"A message comes in\" on the Messaging Service (or number) to this address. STOP ends every text to that person; other replies land in the Queue.",
   },
 ];
 
 const SLACK = skillTool("slack");
-const slackFields = (showIf: FieldBase["showIf"]): SettingField[] => [
-  { kind: "connect", store: "none", path: "connect:slack", label: "Slack", tools: [SLACK], default: null, showIf },
-  { kind: "select", store: "stack", path: "slack_channel_id", label: "Channel", options: [], optionsFrom: "slackChannels", default: null, showIf, help: "Invite the Slack app to the channel. Channels show once Slack is connected." },
-  { kind: "text", store: "stack", path: "slack_webhook_url", label: "Or post through an incoming webhook", format: "url", maxLength: 500, placeholder: "https://hooks.slack.com/services/…", default: null, showIf, help: "Keeps the Approve and Reject buttons on each post." },
+/** Slack's channel (or webhook) under the choice that sends to Slack. A
+ * connect row only where no Slack logo is already on screen to connect from. */
+const slackFields = (showIf: FieldBase["showIf"], withConnect: boolean): SettingField[] => [
+  ...(withConnect ? [{ kind: "connect", store: "none", path: "connect:slack", label: "Slack", tools: [SLACK], default: null, showIf, detail: true } as SettingField] : []),
+  { kind: "select", store: "stack", path: "slack_channel_id", label: "Channel", options: [], optionsFrom: "slackChannels", default: null, showIf, detail: true, help: "Invite the Slack app to it." },
+  { kind: "text", store: "stack", path: "slack_webhook_url", label: "Or an incoming webhook", format: "url", maxLength: 500, placeholder: "https://hooks.slack.com/services/…", default: null, showIf, detail: true },
 ];
 
 const RECALL_REGIONS = [
@@ -269,6 +280,7 @@ const PILE_ON_TARGETS: SettingField[] = [
     },
     default: null,
     showIf: { path: "email_platform", equals: LIST_TOOLS },
+    detail: true,
   },
   {
     kind: "pick",
@@ -279,6 +291,7 @@ const PILE_ON_TARGETS: SettingField[] = [
     params: GHL,
     default: null,
     showIf: { path: "email_platform", equals: ["ghl"] },
+    detail: true,
   },
 ];
 const WIN_BACK_TARGETS: SettingField[] = [
@@ -299,6 +312,7 @@ const WIN_BACK_TARGETS: SettingField[] = [
     },
     default: null,
     showIf: { path: "email_platform", equals: LIST_TOOLS },
+    detail: true,
   },
   {
     kind: "pick",
@@ -308,6 +322,7 @@ const WIN_BACK_TARGETS: SettingField[] = [
     sourceBy: { path: "email_platform", map: { ghl: { resource: "ghl-workflows", params: GHL }, hubspot: { resource: "hubspot-workflows" } } },
     default: null,
     showIf: { path: "email_platform", equals: ["ghl", "hubspot"] },
+    detail: true,
   },
   {
     kind: "pick",
@@ -318,6 +333,7 @@ const WIN_BACK_TARGETS: SettingField[] = [
     params: AC,
     default: null,
     showIf: { path: "email_platform", equals: ["activecampaign"] },
+    detail: true,
   },
   {
     kind: "pick",
@@ -328,6 +344,7 @@ const WIN_BACK_TARGETS: SettingField[] = [
     resource: "klaviyo-lists",
     default: null,
     showIf: { path: "email_platform", equals: ["klaviyo"] },
+    detail: true,
   },
 ];
 
@@ -369,15 +386,15 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: null,
       },
-      { kind: "number", store: "stack", path: "webhook_poll_interval_minutes", label: "Check every", unit: "minutes", min: 5, max: 120, integer: true, default: 25, showIf: { path: "webhook_receiver_mode", equals: ["polling"] } },
-      { kind: "copy", store: "none", path: "copy:bookingWebhookUrl", label: "Webhook address", from: "bookingWebhookUrl", default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] } },
-      { kind: "copy", store: "none", path: "copy:bookingWebhookSecret", label: "Webhook signing secret", from: "bookingWebhookSecret", secret: true, default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] } },
+      { kind: "number", store: "stack", path: "webhook_poll_interval_minutes", label: "Check every", unit: "minutes", min: 5, max: 120, integer: true, default: 25, showIf: { path: "webhook_receiver_mode", equals: ["polling"] }, detail: true },
+      { kind: "copy", store: "none", path: "copy:bookingWebhookUrl", label: "Webhook address", from: "bookingWebhookUrl", default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] }, detail: true },
+      { kind: "copy", store: "none", path: "copy:bookingWebhookSecret", label: "Webhook signing secret", from: "bookingWebhookSecret", secret: true, default: null, showIf: { path: "webhook_receiver_mode", equals: ["webhook"] }, detail: true },
       EMAIL_TOOL,
       HOSTING_TOOL,
-      { kind: "pick", store: "stack", path: "hosting_platform_meta.webflow_site_id", label: "Webflow site", resource: "webflow-sites", default: null, showIf: { path: "hosting_platform", equals: ["webflow"] } },
-      { kind: "pick", store: "stack", path: "hosting_platform_meta.vercel_project_name", label: "Vercel project", resource: "vercel-projects", default: null, showIf: { path: "hosting_platform", equals: ["nextjs_vercel"] } },
+      { kind: "pick", store: "stack", path: "hosting_platform_meta.webflow_site_id", label: "Webflow site", resource: "webflow-sites", default: null, showIf: { path: "hosting_platform", equals: ["webflow"] }, detail: true },
+      { kind: "pick", store: "stack", path: "hosting_platform_meta.vercel_project_name", label: "Vercel project", resource: "vercel-projects", default: null, showIf: { path: "hosting_platform", equals: ["nextjs_vercel"] }, detail: true },
       { kind: "toggle", store: "stack", path: "existing_confirmation_page_reuse", label: "Keep the client's own confirmation page", help: "We check it for gaps and publish nothing.", default: false },
-      { kind: "text", store: "stack", path: "existing_confirmation_page_url", label: "Their page", format: "url", maxLength: 500, default: null, showIf: { path: "existing_confirmation_page_reuse", equals: [true] } },
+      { kind: "text", store: "stack", path: "existing_confirmation_page_url", label: "Their page", format: "url", maxLength: 500, default: null, showIf: { path: "existing_confirmation_page_reuse", equals: [true] }, detail: true },
       {
         kind: "select",
         store: "engagement",
@@ -402,8 +419,8 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
       SMS_TOOL,
       ...TWILIO_FIELDS,
       { kind: "toggle", store: "stack", path: "at_risk_check_in", label: "Check in with at-risk calls", help: "One extra text 3 hours before a call whose estimated show chance is low. Replies come back like any text: YES confirms, a new time lands in the Queue.", default: false, showIf: { path: "sms_platform", equals: TEXTING } },
-      { kind: "number", store: "stack", path: "at_risk_threshold", label: "At risk under", unit: "%", min: 10, max: 90, step: 5, integer: true, default: 50, showIf: { path: "at_risk_check_in", equals: [true] } },
-      { kind: "textarea", store: "stack", path: "at_risk_check_in_message", label: "Check-in text", maxLength: 320, tokens: ["{name}", "{time}"], default: DEFAULT_CHECK_IN_MESSAGE, showIf: { path: "at_risk_check_in", equals: [true] } },
+      { kind: "number", store: "stack", path: "at_risk_threshold", label: "At risk under", unit: "%", min: 10, max: 90, step: 5, integer: true, default: 50, showIf: { path: "at_risk_check_in", equals: [true] }, detail: true },
+      { kind: "textarea", store: "stack", path: "at_risk_check_in_message", label: "Check-in text", maxLength: 320, tokens: ["{name}", "{time}"], default: DEFAULT_CHECK_IN_MESSAGE, showIf: { path: "at_risk_check_in", equals: [true] }, detail: true },
       {
         kind: "select",
         store: "stack",
@@ -430,7 +447,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: "standard",
       },
-      { kind: "text", store: "stack", path: "sms_compliance_footer_custom", label: "Your opt-out line", maxLength: 120, placeholder: "Text STOP to stop these messages", default: null, showIf: { path: "sms_compliance_footer_variant", equals: ["custom"] } },
+      { kind: "text", store: "stack", path: "sms_compliance_footer_custom", label: "Your opt-out line", maxLength: 120, placeholder: "Text STOP to stop these messages", default: null, showIf: { path: "sms_compliance_footer_variant", equals: ["custom"] }, detail: true },
       {
         kind: "tool",
         store: "stack",
@@ -453,6 +470,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         resource: "google-sheets-spreadsheets",
         default: null,
         showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
+        detail: true,
       },
       {
         kind: "pick",
@@ -463,6 +481,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         params: { spreadsheetId: "ad_data_platform_meta.google_sheets_spreadsheet_id" },
         default: null,
         showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
+        detail: true,
       },
       {
         kind: "text",
@@ -472,6 +491,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         maxLength: 100,
         default: "showtime_pile_on_cohort",
         showIf: { path: "ad_data_platform", equals: ["hyros", "google_sheets"] },
+        detail: true,
         help: "What booked leads are tagged as, so your ads can target or exclude them.",
       },
     ],
@@ -530,12 +550,13 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         from: "deliveryWebhookUrl",
         default: null,
         showIf: { path: "email_platform", equals: DELIVERY_EMAIL },
+        advanced: true,
         help: "Add this address as a webhook in the email tool, so bounces and complaints are counted and sending pauses on its own.",
       },
-      { kind: "secret", store: "none", path: "secret:klaviyo", label: "Klaviyo webhook secret", secret: { credential: "klaviyo_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["klaviyo"] } },
-      { kind: "secret", store: "none", path: "secret:mailchimp", label: "Your own secret on the address (optional)", secret: { credential: "mailchimp_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["mailchimp"] }, help: "The address already carries this client's token. To add your own too, append &secret= and it to the address in Mailchimp, and save the same value here." },
-      { kind: "secret", store: "none", path: "secret:activecampaign", label: "ActiveCampaign webhook secret", secret: { credential: "activecampaign_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] } },
-      { kind: "text", store: "stack", path: "activecampaign_webhook_signature_header", label: "Signature header name", placeholder: "The header you marked as the signature", maxLength: 100, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] } },
+      { kind: "secret", store: "none", path: "secret:klaviyo", label: "Klaviyo webhook secret", secret: { credential: "klaviyo_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["klaviyo"] }, advanced: true },
+      { kind: "secret", store: "none", path: "secret:mailchimp", label: "Your own secret on the address (optional)", secret: { credential: "mailchimp_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["mailchimp"] }, advanced: true, help: "The address already carries this client's token. To add your own too, append &secret= and it to the address in Mailchimp, and save the same value here." },
+      { kind: "secret", store: "none", path: "secret:activecampaign", label: "ActiveCampaign webhook secret", secret: { credential: "activecampaign_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] }, advanced: true },
+      { kind: "text", store: "stack", path: "activecampaign_webhook_signature_header", label: "Signature header name", placeholder: "The header you marked as the signature", maxLength: 100, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] }, advanced: true },
       {
         kind: "select",
         store: "stack",
@@ -548,8 +569,8 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: "none",
       },
-      { kind: "copy", store: "none", path: "copy:replyCatcherUrl", label: "Forward replies to", from: "replyCatcherUrl", default: null, showIf: { path: "inbound_reply_mode", equals: ["forwarding"] } },
-      { kind: "text", store: "stack", path: "hubspot_portal_id", label: "HubSpot account ID", placeholder: "12345678", maxLength: 20, default: null, showIf: { path: "inbound_reply_mode", equals: ["native"] }, help: "Read from HubSpot when it's connected; otherwise under Settings, Account Setup, Account Defaults." },
+      { kind: "copy", store: "none", path: "copy:replyCatcherUrl", label: "Forward replies to", from: "replyCatcherUrl", default: null, showIf: { path: "inbound_reply_mode", equals: ["forwarding"] }, detail: true },
+      { kind: "text", store: "stack", path: "hubspot_portal_id", label: "HubSpot account ID", placeholder: "12345678", maxLength: 20, default: null, showIf: { path: "inbound_reply_mode", equals: ["native"] }, detail: true, help: "Read from HubSpot when it's connected; otherwise under Settings, Account Setup, Account Defaults." },
     ],
     check: (v) =>
       v.inbound_reply_mode === "native" && v.email_platform !== "hubspot"
@@ -571,7 +592,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: null,
       },
-      ...slackFields({ path: "brief_landing_destination", equals: ["slack"] }),
+      ...slackFields({ path: "brief_landing_destination", equals: ["slack"] }, false),
       {
         kind: "copy",
         store: "none",
@@ -580,6 +601,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         from: "slackInteractionsUrl",
         default: null,
         showIf: { path: "brief_landing_destination", equals: ["slack"] },
+        advanced: true,
         help: "For the Approve and Reject buttons: in your Slack app, turn on Interactivity and paste this as the Request URL.",
       },
       {
@@ -590,6 +612,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         secret: { signing: "slack" },
         default: null,
         showIf: { path: "brief_landing_destination", equals: ["slack"] },
+        advanced: true,
         help: "From your Slack app's Basic Information page. Without it, button presses are refused.",
       },
       {
@@ -638,10 +661,10 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: null,
       },
-      { kind: "select", store: "stack", path: "conversation_intelligence_meta.recall_region", label: "Recall region", options: RECALL_REGIONS, default: null, showIf: onRecall, help: "Must match the region in this client's Recall.ai dashboard." },
-      { kind: "text", store: "stack", path: "conversation_intelligence_meta.recall_bot_name", label: "Notetaker's name", placeholder: "Notetaker", maxLength: 60, default: null, showIf: onRecall },
-      { kind: "copy", store: "none", path: "copy:recallWebhookUrl", label: "Recall webhook address", from: "recallWebhookUrl", default: null, showIf: onRecall, help: "In Recall.ai → Webhooks, point a webhook here, then paste its signing secret below." },
-      { kind: "secret", store: "none", path: "secret:recall", label: "Recall webhook signing secret", secret: { signing: "recall" }, default: null, showIf: onRecall },
+      { kind: "select", store: "stack", path: "conversation_intelligence_meta.recall_region", label: "Recall region", options: RECALL_REGIONS, default: null, showIf: onRecall, detail: true, help: "Must match the region in this client's Recall.ai dashboard." },
+      { kind: "text", store: "stack", path: "conversation_intelligence_meta.recall_bot_name", label: "Notetaker's name", placeholder: "Notetaker", maxLength: 60, default: null, showIf: onRecall, detail: true },
+      { kind: "copy", store: "none", path: "copy:recallWebhookUrl", label: "Recall webhook address", from: "recallWebhookUrl", default: null, showIf: onRecall, advanced: true, help: "In Recall.ai → Webhooks, point a webhook here, then paste its signing secret below." },
+      { kind: "secret", store: "none", path: "secret:recall", label: "Recall webhook signing secret", secret: { signing: "recall" }, default: null, showIf: onRecall, advanced: true },
       {
         kind: "tool",
         store: "stack",
@@ -656,9 +679,9 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: null,
       },
-      { kind: "text", store: "stack", path: "hero_video_id", label: "Video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["vidalytics", "youtube_analytics"] } },
-      { kind: "text", store: "stack", path: "video_engagement_meta.wistia_video_id", label: "Wistia video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["wistia"] } },
-      { kind: "text", store: "stack", path: "video_engagement_meta.youtube_channel_id", label: "YouTube channel ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["youtube_analytics"] } },
+      { kind: "text", store: "stack", path: "hero_video_id", label: "Video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["vidalytics", "youtube_analytics"] }, detail: true },
+      { kind: "text", store: "stack", path: "video_engagement_meta.wistia_video_id", label: "Wistia video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["wistia"] }, detail: true },
+      { kind: "text", store: "stack", path: "video_engagement_meta.youtube_channel_id", label: "YouTube channel ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["youtube_analytics"] }, detail: true },
     ],
   },
   "leak-map": {
@@ -679,8 +702,8 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: "dashboard_only",
       },
-      { kind: "text", store: "stack", path: "leak_map_report_email", label: "Email it to", format: "email", maxLength: 254, required: true, default: null, showIf: { path: "audit_output_format", equals: ["email"] } },
-      ...slackFields({ path: "audit_output_format", equals: ["slack"] }),
+      { kind: "text", store: "stack", path: "leak_map_report_email", label: "Email it to", format: "email", maxLength: 254, required: true, default: null, showIf: { path: "audit_output_format", equals: ["email"] }, detail: true },
+      ...slackFields({ path: "audit_output_format", equals: ["slack"] }, true),
       { kind: "number", store: "stack", path: "sample_size_minimum", label: "Trust a number only after", unit: "calls", min: 1, max: 200, integer: true, default: 5 },
       { kind: "number", store: "stack", path: "aging_threshold_days", label: "Deals count as stuck after", unit: "days", min: 1, max: 365, integer: true, default: 30 },
       { kind: "multi", store: "stack", path: "notification_pack_selections", label: "Alert me when", optionsFrom: "notificationPack", default: null, help: "Each one watches a number from the latest audit and alerts you when it crosses its line." },
@@ -765,13 +788,13 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: "generate",
       },
-      { kind: "sequences", store: "coldOpen", path: "bodyVariantPools.default", label: "Your sequences", minItems: 2, maxItems: 10, default: null, showIf: { path: "dailySendSettings.copyMode", equals: ["upload"] }, help: "Each lead gets one, the same one every time. {company_name} works in the subject." },
+      { kind: "sequences", store: "coldOpen", path: "bodyVariantPools.default", label: "Your sequences", minItems: 2, maxItems: 10, default: null, showIf: { path: "dailySendSettings.copyMode", equals: ["upload"] }, detail: true, help: "Each lead gets one, the same one every time. {company_name} works in the subject." },
     ],
   },
   "send-connect": {
     fields: [
       SEND_TOOL,
-      { kind: "text", store: "coldOpen", path: "sendPlatform.baseUrl", label: "API address (optional)", format: "url", maxLength: 300, default: null, help: "Only if the sending tool gave this account its own API address. Empty uses the standard one." },
+      { kind: "text", store: "coldOpen", path: "sendPlatform.baseUrl", label: "API address (optional)", format: "url", maxLength: 300, default: null, advanced: true, help: "Only if the sending tool gave this account its own API address. Empty uses the standard one." },
       { kind: "map", store: "coldOpen", path: "campaignMap", label: "Campaign for each customer type", keysFrom: "coldOpenIcps", optionsFrom: "coldOpenCampaigns", default: null, help: "Leads go into this campaign in the sending tool." },
       { kind: "multi", store: "coldOpen", path: "autoPushIcps", label: "Push without review", optionsFrom: "coldOpenIcps", help: "Leads for these customer types go straight to the sending tool, even if they're marked for review.", default: null },
     ],
@@ -821,8 +844,8 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   "whop-bridge-manager": {
     fields: [
       { kind: "text", store: "stack", path: "whop_bridge_destination_url", label: "Forward events to", format: "url", maxLength: 500, placeholder: "https://…", default: null, help: "A public https address. Verified Whop events are posted there as they arrive." },
-      { kind: "copy", store: "none", path: "copy:whopBridgeSecret", label: "Signing secret", from: "whopBridgeSecret", secret: true, default: null, help: "Each post is signed with this, so the destination can check it came from here." },
-      { kind: "pairs", store: "stack", path: "whop_bridge_field_mapping", label: "Rename fields", fromLabel: "Whop field", toLabel: "Name it", maxItems: 30, default: null, help: "Only if the destination expects different names. Everything else is sent as Whop names it." },
+      { kind: "copy", store: "none", path: "copy:whopBridgeSecret", label: "Signing secret", from: "whopBridgeSecret", secret: true, default: null, advanced: true, help: "Each post is signed with this, so the destination can check it came from here." },
+      { kind: "pairs", store: "stack", path: "whop_bridge_field_mapping", label: "Rename fields", fromLabel: "Whop field", toLabel: "Name it", maxItems: 30, default: null, advanced: true, help: "Only if the destination expects different names. Everything else is sent as Whop names it." },
     ],
   },
   "whop-payment-recovery": {

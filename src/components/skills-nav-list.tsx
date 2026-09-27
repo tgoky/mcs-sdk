@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Settings } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, MoreHorizontal, Plus, Settings } from "lucide-react";
 import { hasSkillSettings } from "@/lib/skill-settings/schema";
 import { useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import { useOpenSkillSettings } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
@@ -157,19 +157,21 @@ function InstalledSkillsList({
                           // eslint-disable-next-line @next/next/no-img-element -- a static product mark, same as the Library's
                           <img src={product.image} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
                         ) : null}
-                        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-                        <span className="shrink-0 text-[12px] tabular-nums text-zinc-400">
-                          {skills.length} on
-                          {failing > 0 && (
-                            <span
-                              title={`${failing} ${failing === 1 ? "skill" : "skills"} failed their last run`}
-                              aria-label={`${failing} failing`}
-                              className="text-status-error"
-                            >
-                              {" "}
-                              · {failing} failing
-                            </span>
-                          )}
+                        <span className="min-w-0 flex-1 truncate font-medium" title={name}>
+                          {name}
+                        </span>
+                        {/* How many are on, as a small badge; red with a mark when one failed its last run. */}
+                        <span
+                          title={failing > 0 ? `${skills.length} on · ${failing} failed ${failing === 1 ? "its" : "their"} last run` : `${skills.length} on`}
+                          aria-label={failing > 0 ? `${skills.length} on, ${failing} failing` : `${skills.length} on`}
+                          className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums ${
+                            failing > 0
+                              ? "bg-rose-500/12 text-rose-600 ring-1 ring-inset ring-rose-500/25 dark:bg-rose-500/15 dark:text-rose-400"
+                              : "bg-zinc-200/70 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                          }`}
+                        >
+                          {failing > 0 && <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.5} />}
+                          {skills.length}
                         </span>
                       </button>
                       {engagementId && setupWorker && (

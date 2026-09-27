@@ -27,7 +27,7 @@ export function SkillSettingsPageClient({ engagementId, skillId, backHref }: { e
   }, []);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800/80 dark:bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 md:p-6 dark:border-zinc-800/80 dark:bg-zinc-900/40">
       <SkillSettingsPanel
         engagementId={engagementId}
         skillId={skillId}

@@ -12,6 +12,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 export interface PaneSkill {
   engagementId: string;
   skillId: string;
+  /** Only these settings (paths): opened from a setup page, the ones it doesn't ask. */
+  only?: string[];
 }
 
 interface SkillPaneState {
@@ -95,7 +97,13 @@ export function useSkillPane(): SkillPaneState | null {
   return useContext(SkillPaneContext);
 }
 
-/** A skill's own settings page. */
-export function skillSettingsHref(engagementId: string, skillId: string): string {
-  return `/dashboard/engagements/${encodeURIComponent(engagementId)}/skills/${encodeURIComponent(skillId)}/settings`;
+/** A skill's own settings page; `from` is where Back returns to. */
+export function skillSettingsHref(engagementId: string, skillId: string, from?: string): string {
+  const base = `/dashboard/engagements/${encodeURIComponent(engagementId)}/skills/${encodeURIComponent(skillId)}/settings`;
+  return from ? `${base}?from=${encodeURIComponent(from)}` : base;
+}
+
+/** Where the browser is now, to come back to. */
+export function hereForBack(): string | undefined {
+  return typeof window === "undefined" ? undefined : `${window.location.pathname}${window.location.search}`;
 }

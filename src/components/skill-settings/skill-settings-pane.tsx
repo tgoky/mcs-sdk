@@ -18,7 +18,7 @@ import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { SkillSettingsPanel } from "./skill-settings-panel";
-import { skillSettingsHref, useSkillPane } from "./skill-pane-context";
+import { hereForBack, skillSettingsHref, useSkillPane } from "./skill-pane-context";
 import { cn } from "@/lib/utils";
 
 const MIN_WIDTH = 380;
@@ -108,7 +108,7 @@ export function SkillSettingsPane({ width, onWidthChange, variant = "shell" }: {
             <button
               type="button"
               onClick={() => {
-                router.push(skillSettingsHref(shown.engagementId, shown.skillId));
+                router.push(skillSettingsHref(shown.engagementId, shown.skillId, hereForBack()));
                 pane.close();
               }}
               className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
@@ -148,6 +148,7 @@ export function SkillSettingsPane({ width, onWidthChange, variant = "shell" }: {
               engagementId={shown.engagementId}
               skillId={shown.skillId}
               layout="fill"
+              only={shown.only}
               onDirtyChange={pane.setDirty}
               onClose={pane.close}
               onSaved={(notice) => {

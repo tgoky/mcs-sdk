@@ -60,14 +60,15 @@ export default async function DashboardLayout({
   // so the provider survives every route change under /dashboard instead
   // of resetting mid-tour on each navigation.
   const primaryEngagementId = await getPrimaryEngagementIdForWorkspace(activeWorkspace.workspaceId);
-  const tourStack = primaryEngagementId
+  const primaryRow = primaryEngagementId
     ? await db
-        .select({ stack: engagements.stack })
+        .select({ stack: engagements.stack, pausedAt: engagements.pausedAt })
         .from(engagements)
         .where(eq(engagements.engagementId, primaryEngagementId))
         .limit(1)
-        .then((r) => (r[0]?.stack as EngagementStack | null) ?? null)
+        .then((r) => r[0] ?? null)
     : null;
+  const tourStack = (primaryRow?.stack as EngagementStack | null | undefined) ?? null;
   // What the Create menu's shortcuts act on: this client's switched-on
   // skills and installed products. A failed read leaves the lists empty,
   // never the whole dashboard down.
@@ -77,6 +78,7 @@ export default async function DashboardLayout({
   ]);
   const createMenu: CreateMenuContext = {
     engagementId: primaryEngagementId,
+    paused: Boolean(primaryRow?.pausedAt),
     skills: enabledIds.map((id) => ({ id, name: WORKER_REGISTRY[id].name, hasSettings: hasSkillSettings(id) })),
     products: (installed.get(activeWorkspace.workspaceId) ?? []).filter(isProductId).map((id) => ({
       id,

@@ -460,6 +460,9 @@ describe("the panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Twilio" }));
     fireEvent.click(await screen.findByRole("button", { name: "Use Twilio" }));
     await screen.findByText("Twilio Account SID");
+    // The reply address is pasted once, so it waits in the closed Advanced group.
+    expect(screen.queryByText("https://app.test/api/webhooks/twilio-inbound/e1?token=t")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     expect(screen.getByText("https://app.test/api/webhooks/twilio-inbound/e1?token=t")).toBeTruthy();
     expect(screen.getByText("Check in with at-risk calls")).toBeTruthy();
 
@@ -467,6 +470,18 @@ describe("the panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(posted[0].body).toMatchObject({ sms_platform: "twilio", "sms_platform_meta.twilio_account_sid": "AC123" });
+  });
+
+  it("shows Slack once, with the channel nested under it and waiting for the connection", async () => {
+    serve(viewOf({ skillId: "pre-call-read", name: "Call Brief", values: { brief_landing_destination: "slack", prospect_research_sources_used: null } }));
+    render(<SkillSettingsPanel engagementId="e1" skillId="pre-call-read" onClose={() => undefined} />);
+    await screen.findByText("Briefs land in");
+    // One Slack: its logo. No second "connect Slack" row further down.
+    expect(screen.getAllByRole("button", { name: "Slack" })).toHaveLength(1);
+    expect(screen.getByText(/Connect Slack \(its logo above\) to pick a channel/)).toBeInTheDocument();
+    // The interactivity address is pasted once, so it's behind Advanced.
+    expect(screen.queryByText("Slack interactivity address")).toBeNull();
+    expect(screen.getByRole("button", { name: /Advanced/ })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("connects a tool from its logo with a key, through the shared connect route", async () => {

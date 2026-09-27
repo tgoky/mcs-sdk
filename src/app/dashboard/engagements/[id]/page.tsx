@@ -39,13 +39,15 @@ import { getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import { startOfWeek } from "@/lib/dashboard-stats";
 import { getRecentAccountReviews } from "@/features/reports/server/account-advisor";
 import { DynamicClientReport } from "@/components/reports/dynamic-client-report";
+import { HeaderTools, type HeaderTool } from "./header-tools";
+import { findShowtimeTool } from "@/lib/showtime-setup/catalog";
+import { loadToolStates } from "@/lib/showtime-setup/tool-states";
+import { getClientFacts } from "@/lib/client-facts";
 import { getClientResults } from "@/features/reports/server/client-results";
 import { getConnectedResults } from "@/features/reports/server/connected-results";
 import { AccountAdvisorPanel } from "@/components/reports/account-advisor-panel";
 import {
   SKILLS,
-  bookingPlatformLabel,
-  emailPlatformLabel,
   type SkillName,
 } from "@/lib/copy";
 import { latestStepLabel } from "@/lib/run-display";
@@ -259,6 +261,16 @@ export default async function EngagementDetailPage({
   //   buyer: "Exported to buyer's infra",
   // };
 
+
+  // The booking and email tools, with what's connected for this client, for the header's logos.
+  const headerToolList = [
+    { role: "Bookings", tool: stack?.booking_platform ? findShowtimeTool(stack.booking_platform, "booking") : undefined },
+    { role: "Emails", tool: stack?.email_platform ? findShowtimeTool(stack.email_platform, "email") : undefined },
+  ].filter((t): t is { role: string; tool: NonNullable<typeof t.tool> } => Boolean(t.tool));
+  const headerStates = headerToolList.length
+    ? await loadToolStates(engagement.engagementId, activeWorkspace.workspaceId, headerToolList.map((t) => t.tool), await getClientFacts(engagement.engagementId)).catch(() => [])
+    : [];
+  const headerTools: HeaderTool[] = headerToolList.map((t) => ({ ...t, state: headerStates.find((st) => st.provider === t.tool.provider && st.group === t.tool.group) }));
   return (
     <div className="relative min-h-screen w-full mx-auto tracking-tight antialiased px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200 overflow-hidden pb-10">
       
@@ -298,15 +310,8 @@ export default async function EngagementDetailPage({
                   </h1>
                 </div>
 
-                {/* Clean Meta Row */}
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 translate-y-3.5 -mb-3 -ml-11 z-10 relative">
-                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                    {bookingPlatformLabel(stack?.booking_platform)}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-border text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                    {emailPlatformLabel(stack?.email_platform)}
-                  </span>
-                </div>
+                {/* The client's tools as logos (each opens its connection), and the offer's traffic. */}
+                <HeaderTools engagementId={engagement.engagementId} buyer={engagement.buyer} tools={headerTools} trafficTemp={offerDetails?.traffic_temperature ? String(offerDetails.traffic_temperature) : null} />
               </div>
             </div>
 
@@ -328,10 +333,7 @@ export default async function EngagementDetailPage({
                   vaultLinksByProvider={vaultLinksByProvider}
                   initialRequireApproval={requireApproval}
                   initialDeletedAt={engagement.deletedAt ? engagement.deletedAt.toISOString() : null}
-                  clientDetails={{
-                    queuePinWindowHours: engagement.queuePinWindowHours,
-                    notificationPackSelections: (engagement.stack as EngagementStack | null)?.notification_pack_selections ?? [],
-                  }}
+                  initialPausedAt={engagement.pausedAt ? engagement.pausedAt.toISOString() : null}
                 />
               </div>
             </div>
@@ -344,12 +346,14 @@ export default async function EngagementDetailPage({
             real, correctly-zeroed Showtime card even for a client with no
             Showtime setup at all. */}
         <div data-tour="engagement-report">
-          <DynamicClientReport engagementId={id} offerDetails={offerDetails} blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} connected={connectedResults} />
+          <DynamicClientReport engagementId={id} offerDetails={offerDetails} hideOfferTag blocksByPeriod={reportBlocksByPeriod} enabledWorkerIds={workerIds} results={clientResults} connected={connectedResults} />
         </div>
       </ReportPeriodProvider>
 
         <AccountAdvisorPanel engagementId={engagement.engagementId} initialReviews={recentAccountReviews} />
 
+        {/* Skills and the audit log read as one block: no page gap between them. */}
+        <div className="space-y-4">
         <div data-tour="engagement-workers-panel">
           <WorkersPanel
             engagementId={engagement.engagementId}
@@ -365,6 +369,7 @@ export default async function EngagementDetailPage({
         </div>
 
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
+        </div>
 
         {repIdentityGraphRow && (
           <Link

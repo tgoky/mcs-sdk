@@ -49,6 +49,8 @@ export function ToolAvatar({
   buyer,
   actions,
   size = 48,
+  hideLabel = false,
+  title,
 }: {
   tool: SetupTool;
   state: ToolState | undefined;
@@ -57,6 +59,10 @@ export function ToolAvatar({
   buyer: string;
   actions: ToolActions;
   size?: number;
+  /** Just the logo (a page header); the name shows on hover. */
+  hideLabel?: boolean;
+  /** Hover text, when the label is hidden. */
+  title?: string;
 }) {
   const [open, setOpen] = useState(false);
   const linked = Boolean(state?.linked);
@@ -74,6 +80,7 @@ export function ToolAvatar({
           type="button"
           {...props}
           className="group relative flex flex-col items-center gap-1.5 outline-none cursor-pointer"
+          title={title}
           aria-label={`${tool.label}${on ? ", connected" : ""}`}
         >
           <motion.span
@@ -115,9 +122,11 @@ export function ToolAvatar({
               )}
             </AnimatePresence>
           </motion.span>
-          <span className={cn("max-w-[72px] truncate text-[11px] leading-none", on ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-muted)]")}>
-            {tool.label}
-          </span>
+          {!hideLabel && (
+            <span className={cn("max-w-[72px] truncate text-[11px] leading-none", on ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-muted)]")}>
+              {tool.label}
+            </span>
+          )}
         </button>
       )}
     >

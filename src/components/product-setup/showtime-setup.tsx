@@ -1825,7 +1825,7 @@ function weakGuess(v: SetupValue | undefined): string | null {
 
 function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-[var(--text-primary)]/10 pb-2.5">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--border)] pb-2.5">
       <h2 className="text-[19px] font-semibold tracking-tight text-[var(--text-primary)]">{children}</h2>
       {hint && <p className="text-xs text-[var(--text-muted)]">{hint}</p>}
     </div>

@@ -9,15 +9,15 @@ import {
   Building2,
   Play,
   Settings2,
-  Blocks,
   Wrench,
-  ListTodo,
-  PlugZap,
   MessageSquareQuote,
   Link2,
-  FileText,
-  ChevronLeft,
   ChevronRight,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  UserCheck,
+  ListPlus,
   Loader2,
 } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
@@ -27,7 +27,7 @@ import type { RightPanelKey } from "@/components/right-utility-panel";
 import { TourLauncher } from "@/components/tours/tour-launcher";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
-import { skillSettingsHref, useSkillPane } from "@/components/skill-settings/skill-pane-context";
+import { hereForBack, skillSettingsHref, useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 
 /** What the Create menu's shortcuts act on: the active client. */
@@ -37,6 +37,8 @@ export interface CreateMenuContext {
   skills: { id: string; name: string; hasSettings: boolean }[];
   /** Installed products, each with its setup page's skill. */
   products: { id: string; name: string; setupSkillId: string }[];
+  /** Whether everything for the client is paused. */
+  paused?: boolean;
 }
 
 interface TopNavProps {
@@ -49,56 +51,60 @@ interface TopNavProps {
 }
 
 const itemCls =
-  "group flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default";
-const iconCls = "w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0";
+  "group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default";
+const iconCls = "w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0";
+const panelCls =
+  "w-64 rounded-xl surface-glass-3 p-1.5 text-zinc-900 dark:text-zinc-100 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-100";
 
-function Section({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="py-1">
-      <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
-      {children}
-    </div>
-  );
-}
+type SubKey = "run" | "settings" | "setup";
 
 /**
- * The Create menu: shortcuts that do something for the active client.
- * Three of them open a short list first (which skill to run, which
- * skill's settings, which product's setup). Every item goes somewhere
- * real or calls a real route; nothing here is a placeholder.
+ * The Create menu: shortcuts for the active client, the ones that take
+ * several clicks to reach otherwise. Anything already one click away in
+ * the sidebar (reports, the queue, the library) isn't repeated here.
+ * Three items open a list beside the menu, Windows-style: it opens next
+ * to the item and stays open until you point at another item. Every item
+ * goes somewhere real or calls a real route.
  */
 function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | undefined; close: () => void; onSelectPanel: (key: RightPanelKey) => void }) {
   const router = useRouter();
   const toast = useToast();
   const pane = useSkillPane();
-  const [view, setView] = useState<"main" | "run" | "settings" | "setup">("main");
+  const [sub, setSub] = useState<{ key: SubKey; top: number; side: boolean } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const engagementId = ctx?.engagementId ?? null;
-  const desktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+  const enc = engagementId ? encodeURIComponent(engagementId) : "";
+  const desktop = () => typeof window !== "undefined" && Boolean(window.matchMedia?.("(min-width: 768px)").matches);
+  const skills = ctx?.skills ?? [];
+  const products = ctx?.products ?? [];
+  const has = (productId: string) => products.some((p) => p.id === productId);
+  const skillOn = (id: string) => skills.some((s) => s.id === id);
+  const coldOpenOn = has("cold-open");
+  const showtimeOn = has("showtime");
 
-  async function run(skillId: string, name: string) {
-    if (!engagementId) return;
-    setBusy(skillId);
+  async function call(key: string, url: string, init: RequestInit, ok: string, fail: string) {
+    setBusy(key);
     try {
-      const res = await fetch("/api/skill-runs/trigger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engagementId, skillName: skillId }) });
+      const res = await fetch(url, init);
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.ok) {
-        toast.success(`${name} started.`);
-        close();
-        router.refresh();
-      } else toast.error(body.error ?? `Couldn't start ${name}.`);
+      if (!res.ok) return toast.error(body.error ?? fail);
+      toast.success(ok);
+      close();
+      router.refresh();
     } catch {
-      toast.error(`Couldn't start ${name}.`);
+      toast.error(fail);
     } finally {
       setBusy(null);
     }
   }
 
+  const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
   async function shareResults() {
     if (!engagementId) return;
     setBusy("share");
     try {
-      const res = await fetch(`/api/engagements/${encodeURIComponent(engagementId)}/share-link`, { method: "POST" });
+      const res = await fetch(`/api/engagements/${enc}/share-link`, { method: "POST" });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !body.url) {
         toast.error(body.error ?? "Couldn't make the link.");
@@ -116,108 +122,145 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
     if (!engagementId) return;
     close();
     if (pane && desktop()) pane.open({ engagementId, skillId });
-    else router.push(skillSettingsHref(engagementId, skillId));
+    else router.push(skillSettingsHref(engagementId, skillId, hereForBack()));
   }
 
-  const back = (title: string) => (
-    <button type="button" onClick={() => setView("main")} className="flex w-full items-center gap-1.5 border-b border-border px-2.5 pb-1.5 pt-1 text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer">
-      <ChevronLeft className="w-3 h-3" /> {title}
-    </button>
-  );
-  const skillList = (list: CreateMenuContext["skills"], onPick: (s: CreateMenuContext["skills"][number]) => void, empty: string) =>
-    list.length === 0 ? (
-      <p className="px-2.5 py-2 text-[11px] text-zinc-500">{empty}</p>
-    ) : (
-      <div className="max-h-72 overflow-y-auto py-1">
-        {list.map((s) => (
-          <button key={s.id} type="button" disabled={busy !== null} onClick={() => onPick(s)} className={itemCls}>
-            {s.id in WORKER_REGISTRY ? <AnySkillBadge skill={s.id as WorkerId} size={16} /> : null}
-            <span className="flex-1 truncate">{s.name}</span>
-            {busy === s.id && <Loader2 className="w-3 h-3 animate-spin" />}
-          </button>
-        ))}
-      </div>
-    );
-
-  if (view === "run") return <>{back("Run a skill now")}{skillList(ctx?.skills ?? [], (s) => void run(s.id, s.name), "No skills are on for this client yet.")}</>;
-  if (view === "settings")
-    return <>{back("Change a skill's settings")}{skillList((ctx?.skills ?? []).filter((s) => s.hasSettings), (s) => openSettings(s.id), "No switched-on skill has settings.")}</>;
-  if (view === "setup")
-    return (
-      <>
-        {back("Open a product's setup")}
-        {(ctx?.products ?? []).length === 0 ? (
-          <p className="px-2.5 py-2 text-[11px] text-zinc-500">No products installed yet.</p>
-        ) : (
-          <div className="py-1">
-            {(ctx?.products ?? []).map((p) => (
-              <Link key={p.id} href={`/dashboard/engagements/${engagementId}/bridges/${p.setupSkillId}`} onClick={close} className={itemCls}>
-                <Wrench className={iconCls} />
-                <span className="truncate">{p.name}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </>
-    );
-
   const needsClient = !engagementId;
-  const sub = (label: string, icon: ReactNode, next: "run" | "settings" | "setup") => (
-    <button type="button" disabled={needsClient} onClick={() => setView(next)} className={itemCls}>
-      {icon}
-      <span className="flex-1 truncate">{label}</span>
-      <ChevronRight className="w-3 h-3 text-zinc-400" />
-    </button>
+
+  const subItems = (key: SubKey): ReactNode => {
+    const empty = (text: string) => <p className="px-2.5 py-2 text-[12px] text-zinc-500">{text}</p>;
+    const skillRow = (sk: CreateMenuContext["skills"][number], onPick: () => void) => (
+      <button key={sk.id} type="button" role="menuitem" disabled={busy !== null} onClick={onPick} className={itemCls}>
+        {sk.id in WORKER_REGISTRY ? <AnySkillBadge skill={sk.id as WorkerId} size={18} /> : null}
+        <span className="flex-1 truncate">{sk.name}</span>
+        {busy === sk.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+      </button>
+    );
+    if (key === "run")
+      return skills.length === 0
+        ? empty("No skills are on for this client yet.")
+        : skills.map((sk) => skillRow(sk, () => void call(sk.id, "/api/skill-runs/trigger", json({ engagementId, skillName: sk.id }), `${sk.name} started.`, `Couldn't start ${sk.name}.`)));
+    if (key === "settings") {
+      const list = skills.filter((sk) => sk.hasSettings);
+      return list.length === 0 ? empty("No switched-on skill has settings.") : list.map((sk) => skillRow(sk, () => openSettings(sk.id)));
+    }
+    return products.length === 0
+      ? empty("No products installed yet.")
+      : products.map((p) => (
+          <Link key={p.id} role="menuitem" href={`/dashboard/engagements/${enc}/bridges/${p.setupSkillId}`} onClick={close} className={itemCls}>
+            <Wrench className={iconCls} />
+            <span className="truncate">{p.name}</span>
+          </Link>
+        ));
+  };
+
+  // Pointing at an item that opens a list opens it beside the menu; any
+  // other item closes it. On phones the list opens under the item instead.
+  const cascade = (label: string, icon: ReactNode, key: SubKey) => (
+    <div key={key}>
+      <button
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={sub?.key === key}
+        disabled={needsClient}
+        onMouseEnter={(e) => desktop() && setSub({ key, top: e.currentTarget.offsetTop, side: true })}
+        onClick={(e) => setSub(sub?.key === key && !sub.side ? null : { key, top: e.currentTarget.offsetTop, side: desktop() })}
+        className={`${itemCls} ${sub?.key === key ? "bg-zinc-900/[0.06] dark:bg-white/[0.08]" : ""}`}
+      >
+        {icon}
+        <span className="flex-1 truncate">{label}</span>
+        <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
+      </button>
+      {sub?.key === key && !sub.side && <div className="ml-4 border-l border-border pl-1">{subItems(key)}</div>}
+    </div>
   );
+  const leaf = { onMouseEnter: () => setSub(null) };
 
   return (
-    <div className="divide-y divide-border">
-      <Section label="Client">
-        <Link href="/dashboard/engagements/new" onClick={close} className={itemCls}>
+    <div className="relative">
+      <div role="menu" className={panelCls}>
+        <Link href="/home/new" onClick={close} className={itemCls} {...leaf}>
           <Building2 className={iconCls} />
-          <span className="truncate">New client</span>
+          <span className="truncate">New workspace</span>
         </Link>
-        <button type="button" disabled={needsClient || busy !== null} onClick={() => void shareResults()} className={itemCls}>
+        <div className="my-1 border-t border-zinc-900/[0.07] dark:border-white/10" />
+        {cascade("Run a skill now", <Play className={iconCls} />, "run")}
+        {cascade("Change a skill's settings", <Settings2 className={iconCls} />, "settings")}
+        {cascade("Open a product's setup", <Wrench className={iconCls} />, "setup")}
+        <div className="my-1 border-t border-zinc-900/[0.07] dark:border-white/10" />
+        <button type="button" role="menuitem" disabled={needsClient || busy !== null} onClick={() => void shareResults()} className={itemCls} {...leaf}>
           <Link2 className={iconCls} />
           <span className="flex-1 truncate">Copy a results link</span>
-          {busy === "share" && <Loader2 className="w-3 h-3 animate-spin" />}
+          {busy === "share" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
         </button>
-        <Link href="/dashboard/reports" onClick={close} className={itemCls}>
-          <FileText className={iconCls} />
-          <span className="truncate">Open the client report</span>
-        </Link>
-      </Section>
-      <Section label="Skills">
-        {sub("Run a skill now", <Play className={iconCls} />, "run")}
-        {sub("Change a skill's settings", <Settings2 className={iconCls} />, "settings")}
-        <Link href="/dashboard/library" onClick={close} className={itemCls}>
-          <Blocks className={iconCls} />
-          <span className="truncate">Turn on a skill</span>
-        </Link>
-        {sub("Open a product's setup", <Wrench className={iconCls} />, "setup")}
-      </Section>
-      <Section label="Work">
-        <Link href="/dashboard/queue" onClick={close} className={itemCls}>
-          <ListTodo className={iconCls} />
-          <span className="truncate">Review the queue</span>
-        </Link>
-        <Link href="/dashboard/settings/apps" onClick={close} className={itemCls}>
-          <PlugZap className={iconCls} />
-          <span className="truncate">Connect a tool</span>
-        </Link>
         <button
           type="button"
+          role="menuitem"
+          disabled={needsClient || busy !== null}
+          onClick={() =>
+            void call(
+              "pause",
+              `/api/engagements/${enc}/pause`,
+              ctx?.paused ? { method: "DELETE" } : json({ reason: null }),
+              ctx?.paused ? "Resumed. Every product picks up where it stopped." : "Paused. Nothing runs for this client until you resume.",
+              ctx?.paused ? "Couldn't resume." : "Couldn't pause."
+            )
+          }
+          className={itemCls}
+          {...leaf}
+        >
+          {ctx?.paused ? <PlayCircle className={iconCls} /> : <PauseCircle className={iconCls} />}
+          <span className="flex-1 truncate">{ctx?.paused ? "Resume this client" : "Pause this client"}</span>
+          {busy === "pause" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+        </button>
+        {showtimeOn && (
+          <button
+            type="button"
+            role="menuitem"
+            disabled={needsClient || busy !== null}
+            onClick={() => void call("rebuild", `/api/engagements/${enc}/pin-down/run-piece`, json({ piece: "confirmation_page" }), "Rebuilding the confirmation page.", "Couldn't rebuild the page.")}
+            className={itemCls}
+            {...leaf}
+          >
+            <RefreshCw className={iconCls} />
+            <span className="flex-1 truncate">Rebuild the confirmation page</span>
+            {busy === "rebuild" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          </button>
+        )}
+        {coldOpenOn && skillOn("daily-send") && (
+          <Link href={`/dashboard/engagements/${enc}/bridges/daily-send`} onClick={close} className={itemCls} {...leaf}>
+            <UserCheck className={iconCls} />
+            <span className="truncate">Approve held Cold Open leads</span>
+          </Link>
+        )}
+        {coldOpenOn && (
+          <button type="button" role="menuitem" disabled={needsClient} onClick={() => openSettings("source-connect")} className={itemCls} {...leaf}>
+            <ListPlus className={iconCls} />
+            <span className="truncate">Add a lead list</span>
+          </button>
+        )}
+        <div className="my-1 border-t border-zinc-900/[0.07] dark:border-white/10" />
+        <button
+          type="button"
+          role="menuitem"
           onClick={() => {
             close();
             if (desktop()) onSelectPanel("teammates");
             else router.push("/dashboard/teammates");
           }}
           className={itemCls}
+          {...leaf}
         >
           <MessageSquareQuote className={iconCls} />
           <span className="truncate">Ask a teammate</span>
         </button>
-      </Section>
+      </div>
+      {sub?.side && (
+        <div role="menu" aria-label="More" className={`absolute left-full ml-1 max-h-[60vh] overflow-y-auto ${panelCls}`} style={{ top: Math.max(0, sub.top - 6) }}>
+          {subItems(sub.key)}
+        </div>
+      )}
     </div>
   );
 }
@@ -255,7 +298,7 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
             <>
               <div className="fixed inset-0 z-40" onClick={closeCreate} />
               {/* Mobile: opens below | Desktop: opens to the right */}
-              <div className="absolute left-0 top-full mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2 w-60 bg-white dark:bg-zinc-900 border border-border rounded-sm shadow-xl z-50 py-0.5 text-zinc-900 dark:text-zinc-100 font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute left-0 top-full z-50 mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2">
                 <CreateMenu ctx={createMenu} close={closeCreate} onSelectPanel={onSelectPanel} />
               </div>
             </>

@@ -12,7 +12,7 @@
 // Signing in leaves the page; the panel keeps what was typed and opens
 // again when the person comes back (see SkillConfigureMenu).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, Eye, EyeOff, Loader2, NotebookPen, Plus, Search, Star, Tag, X, Ban } from "lucide-react";
 import { Switch } from "@/components/product-setup/skill-switch";
 import { ToolAvatar, type ToolActions } from "@/components/product-setup/tool-avatar";
@@ -236,7 +236,10 @@ export function SkillSettingsPanel({
     );
   }
 
-  const shown = fields.filter((f) => isShown(f, draft, allFields));
+  const shownAll = fields.filter((f) => isShown(f, draft, allFields));
+  // A connect row isn't drawn when that tool's logo is already on screen to connect from.
+  const toolLogos = new Set(shownAll.flatMap((f) => (f.kind === "tool" ? f.choices.flatMap((c) => (c.tool ? [c.tool.provider] : [])) : [])));
+  const shown = shownAll.filter((f) => !(f.kind === "connect" && f.tools.every((t) => toolLogos.has(t.provider))));
   const editable = fields.some((f) => !isValueless(f)) && !view.blocked;
 
   const body = (
@@ -248,8 +251,9 @@ export function SkillSettingsPanel({
       {view.blocked ? (
         <p className="text-[13px] text-zinc-600 dark:text-zinc-300">{view.blocked}</p>
       ) : fields.length > 0 ? (
-        <div className="space-y-4">
-          {shown.map((f) => (
+        <Arranged
+          shown={shown}
+          renderRow={(f) => (
             <FieldRow
               key={fieldKey(f)}
               field={f}
@@ -261,8 +265,10 @@ export function SkillSettingsPanel({
               actionsFor={actionsFor}
               error={error?.field === fieldKey(f) ? error.text : null}
             />
-          ))}
-        </div>
+          )}
+          advancedOpenFor={error?.field ?? null}
+          wide={layout === "page"}
+        />
       ) : (
         <p className="text-[13px] text-zinc-600 dark:text-zinc-300">It runs on its own; there&apos;s nothing to set.</p>
       )}
@@ -286,7 +292,7 @@ export function SkillSettingsPanel({
     <footer
       className={cn(
         "flex items-center justify-end gap-2 border-t border-zinc-200/70 dark:border-white/10",
-        layout === "fill" ? "shrink-0 px-4 py-3" : layout === "page" ? "sticky bottom-0 z-10 bg-background/95 py-3 backdrop-blur-sm" : "pt-3"
+        layout === "fill" ? "shrink-0 px-4 py-3" : "pt-3"
       )}
     >
       {dirty && <span className="mr-auto text-[12px] text-zinc-500 dark:text-zinc-400">Unsaved changes</span>}
@@ -387,15 +393,35 @@ function FieldRow(p: RowProps) {
     );
   }
 
+  // Short values sit on one line with their label: a number and its unit,
+  // or a pick from a few short choices.
+  if (isInline(f)) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-4">
+          <p className="min-w-0 text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{f.label}</p>
+          <div className="shrink-0">
+            <Control {...p} />
+          </div>
+        </div>
+        {help && <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">{help}</p>}
+        {error && <p className="text-[12px] text-rose-600 dark:text-rose-400">{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
-      <p className="text-[12.5px] font-medium text-zinc-700 dark:text-zinc-300">{f.label}</p>
+      <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">{f.label}</p>
       <Control {...p} />
       {help && <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">{help}</p>}
       {error && <p className="text-[12px] text-rose-600 dark:text-rose-400">{error}</p>}
     </div>
   );
 }
+
+const isInline = (f: SettingField) =>
+  f.kind === "number" || (f.kind === "select" && !f.optionsFrom && f.options.every((o) => !o.hint && o.label.length <= 30));
 
 function Control(p: RowProps) {
   const { field: f, value, onChange, view } = p;
@@ -480,8 +506,21 @@ function Control(p: RowProps) {
       );
     case "select": {
       const opts = f.optionsFrom ? (view.options[fieldKey(f)] ?? []) : f.options;
+      if (f.optionsFrom === "slackChannels" && opts.length === 0) {
+        const slackLinked = Boolean(view.tools.find((t) => t.provider === "slack")?.linked);
+        return (
+          <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">
+            {slackLinked ? "Slack is connected; its channels are still being read. Open this again in a moment." : "Connect Slack (its logo above) to pick a channel."}
+          </p>
+        );
+      }
+      if (f.optionsFrom === "bookingEventTypes" && opts.length === 0) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Connect the booking tool above and its events show here.</p>;
       if (f.optionsFrom && opts.length === 0) return <p className="text-[12.5px] text-zinc-500">Nothing to pick yet.</p>;
-      return <ChoiceSelect label={f.label} value={value === null || value === undefined ? null : String(value)} options={opts} onChange={onChange} />;
+      return (
+        <div className={isInline(f) ? "w-48" : undefined}>
+          <ChoiceSelect label={f.label} value={value === null || value === undefined ? null : String(value)} options={opts} onChange={onChange} />
+        </div>
+      );
     }
     case "text":
       return <input type="text" value={typeof value === "string" ? value : ""} maxLength={f.maxLength} placeholder={f.placeholder} onChange={(e) => onChange(e.target.value)} aria-label={f.label} className={cn(inputCls, "h-8")} />;
@@ -964,5 +1003,71 @@ function ListingLine({ l }: { l: RepGoogleListing }) {
       {l.address && <span className="truncate">{l.address}</span>}
       {l.site && <span className="truncate">{l.site.replace(/^https?:\/\//, "")}</span>}
     </span>
+  );
+}
+
+/**
+ * The settings in order: the tools first, then what the skill does, then
+ * a closed Advanced group for what's set once (webhook addresses, signing
+ * secrets). A tool's own details (Twilio's number, the Slack channel) sit
+ * indented under it, and only show when it's picked.
+ */
+function Arranged({ shown, renderRow, advancedOpenFor, wide = false }: { shown: SettingField[]; renderRow: (f: SettingField) => ReactNode; advancedOpenFor: string | null; wide?: boolean }) {
+  const keys = new Set(shown.map(fieldKey));
+  const childrenOf = (f: SettingField) => shown.filter((c) => c.detail && !c.advanced && c.showIf?.path === fieldKey(f));
+  const isNested = (f: SettingField) => Boolean(f.detail && !f.advanced && f.showIf && keys.has(f.showIf.path));
+  const top = shown.filter((f) => !isNested(f) && !f.advanced);
+  const tools = top.filter((f) => f.kind === "tool" || f.kind === "connect");
+  const rest = top.filter((f) => f.kind !== "tool" && f.kind !== "connect");
+  const advanced = shown.filter((f) => f.advanced);
+  const [open, setOpen] = useState(false);
+  const advancedOpen = open || Boolean(advancedOpenFor && advanced.some((f) => fieldKey(f) === advancedOpenFor));
+
+  const tree = (f: SettingField, depth = 0): ReactNode => {
+    const kids = depth < 3 ? childrenOf(f) : [];
+    return (
+      <div key={fieldKey(f)} className="space-y-3">
+        {renderRow(f)}
+        {kids.length > 0 && <div className="ml-1.5 space-y-3 border-l border-zinc-200 pl-3.5 dark:border-white/10">{kids.map((k) => tree(k, depth + 1))}</div>}
+      </div>
+    );
+  };
+  const heading = (label: string) => <p className="text-[10.5px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>;
+  const both = tools.length > 0 && rest.length > 0;
+
+  // On a full page, the tools and how it runs sit side by side.
+  const sideBySide = wide && both;
+  return (
+    <div className="space-y-5">
+      <div className={cn(sideBySide ? "grid gap-x-10 gap-y-5 lg:grid-cols-2" : "space-y-5")}>
+      {tools.length > 0 && (
+        <div className="space-y-4">
+          {both && heading("Tools")}
+          {tools.map((f) => tree(f))}
+        </div>
+      )}
+      {rest.length > 0 && (
+        <div className={cn("space-y-4", both && !sideBySide && "border-t border-zinc-200/70 pt-4 dark:border-white/10", sideBySide && "border-t border-zinc-200/70 pt-4 lg:border-t-0 lg:pt-0 dark:border-white/10")}>
+          {both && heading("How it runs")}
+          {rest.map((f) => tree(f))}
+        </div>
+      )}
+      </div>
+      {advanced.length > 0 && (
+        <div className="border-t border-zinc-200/70 pt-3 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={advancedOpen}
+            className="flex w-full items-center gap-1.5 text-[12.5px] font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 cursor-pointer"
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !advancedOpen && "-rotate-90")} />
+            Advanced
+            <span className="font-normal text-zinc-400 dark:text-zinc-500">· addresses and secrets to paste once</span>
+          </button>
+          {advancedOpen && <div className="mt-3 space-y-4">{advanced.map((f) => renderRow(f))}</div>}
+        </div>
+      )}
+    </div>
   );
 }

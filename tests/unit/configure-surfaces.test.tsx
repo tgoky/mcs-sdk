@@ -94,7 +94,8 @@ describe("the settings pane", () => {
       </SkillPaneProvider>
     );
     fireEvent.click(screen.getByRole("button", { name: "Configure" }));
-    expect(push).toHaveBeenCalledWith("/dashboard/engagements/e1/skills/pile-on/settings");
+    // Back on that page returns here.
+    expect(push).toHaveBeenCalledWith("/dashboard/engagements/e1/skills/pile-on/settings?from=%2F");
   });
 
   it("gives no gear to a skill with nothing to set", () => {

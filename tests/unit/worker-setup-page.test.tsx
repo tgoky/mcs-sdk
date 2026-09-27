@@ -29,6 +29,7 @@ vi.mock("@/components/worker-config-forms/config-form-registry", () => ({
 }));
 
 import { loadOwnedEngagement } from "@/app/dashboard/engagements/[id]/owned-engagement";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
 import WorkerSetupPage from "@/app/dashboard/engagements/[id]/bridges/[workerId]/page";
 
 const params = (workerId: string) => ({ params: Promise.resolve({ id: "e1", workerId }) });
@@ -86,16 +87,21 @@ describe("worker setup page", () => {
 });
 
 describe("a product's setup page holds every skill setting", () => {
-  it("adds a block for each switched-on skill with settings the setup doesn't already ask", async () => {
+  it("adds a block for each switched-on Cold Open skill with settings the setup doesn't already ask", async () => {
+    vi.mocked(loadOwnedEngagement).mockResolvedValue({ engagementId: "e1", buyer: "Acme", stack: null });
+    vi.mocked(getEnabledWorkerIdsForEngagement).mockResolvedValueOnce(["source-connect", "daily-send", "voice-capture"]);
+    render(await WorkerSetupPage(params("icp-lock")));
+    const blocks = blocksSeen.at(-1)!;
+    // Voice Capture has nothing the setup doesn't already ask, so no block.
+    expect(blocks.map((b) => b.skillId)).toEqual(["icp-lock", "source-connect", "daily-send"]);
+    expect(blocks[1].only).toEqual(["leadLists"]);
+  });
+
+  it("adds no blocks to a setup whose skill list carries a gear per skill", async () => {
+    blocksSeen.length = 0;
     vi.mocked(loadOwnedEngagement).mockResolvedValue({ engagementId: "e1", buyer: "Acme", stack: null });
     render(await WorkerSetupPage(params("pin-down")));
-    const blocks = blocksSeen.at(-1)!;
-    expect(blocks.map((b) => b.skillId)).toEqual(["pin-down", "pile-on", "win-back"]);
-    // Show Rate Setup's block has only what the setup above doesn't.
-    expect(blocks[0].only).toEqual(expect.arrayContaining(["booking_standing_link", "webhook_receiver_mode"]));
-    expect(blocks[0].only).not.toContain("booking_platform");
-    expect(blocks[1].only).toContain("at_risk_check_in");
-    expect(blocks[1].only).not.toContain("sms_platform");
+    expect(blocksSeen).toEqual([]);
   });
 
   it("adds none to a single skill's settings page", async () => {

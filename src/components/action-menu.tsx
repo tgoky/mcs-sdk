@@ -6,7 +6,6 @@ import { ExternalLink, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PANEL_WIDTH = 300;
-const EST_PANEL_HEIGHT = 340;
 const VIEWPORT_MARGIN = 8;
 
 export function ActionMenu({
@@ -26,30 +25,34 @@ export function ActionMenu({
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; flipped: boolean; measured: boolean } | null>(null);
 
   function toggle() {
-    setOpen((o) => !o);
+    if (open) close();
+    else setOpen(true);
   }
   function close() {
     setOpen(false);
+    setCoords(null);
   }
 
-  useEffect(() => {
-    if (!open) return;
+  // Placed below the button unless the menu's real height doesn't fit
+  // there and does above. Measured the moment it's drawn (hidden until
+  // then): a fixed guess flipped short menus upward near the bottom.
+  // A ref callback: runs once the menu is in the page, outside render.
+  function measureRef(node: HTMLDivElement | null) {
+    panelRef.current = node;
     const el = anchorRef.current;
-    if (!el) return;
+    if (!node || !el) return;
     const rect = el.getBoundingClientRect();
-
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const flipped = spaceBelow < EST_PANEL_HEIGHT && rect.top > EST_PANEL_HEIGHT;
-    const top = flipped ? rect.top - VIEWPORT_MARGIN : rect.bottom + 6;
-
+    const height = node.getBoundingClientRect().height;
+    const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
+    const flipped = height > spaceBelow && rect.top - VIEWPORT_MARGIN > spaceBelow;
+    const top = flipped ? rect.top - 6 : rect.bottom + 6;
     let left = align === "end" ? rect.right - panelWidth : rect.left;
     left = Math.min(Math.max(VIEWPORT_MARGIN, left), window.innerWidth - panelWidth - VIEWPORT_MARGIN);
-
-    setCoords({ top, left, flipped });
-  }, [open, align, panelWidth]);
+    setCoords((c) => (c && c.top === top && c.left === left && c.flipped === flipped ? c : { top, left, flipped, measured: true }));
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -93,25 +96,26 @@ export function ActionMenu({
     <div ref={anchorRef} className="inline-flex">
       {trigger({ open, toggle })}
       {open &&
-        coords &&
         typeof document !== "undefined" &&
         createPortal(
           <div
             style={{
               position: "fixed",
-              top: coords.flipped ? undefined : coords.top,
-              bottom: coords.flipped ? window.innerHeight - coords.top : undefined,
-              left: coords.left,
+              top: coords ? (coords.flipped ? undefined : coords.top) : 0,
+              bottom: coords?.flipped ? window.innerHeight - coords.top : undefined,
+              left: coords?.left ?? 0,
               width: panelWidth,
               zIndex: 9999,
+              // Hidden for the one frame before its height is known.
+              visibility: coords ? undefined : "hidden",
             }}
             className={`motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 ${
-              coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
+              coords?.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
             }`}
           >
             {/* Responsive Card Container for Light & Dark Mode */}
             <div
-              ref={panelRef}
+              ref={measureRef}
               role="menu"
               className={cn(panelClassName ?? "rounded-2xl", "surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5")}
             >

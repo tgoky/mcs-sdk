@@ -2,25 +2,26 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Settings2, KeyRound, Trash2, FileEdit, Share2 } from "lucide-react";
+import { useToast } from "@/components/toast/toast-provider";
+import { Settings2, KeyRound, Trash2, FileEdit, Share2, Pause, Play } from "lucide-react";
 import { ActionMenu, ActionMenuSection, ActionMenuDivider, ActionMenuItem } from "@/components/action-menu";
 import { Modal } from "@/components/modal";
 import { ApprovalModeToggle } from "./approval-mode/approval-mode-toggle";
-import { CallIntelligenceToggle } from "./call-intelligence-toggle";
 import { EditStackSettings } from "./edit-stack-settings";
 import { UpdateCredentialsForm } from "./update-credentials-form";
 import { DeleteClientSection } from "./delete-client-section";
-import { ClientDetailsDrawer, type ClientDetailsDrawerData } from "./client-details-drawer";
+import { ClientDetailsForm } from "./client-details-form";
 import type { EngagementStack } from "@/models/schema";
-import { useToast } from "@/components/toast/toast-provider";
 import { ShareResultsLink } from "./share-results-link";
 
 type ActiveModal = "stack" | "credentials" | "delete" | "details" | "share" | null;
 
 /**
- * Single "Modify" entry point for client configuration: automation mode,
- * stack settings, credentials, call intelligence, client details, and
- * client deletion.
+ * "Modify" holds what belongs to the client as a whole: automation mode,
+ * its details (name, website, time zone), the results link, and deletion.
+ * Product and tool settings live in each product's setup and each skill's
+ * settings. The stack and credentials modals still open from links that
+ * carry ?fixSection= or ?fixCredential=1 (deliverables, connect menus).
  */
 export function EngagementActionsMenu({
   engagementId,
@@ -31,7 +32,7 @@ export function EngagementActionsMenu({
   vaultLinksByProvider,
   initialRequireApproval,
   initialDeletedAt,
-  clientDetails,
+  initialPausedAt = null,
 }: {
   engagementId: string;
   buyerName: string;
@@ -41,22 +42,27 @@ export function EngagementActionsMenu({
   vaultLinksByProvider: Record<string, string | null>;
   initialRequireApproval: boolean;
   initialDeletedAt: string | null;
-  clientDetails: Omit<ClientDetailsDrawerData, "engagementId" | "buyer">;
+  initialPausedAt?: string | null;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const toast = useToast();
+  const paused = Boolean(initialPausedAt);
+
+  async function togglePause() {
+    const res = await fetch(`/api/engagements/${encodeURIComponent(engagementId)}/pause`, paused
+      ? { method: "DELETE" }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: null }) }
+    ).catch(() => null);
+    if (!res?.ok) return toast.error(paused ? "Couldn't resume." : "Couldn't pause.");
+    toast.success(paused ? `${buyerName} resumed.` : `Everything for ${buyerName} is paused.`);
+    router.refresh();
+  }
   const [activeModal, setActiveModal] = useState<ActiveModal>(() => {
     if (searchParams.get("fixCredential") === "1") return "credentials";
     if (searchParams.get("fixSection")) return "stack";
     return null;
   });
-  // Set right before opening the stack modal from something already
-  // mounted on this page (the Call Intelligence toggle's "Connect"/
-  // "Manage" actions) — see EditStackSettings' initialHighlightSection
-  // prop for why this can't just reuse the ?fixSection= URL param for
-  // same-page opens.
-  const [stackHighlightSection, setStackHighlightSection] = useState<string | null>(null);
 
   const conversationIntelligenceProvider = initialStack?.conversation_intelligence_provider ?? null;
   const hostingPlatform = initialStack?.hosting_platform ?? null;
@@ -70,11 +76,6 @@ export function EngagementActionsMenu({
       (smsPlatform && smsPlatform !== "none") ||
       (adDataPlatform && adDataPlatform !== "none")
   );
-
-  function openStackSettings(highlightSection?: string) {
-    setStackHighlightSection(highlightSection ?? null);
-    setActiveModal("stack");
-  }
 
   return (
     <>
@@ -106,20 +107,25 @@ export function EngagementActionsMenu({
 
             <ActionMenuDivider />
 
-            <ActionMenuSection label="Call intelligence">
-              <CallIntelligenceToggle
-                engagementId={engagementId}
-                initialProvider={conversationIntelligenceProvider}
-                onManage={() => {
-                  openStackSettings("conversation_intelligence");
+            <ActionMenuSection label="Client">
+              <ActionMenuItem
+                icon={paused ? Play : Pause}
+                label={paused ? "Resume everything" : "Pause everything"}
+                description={paused ? "Every product picks up where it stopped" : "Stops every skill for this client until you resume"}
+                onClick={() => {
+                  close();
+                  void togglePause();
+                }}
+              />
+              <ActionMenuItem
+                icon={FileEdit}
+                label="Edit client details"
+                description="Name, website, time zone, Queue pinning"
+                onClick={() => {
+                  setActiveModal("details");
                   close();
                 }}
               />
-            </ActionMenuSection>
-
-            <ActionMenuDivider />
-
-            <ActionMenuSection label="Client management">
               <ActionMenuItem
                 icon={Share2}
                 label="Share results link"
@@ -129,35 +135,6 @@ export function EngagementActionsMenu({
                   close();
                 }}
               />
-              <ActionMenuItem
-                icon={FileEdit}
-                label="Edit client details"
-                description="Offer, voice, prospect research, notifications"
-                onClick={() => {
-                  setActiveModal("details");
-                  close();
-                }}
-              />
-              <ActionMenuItem
-                icon={Settings2}
-                label="Edit stack settings"
-                description="Booking, hosting, email, SMS, ad-data"
-                onClick={() => {
-                  openStackSettings();
-                  close();
-                }}
-              />
-              {hasCredentialsForm && (
-                <ActionMenuItem
-                  icon={KeyRound}
-                  label="Update credentials"
-                  description="Re-enter a key or link a saved one"
-                  onClick={() => {
-                    setActiveModal("credentials");
-                    close();
-                  }}
-                />
-              )}
               <ActionMenuItem
                 icon={Trash2}
                 label="Delete client"
@@ -180,7 +157,7 @@ export function EngagementActionsMenu({
             initialStack={initialStack}
             embedded
             onRequestClose={() => setActiveModal(null)}
-            initialHighlightSection={stackHighlightSection}
+            initialHighlightSection={searchParams.get("fixSection")}
           />
         </Modal>
       )}
@@ -221,15 +198,9 @@ export function EngagementActionsMenu({
       )}
 
       {activeModal === "details" && (
-        <ClientDetailsDrawer
-          data={{ engagementId, buyer: buyerName, ...clientDetails }}
-          isOpen
-          onClose={() => setActiveModal(null)}
-          onSaved={() => {
-            toast.success(`${buyerName}'s details saved.`);
-            router.refresh();
-          }}
-        />
+        <Modal title="Client details" icon={FileEdit} onClose={() => setActiveModal(null)}>
+          <ClientDetailsForm engagementId={engagementId} onClose={() => setActiveModal(null)} />
+        </Modal>
       )}
     </>
   );

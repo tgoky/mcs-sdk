@@ -13,7 +13,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { hasSkillSettings } from "@/lib/skill-settings/schema";
-import { skillSettingsHref, useSkillPane } from "@/components/skill-settings/skill-pane-context";
+import { hereForBack, skillSettingsHref, useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import type { WorkerId } from "@/lib/worker-registry";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ export function useOpenSkillSettings() {
   const router = useRouter();
   return (engagementId: string, skillId: string) => {
     if (pane && isDesktop()) pane.open({ engagementId, skillId });
-    else router.push(skillSettingsHref(engagementId, skillId));
+    else router.push(skillSettingsHref(engagementId, skillId, hereForBack()));
   };
 }
 

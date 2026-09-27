@@ -240,10 +240,9 @@ export function WorkersPanel({
     <div className="w-full space-y-3 font-sans">
       <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-zinc-200/80 dark:border-zinc-800/60">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Skills</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed font-sans">
-            Status, configuration, and manual executions for every skill installed for this client. Showtime and
-            Reputation Manager together, whichever this client actually has running.
+          <h2 className="text-sm font-bold uppercase tracking-wider font-mono text-zinc-900 dark:text-zinc-100">Skills</h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 font-sans">
+            What each skill is doing for this client. Open one to change it or run it now.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -269,8 +268,8 @@ export function WorkersPanel({
           {PRODUCT_IDS.map((productId) => ({ productId, ids: workerIds.filter((id) => WORKER_REGISTRY[id].productId === productId) }))
             .filter((g) => g.ids.length > 0)
             .map(({ productId, ids }) => (
-              <section key={productId} className="space-y-1">
-                <h3 className="px-1 text-[12px] font-medium text-zinc-500 dark:text-zinc-400">{WORKSPACE_PRODUCTS.find((p) => p.id === productId)?.name ?? productId}</h3>
+              <section key={productId} className="space-y-2">
+                <h3 className="px-1 text-[15px] font-semibold text-zinc-800 dark:text-zinc-200">{WORKSPACE_PRODUCTS.find((p) => p.id === productId)?.name ?? productId}</h3>
                 <ul className="divide-y divide-zinc-200/80 rounded-xl border border-zinc-200/80 bg-white/70 dark:divide-zinc-800/60 dark:border-zinc-800/60 dark:bg-zinc-900/40">
                   {ids.map((workerId) => {
                     const worker = WORKER_REGISTRY[workerId];
@@ -296,12 +295,12 @@ export function WorkersPanel({
                     return (
                       <li key={workerId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-3 ${isEnabled ? "" : "opacity-60"} ${openSkillId === workerId ? "bg-zinc-100/80 dark:bg-zinc-800/50" : ""}`}>
                         <div className="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
-                          <AnySkillBadge skill={workerId} size={24} enabled={isEnabled} paused={isPausedActive} />
+                          <AnySkillBadge skill={workerId} size={28} enabled={isEnabled} paused={isPausedActive} />
                           <div className="min-w-0">
-                            <Link href={workerPrimaryHref(workerId, engagementId)} className="block truncate text-base font-bold text-zinc-900 hover:underline dark:text-zinc-100">
+                            <Link href={workerPrimaryHref(workerId, engagementId)} className="block truncate text-[17px] font-bold text-zinc-900 hover:underline dark:text-zinc-100">
                               {worker.name}
                             </Link>
-                            {detail && <p className={`truncate font-mono text-xs ${detail.tone}`}>{detail.text}</p>}
+                            {detail && <p className={`truncate font-mono text-[13px] ${detail.tone}`}>{detail.text}</p>}
                           </div>
                         </div>
                         <span className={`w-24 shrink-0 text-sm ${STATUS_TONE[status]}`}>{STATUS_LABEL[status]}</span>

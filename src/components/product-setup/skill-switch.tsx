@@ -7,7 +7,12 @@
 // Audit, or everything; what the screen asks for follows what's on.
 
 import type { ReactNode } from "react";
+import { useParams } from "next/navigation";
 import { motion } from "motion/react";
+import { Settings } from "lucide-react";
+import { settingsBeyondSetup } from "@/lib/skill-settings/schema";
+import { useSkillPane } from "@/components/skill-settings/skill-pane-context";
+import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { cn } from "@/lib/utils";
@@ -49,6 +54,30 @@ export function SkillSwitchRow({
   children?: ReactNode;
 }) {
   const name = anySkillDisplayName(skillId);
+  // The skill's settings this setup doesn't ask, beside its switch: opened
+  // at the right edge like the sidebar's gears. Only on a client's page.
+  const params = useParams<{ id?: string }>();
+  const pane = useSkillPane();
+  const engagementId = typeof params?.id === "string" ? params.id : null;
+  const productId = skillId in WORKER_REGISTRY ? WORKER_REGISTRY[skillId as WorkerId].productId : null;
+  const only = productId ? settingsBeyondSetup(skillId, productId) : [];
+  const gearOpen = pane?.current?.skillId === skillId;
+  const gear =
+    on && engagementId && pane && only.length > 0 ? (
+      <button
+        type="button"
+        onClick={() => (gearOpen ? pane.close() : pane.open({ engagementId, skillId, only }))}
+        aria-pressed={gearOpen}
+        aria-label={`${name} settings`}
+        title="More settings"
+        className={cn(
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors cursor-pointer",
+          gearOpen ? "bg-[var(--accent-dim)] text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--accent-dim)] hover:text-[var(--text-primary)]"
+        )}
+      >
+        <Settings className="h-3.5 w-3.5" />
+      </button>
+    ) : null;
   return (
     <li className="py-3.5">
       <div className="flex items-start gap-3">
@@ -63,7 +92,10 @@ export function SkillSwitchRow({
             <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">{blurb}</p>
           )}
         </div>
-        <Switch on={on} onChange={onChange} label={`${name} ${on ? "on" : "off"}`} />
+        <div className="flex shrink-0 items-center gap-2">
+          {gear}
+          <Switch on={on} onChange={onChange} label={`${name} ${on ? "on" : "off"}`} />
+        </div>
       </div>
     </li>
   );

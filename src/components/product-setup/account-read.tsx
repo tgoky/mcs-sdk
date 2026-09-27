@@ -7,6 +7,7 @@
 // the business in a few sentences, and the prospects' own words. Nothing
 // here is typed by anyone; every number is counted from the account.
 
+import { useState } from "react";
 import { AlertTriangle, Quote } from "lucide-react";
 import type { AccountRead, TrustTier } from "@/lib/showtime-setup/types";
 import { formatMoney } from "@/lib/showtime-setup/intel-steps";
@@ -177,15 +178,36 @@ function WordList({ title, items }: { title: string; items: string[] }) {
 }
 
 function FooterFacts({ read }: { read: AccountRead }) {
+  const [showAutomations, setShowAutomations] = useState(false);
   const bits: string[] = [];
   if (read.sender) bits.push(`Emails go out as ${[read.sender.fromName, read.sender.fromEmail && `<${read.sender.fromEmail}>`].filter(Boolean).join(" ")}`);
-  if (read.automations.length) bits.push(`${read.automations.length} automation${read.automations.length === 1 ? "" : "s"} already running`);
   if (read.team.length > 1) bits.push(`${read.team.length} people on the team`);
   if (read.leadSources.length) bits.push(`Leads mostly from ${read.leadSources.slice(0, 2).map((s) => s.source).join(" and ")}`);
-  if (bits.length === 0 && read.blocked.length === 0) return null;
+  if (bits.length === 0 && read.blocked.length === 0 && read.automations.length === 0) return null;
+  const n = read.automations.length;
   return (
     <div className="space-y-1 border-t pt-3 text-[13px] text-[var(--text-muted)]">
-      {bits.length > 0 && <p>{bits.join(" · ")}</p>}
+      {(bits.length > 0 || n > 0) && (
+        <p>
+          {bits.join(" · ")}
+          {bits.length > 0 && n > 0 && " · "}
+          {n > 0 && (
+            // Which automations: the client's own, already switched on in their tools.
+            <button type="button" onClick={() => setShowAutomations((v) => !v)} aria-expanded={showAutomations} className="underline decoration-dotted underline-offset-4 hover:text-[var(--text-primary)] cursor-pointer">
+              {n} automation{n === 1 ? "" : "s"} of yours already running
+            </button>
+          )}
+        </p>
+      )}
+      {showAutomations && n > 0 && (
+        <ul className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+          {read.automations.map((a) => (
+            <li key={a} className="truncate text-[var(--text-secondary)]" title={a}>
+              {a}
+            </li>
+          ))}
+        </ul>
+      )}
       {read.blocked.map((x) => (
         <p key={x.tool} className={cn("text-[var(--text-muted)]")}>
           {x.tool} didn&apos;t share {x.parts.join(", ")}. Reconnect it with more access to include them.

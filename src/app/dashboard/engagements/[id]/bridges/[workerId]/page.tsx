@@ -30,9 +30,10 @@ export default async function WorkerSetupPage({ params }: { params: Promise<{ id
 
   const worker = WORKER_REGISTRY[workerId];
 
-  // A product's setup page also holds the settings of its switched-on
-  // skills that the setup itself doesn't ask, so setup is complete.
-  const isProductSetup = PRODUCT_ONBOARDING_WORKER_ID[worker.productId] === workerId;
+  // Setups that list their skills with switches put each skill's gear
+  // beside its switch (skill-switch.tsx); Cold Open's setup has no such
+  // list, so its skills with more to set get a short list of their own.
+  const isProductSetup = PRODUCT_ONBOARDING_WORKER_ID[worker.productId] === workerId && worker.productId === "cold-open";
   let blocks: SetupSkillBlock[] = [];
   if (isProductSetup) {
     const enabled = new Set<WorkerId>(await getEnabledWorkerIdsForEngagement(id).catch(() => []));

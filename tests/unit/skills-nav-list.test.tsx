@@ -30,7 +30,7 @@ describe("the sidebar's enabled skills", () => {
     // ("Setup for Showtime") also contains the product name.
     const showtime = screen.getByRole("button", { name: /Showtime\s*3 on/ });
     expect(showtime).toHaveAttribute("aria-expanded", "true");
-    expect(within(showtime).getByLabelText("1 failing")).toBeInTheDocument();
+    expect(within(showtime).getByLabelText("3 on, 1 failing")).toBeInTheDocument();
     const here = screen.getByRole("link", { current: "page" });
     expect(here).toHaveAttribute("href", "/dashboard/engagements/e1/skills/win-back");
 

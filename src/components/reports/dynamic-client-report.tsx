@@ -55,6 +55,7 @@ function PeriodRow({ label, blocks }: { label: string; blocks: ReportBlockWithTr
 export function DynamicClientReport({
   engagementId,
   offerDetails,
+  hideOfferTag = false,
   blocksByPeriod,
   enabledWorkerIds,
   results,
@@ -65,6 +66,8 @@ export function DynamicClientReport({
    * — genuinely useful when present, simply absent for an RM-only client
    * rather than shown as an empty Showtime-shaped section. */
   offerDetails?: Record<string, string | boolean> | null;
+  /** The client page shows the offer's traffic beside its tools instead. */
+  hideOfferTag?: boolean;
   blocksByPeriod: Record<ReportPeriod, ReportBlockWithTrend[]>;
   /** Every worker actually enabled for this client — used only to name
    * the ones that contributed zero blocks in any period (pin-down,
@@ -121,6 +124,7 @@ export function DynamicClientReport({
     <div className="space-y-4">
       {offerName && (
         <div className="space-y-1.5 min-w-0">
+          {!hideOfferTag && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
               Offer
@@ -131,6 +135,7 @@ export function DynamicClientReport({
               </span>
             )}
           </div>
+          )}
           <div className="flex items-baseline gap-3 flex-wrap">
             <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{offerName}</h2>
             {offerPrice && <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 font-mono">${offerPrice}</span>}

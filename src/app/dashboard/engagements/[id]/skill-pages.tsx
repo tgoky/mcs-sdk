@@ -54,6 +54,7 @@ export interface SkillPageDefinition {
  * ?from= names one, otherwise the client page. */
 export function skillPageBackLink(engagementId: string, from: string | string[] | undefined): { href: string; label: string } {
   if (typeof from === "string" && from.startsWith("/dashboard/modules")) return { href: from, label: "Back to Module" };
+  if (typeof from === "string" && from.startsWith("/dashboard/")) return { href: from, label: "Back" };
   return { href: `/dashboard/engagements/${engagementId}`, label: "Back to client" };
 }
 
