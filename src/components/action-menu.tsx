@@ -102,13 +102,15 @@ export function ActionMenu({
               width: panelWidth,
               zIndex: 9999,
             }}
-            className={`animate-glass-drop-in ${coords.flipped ? "origin-bottom-right" : "origin-top-right"}`}
+            className={`motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 ${
+              coords.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
+            }`}
           >
             {/* Responsive Card Container for Light & Dark Mode */}
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-sm surface-glass-landing text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className="rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
             >
               {typeof children === "function" ? children(close) : children}
             </div>

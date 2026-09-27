@@ -41,12 +41,13 @@ describe("the sidebar's enabled skills", () => {
     expect(whopToggle).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("the setup kebab lists each of the product's skills, linking to its own setup page", () => {
+  it("the setup kebab opens the product's one setup page, not a page per skill", () => {
     pathname = "/dashboard";
     render(<SkillsNavList layout="grid" productIds={["showtime"]} enabledWorkerIds={enabled} engagementId="e1" />);
     fireEvent.click(screen.getByRole("button", { name: "Setup for Showtime" }));
-    const winBackSetup = screen.getByRole("link", { name: /Booking Recovery/ });
-    expect(winBackSetup).toHaveAttribute("href", "/dashboard/engagements/e1/bridges/win-back");
+    const setupLinks = screen.getAllByRole("link", { name: /View setup/ });
+    expect(setupLinks).toHaveLength(1);
+    expect(setupLinks[0]).toHaveAttribute("href", "/dashboard/engagements/e1/bridges/pin-down");
   });
 
   it("says so when nothing is on", () => {

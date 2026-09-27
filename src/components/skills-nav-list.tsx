@@ -5,12 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
-import { WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
 import { ActionMenu, ActionMenuSection } from "@/components/action-menu";
-import { hasWorkerConfigForm } from "@/components/worker-config-forms/config-form-registry";
 
 interface SkillEntry {
   skillId: WorkerId;
@@ -62,14 +61,10 @@ export function productForPath(pathname: string): ProductId | null {
  * looked at starts open. The sidebar stays the same height however many
  * skills a client runs.
  *
- * Each product row also carries a "…" kebab (visible whenever at least one
- * of its skills has a real config form) that opens the same surface-glass-3
- * dropdown used elsewhere in the app (ActionMenu — see the client switcher
- * and workspace card menu), listing that product's skills with "View
- * setup," straight to that skill's own setup page (bridges/[workerId]).
- * Setup is inherently per-skill, not per-product (config-form-registry.tsx),
- * so there's no single "configure this product" destination to collapse
- * that list into.
+ * Each product row also carries a "…" kebab (the app's ActionMenu, as on
+ * the workspace card) with one entry: the product's setup page, e.g.
+ * bridges/pin-down for Showtime (PRODUCT_ONBOARDING_WORKER_ID). A product
+ * has one setup page; each skill's own settings are its Configure.
  *
  * Nothing is switched on or off here: that's the client page and the
  * Library, which show what each switch does. This is for getting to a
@@ -140,7 +135,7 @@ function InstalledSkillsList({
                 const open = toggled[productId] ?? productId === current;
                 const failing = skills.filter((s) => needsAttentionWorkerIds?.has(s.skillId)).length;
                 const name = product?.name ?? productId;
-                const setupTargets = skills.filter((s) => hasWorkerConfigForm(s.skillId));
+                const setupWorker = PRODUCT_ONBOARDING_WORKER_ID[productId];
                 return (
                   <li key={productId}>
                     <div className="flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-zinc-100 dark:hover:bg-zinc-800/60">
@@ -170,7 +165,7 @@ function InstalledSkillsList({
                           )}
                         </span>
                       </button>
-                      {engagementId && setupTargets.length > 0 && (
+                      {engagementId && setupWorker && (
                         <ActionMenu
                           align="end"
                           panelWidth={240}
@@ -192,20 +187,19 @@ function InstalledSkillsList({
                             </button>
                           )}
                         >
-                          <ActionMenuSection label={`${name} setup`}>
-                            {setupTargets.map((s) => (
-                              <Link
-                                key={s.skillId}
-                                href={`/dashboard/engagements/${engagementId}/bridges/${s.skillId}`}
-                                className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
-                              >
-                                <AnySkillBadge skill={s.skillId} size={18} />
-                                <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-zinc-700 dark:text-zinc-200">{s.label}</span>
-                                <span className="shrink-0 text-[11px] text-zinc-400 group-hover/setup:text-zinc-700 dark:group-hover/setup:text-zinc-200">
-                                  View setup
-                                </span>
-                              </Link>
-                            ))}
+                          <ActionMenuSection label={name}>
+                            <Link
+                              href={`/dashboard/engagements/${engagementId}/bridges/${setupWorker}`}
+                              className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
+                            >
+                              <AnySkillBadge skill={setupWorker} size={18} />
+                              <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
+                                {WORKER_REGISTRY[setupWorker].name}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-zinc-400 group-hover/setup:text-zinc-700 dark:group-hover/setup:text-zinc-200">
+                                View setup
+                              </span>
+                            </Link>
                           </ActionMenuSection>
                         </ActionMenu>
                       )}

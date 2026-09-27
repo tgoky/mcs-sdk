@@ -303,7 +303,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
         >
           <X className="w-3.5 h-3.5" /> Back to Cold Open
         </button>
-        <div className="max-w-lg rounded-sm surface-glass-landing animate-glass-drop-in">
+        <div className="max-w-lg rounded-2xl surface-glass-3">
           <SkillSettingsPanel skillId={configuringSkill} engagementId={engagementId} onClose={close} onSaved={close} />
         </div>
       </div>

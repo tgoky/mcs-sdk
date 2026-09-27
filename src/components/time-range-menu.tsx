@@ -118,7 +118,7 @@ export function TimeRangeMenu({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[220px] p-1.5 rounded-sm surface-glass-landing overflow-hidden font-sans animate-glass-drop-in"
+        className="w-[220px] p-1.5 rounded-2xl surface-glass-3 overflow-hidden font-sans"
       >
         <div className="space-y-0.5">
           <button

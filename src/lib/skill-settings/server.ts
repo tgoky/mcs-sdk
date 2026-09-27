@@ -23,7 +23,8 @@ import { getColdOpenConfig, upsertColdOpenConfig, setColdOpenPhaseState, type Co
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { WHOP_AGENT_SKILL_IDS } from "@/lib/whop-agent-skill-manifest";
 import { resyncWhopWebhook } from "@/lib/whop-setup/save";
-import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+import type { ProductId } from "@/lib/product-catalog";
 import { AD_DATA_PLATFORM_LABELS, BOOKING_PLATFORM_LABELS, EMAIL_PLATFORM_LABELS, HOSTING_PLATFORM_LABELS, SMS_PLATFORM_LABELS } from "@/lib/copy";
 import { cleanSettings, defaultValue, fieldKey, settingsFor, storedValue, toShown, type SettingField, type SettingValue, type SettingValues } from "./schema";
 
@@ -35,7 +36,6 @@ export function readPath(source: unknown, path: string): unknown {
 }
 
 /** Where each product's setup lives: the page tools and connections change on. */
-const SETUP_WORKER: Record<string, WorkerId> = { showtime: "pin-down", "reputation-manager": "rep-onboarding", "cold-open": "icp-lock", "whop-agent": "whop-connect" };
 
 export interface SkillSettingsView {
   skillId: WorkerId;
@@ -193,7 +193,7 @@ export async function loadSkillSettings(engagementId: string, skillId: WorkerId)
     options,
     context,
     facts: factsFor(skillId, stores),
-    setupHref: `/dashboard/engagements/${encodeURIComponent(engagementId)}/bridges/${SETUP_WORKER[product] ?? skillId}`,
+    setupHref: `/dashboard/engagements/${encodeURIComponent(engagementId)}/bridges/${PRODUCT_ONBOARDING_WORKER_ID[product as ProductId] ?? skillId}`,
     blocked: blockedReason(skillId, fields, stores),
   };
 }
