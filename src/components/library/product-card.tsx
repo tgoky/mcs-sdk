@@ -17,8 +17,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
 import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
-import { HOME_COPY } from "@/lib/copy";
-import { StatChip } from "@/components/library/stat-chip";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -80,64 +78,54 @@ export function ProductCard({
   }
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-3.5 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
-      <Link href={`/dashboard/library/${productId}`} className="space-y-2.5 block">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2.5 min-w-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={image}
-              alt={name}
-              className="w-10 h-10 shrink-0 object-contain group-hover:scale-105 transition-transform"
-            />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                  {name}
-                </h2>
-                {installed && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-1.5 py-0.5 rounded-md">
-                    <Download size={10} className="stroke-[2.5]" /> Installed
-                  </span>
-                )}
-              </div>
-              <p className="text-xs font-mono text-zinc-500 dark:text-zinc-400 font-medium">By {HOME_COPY.footerNote}</p>
-              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-1 max-w-md line-clamp-2">{description}</p>
+    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-3 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+      {/* Compact: logo, name and one line of what it does; then the skills
+          as an overlapping badge stack (switched-on ones lit) beside one
+          line of numbers. */}
+      <Link href={`/dashboard/library/${productId}`} className="block space-y-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt={name} className="w-8 h-8 shrink-0 object-contain group-hover:scale-105 transition-transform" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h2 className="truncate text-[13px] font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">{name}</h2>
+              {installed && (
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-400 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-zinc-900">
+                  <Download size={9} className="stroke-[2.5]" /> Installed
+                </span>
+              )}
             </div>
+            <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400" title={description}>{description}</p>
           </div>
-          <ArrowUpRight
-            size={16}
-            className="shrink-0 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
-          />
+          <ArrowUpRight size={14} className="shrink-0 self-start text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
 
-        <div className="flex items-center gap-4">
-          <StatChip label="Skills on" value={`${enabledCount}/${skillIds.length}`} />
-          <StatChip label="Runs (7d)" value={String(runsInWindow)} />
-          <StatChip
-            label="Success rate"
-            value={successRate !== null ? `${successRate}%` : "No data"}
-            tone={successRate === null ? "neutral" : successRate >= 80 ? "success" : "warning"}
-          />
-        </div>
-
-        <div className="flex items-center gap-2 pt-1.5 border-t border-zinc-200 dark:border-zinc-800/80">
-          {/* Every skill this worker bundles, not a truncated preview —
-              wraps instead of running off the card. */}
-          <div className="flex items-center flex-wrap gap-1" title={skillNames}>
+        <div className="flex items-center gap-2 border-t border-zinc-200 pt-2 dark:border-zinc-800/80">
+          <div className="flex items-center -space-x-1" title={skillNames}>
             {skillIds.map((id) => (
-              <div key={id} className="rounded-full">
-                <AnySkillBadge skill={id} size={18} />
+              <div key={id} className="rounded-full ring-2 ring-white dark:ring-zinc-900">
+                <AnySkillBadge skill={id} size={16} />
               </div>
             ))}
           </div>
-          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 shrink-0 ml-auto">
-            {skillIds.length} skill{skillIds.length === 1 ? "" : "s"}
-          </span>
+          <p className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+            <span title="Skills switched on">
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200">{enabledCount}/{skillIds.length}</span> on
+            </span>
+            <span aria-hidden="true">·</span>
+            <span title="Runs in the last 7 days">{runsInWindow} runs</span>
+            <span aria-hidden="true">·</span>
+            <span
+              title="Success rate"
+              className={successRate === null ? "" : successRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
+            >
+              {successRate !== null ? `${successRate}%` : "No data"}
+            </span>
+          </p>
         </div>
       </Link>
 
-      <div className="flex items-center gap-2 pt-2 mt-0.5">
+      <div className="flex items-center gap-2 pt-2">
         <button
           type="button"
           onClick={toggleInstalled}
@@ -147,8 +135,8 @@ export function ProductCard({
           // (below) the main one; before install, Install leads.
           className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:opacity-50 ${
             installed
-              ? "order-2 ml-auto px-2 py-1.5 font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-300"
-              : "px-3 py-1.5 font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
+              ? "order-2 ml-auto px-2 py-1 font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-300"
+              : "px-2.5 py-1 font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
           }`}
         >
           {pending ? (
@@ -164,7 +152,7 @@ export function ProductCard({
           href={`/dashboard/library/${productId}`}
           className={
             installed
-              ? "order-1 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors"
+              ? "order-1 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors"
               : "inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
           }
         >
