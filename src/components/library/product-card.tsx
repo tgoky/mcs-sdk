@@ -15,13 +15,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Trash2, ArrowUpRight, Loader2, PackageCheck } from "lucide-react";
+import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
 import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
+import { HOME_COPY } from "@/lib/copy";
+import { StatChip } from "@/components/library/stat-chip";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
-
-/** Badges shown before "+N": enough to recognise the product at a glance. */
-const BADGE_CAP = 5;
 
 export function ProductCard({
   productId,
@@ -80,78 +79,100 @@ export function ProductCard({
     }
   }
 
-  const shown = skillIds.slice(0, BADGE_CAP);
-  const more = skillIds.length - shown.length;
-
-  // A small square tile: logo, name, the skills as a short badge stack
-  // with how many are on, then the numbers. The tile opens the product;
-  // Install is a small button, Uninstall a quiet icon.
   return (
-    <div className="group relative flex aspect-square flex-col rounded-lg border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700">
-      <Link href={`/dashboard/library/${productId}`} aria-label={`Open ${name}`} className="absolute inset-0 rounded-lg" />
-      <ArrowUpRight size={13} className="absolute right-3 top-3 text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-zinc-900 dark:text-zinc-500 dark:group-hover:text-zinc-100" />
-      {/* The logo, large and centred in the space above the name. */}
-      <div className="flex min-h-0 flex-1 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image} alt="" className="h-14 w-14 object-contain transition-transform group-hover:scale-105" />
-      </div>
-
-      <div className="min-w-0">
-        <h2 className="truncate text-[13px] font-bold text-zinc-900 group-hover:text-amber-600 dark:text-white dark:group-hover:text-amber-400" title={description}>
-          {name}
-        </h2>
-        <p className="flex items-center gap-1 text-[10.5px] text-zinc-500 dark:text-zinc-400">
-          {installed ? (
-            <>
-              <PackageCheck size={12} className="shrink-0 text-emerald-500" aria-hidden="true" /> Installed
-            </>
-          ) : (
-            "Not installed"
-          )}
-        </p>
-      </div>
-
-      <div className="mt-2 flex items-center gap-1.5" title={skillNames}>
-        <div className="flex items-center -space-x-1">
-          {shown.map((id) => (
-            <div key={id} className="rounded-full ring-2 ring-white dark:ring-zinc-900">
-              <AnySkillBadge skill={id} size={14} />
+    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-2.5 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+      <Link href={`/dashboard/library/${productId}`} className="space-y-2 block">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5 min-w-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={name}
+              className="w-8 h-8 shrink-0 object-contain group-hover:scale-105 transition-transform"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-[13px] font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  {name}
+                </h2>
+                {installed && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-900 bg-amber-400 dark:bg-amber-400 border border-amber-500 px-1 py-px rounded">
+                    <Download size={9} className="stroke-[2.5]" /> Installed
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-medium">By {HOME_COPY.footerNote}</p>
+              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 leading-snug mt-0.5 max-w-md line-clamp-2">{description}</p>
             </div>
-          ))}
+          </div>
+          <ArrowUpRight
+            size={14}
+            className="shrink-0 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all"
+          />
         </div>
-        {more > 0 && <span className="text-[10px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">+{more}</span>}
-        <span className="ml-auto text-[10.5px] tabular-nums text-zinc-500 dark:text-zinc-400">
-          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{enabledCount}/{skillIds.length}</span> on
-        </span>
-      </div>
 
-      <div className="relative z-10 mt-2 flex items-center gap-1.5 border-t border-zinc-200 pt-2 text-[10.5px] tabular-nums text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
-        <span title="Runs in the last 7 days">{runsInWindow} runs</span>
-        <span aria-hidden="true">·</span>
-        <span
-          title="Success rate"
-          className={successRate === null ? "" : successRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
-        >
-          {successRate !== null ? `${successRate}%` : "No data"}
-        </span>
+        <div className="flex items-center gap-3">
+          <StatChip size="sm" label="Skills on" value={`${enabledCount}/${skillIds.length}`} />
+          <StatChip size="sm" label="Runs (7d)" value={String(runsInWindow)} />
+          <StatChip
+            size="sm"
+            label="Success rate"
+            value={successRate !== null ? `${successRate}%` : "No data"}
+            tone={successRate === null ? "neutral" : successRate >= 80 ? "success" : "warning"}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 pt-1.5 border-t border-zinc-200 dark:border-zinc-800/80">
+          {/* Every skill this worker bundles, not a truncated preview —
+              wraps instead of running off the card. */}
+          <div className="flex items-center flex-wrap gap-1" title={skillNames}>
+            {skillIds.map((id) => (
+              <div key={id} className="rounded-full">
+                <AnySkillBadge skill={id} size={14} />
+              </div>
+            ))}
+          </div>
+          <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300 shrink-0 ml-auto">
+            {skillIds.length} skill{skillIds.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      </Link>
+
+      <div className="flex items-center gap-2 pt-1.5">
         <button
           type="button"
           onClick={toggleInstalled}
           disabled={pending}
           data-tour="product-card-install"
-          aria-label={installed ? `Uninstall ${name}` : `Install ${name}`}
-          title={installed ? "Uninstall" : "Install"}
-          className={`ml-auto inline-flex items-center gap-1 rounded-md transition-colors cursor-pointer disabled:opacity-50 ${
+          // Installed: Uninstall is the quiet action and "View skills"
+          // (below) the main one; before install, Install leads.
+          className={`inline-flex items-center justify-center gap-1 rounded-md text-[11px] transition-colors cursor-pointer disabled:opacity-50 ${
             installed
-              ? "p-1 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
-              : "bg-zinc-900 px-2 py-0.5 font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              ? "order-2 ml-auto px-1.5 py-1 font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-300"
+              : "px-2.5 py-1 font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
           }`}
         >
-          {pending ? <Loader2 size={11} className="animate-spin" /> : installed ? <Trash2 size={11} /> : <Download size={11} />}
-          {!installed && (pending ? "Installing…" : "Install")}
+          {pending ? (
+            <Loader2 size={11} className="animate-spin" />
+          ) : installed ? (
+            <Trash2 size={11} />
+          ) : (
+            <Download size={11} />
+          )}
+          {pending ? (installed ? "Uninstalling…" : "Installing…") : installed ? "Uninstall" : "Install"}
         </button>
+        <Link
+          href={`/dashboard/library/${productId}`}
+          className={
+            installed
+              ? "order-1 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors"
+              : "inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+          }
+        >
+          View skills <ArrowUpRight size={11} />
+        </Link>
       </div>
-      {error && <p className="relative z-10 mt-1 text-[10.5px] leading-snug text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
     </div>
   );
 }

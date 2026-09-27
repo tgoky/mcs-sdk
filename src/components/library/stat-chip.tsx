@@ -16,8 +16,8 @@ export function StatChip({
   label: string;
   value: string;
   tone?: "neutral" | "success" | "warning" | "danger";
-  /** "lg" for pages built around the numbers (Reports). */
-  size?: "md" | "lg";
+  /** "lg" for pages built around the numbers (Reports); "sm" for compact cards. */
+  size?: "sm" | "md" | "lg";
 }) {
   const toneClass =
     tone === "success"
@@ -30,8 +30,8 @@ export function StatChip({
 
   return (
     <div className={cn("flex flex-col", size === "lg" ? "gap-1.5" : "gap-0.5")}>
-      <span className={cn(size === "lg" ? "text-[28px] font-semibold tracking-tight" : "text-xl font-bold", "tabular-nums leading-none", toneClass)}>{value}</span>
-      <span className={cn(size === "lg" ? "text-xs" : "text-[11px]", "font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400")}>{label}</span>
+      <span className={cn(size === "lg" ? "text-[28px] font-semibold tracking-tight" : size === "sm" ? "text-sm font-bold" : "text-xl font-bold", "tabular-nums leading-none", toneClass)}>{value}</span>
+      <span className={cn(size === "lg" ? "text-xs" : size === "sm" ? "text-[9px]" : "text-[11px]", "font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400")}>{label}</span>
     </div>
   );
 }

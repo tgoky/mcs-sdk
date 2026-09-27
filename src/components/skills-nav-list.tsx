@@ -178,7 +178,7 @@ function InstalledSkillsList({
                       </button>
                       {engagementId && setupWorker && (
                         <ActionMenu
-                          align="start"
+                          align="end"
                           panelWidth={200}
                           panelClassName="rounded-lg"
                           trigger={({ toggle, open: menuOpen }) => (
