@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Plus, ArrowUpRight, LayoutGrid, List } from "lucide-react";
-import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { HOME_COPY, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import type { Workspace } from "@/lib/workspace";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { workersForProduct, type WorkerDefinition } from "@/lib/worker-registry";
@@ -124,6 +124,14 @@ function SegmentedBarLoader({ count = 8 }: { count?: number }) {
   );
 }
 
+function PackageBadge({ packageId }: { packageId: string }) {
+  return (
+    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-none">
+      <LayoutGrid size={11} className="stroke-[2.5px]" />
+    </div>
+  );
+}
+
 function WorkspaceCard({
   workspace,
   packageIds,
@@ -142,7 +150,7 @@ function WorkspaceCard({
   const { available, enabled, enabledSet } = workspaceSkills(packageIds, enabledSkillIds);
 
   return (
-    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-xl p-3 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
+    <div className="hover-lift group relative flex h-full w-full flex-col justify-between surface-glass-3 surface-blend-page rounded-xl p-4 text-left select-none hover:border-zinc-300 dark:hover:border-zinc-700">
       <form
         action={`/api/workspaces/${workspace.workspaceId}/switch`}
         method="POST"
@@ -156,37 +164,54 @@ function WorkspaceCard({
           className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
         />
       </form>
-      {/* Compact: name and menu, the products under it, then one row of
-          skill badges (switched-on ones first and lit, the rest dimmed)
-          with the count. The whole card opens the workspace. */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" title={workspace.name}>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            {packageIds.length > 0 ? (
+              packageIds.map((id) => <PackageBadge key={id} packageId={id} />)
+            ) : (
+              <span className="font-mono text-[10px] font-medium text-zinc-400 dark:text-zinc-600">
+                Nothing installed
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 z-20">
+            <span className="inline-flex items-center rounded-md bg-amber-500/10 dark:bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-mono font-medium text-amber-600 dark:text-amber-400">
+              Active
+            </span>
+            <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <h2 className="truncate text-[15px] font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" title={workspace.name}>
             {workspace.name}
           </h2>
-          <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 font-sans">
-            {packageIds.length > 0 ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(" · ") : "Nothing installed yet"}
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400 font-sans">
+            {packageIds.length > 0
+              ? packageIds.map((id) => PACKAGE_NAMES.get(id) ?? id).join(", ")
+              : "No packages installed yet"}
           </p>
         </div>
-        <div className="relative z-20 -mr-1.5 -mt-1">
-          <WorkspaceCardMenu workspace={workspace} canDelete={workspaceCount > 1 && !workspace.isLegacy} />
-        </div>
+        {/* One strip: every skill this workspace can use, the switched-on
+            ones lit. Keeps the card short enough for 6-8 on one screen. */}
+        {available.length > 0 && (
+          <div>
+            <p className="mb-1 text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              Skills · {enabled.length} of {available.length} on
+            </p>
+            <SkillBadgeStrip skills={available} enabledIds={enabledSet} size={18} />
+          </div>
+        )}
       </div>
-      <div className="mt-2.5 flex h-6 items-center gap-2">
+      <div className="pt-3">
         {isSwitching ? (
-          <div className="flex w-full items-center justify-center">
+          <div className="flex h-7 w-full items-center justify-center">
             <SegmentedBarLoader count={10} />
           </div>
         ) : (
-          <>
-            {available.length > 0 ? (
-              <SkillBadgeStrip skills={[...enabled, ...available.filter((sk) => !enabledSet.has(sk.id))]} enabledIds={enabledSet} size={16} />
-            ) : null}
-            <span className="ml-auto shrink-0 text-[11px] font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
-              {available.length > 0 ? `${enabled.length}/${available.length} on` : ""}
-            </span>
-            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-amber-500" />
-          </>
+          <span className="inline-flex w-full items-center justify-center truncate rounded-md bg-amber-400 px-2.5 py-1 text-xs font-bold text-zinc-950 transition-all group-hover:bg-amber-500">
+            {HOME_COPY.openLabel}
+          </span>
         )}
       </div>
     </div>
@@ -363,7 +388,7 @@ export function WorkspaceHomeClient({
         </div>
       </div>
       {viewMode === "card" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {workspaceList.map((workspace) => (
             <WorkspaceCard
               key={workspace.workspaceId}

@@ -20,6 +20,9 @@ import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 
+/** Badges shown before "+N": enough to recognise the product at a glance. */
+const BADGE_CAP = 5;
+
 export function ProductCard({
   productId,
   name,
@@ -77,89 +80,77 @@ export function ProductCard({
     }
   }
 
+  const shown = skillIds.slice(0, BADGE_CAP);
+  const more = skillIds.length - shown.length;
+
+  // A small square tile: logo, name, the skills as a short badge stack
+  // with how many are on, then the numbers. The tile opens the product;
+  // Install is a small button, Uninstall a quiet icon.
   return (
-    <div className="group relative flex flex-col justify-between rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 p-3 shadow-sm hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
-      {/* Compact: logo, name and one line of what it does; then the skills
-          as an overlapping badge stack (switched-on ones lit) beside one
-          line of numbers. */}
-      <Link href={`/dashboard/library/${productId}`} className="block space-y-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={name} className="w-8 h-8 shrink-0 object-contain group-hover:scale-105 transition-transform" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <h2 className="truncate text-[13px] font-bold text-zinc-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">{name}</h2>
-              {installed && (
-                <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-400 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-zinc-900">
-                  <Download size={9} className="stroke-[2.5]" /> Installed
-                </span>
-              )}
+    <div className="group relative flex aspect-square flex-col rounded-lg border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700">
+      <Link href={`/dashboard/library/${productId}`} aria-label={`Open ${name}`} className="absolute inset-0 rounded-lg" />
+      <div className="flex items-start justify-between">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image} alt="" className="h-8 w-8 shrink-0 object-contain" />
+        <ArrowUpRight size={13} className="text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-zinc-900 dark:text-zinc-500 dark:group-hover:text-zinc-100" />
+      </div>
+
+      <div className="mt-auto min-w-0">
+        <h2 className="truncate text-[13px] font-bold text-zinc-900 group-hover:text-amber-600 dark:text-white dark:group-hover:text-amber-400" title={description}>
+          {name}
+        </h2>
+        <p className="flex items-center gap-1 text-[10.5px] text-zinc-500 dark:text-zinc-400">
+          {installed ? (
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Installed
+            </>
+          ) : (
+            "Not installed"
+          )}
+        </p>
+      </div>
+
+      <div className="mt-2 flex items-center gap-1.5" title={skillNames}>
+        <div className="flex items-center -space-x-1">
+          {shown.map((id) => (
+            <div key={id} className="rounded-full ring-2 ring-white dark:ring-zinc-900">
+              <AnySkillBadge skill={id} size={14} />
             </div>
-            <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400" title={description}>{description}</p>
-          </div>
-          <ArrowUpRight size={14} className="shrink-0 self-start text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+          ))}
         </div>
+        {more > 0 && <span className="text-[10px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">+{more}</span>}
+        <span className="ml-auto text-[10.5px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{enabledCount}/{skillIds.length}</span> on
+        </span>
+      </div>
 
-        <div className="flex items-center gap-2 border-t border-zinc-200 pt-2 dark:border-zinc-800/80">
-          <div className="flex items-center -space-x-1" title={skillNames}>
-            {skillIds.map((id) => (
-              <div key={id} className="rounded-full ring-2 ring-white dark:ring-zinc-900">
-                <AnySkillBadge skill={id} size={16} />
-              </div>
-            ))}
-          </div>
-          <p className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-            <span title="Skills switched on">
-              <span className="font-semibold text-zinc-800 dark:text-zinc-200">{enabledCount}/{skillIds.length}</span> on
-            </span>
-            <span aria-hidden="true">·</span>
-            <span title="Runs in the last 7 days">{runsInWindow} runs</span>
-            <span aria-hidden="true">·</span>
-            <span
-              title="Success rate"
-              className={successRate === null ? "" : successRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
-            >
-              {successRate !== null ? `${successRate}%` : "No data"}
-            </span>
-          </p>
-        </div>
-      </Link>
-
-      <div className="flex items-center gap-2 pt-2">
+      <div className="relative z-10 mt-2 flex items-center gap-1.5 border-t border-zinc-200 pt-2 text-[10.5px] tabular-nums text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
+        <span title="Runs in the last 7 days">{runsInWindow} runs</span>
+        <span aria-hidden="true">·</span>
+        <span
+          title="Success rate"
+          className={successRate === null ? "" : successRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
+        >
+          {successRate !== null ? `${successRate}%` : "No data"}
+        </span>
         <button
           type="button"
           onClick={toggleInstalled}
           disabled={pending}
           data-tour="product-card-install"
-          // Installed: Uninstall is the quiet action and "View skills"
-          // (below) the main one; before install, Install leads.
-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:opacity-50 ${
+          aria-label={installed ? `Uninstall ${name}` : `Install ${name}`}
+          title={installed ? "Uninstall" : "Install"}
+          className={`ml-auto inline-flex items-center gap-1 rounded-md transition-colors cursor-pointer disabled:opacity-50 ${
             installed
-              ? "order-2 ml-auto px-2 py-1 font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-300"
-              : "px-2.5 py-1 font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900"
+              ? "p-1 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
+              : "bg-zinc-900 px-2 py-0.5 font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
           }`}
         >
-          {pending ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : installed ? (
-            <Trash2 size={12} />
-          ) : (
-            <Download size={12} />
-          )}
-          {pending ? (installed ? "Uninstalling…" : "Installing…") : installed ? "Uninstall" : "Install"}
+          {pending ? <Loader2 size={11} className="animate-spin" /> : installed ? <Trash2 size={11} /> : <Download size={11} />}
+          {!installed && (pending ? "Installing…" : "Install")}
         </button>
-        <Link
-          href={`/dashboard/library/${productId}`}
-          className={
-            installed
-              ? "order-1 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors"
-              : "inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-          }
-        >
-          View skills <ArrowUpRight size={12} />
-        </Link>
       </div>
-      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="relative z-10 mt-1 text-[10.5px] leading-snug text-rose-600 dark:text-rose-400">{error}</p>}
     </div>
   );
 }

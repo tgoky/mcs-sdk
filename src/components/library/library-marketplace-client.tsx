@@ -300,7 +300,7 @@ export function LibraryMarketplaceClient({
                 No workers match these filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 items-stretch" data-tour="library-grid">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(170px,190px))] gap-2.5" data-tour="library-grid">
                 {filtered.map((p) => (
                   <ProductCard
                     key={p.id}

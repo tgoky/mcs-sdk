@@ -45,9 +45,13 @@ describe("the sidebar's enabled skills", () => {
     pathname = "/dashboard";
     render(<SkillsNavList layout="grid" productIds={["showtime"]} enabledWorkerIds={enabled} engagementId="e1" />);
     fireEvent.click(screen.getByRole("button", { name: "Setup for Showtime" }));
-    const setupLinks = screen.getAllByRole("link", { name: /View setup/ });
+    const menu = screen.getByRole("menu");
+    const setupLinks = within(menu).getAllByRole("link");
     expect(setupLinks).toHaveLength(1);
+    expect(setupLinks[0]).toHaveTextContent("Show Rate Setup");
     expect(setupLinks[0]).toHaveAttribute("href", "/dashboard/engagements/e1/bridges/pin-down");
+    // The product is named on the row it opens from; the menu doesn't repeat it.
+    expect(within(menu).queryByText("Showtime")).toBeNull();
   });
 
   it("says so when nothing is on", () => {

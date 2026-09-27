@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, ChevronDown, ChevronRight, MoreHorizontal, Plus, Settings } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, ChevronDown, ChevronRight, MoreHorizontal, Plus, Settings } from "lucide-react";
 import { hasSkillSettings } from "@/lib/skill-settings/schema";
 import { useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import { useOpenSkillSettings } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
@@ -12,7 +12,7 @@ import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY, workersForProduct, worke
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { SidebarNavLinks, type NavLinkItem } from "@/app/dashboard/sidebar-nav-links";
-import { ActionMenu, ActionMenuSection } from "@/components/action-menu";
+import { ActionMenu } from "@/components/action-menu";
 
 interface SkillEntry {
   skillId: WorkerId;
@@ -178,8 +178,8 @@ function InstalledSkillsList({
                       </button>
                       {engagementId && setupWorker && (
                         <ActionMenu
-                          align="end"
-                          panelWidth={240}
+                          align="start"
+                          panelWidth={200}
                           panelClassName="rounded-lg"
                           trigger={({ toggle, open: menuOpen }) => (
                             <button
@@ -199,20 +199,16 @@ function InstalledSkillsList({
                             </button>
                           )}
                         >
-                          <ActionMenuSection label={name}>
-                            <Link
-                              href={`/dashboard/engagements/${engagementId}/bridges/${setupWorker}`}
-                              className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
-                            >
-                              <AnySkillBadge skill={setupWorker} size={18} />
-                              <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
-                                {WORKER_REGISTRY[setupWorker].name}
-                              </span>
-                              <span className="shrink-0 text-[11px] text-zinc-400 group-hover/setup:text-zinc-700 dark:group-hover/setup:text-zinc-200">
-                                View setup
-                              </span>
-                            </Link>
-                          </ActionMenuSection>
+                          {/* One row: the product's setup. The product is already
+                              named on the row this opens from, so no heading. */}
+                          <Link
+                            href={`/dashboard/engagements/${engagementId}/bridges/${setupWorker}`}
+                            className="group/setup flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors select-none cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
+                          >
+                            <AnySkillBadge skill={setupWorker} size={16} />
+                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-zinc-700 dark:text-zinc-200">{WORKER_REGISTRY[setupWorker].name}</span>
+                            <ArrowUpRight className="h-3 w-3 shrink-0 text-zinc-400 group-hover/setup:text-zinc-700 dark:group-hover/setup:text-zinc-200" />
+                          </Link>
                         </ActionMenu>
                       )}
                     </div>
