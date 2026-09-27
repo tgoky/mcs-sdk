@@ -34,7 +34,7 @@ export function HoverPreview({
 
   return createPortal(
     <div
-      style={{ position: "fixed", top: coords.top, left: coords.left, width: PANEL_WIDTH, zIndex: 9999 }}
+      style={{ position: "fixed", top: coords.top, left: coords.left, width: PANEL_WIDTH, zIndex: 9999, transition: "none" }}
       className={[
         "pointer-events-none motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150",
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",

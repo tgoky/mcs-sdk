@@ -108,6 +108,10 @@ export function ActionMenu({
               zIndex: 9999,
               // Hidden for the one frame before its height is known.
               visibility: coords ? undefined : "hidden",
+              // duration-150 (for the fade) would otherwise also animate
+              // top/left, sliding the menu in from the corner it's first
+              // drawn at. Only the fade and zoom animate.
+              transition: "none",
             }}
             className={`motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150 ${
               coords?.flipped ? "motion-safe:origin-bottom-right" : "motion-safe:origin-top-right"
