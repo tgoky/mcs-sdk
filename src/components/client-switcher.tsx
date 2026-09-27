@@ -1,8 +1,8 @@
 "use client";
 
-// The client switcher, in the top nav where the breadcrumb used to be: the
-// active client's avatar and name with an up-down mark, opening a list
-// downward. A workspace is a client here (one per workspace), so this is
+// The client switcher, at the top nav's left edge (where the menu button
+// was): the active client's avatar and name with an up-down mark, opening
+// a list downward. A workspace is a client here (one per workspace), so this is
 // "switch client". Same switch route as always (/api/workspaces/[id]/switch).
 
 import { useEffect, useMemo, useState } from "react";
@@ -108,7 +108,7 @@ export function ClientSwitcher({ workspaces, activeWorkspaceId }: { workspaces: 
         aria-expanded={clientSwitcherOpen}
         aria-haspopup="menu"
         title="Switch client"
-        className={`flex min-w-0 max-w-[260px] items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 text-left transition-colors cursor-pointer ${
+        className={`flex min-w-0 max-w-[200px] items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 text-left transition-colors cursor-pointer ${
           clientSwitcherOpen ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-100 dark:hover:bg-zinc-900"
         }`}
       >

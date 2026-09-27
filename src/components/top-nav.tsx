@@ -22,6 +22,7 @@ import {
   FileEdit,
   Loader2,
 } from "lucide-react";
+import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
 import { ClientSwitcher } from "@/components/client-switcher";
 import type { Workspace } from "@/lib/workspace";
 import { GlobalSearch } from "@/components/global-search";
@@ -304,18 +305,10 @@ export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, active
 
   return (
     <header className="relative h-12 w-full bg-background border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
-      {/* Left: Sidebar Toggle + Create Button */}
+      {/* Left: Client switcher + Create button */}
       <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          aria-pressed={!sidebarOpen}
-          className="hidden md:flex p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-        </button>
+        {/* The client switcher sits where the menu button was. */}
+        {workspaces && activeWorkspaceId ? <ClientSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} /> : null}
 
         <div className="relative flex items-center">
           <button
@@ -341,13 +334,21 @@ export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, active
         </div>
       </div>
 
-      {/* Middle-left: which client you're in (and the switch to another),
-          where the breadcrumb used to be, plus the way back into a tour. */}
-      <div className="flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
-        {workspaces && activeWorkspaceId ? <ClientSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} /> : null}
-        <span className="hidden md:inline-flex">
-          <TourLauncher />
-        </span>
+      {/* Middle-left: the sidebar's collapse toggle, the breadcrumbs, and
+          the way back into a tour for anyone who skipped it. */}
+      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-pressed={!sidebarOpen}
+          className="flex shrink-0 p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+        </button>
+        <Breadcrumbs />
+        <TourLauncher />
       </div>
 
       {/* Search — a normal flex sibling between breadcrumbs and the

@@ -14,7 +14,6 @@ import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
-import { ClientAvatar } from "@/components/client-switcher";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -39,6 +38,19 @@ const NAV_ICON_MAP: Record<string, string> = {
   "/dashboard/analytics": "/images/analytic.png",
   "/dashboard/library": "/images/lib.png",
 };
+
+/** The client profile's rail badge, drawn like the skill badges: a filled
+ * pastel circle with a solid dark figure. */
+function ClientBadge({ size = 34 }: { size?: number }) {
+  return (
+    <div className="flex shrink-0 items-center justify-center rounded-full bg-sky-300 shadow-xs" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 24 24" width={Math.round(size * 0.62)} height={Math.round(size * 0.62)} aria-hidden="true" className="fill-zinc-950">
+        <circle cx="12" cy="8" r="4.25" />
+        <path d="M3.75 21c0-4.4 3.7-7.5 8.25-7.5s8.25 3.1 8.25 7.5c0 .55-.45 1-1 1H4.75c-.55 0-1-.45-1-1Z" />
+      </svg>
+    </div>
+  );
+}
 
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -65,17 +77,16 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
                 : "hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
             }
           >
-            {/* Just the active client's initials avatar, sized up — no
-                label underneath (the name is already on the row above in
-                the dropdown, and on the title tooltip here), this is
-                purely a "jump straight to my current client" glyph. */}
+            {/* A person badge, not the client's initials: the switcher in the
+                top nav already shows those, so two would read as a repeat.
+                The client's name is on the tooltip. */}
             <div
               className={
                 "transition-transform duration-300 ease-out " +
                 (pathname.startsWith("/dashboard/engagements") ? "scale-105" : "group-hover:scale-110")
               }
             >
-              <ClientAvatar name={activeClient.name} size="w-9 h-9" />
+              <ClientBadge />
             </div>
           </Link>
         )}

@@ -5,6 +5,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 vi.mock("@/components/toast/toast-provider", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/global-search", () => ({ GlobalSearch: () => null }));
 vi.mock("@/components/right-utility-rail", () => ({ RightUtilityRail: () => null }));
+vi.mock("@/components/breadcrumbs/breadcrumbs", () => ({ Breadcrumbs: () => <nav aria-label="Breadcrumb" /> }));
 vi.mock("@/components/tours/tour-launcher", () => ({ TourLauncher: () => null }));
 
 import { TopNav } from "@/components/top-nav";
@@ -17,10 +18,12 @@ const workspaces = [
 ] as unknown as Workspace[];
 
 describe("the top nav", () => {
-  it("shows the active client where the breadcrumb was, and opens the client list downward", () => {
+  it("shows the active client where the menu button was, keeps the breadcrumb, and opens the client list downward", () => {
     global.fetch = vi.fn(async () => new Response(JSON.stringify({ summaries: [] }))) as unknown as typeof fetch;
     render(<TopNav onToggleSidebar={() => {}} workspaces={workspaces} activeWorkspaceId="w1" activePanel={null} onSelectPanel={() => {}} unreadNotifications={0} />);
-    expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeInTheDocument();
+    // The switcher is the first control in the bar.
+    expect(document.querySelector("header button")).toHaveAttribute("title", "Switch client");
     const switcher = screen.getByRole("button", { name: /Acme Dental/ });
     expect(switcher).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(switcher);
