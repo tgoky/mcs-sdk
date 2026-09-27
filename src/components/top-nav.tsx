@@ -64,7 +64,7 @@ const itemCls =
   "group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default";
 const iconCls = "w-4 h-4 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0";
 const panelCls =
-  "w-64 rounded-xl surface-glass-3 p-1.5 text-zinc-900 dark:text-zinc-100 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-100";
+  "w-64 rounded-xl surface-frost p-1.5 text-zinc-900 dark:text-zinc-100 font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-100";
 
 type SubKey = "run" | "settings" | "setup";
 

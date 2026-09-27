@@ -40,7 +40,7 @@ export function HoverPreview({
         coords.flip ? "motion-safe:origin-top-right" : "motion-safe:origin-top-left",
       ].join(" ")}
     >
-      <div className="rounded-xl surface-glass-3 p-4 text-xs font-mono text-zinc-800 dark:text-zinc-200 leading-normal">
+      <div className="rounded-xl surface-frost p-4 text-xs font-mono text-zinc-800 dark:text-zinc-200 leading-normal">
         {preview}
       </div>
     </div>,

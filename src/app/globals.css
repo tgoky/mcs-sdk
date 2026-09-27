@@ -411,6 +411,22 @@
    above, for surfaces that should keep the blur/shadow/border but not
    the colored wash (tables, dense panels where the tint read as visual
    noise). Pair with a surface-glass-* class rather than replacing it. */
+/* Frosted glass for floating menus (dropdowns, the client switcher, the
+   Create menu): the landing page's product menu, copied as-is. Almost no
+   tint and a heavy blur, so whatever sits under the menu (bold text, a
+   white button) shows through as soft shapes. No painted glow. */
+.surface-frost {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: blur(40px);
+  backdrop-filter: blur(40px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+.dark .surface-frost {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .no-ambient-glow.surface-glass-1,
 .no-ambient-glow.surface-glass-2,
 .no-ambient-glow.surface-glass-3 {

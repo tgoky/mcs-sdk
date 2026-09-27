@@ -120,7 +120,7 @@ export function ClientSwitcher({ workspaces, activeWorkspaceId }: { workspaces: 
       {clientSwitcherOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
-          <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-72 surface-glass-3 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
+          <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-72 surface-frost rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
             <div className="p-3 space-y-2">
               <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
               {workspaces.length > 6 && (

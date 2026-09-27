@@ -121,7 +121,7 @@ export function ActionMenu({
             <div
               ref={measureRef}
               role="menu"
-              className={cn(panelClassName ?? "rounded-2xl", "surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5")}
+              className={cn(panelClassName ?? "rounded-2xl", "surface-frost text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5")}
             >
               {typeof children === "function" ? children(close) : children}
             </div>

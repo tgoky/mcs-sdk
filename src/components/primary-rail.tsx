@@ -176,7 +176,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
           <>
             <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
 
-            <div className="absolute left-full bottom-0 ml-2 z-50 w-72 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-2xl rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100 p-4 space-y-3">
+            <div className="absolute left-full bottom-0 ml-2 z-50 w-72 surface-frost text-zinc-900 dark:text-zinc-100 rounded-2xl overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100 p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <UserAvatar
                   avatar={avatar}
