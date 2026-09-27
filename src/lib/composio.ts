@@ -275,9 +275,9 @@ const COMPOSIO_RETURN_BRIDGE_PATTERN = new RegExp(
  */
 const COMPOSIO_RETURN_ENGAGEMENT_DETAIL_PATTERN = /^\/dashboard\/engagements\/[^/]+$/;
 
-/** Pages a skill's Configure opens on: a skill's own page and a product's
- * Library page. Signing in to a tool there comes back to the same page. */
-const COMPOSIO_RETURN_CONFIGURE_PATTERN = /^\/dashboard\/(engagements\/[^/]+\/skills\/[a-z0-9-]+|library\/[a-z0-9-]+)$/;
+/** A skill's own page, its settings page, and a product's Library page:
+ * signing in to a tool from a skill's settings comes back to them. */
+const COMPOSIO_RETURN_CONFIGURE_PATTERN = /^\/dashboard\/(engagements\/[^/]+\/skills\/[a-z0-9-]+(\/settings)?|library\/[a-z0-9-]+)$/;
 
 export function isAllowedComposioReturnPath(path: string): boolean {
   return (

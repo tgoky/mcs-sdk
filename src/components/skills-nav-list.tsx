@@ -3,7 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Settings } from "lucide-react";
+import { hasSkillSettings } from "@/lib/skill-settings/schema";
+import { useSkillPane } from "@/components/skill-settings/skill-pane-context";
+import { useOpenSkillSettings } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
 import { PRODUCT_IDS, type ProductId } from "@/lib/product-catalog";
 import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY, workersForProduct, workerPrimaryHref, type WorkerId } from "@/lib/worker-registry";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
@@ -81,6 +84,10 @@ function InstalledSkillsList({
 }) {
   const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(false);
+  // A skill's gear opens its settings at the app's right edge, like
+  // Teammates, without leaving the page (a page of its own on a phone).
+  const pane = useSkillPane();
+  const openSettings = useOpenSkillSettings();
   // Rows the person opened or closed; any other row follows the page.
   const [toggled, setToggled] = useState<Partial<Record<ProductId, boolean>>>({});
   const current = productForPath(pathname);
@@ -217,8 +224,27 @@ function InstalledSkillsList({
                               <span className={`min-w-0 flex-1 truncate ${needsAttention ? "text-status-error" : ""}`}>{entry.label}</span>
                             </>
                           );
+                          const settingsOpen = pane?.current?.skillId === entry.skillId && pane.current.engagementId === engagementId;
+                          const gear =
+                            engagementId && hasSkillSettings(entry.skillId) ? (
+                              <button
+                                type="button"
+                                onClick={() => (settingsOpen ? pane?.close() : openSettings(engagementId, entry.skillId))}
+                                aria-pressed={settingsOpen}
+                                aria-label={`${entry.label} settings`}
+                                title="Settings"
+                                className={`mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors cursor-pointer ${
+                                  settingsOpen
+                                    ? "bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                                    : "text-zinc-400 opacity-60 group-hover/skill:opacity-100 focus-visible:opacity-100 hover:bg-zinc-200/70 hover:text-zinc-900 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-200"
+                                }`}
+                              >
+                                <Settings className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null;
                           return (
-                            <li key={entry.skillId}>
+                            <li key={entry.skillId} className="group/skill flex items-center">
+                              <div className="min-w-0 flex-1">
                               {href ? (
                                 <Link
                                   href={href}
@@ -240,6 +266,8 @@ function InstalledSkillsList({
                                   {label}
                                 </span>
                               )}
+                              </div>
+                              {gear}
                             </li>
                           );
                         })}

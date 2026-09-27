@@ -13,7 +13,6 @@
 // again when the person comes back (see SkillConfigureMenu).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
 import { Check, ChevronDown, Copy, Eye, EyeOff, Loader2, NotebookPen, Plus, Search, Star, Tag, X, Ban } from "lucide-react";
 import { Switch } from "@/components/product-setup/skill-switch";
 import { ToolAvatar, type ToolActions } from "@/components/product-setup/tool-avatar";
@@ -26,6 +25,7 @@ import { LeadLists } from "@/components/product-setup/cold-open-setup";
 import type { RepGoogleListing } from "@/models/schema";
 import type { SkillSettingsView } from "@/lib/skill-settings/server";
 import type { SetupTool } from "@/lib/showtime-setup/catalog";
+import { skillSettingsHref } from "./skill-pane-context";
 
 const inputCls =
   "w-full rounded-md border border-zinc-200 bg-white/70 px-2.5 text-[13px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-white/25";
@@ -57,17 +57,38 @@ export function SkillSettingsPanel({
   skillId,
   onClose,
   onSaved,
+  layout = "fill",
+  only,
+  onDirtyChange,
 }: {
   engagementId: string;
   skillId: string;
-  onClose: () => void;
+  /** Cancel. Not shown when there's nowhere to close to (a setup section). */
+  onClose?: () => void;
   /** After a save went through; `notice` says what it set off, if anything. */
   onSaved?: (notice?: string) => void;
+  /**
+   * fill     fills its container: the settings scroll, Save stays pinned
+   *          (the Configure pane, a card).
+   * page     a page of its own: the page scrolls, Save sticks to the bottom.
+   * section  a block inside another page (a product's setup): no title.
+   */
+  layout?: "fill" | "page" | "section";
+  /** Only these settings (paths), for a page that already has the rest. */
+  only?: string[];
+  /** Told when there are unsaved changes, and when there aren't any more. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const spec = settingsFor(skillId);
-  const fields = useMemo(() => spec?.fields ?? [], [spec]);
+  const onlyKey = only?.join("|") ?? "";
+  // All of the skill's settings are loaded (a shown one can depend on one
+  // that isn't shown here); only `only` are drawn and saved.
+  const allFields = useMemo(() => spec?.fields ?? [], [spec]);
+  const fields = useMemo(() => {
+    const keep = onlyKey ? new Set(onlyKey.split("|")) : null;
+    return keep ? allFields.filter((f) => keep.has(f.path)) : allFields;
+  }, [allFields, onlyKey]);
   const url = `/api/engagements/${encodeURIComponent(engagementId)}/skills/${encodeURIComponent(skillId)}/settings`;
-  const pathname = usePathname();
 
   const [view, setView] = useState<SkillSettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,7 +110,7 @@ export function SkillSettingsPanel({
       .then((body) => {
         if (!live || !body) return;
         setView(body);
-        const shown = shownValues(fields, body.values);
+        const shown = shownValues(allFields, body.values);
         setSaved(shown);
         // Back from signing in: what was typed before leaving comes back.
         let kept: SettingValues | null = null;
@@ -107,7 +128,7 @@ export function SkillSettingsPanel({
     return () => {
       live = false;
     };
-  }, [load, fields, engagementId, skillId]);
+  }, [load, allFields, engagementId, skillId]);
 
   /** Tool states and loaded choices change after a connection; the draft doesn't. */
   const refresh = useCallback(async () => {
@@ -120,6 +141,9 @@ export function SkillSettingsPanel({
   }, [load]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const set = (key: string, value: SettingValue) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setError(null);
@@ -152,7 +176,10 @@ export function SkillSettingsPanel({
         const res = await fetch("/api/composio/connect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider: tool.provider, returnTo: pathname, engagementId }),
+          // Back to this skill's settings page, wherever the settings were
+          // open: a pane beside another page can't be reopened from the
+          // address bar, the page can (and restores what was typed).
+          body: JSON.stringify({ provider: tool.provider, returnTo: skillSettingsHref(engagementId, skillId), engagementId }),
         });
         const json = (await res.json().catch(() => ({}))) as { redirectUrl?: string; error?: string };
         if (!res.ok || !json.redirectUrl) return json.error ?? `Couldn't start signing in to ${tool.label}.`;
@@ -182,7 +209,7 @@ export function SkillSettingsPanel({
     setError(null);
     try {
       // Only what's shown is sent; hidden rows keep what's stored.
-      const body = Object.fromEntries(fields.filter((f) => !isValueless(f) && isShown(f, draft, fields) && fieldKey(f) in draft).map((f) => [fieldKey(f), draft[fieldKey(f)]]));
+      const body = Object.fromEntries(fields.filter((f) => !isValueless(f) && isShown(f, draft, allFields) && fieldKey(f) in draft).map((f) => [fieldKey(f), draft[fieldKey(f)]]));
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; field?: string; notice?: string };
       if (!res.ok || !json.ok) {
@@ -209,15 +236,12 @@ export function SkillSettingsPanel({
     );
   }
 
-  const shown = fields.filter((f) => isShown(f, draft, fields));
+  const shown = fields.filter((f) => isShown(f, draft, allFields));
   const editable = fields.some((f) => !isValueless(f)) && !view.blocked;
 
-  return (
-    <div className="space-y-4 p-4">
-      <header className="space-y-1">
-        <p className="text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{view.name}</p>
-        <p className="line-clamp-2 text-[12.5px] leading-relaxed text-zinc-500 dark:text-zinc-400">{view.description}</p>
-      </header>
+  const body = (
+    <>
+      {layout !== "section" && <p className="text-[12.5px] leading-relaxed text-zinc-500 dark:text-zinc-400">{view.description}</p>}
 
       {view.alert && <AlertRow alert={view.alert} onDone={refresh} />}
 
@@ -255,23 +279,50 @@ export function SkillSettingsPanel({
       )}
 
       {error && (!error.field || !shown.some((f) => fieldKey(f) === error.field)) && <p className="text-[12.5px] text-rose-600 dark:text-rose-400">{error.text}</p>}
+    </>
+  );
 
-      <footer className="flex items-center justify-end gap-2 border-t border-zinc-200/70 pt-3 dark:border-white/10">
+  const footer = (editable || onClose) && (
+    <footer
+      className={cn(
+        "flex items-center justify-end gap-2 border-t border-zinc-200/70 dark:border-white/10",
+        layout === "fill" ? "shrink-0 px-4 py-3" : layout === "page" ? "sticky bottom-0 z-10 bg-background/95 py-3 backdrop-blur-sm" : "pt-3"
+      )}
+    >
+      {dirty && <span className="mr-auto text-[12px] text-zinc-500 dark:text-zinc-400">Unsaved changes</span>}
+      {onClose && (
         <button type="button" onClick={onClose} className="h-8 rounded-md px-3 text-[13px] text-zinc-600 transition-colors hover:bg-zinc-900/5 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer">
           {editable ? "Cancel" : "Close"}
         </button>
-        {editable && (
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 cursor-pointer disabled:cursor-default"
-          >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Save
-          </button>
-        )}
-      </footer>
+      )}
+      {editable && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty || saving}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 cursor-pointer disabled:cursor-default"
+        >
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Save
+        </button>
+      )}
+    </footer>
+  );
+
+  // One scroll: in a pane the settings scroll between a fixed top and a
+  // pinned Save; on a page (or inside setup) the page itself scrolls.
+  if (layout === "fill") {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">{body}</div>
+        {footer}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {body}
+      {footer}
     </div>
   );
 }

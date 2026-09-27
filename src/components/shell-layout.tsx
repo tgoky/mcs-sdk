@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, ReactNode } from "react";
+import { useCallback, useEffect, useState, ReactNode } from "react";
 import { TopNav } from "@/components/top-nav";
 import { PrimaryRail } from "@/components/primary-rail";
 import { SecondarySidebar } from "@/components/secondary-sidebar";
@@ -9,9 +9,30 @@ import { RightUtilityPanel, type RightPanelKey } from "@/components/right-utilit
 import { useNotifications } from "@/app/dashboard/use-notifications";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
+import { SkillPaneProvider, useSkillPane } from "@/components/skill-settings/skill-pane-context";
+import { SkillSettingsPane } from "@/components/skill-settings/skill-settings-pane";
+import type { CreateMenuContext } from "@/components/top-nav";
 
 const PANEL_WIDTH_KEY = "mcs-right-panel-width";
 const DEFAULT_PANEL_WIDTH = 360;
+const SETTINGS_PANE_WIDTH_KEY = "mcs-settings-pane-width";
+const DEFAULT_SETTINGS_PANE_WIDTH = 460;
+
+/** The utility panel and the Configure pane share the right edge: opening one closes the other. */
+function PaneExclusion({ activePanel, closePanel }: { activePanel: RightPanelKey | null; closePanel: () => void }) {
+  const pane = useSkillPane();
+  const paneOpen = Boolean(pane?.current);
+  useEffect(() => {
+    if (activePanel && paneOpen) pane?.close();
+    // Only when the utility panel is opened, not when the pane is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePanel]);
+  useEffect(() => {
+    if (paneOpen) closePanel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paneOpen]);
+  return null;
+}
 
 export function ShellLayout({
   children,
@@ -22,6 +43,7 @@ export function ShellLayout({
   avatar,
   work,
   settings,
+  createMenu,
 }: {
   children: ReactNode;
   displayName: string;
@@ -31,6 +53,8 @@ export function ShellLayout({
   avatar: UserAvatarPrefs;
   work: ReactNode;
   settings?: ReactNode;
+  /** What the Create menu's shortcuts act on (the active client). */
+  createMenu?: CreateMenuContext;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -59,8 +83,27 @@ export function ShellLayout({
   }, []);
 
   const notifications = useNotifications();
+  const [paneWidth, setPaneWidth] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_SETTINGS_PANE_WIDTH;
+    try {
+      const n = Number(window.localStorage.getItem(SETTINGS_PANE_WIDTH_KEY));
+      return Number.isFinite(n) && n > 0 ? n : DEFAULT_SETTINGS_PANE_WIDTH;
+    } catch {
+      return DEFAULT_SETTINGS_PANE_WIDTH;
+    }
+  });
+  const handlePaneWidth = useCallback((w: number) => {
+    setPaneWidth(w);
+    try {
+      window.localStorage.setItem(SETTINGS_PANE_WIDTH_KEY, String(w));
+    } catch {
+      // Width just isn't remembered.
+    }
+  }, []);
 
   return (
+    <SkillPaneProvider>
+    <PaneExclusion activePanel={activePanel} closePanel={() => setActivePanel(null)} />
     <div className="h-screen w-screen flex flex-col bg-background text-zinc-600 dark:text-zinc-400 font-sans antialiased overflow-hidden transition-colors duration-200">
       {/* 1. Global Top Navigation Header */}
       <TopNav
@@ -69,6 +112,7 @@ export function ShellLayout({
         activePanel={activePanel}
         onSelectPanel={handleSelectPanel}
         unreadNotifications={notifications.unreadCount}
+        createMenu={createMenu}
       />
 
       {/* 2. Main Body 3-Region Split (+ the right utility panel, when open) */}
@@ -107,7 +151,11 @@ export function ShellLayout({
           onWidthChange={handleWidthChange}
           notifications={notifications}
         />
+
+        {/* Column 5: a skill's Configure, beside the page like a row's details. */}
+        <SkillSettingsPane width={paneWidth} onWidthChange={handlePaneWidth} />
       </div>
     </div>
+    </SkillPaneProvider>
   );
 }

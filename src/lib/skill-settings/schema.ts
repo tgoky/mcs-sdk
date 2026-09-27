@@ -856,6 +856,78 @@ export function isShown(f: SettingField, values: SettingValues, fields?: Setting
 /** Rows that store nothing of their own: not sent, not saved as values. */
 export const isValueless = (f: SettingField) => f.kind === "connect" || f.kind === "copy" || f.kind === "leadLists";
 
+/**
+ * What each product's own setup page already edits and saves (checked
+ * against each setup's save: bridges/pin-down with autoPicks,
+ * cold-open-setup/save.ts, bridges/rep-onboarding, whop-setup/save.ts).
+ * The setup page's per-skill blocks show only the rest, so no setting is
+ * on that page twice, where one Save could undo the other.
+ */
+export const SETUP_COVERS: Record<string, string[]> = {
+  showtime: [
+    "booking_platform",
+    "email_platform",
+    "hosting_platform",
+    "sms_platform",
+    "ad_data_platform",
+    "brief_landing_destination",
+    "salesCallEventType",
+    "hosting_platform_meta.webflow_site_id",
+    "hosting_platform_meta.vercel_project_name",
+    "target_list_id",
+    "target_workflow_id",
+    "recovery_list_id",
+    "recovery_workflow_id",
+    "existing_confirmation_page_reuse",
+    "existing_confirmation_page_url",
+    "confirmationPageTemplate",
+    "heroVideoUrl",
+    "offerDetails.hybrid_mode_enabled",
+    "confirmationPageAnimationsEnabled",
+    "prospectMeets",
+    "topCallQuestions",
+    "topObjections",
+    "rawVoiceCorpus",
+  ],
+  "cold-open": [
+    "voiceProfile.greeting",
+    "voiceProfile.signOff",
+    "voiceProfile.tone",
+    "subjectVariants",
+    "bodyVariantPools.default",
+    "sendPlatform.platform",
+    "campaignMap",
+    "dailySendSettings.volume",
+    "dailySendSettings.localHour",
+    "dailySendSettings.timezone",
+    "dailySendSettings.copyMode",
+  ],
+  "reputation-manager": ["seedPanelPrompts", "activeEngines", "soleAuthorityName", "crisisThresholdOverride", "operatorPagePhone", "googleListing", "rep_review_link", "rep_review_request_message", "rep_review_request_subject", "rep_review_request_delay_hours", "rep_review_request_channel"],
+  "whop-agent": [
+    "refund_dispute_rate_threshold",
+    "dispute_rate_threshold",
+    "dispute_alert_threshold",
+    "min_payment_sample_size",
+    "whop_bridge_destination_url",
+    "whop_bridge_field_mapping",
+    "whop_recovery_message",
+    "whop_save_offer_cooldown_days",
+    "whop_save_offer_discount_percentage",
+    "whop_save_offer_duration_months",
+    "whop_save_offer_message",
+    "whop_save_offer_min_tenure_days",
+  ],
+};
+
+/** A skill's settings that its product's setup page doesn't already have (paths). */
+export function settingsBeyondSetup(skillId: string, productId: string): string[] {
+  const covered = new Set(SETUP_COVERS[productId] ?? []);
+  const fields = settingsFor(skillId)?.fields ?? [];
+  const rest = fields.filter((f) => !covered.has(f.path));
+  // Something to set, not only addresses or connections that go with a covered choice.
+  return rest.some((f) => f.kind !== "copy" && f.kind !== "connect") ? rest.map((f) => f.path) : [];
+}
+
 /** Which live list a pick reads right now, given the values on screen. */
 export function pickSource(f: Extract<SettingField, { kind: "pick" }>, values: SettingValues): PickSource | null {
   if (f.sourceBy) return f.sourceBy.map[String(values[f.sourceBy.path] ?? "")] ?? null;

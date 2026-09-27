@@ -12,6 +12,14 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/components/breadcrumbs/breadcrumb-context", () => ({ SetBreadcrumbLabel: () => null }));
 vi.mock("@/app/dashboard/engagements/[id]/owned-engagement", () => ({ loadOwnedEngagement: vi.fn() }));
+vi.mock("@/lib/engagement-skills", () => ({ getEnabledWorkerIdsForEngagement: vi.fn(async () => ["pile-on", "win-back"]) }));
+const blocksSeen: Array<{ skillId: string; only: string[] }[]> = [];
+vi.mock("@/components/skill-settings/setup-skill-settings", () => ({
+  SetupSkillSettings: ({ blocks }: { blocks: { skillId: string; only: string[] }[] }) => {
+    blocksSeen.push(blocks);
+    return <div data-testid="skill-blocks">{blocks.map((b) => b.skillId).join(",")}</div>;
+  },
+}));
 const handlersSeen: Array<Record<string, unknown>> = [];
 vi.mock("@/components/worker-config-forms/config-form-registry", () => ({
   renderWorkerConfigForm: (workerId: string, handlers: Record<string, unknown>) => {
@@ -74,5 +82,25 @@ describe("worker setup page", () => {
     search = new URLSearchParams({ from: "https://evil.example" });
     render(await WorkerSetupPage(params("win-back")));
     expect((handlersSeen.at(-1) as { backHref?: string }).backHref).toBe("/dashboard/engagements/e1");
+  });
+});
+
+describe("a product's setup page holds every skill setting", () => {
+  it("adds a block for each switched-on skill with settings the setup doesn't already ask", async () => {
+    vi.mocked(loadOwnedEngagement).mockResolvedValue({ engagementId: "e1", buyer: "Acme", stack: null });
+    render(await WorkerSetupPage(params("pin-down")));
+    const blocks = blocksSeen.at(-1)!;
+    expect(blocks.map((b) => b.skillId)).toEqual(["pin-down", "pile-on", "win-back"]);
+    // Show Rate Setup's block has only what the setup above doesn't.
+    expect(blocks[0].only).toEqual(expect.arrayContaining(["booking_standing_link", "webhook_receiver_mode"]));
+    expect(blocks[0].only).not.toContain("booking_platform");
+    expect(blocks[1].only).toContain("at_risk_check_in");
+    expect(blocks[1].only).not.toContain("sms_platform");
+  });
+
+  it("adds none to a single skill's settings page", async () => {
+    blocksSeen.length = 0;
+    render(await WorkerSetupPage(params("win-back")));
+    expect(blocksSeen).toEqual([]);
   });
 });

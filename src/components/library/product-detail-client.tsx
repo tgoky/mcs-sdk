@@ -30,6 +30,7 @@ import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SkillConfigureMenu } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
+import { InPageSettings } from "@/components/skill-settings/in-page-settings";
 import { useToast } from "@/components/toast/toast-provider";
 
 export function ProductDetailClient({
@@ -256,10 +257,10 @@ export function ProductDetailClient({
             No skills match these filters.
           </div>
         ) : (
+          <InPageSettings>
+            {(openSkillId) => (
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 px-5 divide-y divide-zinc-200 dark:divide-zinc-800/80 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200" data-tour="product-skill-list">
             {filteredWorkers.map((worker, i) => {
-              // Every skill opens its own settings (components/skill-settings).
-              const formId = worker.id;
               const canConfigure = Boolean(engagementId);
               return (
                 <WorkerCard
@@ -271,10 +272,14 @@ export function ProductDetailClient({
                   engagementId={engagementId}
                   buyerName={buyerName}
                   stats={statsById.get(worker.id)}
-                  playbook={SKILL_PLAYBOOKS[worker.id]}
+                  // While a skill's settings are open beside the list, the
+                  // rows fold to name, numbers and controls: the long
+                  // guidelines don't fit half the width.
+                  playbook={openSkillId ? undefined : SKILL_PLAYBOOKS[worker.id]}
+                  selected={openSkillId === worker.id}
                   configureMenu={
-                    canConfigure && engagementId && formId ? (
-                      <SkillConfigureMenu skillId={formId} engagementId={engagementId} triggerClassName={WORKER_CARD_ICON_BUTTON_CLASS} iconSize={16} />
+                    canConfigure && engagementId ? (
+                      <SkillConfigureMenu skillId={worker.id} engagementId={engagementId} triggerClassName={WORKER_CARD_ICON_BUTTON_CLASS} iconSize={16} />
                     ) : undefined
                   }
                   productOnboarded={productOnboarded}
@@ -284,6 +289,8 @@ export function ProductDetailClient({
               );
             })}
           </div>
+            )}
+          </InPageSettings>
         )}
       </div>
     </div>

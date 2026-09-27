@@ -8,7 +8,6 @@ import {
   LogOut,
   User,
   Settings,
-  Home,
   Check,
   Plus,
   Loader2,
@@ -441,18 +440,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
       {/* Bottom Section */}
       <div className="flex flex-col items-center gap-2 w-full relative">
-        <a
-          href="/home"
-          title="Back to account"
-          className="group relative w-full h-[58px] flex flex-col items-center justify-center p-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-all duration-300 overflow-hidden"
-        >
-          <div className="transition-all duration-300 ease-out transform group-hover:scale-[1.35] group-hover:translate-y-[3px] flex items-center justify-center">
-            <Home className="w-5 h-5 shrink-0" />
-          </div>
-          <span className="text-[9.5px] font-medium leading-none text-center max-h-4 opacity-100 scale-100 mt-1.5 group-hover:max-h-0 group-hover:opacity-0 group-hover:scale-75 group-hover:mt-0 group-hover:pointer-events-none transition-all duration-300 ease-out origin-bottom">
-            Home
-          </span>
-        </a>
+        {/* No Home link here: the client switcher above already goes between clients and back. */}
 
         {/* User Profile Avatar Trigger */}
         <button

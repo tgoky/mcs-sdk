@@ -24,7 +24,7 @@ import { StatusPill } from "@/app/dashboard/runs/[id]/_shared/status-pill";
 import Link from "next/link";
 import { EmptyState } from "@/app/dashboard/runs/[id]/_shared/empty-state";
 import { ActionMenu, ActionMenuItem } from "@/components/action-menu";
-import { SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
+import { useOpenSkillSettings } from "./skill-configure-menu";
 import type { ColdOpenLeadStatus, ColdOpenReplyDisposition, ColdOpenPhaseKey, ColdOpenPhaseState, ColdOpenRunSummary } from "@/models/schema";
 
 type ConfigurableColdOpenSkill = "icp-lock" | "voice-capture" | "source-connect" | "send-connect" | "daily-send";
@@ -167,7 +167,8 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
   // directly on that page; this one had none, so the 5 configurable Cold
   // Open skills were only reachable via the Library. Same inline-swap
   // pattern WorkersPanel already uses for Configure, scoped to this page.
-  const [configuringSkill, setConfiguringSkill] = useState<ConfigurableColdOpenSkill | null>(null);
+  // A skill's settings open beside the page (the app's right edge), or as a page on a phone.
+  const openSettings = useOpenSkillSettings();
   const [tab, setTab] = useState<"sends" | "replies">("sends");
   const [filterText, setFilterText] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState<"all" | ColdOpenLeadStatus>("all");
@@ -289,26 +290,6 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
   const last7Days = data.last7Days;
   const totalReplies7d = Object.values(last7Days.repliesByDisposition).reduce((sum, n) => sum + n, 0);
 
-  if (configuringSkill) {
-    const close = () => {
-      setConfiguringSkill(null);
-      load();
-    };
-    return (
-      <div className="space-y-4 font-sans antialiased">
-        <button
-          type="button"
-          onClick={close}
-          className="inline-flex items-center gap-1 text-sm font-mono font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
-        >
-          <X className="w-3.5 h-3.5" /> Back to Cold Open
-        </button>
-        <div className="max-w-lg rounded-2xl surface-glass-3">
-          <SkillSettingsPanel skillId={configuringSkill} engagementId={engagementId} onClose={close} onSaved={close} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-3 font-sans antialiased">
@@ -440,7 +421,7 @@ export function ColdOpenFindingsPanel({ engagementId }: { engagementId: string }
                   icon={skill.icon}
                   label={skill.label}
                   onClick={() => {
-                    setConfiguringSkill(skill.id);
+                    openSettings(engagementId, skill.id);
                     close();
                   }}
                 />

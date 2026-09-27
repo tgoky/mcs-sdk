@@ -14,7 +14,9 @@ vi.mock("@/lib/workspace", () => ({
   getActiveWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
   getPrimaryEngagementIdForWorkspace: vi.fn(),
+  getInstalledPackagesByWorkspace: vi.fn(async () => new Map([["ws1", ["showtime"]]])),
 }));
+vi.mock("@/lib/engagement-skills", () => ({ getEnabledWorkerIdsForEngagement: vi.fn(async () => ["pile-on", "rep-digest"]) }));
 vi.mock("@/lib/user-avatar", () => ({ getUserAvatar: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn() } }));
 const tourProps = vi.fn();

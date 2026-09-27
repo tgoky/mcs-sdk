@@ -8,7 +8,6 @@ import {
   FileText,
   ListTodo,
   Activity,
-  Building2,
 } from "lucide-react";
 import { SidebarNavLinks, type NavLinkItem } from "./sidebar-nav-links";
 import { SkillsNavList } from "@/components/skills-nav-list";
@@ -89,9 +88,8 @@ export async function WorkSidebar({ whopUserId, workspaceId }: { whopUserId: str
   // in the database).
   const group1Links: NavLinkItem[] = [
     { href: "/dashboard", label: "Home", icon: <Home className="w-4 h-4" /> },
-    ...(primaryEngagementId
-      ? [{ href: `/dashboard/engagements/${primaryEngagementId}`, label: "Client Profile", icon: <Building2 className="w-4 h-4" /> }]
-      : []),
+    // The client's profile is reached from the primary rail's client
+    // switcher; a second way in here only made two "home"s to choose from.
     { href: "/dashboard/reports", label: "Reports", icon: <FileText className="w-4 h-4" /> },
   ];
 

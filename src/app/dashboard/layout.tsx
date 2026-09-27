@@ -5,7 +5,13 @@ import { ShellLayout } from "@/components/shell-layout";
 import { BreadcrumbProvider } from "@/components/breadcrumbs/breadcrumb-context";
 import { BookingToast } from "./booking-toast";
 import { WorkSidebar, WorkSidebarSkeleton } from "./work-sidebar";
-import { getActiveWorkspace, listWorkspaces, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
+import { getActiveWorkspace, listWorkspaces, getPrimaryEngagementIdForWorkspace, getInstalledPackagesByWorkspace } from "@/lib/workspace";
+import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
+import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { isProductId } from "@/lib/product-catalog";
+import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+import { hasSkillSettings } from "@/lib/skill-settings/schema";
+import type { CreateMenuContext } from "@/components/top-nav";
 import { getUserAvatar } from "@/lib/user-avatar";
 import { MobileNavPill } from "@/components/mobile-nav-pill";
 import { TourProvider } from "@/components/tours/tour-provider";
@@ -62,6 +68,23 @@ export default async function DashboardLayout({
         .limit(1)
         .then((r) => (r[0]?.stack as EngagementStack | null) ?? null)
     : null;
+  // What the Create menu's shortcuts act on: this client's switched-on
+  // skills and installed products. A failed read leaves the lists empty,
+  // never the whole dashboard down.
+  const [enabledIds, installed] = await Promise.all([
+    primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId).catch(() => []) : Promise.resolve([]),
+    getInstalledPackagesByWorkspace([activeWorkspace.workspaceId]).catch(() => new Map<string, string[]>()),
+  ]);
+  const createMenu: CreateMenuContext = {
+    engagementId: primaryEngagementId,
+    skills: enabledIds.map((id) => ({ id, name: WORKER_REGISTRY[id].name, hasSettings: hasSkillSettings(id) })),
+    products: (installed.get(activeWorkspace.workspaceId) ?? []).filter(isProductId).map((id) => ({
+      id,
+      name: WORKSPACE_PRODUCTS.find((p) => p.id === id)?.name ?? id,
+      setupSkillId: PRODUCT_ONBOARDING_WORKER_ID[id],
+    })),
+  };
+
   // The first-visit welcome is per operator, not per client: once they've
   // dismissed it or taken any tour in any of their workspaces, a new
   // workspace doesn't greet them again.
@@ -92,6 +115,7 @@ export default async function DashboardLayout({
           workspaces={workspaceList}
           activeWorkspaceId={activeWorkspace.workspaceId}
           avatar={avatar}
+          createMenu={createMenu}
           work={
             <Suspense fallback={<WorkSidebarSkeleton />}>
               <WorkSidebar whopUserId={whopUserId} workspaceId={activeWorkspace.workspaceId} />

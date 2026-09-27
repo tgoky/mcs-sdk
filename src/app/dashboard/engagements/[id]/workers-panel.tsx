@@ -7,6 +7,7 @@ import { TrendingUp, PauseCircle } from "lucide-react";
 import { type ModuleStatus, WORKSPACE_PRODUCTS } from "@/lib/copy";
 import { WORKER_REGISTRY, workerPrimaryHref, skillToggleEndpoint, type WorkerId } from "@/lib/worker-registry";
 import { SkillConfigureMenu } from "./skill-configure-menu";
+import { InPageSettings } from "@/components/skill-settings/in-page-settings";
 import { type MissingField } from "@/lib/worker-config-completeness-shared";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { TriggerSkillButton } from "./trigger-skill-button";
@@ -261,7 +262,9 @@ export function WorkersPanel({
       {/* One row per skill, grouped by product: the page doesn't grow a card
           per skill switched on, and every row reads the same way (name, how
           it's doing, when it last ran, then Configure, Run and its switch).
-          Configure opens the skill's own settings in place. */}
+          Configure opens the skill's settings beside the list. */}
+      <InPageSettings>
+        {(openSkillId) => (
       <div className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
           {PRODUCT_IDS.map((productId) => ({ productId, ids: workerIds.filter((id) => WORKER_REGISTRY[id].productId === productId) }))
             .filter((g) => g.ids.length > 0)
@@ -291,7 +294,7 @@ export function WorkersPanel({
                             ? { text: delivery.text, tone: delivery.tone === "error" ? "text-status-error" : "text-zinc-500 dark:text-zinc-400" }
                             : null;
                     return (
-                      <li key={workerId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-3 ${isEnabled ? "" : "opacity-60"}`}>
+                      <li key={workerId} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-3 ${isEnabled ? "" : "opacity-60"} ${openSkillId === workerId ? "bg-zinc-100/80 dark:bg-zinc-800/50" : ""}`}>
                         <div className="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
                           <AnySkillBadge skill={workerId} size={24} enabled={isEnabled} paused={isPausedActive} />
                           <div className="min-w-0">
@@ -343,6 +346,8 @@ export function WorkersPanel({
               </section>
             ))}
       </div>
+        )}
+      </InPageSettings>
 
       {gateWorkerId && (() => {
         const worker = WORKER_REGISTRY[gateWorkerId];

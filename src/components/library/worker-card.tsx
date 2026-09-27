@@ -68,6 +68,7 @@ export function WorkerCard({
   buyerName,
   stats,
   isConfiguring = false,
+  selected = false,
   onToggleConfigure,
   configureMenu,
   variant = "card",
@@ -92,6 +93,8 @@ export function WorkerCard({
    * which own that state and render the actual form — a card doesn't know
    * how to render any worker's form itself). */
   isConfiguring?: boolean;
+  /** Row variant: its settings are open beside the list. */
+  selected?: boolean;
   /** Present when this worker's settings open in place (its own form, or
    * its product's setup form; see workerSettingsFormId) for a real
    * engagement. Absent, the gear links to workerSettingsHref instead. */
@@ -354,7 +357,7 @@ export function WorkerCard({
     const primaryHref = engagementId ? workerPrimaryHref(worker.id, engagementId) : null;
     return (
       <div
-        className={`relative py-5 -mx-5 px-5 transition-colors ${primaryHref ? "cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" : ""}`}
+        className={`relative py-5 -mx-5 px-5 transition-colors ${selected ? "bg-zinc-100/80 dark:bg-zinc-800/50" : primaryHref ? "cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30" : ""} ${primaryHref && selected ? "cursor-pointer" : ""}`}
         onClick={primaryHref ? () => router.push(primaryHref) : undefined}
         data-tour={`worker-row-${worker.id}`}
       >
