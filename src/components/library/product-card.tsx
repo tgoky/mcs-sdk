@@ -15,7 +15,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Trash2, ArrowUpRight, Loader2 } from "lucide-react";
+import { Download, Trash2, ArrowUpRight, Loader2, PackageCheck } from "lucide-react";
 import { getWorkerDefinition, type WorkerId } from "@/lib/worker-registry";
 import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
@@ -89,20 +89,21 @@ export function ProductCard({
   return (
     <div className="group relative flex aspect-square flex-col rounded-lg border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:border-zinc-700">
       <Link href={`/dashboard/library/${productId}`} aria-label={`Open ${name}`} className="absolute inset-0 rounded-lg" />
-      <div className="flex items-start justify-between">
+      <ArrowUpRight size={13} className="absolute right-3 top-3 text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-zinc-900 dark:text-zinc-500 dark:group-hover:text-zinc-100" />
+      {/* The logo, large and centred in the space above the name. */}
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image} alt="" className="h-8 w-8 shrink-0 object-contain" />
-        <ArrowUpRight size={13} className="text-zinc-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-zinc-900 dark:text-zinc-500 dark:group-hover:text-zinc-100" />
+        <img src={image} alt="" className="h-14 w-14 object-contain transition-transform group-hover:scale-105" />
       </div>
 
-      <div className="mt-auto min-w-0">
+      <div className="min-w-0">
         <h2 className="truncate text-[13px] font-bold text-zinc-900 group-hover:text-amber-600 dark:text-white dark:group-hover:text-amber-400" title={description}>
           {name}
         </h2>
         <p className="flex items-center gap-1 text-[10.5px] text-zinc-500 dark:text-zinc-400">
           {installed ? (
             <>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Installed
+              <PackageCheck size={12} className="shrink-0 text-emerald-500" aria-hidden="true" /> Installed
             </>
           ) : (
             "Not installed"
