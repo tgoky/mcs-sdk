@@ -13,6 +13,7 @@ import { TopNav, type CreateMenuContext } from "@/components/top-nav";
 const ctx: CreateMenuContext = {
   engagementId: "e1",
   skills: [
+    { id: "pin-down", name: "Show Rate Setup", hasSettings: true },
     { id: "pile-on", name: "Pre-Call Sequence", hasSettings: true },
     { id: "rep-digest", name: "Daily Digest", hasSettings: false },
   ],
@@ -33,6 +34,7 @@ describe("the Create menu", () => {
       "Run a skill now",
       "Change a skill's settings",
       "Open a product's setup",
+      "Edit client details",
       "Copy a results link",
       "Pause this client",
       "Rebuild the confirmation page",
@@ -41,7 +43,7 @@ describe("the Create menu", () => {
     for (const l of labels) expect(screen.getByText(l)).toBeInTheDocument();
     // What the sidebar already reaches in one click isn't repeated here.
     for (const l of ["New client", "Open the client report", "Review the queue", "Turn on a skill"]) expect(screen.queryByText(l)).toBeNull();
-    // Cold Open items only show when Cold Open is installed.
+    // Cold Open items only show when its skills are switched on for this client.
     expect(screen.queryByText("Add a lead list")).toBeNull();
     expect(screen.queryByText("Approve held Cold Open leads")).toBeNull();
     expect(screen.getByRole("link", { name: "New workspace" })).toHaveAttribute("href", "/home/new");
@@ -65,13 +67,28 @@ describe("the Create menu", () => {
         activePanel={null}
         onSelectPanel={() => {}}
         unreadNotifications={0}
-        createMenu={{ ...ctx, skills: [{ id: "daily-send", name: "Daily Send", hasSettings: true }], products: [{ id: "cold-open", name: "Cold Open", setupSkillId: "icp-lock" }] }}
+        createMenu={{ ...ctx, skills: [{ id: "daily-send", name: "Daily Send", hasSettings: true }, { id: "source-connect", name: "Source Connect", hasSettings: true }], products: [{ id: "cold-open", name: "Cold Open", setupSkillId: "icp-lock" }] }}
       />
     );
     fireEvent.click(screen.getByRole("button", { name: /Create/ }));
     expect(screen.getByRole("link", { name: "Approve held Cold Open leads" })).toHaveAttribute("href", "/dashboard/engagements/e1/bridges/daily-send");
     expect(screen.getByText("Add a lead list")).toBeInTheDocument();
     expect(screen.queryByText("Rebuild the confirmation page")).toBeNull();
+  });
+
+  it("hides Cold Open's shortcuts when the package is installed but none of its skills are on", () => {
+    render(
+      <TopNav
+        onToggleSidebar={() => {}}
+        activePanel={null}
+        onSelectPanel={() => {}}
+        unreadNotifications={0}
+        createMenu={{ ...ctx, products: [...ctx.products, { id: "cold-open", name: "Cold Open", setupSkillId: "icp-lock" }] }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Create/ }));
+    expect(screen.queryByText("Add a lead list")).toBeNull();
+    expect(screen.queryByText("Approve held Cold Open leads")).toBeNull();
   });
 
   it("pauses the client, or resumes it when it's paused", async () => {

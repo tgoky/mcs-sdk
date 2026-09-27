@@ -91,8 +91,10 @@ export function SkillSettingsPane({ width, onWidthChange, variant = "shell" }: {
           ? "hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width,opacity] duration-150 ease-out overflow-hidden bg-background border-zinc-200/80 dark:border-zinc-800/80"
           : // Stays in view while the page scrolls the list beside it.
             cn(
-              "hidden md:flex sticky top-0 shrink-0 flex-col self-start h-[calc(100vh-7.5rem)] transition-[width,opacity,margin] duration-150 ease-out overflow-hidden rounded-lg bg-white dark:bg-zinc-900/40",
-              open && "ml-4 border border-zinc-200 dark:border-zinc-800/80"
+              "hidden md:flex sticky top-0 shrink-0 flex-col self-start transition-[width,opacity,margin] duration-150 ease-out overflow-hidden rounded-lg bg-white dark:bg-zinc-900/40",
+              // Closed, it takes no height either, or the row beside it
+              // would stretch to a screen's height and push what follows down.
+              open ? "h-[calc(100vh-7.5rem)] ml-4 border border-zinc-200 dark:border-zinc-800/80" : "h-0"
             )
       }
       style={{ width: open ? width : 0, opacity: open ? 1 : 0 }}

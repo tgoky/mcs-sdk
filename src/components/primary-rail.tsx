@@ -1,28 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LogOut,
   User,
   Settings,
-  Check,
   Plus,
-  Loader2,
-  Search,
-  GripVertical,
-  Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Workspace } from "@/lib/workspace";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIMARY_NAV_SECTIONS } from "@/lib/primary-nav";
-import { generateInitialsAvatarDataUri } from "@/lib/avatar";
-
-const CLIENT_ORDER_STORAGE_KEY = "mcs-client-order";
+import { ClientAvatar } from "@/components/client-switcher";
 
 interface PrimaryRailProps {
   displayName: string;
@@ -48,314 +40,19 @@ const NAV_ICON_MAP: Record<string, string> = {
   "/dashboard/library": "/images/lib.png",
 };
 
-// DiceBear's `initials` style — derives the letters and a deterministic
-// background color straight from the client's name, no PixelBot (that's
-// specifically the *user* avatar style, per avatar.ts's own doc — a
-// client/company isn't a person). Memoized per name since createAvatar
-// does real SVG work, not a free string format.
-function ClientAvatar({ name, size = "w-7 h-7" }: { name: string; size?: string }) {
-  const dataUri = useMemo(() => generateInitialsAvatarDataUri(name, { size: 64 }), [name]);
-  return <img src={dataUri} alt="" className={`${size} rounded-lg shrink-0 object-cover`} />;
-}
-
 export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspaceId, avatar }: PrimaryRailProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
-  const clientSwitcherAnchorRef = useRef<HTMLDivElement>(null);
-  const [clientSwitcherCoords, setClientSwitcherCoords] = useState<{ top: number; left: number } | null>(null);
-  const [clientSearch, setClientSearch] = useState("");
-  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
-  const [skillCounts, setSkillCounts] = useState<Map<string, number> | null>(null);
-  const [clientOrder, setClientOrder] = useState<string[] | null>(null);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const pathname = usePathname();
   const initials = displayName.slice(0, 2).toUpperCase();
   const topNavItems = PRIMARY_NAV_SECTIONS;
   const activeClient = workspaces.find((w) => w.workspaceId === activeWorkspaceId);
 
-  // Custom drag order is a per-browser preference, not account data — no
-  // migration, no server round trip, and it degrades to plain creation
-  // order (workspaces' own default) the first time or in a fresh browser.
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(CLIENT_ORDER_STORAGE_KEY);
-      if (stored) setClientOrder(JSON.parse(stored));
-    } catch {
-      // Corrupt/blocked storage — falls back to creation order below.
-    }
-  }, []);
-
-  const orderedWorkspaces = useMemo(() => {
-    if (!clientOrder) return workspaces;
-    const byId = new Map(workspaces.map((w) => [w.workspaceId, w]));
-    const ordered: Workspace[] = [];
-    for (const id of clientOrder) {
-      const w = byId.get(id);
-      if (w) {
-        ordered.push(w);
-        byId.delete(id);
-      }
-    }
-    // Anything not in the stored order (new since last reorder) — appended
-    // in its normal creation order rather than dropped.
-    for (const w of workspaces) if (byId.has(w.workspaceId)) ordered.push(w);
-    return ordered;
-  }, [workspaces, clientOrder]);
-
-  const filteredWorkspaces = clientSearch.trim()
-    ? orderedWorkspaces.filter((w) => w.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
-    : orderedWorkspaces;
-  // Reordering while a search filter is active would mean "insert
-  // relative to a hidden item," which has no obvious right answer — drag
-  // is disabled until the search is cleared instead of guessing.
-  const dragEnabled = !clientSearch.trim();
-
-  function handleDrop(targetId: string) {
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-    const current = orderedWorkspaces.map((w) => w.workspaceId);
-    const from = current.indexOf(draggedId);
-    const to = current.indexOf(targetId);
-    if (from === -1 || to === -1) return;
-    const next = [...current];
-    next.splice(from, 1);
-    next.splice(to, 0, draggedId);
-    setClientOrder(next);
-    try {
-      window.localStorage.setItem(CLIENT_ORDER_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Best-effort persistence — the reorder still applies for this
-      // session even if storage is blocked/full.
-    }
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
-  // Panel is portaled to document.body (see below) so backdrop-blur has
-  // real page content behind it to diffuse instead of the rail's own flat
-  // background — position has to be computed manually since it's no
-  // longer a CSS-positioned descendant of the anchor.
-  useEffect(() => {
-    if (!clientSwitcherOpen) return;
-    const rect = clientSwitcherAnchorRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setClientSwitcherCoords({ top: rect.top, left: rect.right + 8 });
-  }, [clientSwitcherOpen]);
-
-  // Fetched lazily the first time the switcher opens, not on every page
-  // load — see the route's own doc for why this can't just be a prop.
-  useEffect(() => {
-    if (!clientSwitcherOpen || skillCounts !== null) return;
-    let cancelled = false;
-    fetch("/api/workspaces/summary")
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return;
-        const map = new Map<string, number>();
-        for (const s of data.summaries ?? []) map.set(s.workspaceId, s.skillCount);
-        setSkillCounts(map);
-      })
-      .catch(() => {
-        // Best-effort — the switcher still works without counts, they
-        // just don't render (see the row's fallback below).
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [clientSwitcherOpen, skillCounts]);
-
   return (
     <aside className="w-[76px] bg-background border-r border-zinc-200 dark:border-zinc-900 flex flex-col items-center justify-between py-3 px-1.5 shrink-0 select-none z-20 transition-colors duration-200">
       {/* Top Section */}
       <div className="flex flex-col items-center gap-1.5 w-full">
-        {/* Client switcher — a workspace IS a client under this app's
-            model (one workspace = one client, enforced at creation), so
-            this is really "switch client." Previously the only way to do
-            this was a generic "Workspaces" list buried inside the avatar
-            popover at the bottom of the rail, indistinguishable from any
-            other SaaS org-switcher and easy to never discover — this is
-            the same switch mechanism (same /api/workspaces/[id]/switch
-            POST), promoted to its own labeled, always-visible rail item,
-            landing directly on the chosen client's profile page instead
-            of Work/home (see that route's own updated redirect). */}
-        <div ref={clientSwitcherAnchorRef} className="relative w-full">
-          <button
-            type="button"
-            onClick={() => setClientSwitcherOpen((p) => !p)}
-            title="Switch client"
-            aria-expanded={clientSwitcherOpen}
-            className={
-              "group relative w-full h-[58px] flex items-center justify-center p-1 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer " +
-              (clientSwitcherOpen
-                ? "bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-xs"
-                : "hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 border border-transparent")
-            }
-          >
-            {/* No label — this badge is self-explanatory (a distinct
-                colored icon, unlike the plain outline icons above it),
-                and full-size by default rather than only reaching this
-                size on hover/active like the labeled items below. */}
-            <div
-              className={
-                "transition-transform duration-300 ease-out " +
-                (clientSwitcherOpen ? "scale-105" : "group-hover:scale-105")
-              }
-            >
-              {/* A fixed, never-changing icon — this button represents the
-                  *category* "clients" (open the switcher), not any one
-                  specific client, so it deliberately does NOT show the
-                  active client's own avatar (that's the separate quick-
-                  link row right below this button instead). A plain
-                  hand-built colored badge (not DiceBear) — solid glyph on
-                  a solid rounded-square backdrop, the same macOS-app-icon
-                  look as every other icon in this app, and fully
-                  controllable/previewable in code instead of a seed
-                  gambling on which auto-generated glyph shows up. */}
-              <div className="w-8 h-8 shrink-0 rounded-md bg-amber-400 flex items-center justify-center">
-                <Users className="w-[18px] h-[18px] text-[#1f1a2e]" strokeWidth={2.5} />
-              </div>
-            </div>
-          </button>
-
-          {clientSwitcherOpen &&
-            clientSwitcherCoords &&
-            typeof document !== "undefined" &&
-            createPortal(
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
-                {/* surface-glass-3 — same floating-panel treatment as the
-                    engagement page's "Modify" menu and the home page's
-                    workspace-card "..." menu (both via ActionMenu, see
-                    action-menu.tsx): near-invisible border, strong
-                    backdrop-blur, soft ambient shadow, so whatever's behind
-                    it visibly diffuses through instead of a flat opaque
-                    panel. Portaled to document.body (like ActionMenu) so
-                    that backdrop is the actual page content instead of the
-                    rail's own flat background — otherwise there's nothing
-                    for the blur to diffuse and the glass effect is invisible. */}
-                <div
-                  style={{ position: "fixed", top: clientSwitcherCoords.top, left: clientSwitcherCoords.left }}
-                  className="z-50 w-72 surface-glass-3 rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased animate-in fade-in zoom-in-95 duration-100">
-                <div className="p-3 space-y-2">
-                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
-                  {workspaces.length > 6 && (
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                      <input
-                        autoFocus
-                        value={clientSearch}
-                        onChange={(e) => setClientSearch(e.target.value)}
-                        placeholder="Search clients..."
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/60 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="max-h-80 overflow-y-auto px-1.5 pb-1.5 space-y-1">
-                  {filteredWorkspaces.length === 0 ? (
-                    <p className="text-xs text-zinc-400 text-center py-4">No clients match &quot;{clientSearch}&quot;.</p>
-                  ) : (
-                    filteredWorkspaces.map((workspace) => {
-                      const isActive = workspace.workspaceId === activeWorkspaceId;
-                      const isSwitching = switchingWorkspaceId === workspace.workspaceId;
-                      const skillCount = skillCounts?.get(workspace.workspaceId);
-                      const isDragging = draggedId === workspace.workspaceId;
-                      const isDragOver =
-                        dragOverId === workspace.workspaceId && draggedId !== null && draggedId !== workspace.workspaceId;
-                      return (
-                        <form
-                          key={workspace.workspaceId}
-                          action={`/api/workspaces/${workspace.workspaceId}/switch`}
-                          method="POST"
-                          onSubmit={() => setSwitchingWorkspaceId(workspace.workspaceId)}
-                          draggable={dragEnabled}
-                          onDragStart={() => setDraggedId(workspace.workspaceId)}
-                          onDragOver={(e) => {
-                            if (!dragEnabled || !draggedId) return;
-                            e.preventDefault();
-                            if (dragOverId !== workspace.workspaceId) setDragOverId(workspace.workspaceId);
-                          }}
-                          onDragLeave={() => setDragOverId((prev) => (prev === workspace.workspaceId ? null : prev))}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            handleDrop(workspace.workspaceId);
-                          }}
-                          onDragEnd={() => {
-                            setDraggedId(null);
-                            setDragOverId(null);
-                          }}
-                          className={
-                            "rounded-lg transition-opacity " +
-                            (isDragging ? "opacity-40 " : "") +
-                            (isDragOver ? "ring-1 ring-inset ring-zinc-400 dark:ring-zinc-500" : "")
-                          }
-                        >
-                          <button
-                            type="submit"
-                            disabled={isActive || switchingWorkspaceId !== null}
-                            className={`w-full flex items-center gap-1.5 py-2 px-2 min-w-0 rounded-lg transition-colors disabled:cursor-not-allowed ${
-                              isActive
-                                ? "bg-white/70 dark:bg-zinc-800/70 cursor-default"
-                                : switchingWorkspaceId !== null
-                                ? "opacity-50"
-                                : "cursor-pointer hover:bg-white/50 dark:hover:bg-zinc-800/50"
-                            }`}
-                          >
-                            {/* 2x3 grip handle — a pure drag affordance; the
-                                whole row is the actual drag source via the
-                                wrapping form's draggable attribute. */}
-                            <GripVertical
-                              className={
-                                "w-3.5 h-3.5 shrink-0 text-zinc-300 dark:text-zinc-700 " +
-                                (dragEnabled ? "cursor-grab" : "opacity-0 pointer-events-none")
-                              }
-                            />
-                            <ClientAvatar name={workspace.name} />
-                            <div className="min-w-0 text-left flex-1">
-                              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={workspace.name}>
-                                {workspace.name}
-                              </p>
-                              <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400">
-                                {skillCount === undefined ? " " : `${skillCount} skill${skillCount === 1 ? "" : "s"} enabled`}
-                              </p>
-                            </div>
-                            {isSwitching ? (
-                              <Loader2 className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto animate-spin" />
-                            ) : (
-                              isActive && <Check className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-200 shrink-0 ml-auto" />
-                            )}
-                          </button>
-                        </form>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="p-1.5 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                  <Link
-                    href="/home/new"
-                    onClick={() => setClientSwitcherOpen(false)}
-                    className="flex items-center gap-2.5 px-2 py-1.5 text-xs font-medium rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-white/50 dark:hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 shrink-0" />
-                    <span>New client</span>
-                  </Link>
-                </div>
-              </div>
-              </>,
-              document.body
-            )}
-        </div>
-
-        {/* Direct link to the currently active client's profile — the
-            switcher above picks *which* client, this jumps straight into
-            it without opening the popover, for the common case of "I'm
-            already on the right client, just take me to their page." */}
+        {/* The active client's profile, first on the rail. Which client is
+            active is picked in the top nav's client switcher. */}
         {activeClient && (
           <Link
             href="/dashboard/engagements"
@@ -440,7 +137,7 @@ export function PrimaryRail({ displayName, userEmail, workspaces, activeWorkspac
 
       {/* Bottom Section */}
       <div className="flex flex-col items-center gap-2 w-full relative">
-        {/* No Home link here: the client switcher above already goes between clients and back. */}
+        {/* No Home link here: the client switcher in the top nav goes between clients. */}
 
         {/* User Profile Avatar Trigger */}
         <button

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus,
-  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Building2,
   Play,
   Settings2,
@@ -18,9 +19,11 @@ import {
   RefreshCw,
   UserCheck,
   ListPlus,
+  FileEdit,
   Loader2,
 } from "lucide-react";
-import { Breadcrumbs } from "@/components/breadcrumbs/breadcrumbs";
+import { ClientSwitcher } from "@/components/client-switcher";
+import type { Workspace } from "@/lib/workspace";
 import { GlobalSearch } from "@/components/global-search";
 import { RightUtilityRail } from "@/components/right-utility-rail";
 import type { RightPanelKey } from "@/components/right-utility-panel";
@@ -29,6 +32,8 @@ import { AnySkillBadge } from "@/components/any-skill-badge";
 import { useToast } from "@/components/toast/toast-provider";
 import { hereForBack, skillSettingsHref, useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
+import { Modal } from "@/components/modal";
+import { ClientDetailsForm } from "@/app/dashboard/engagements/[id]/client-details-form";
 
 /** What the Create menu's shortcuts act on: the active client. */
 export interface CreateMenuContext {
@@ -43,6 +48,10 @@ export interface CreateMenuContext {
 
 interface TopNavProps {
   onToggleSidebar: () => void;
+  /** Whether the Work sidebar is showing (the toggle's icon follows it). */
+  sidebarOpen?: boolean;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
   displayName?: string;
   activePanel: RightPanelKey | null;
   onSelectPanel: (key: RightPanelKey) => void;
@@ -66,7 +75,17 @@ type SubKey = "run" | "settings" | "setup";
  * to the item and stays open until you point at another item. Every item
  * goes somewhere real or calls a real route.
  */
-function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | undefined; close: () => void; onSelectPanel: (key: RightPanelKey) => void }) {
+function CreateMenu({
+  ctx,
+  close,
+  onSelectPanel,
+  onEditDetails,
+}: {
+  ctx: CreateMenuContext | undefined;
+  close: () => void;
+  onSelectPanel: (key: RightPanelKey) => void;
+  onEditDetails: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const pane = useSkillPane();
@@ -77,10 +96,9 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
   const desktop = () => typeof window !== "undefined" && Boolean(window.matchMedia?.("(min-width: 768px)").matches);
   const skills = ctx?.skills ?? [];
   const products = ctx?.products ?? [];
-  const has = (productId: string) => products.some((p) => p.id === productId);
+  // Product shortcuts follow what's switched on for this client (the same
+  // rule as the sidebar's Enabled Skills), not what the workspace installed.
   const skillOn = (id: string) => skills.some((s) => s.id === id);
-  const coldOpenOn = has("cold-open");
-  const showtimeOn = has("showtime");
 
   async function call(key: string, url: string, init: RequestInit, ok: string, fail: string) {
     setBusy(key);
@@ -189,6 +207,20 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
         {cascade("Change a skill's settings", <Settings2 className={iconCls} />, "settings")}
         {cascade("Open a product's setup", <Wrench className={iconCls} />, "setup")}
         <div className="my-1 border-t border-zinc-900/[0.07] dark:border-white/10" />
+        <button
+          type="button"
+          role="menuitem"
+          disabled={needsClient}
+          onClick={() => {
+            close();
+            onEditDetails();
+          }}
+          className={itemCls}
+          {...leaf}
+        >
+          <FileEdit className={iconCls} />
+          <span className="truncate">Edit client details</span>
+        </button>
         <button type="button" role="menuitem" disabled={needsClient || busy !== null} onClick={() => void shareResults()} className={itemCls} {...leaf}>
           <Link2 className={iconCls} />
           <span className="flex-1 truncate">Copy a results link</span>
@@ -214,7 +246,7 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
           <span className="flex-1 truncate">{ctx?.paused ? "Resume this client" : "Pause this client"}</span>
           {busy === "pause" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
         </button>
-        {showtimeOn && (
+        {skillOn("pin-down") && (
           <button
             type="button"
             role="menuitem"
@@ -228,13 +260,13 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
             {busy === "rebuild" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           </button>
         )}
-        {coldOpenOn && skillOn("daily-send") && (
+        {skillOn("daily-send") && (
           <Link href={`/dashboard/engagements/${enc}/bridges/daily-send`} onClick={close} className={itemCls} {...leaf}>
             <UserCheck className={iconCls} />
             <span className="truncate">Approve held Cold Open leads</span>
           </Link>
         )}
-        {coldOpenOn && (
+        {skillOn("source-connect") && (
           <button type="button" role="menuitem" disabled={needsClient} onClick={() => openSettings("source-connect")} className={itemCls} {...leaf}>
             <ListPlus className={iconCls} />
             <span className="truncate">Add a lead list</span>
@@ -265,8 +297,9 @@ function CreateMenu({ ctx, close, onSelectPanel }: { ctx: CreateMenuContext | un
   );
 }
 
-export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNotifications, createMenu }: TopNavProps) {
+export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, activeWorkspaceId, activePanel, onSelectPanel, unreadNotifications, createMenu }: TopNavProps) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
   const closeCreate = () => setCreateOpen(false);
 
   return (
@@ -276,10 +309,12 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
         <button
           type="button"
           onClick={onToggleSidebar}
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-pressed={!sidebarOpen}
           className="hidden md:flex p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-          title="Toggle Navigation"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
-          <Menu className="w-4 h-4" />
+          {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
         </button>
 
         <div className="relative flex items-center">
@@ -299,18 +334,20 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
               <div className="fixed inset-0 z-40" onClick={closeCreate} />
               {/* Mobile: opens below | Desktop: opens to the right */}
               <div className="absolute left-0 top-full z-50 mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2">
-                <CreateMenu ctx={createMenu} close={closeCreate} onSelectPanel={onSelectPanel} />
+                <CreateMenu ctx={createMenu} close={closeCreate} onSelectPanel={onSelectPanel} onEditDetails={() => setEditingDetails(true)} />
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Middle-left: Breadcrumbs + the persistent way back into a tour
-          for anyone who skipped it — see tour-launcher.tsx's own header. */}
-      <div className="hidden md:flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
-        <Breadcrumbs />
-        <TourLauncher />
+      {/* Middle-left: which client you're in (and the switch to another),
+          where the breadcrumb used to be, plus the way back into a tour. */}
+      <div className="flex min-w-0 flex-1 max-w-[38%] items-center gap-1.5">
+        {workspaces && activeWorkspaceId ? <ClientSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} /> : null}
+        <span className="hidden md:inline-flex">
+          <TourLauncher />
+        </span>
       </div>
 
       {/* Search — a normal flex sibling between breadcrumbs and the
@@ -339,6 +376,11 @@ export function TopNav({ onToggleSidebar, activePanel, onSelectPanel, unreadNoti
       <div className="flex items-center gap-2 ml-auto shrink-0" data-tour="top-nav-utility-rail">
         <RightUtilityRail activePanel={activePanel} onSelect={onSelectPanel} unreadCount={unreadNotifications} />
       </div>
+      {editingDetails && createMenu?.engagementId && (
+        <Modal title="Client details" icon={FileEdit} onClose={() => setEditingDetails(false)}>
+          <ClientDetailsForm engagementId={createMenu.engagementId} onClose={() => setEditingDetails(false)} />
+        </Modal>
+      )}
     </header>
   );
 }

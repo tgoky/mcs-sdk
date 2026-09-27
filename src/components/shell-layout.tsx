@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, ReactNode } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, ReactNode } from "react";
 import { TopNav } from "@/components/top-nav";
 import { PrimaryRail } from "@/components/primary-rail";
-import { SecondarySidebar } from "@/components/secondary-sidebar";
+import { SecondarySidebar, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "@/components/secondary-sidebar";
 import { SettingsSidebar } from "@/app/dashboard/settings/settings-sidebar";
 import { RightUtilityPanel, type RightPanelKey } from "@/components/right-utility-panel";
 import { useNotifications } from "@/app/dashboard/use-notifications";
@@ -14,6 +14,27 @@ import { SkillSettingsPane } from "@/components/skill-settings/skill-settings-pa
 import type { CreateMenuContext } from "@/components/top-nav";
 
 const PANEL_WIDTH_KEY = "mcs-right-panel-width";
+const SIDEBAR_WIDTH_KEY = "mcs-sidebar-width";
+const SIDEBAR_WIDTH_EVENT = "mcs-sidebar-width";
+// Used when storage is blocked, so dragging still works for this visit.
+let sidebarWidthFallback = SIDEBAR_DEFAULT_WIDTH;
+function readSidebarWidth(): number {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= SIDEBAR_MIN_WIDTH && n <= SIDEBAR_MAX_WIDTH ? n : sidebarWidthFallback;
+  } catch {
+    return sidebarWidthFallback;
+  }
+}
+function subscribeSidebarWidth(onChange: () => void) {
+  window.addEventListener(SIDEBAR_WIDTH_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(SIDEBAR_WIDTH_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
 const DEFAULT_PANEL_WIDTH = 360;
 const SETTINGS_PANE_WIDTH_KEY = "mcs-settings-pane-width";
 const DEFAULT_SETTINGS_PANE_WIDTH = 460;
@@ -57,6 +78,18 @@ export function ShellLayout({
   createMenu?: CreateMenuContext;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Read after hydration (the server renders the default), so the page
+  // the server sent and the first browser render agree.
+  const sidebarWidth = useSyncExternalStore(subscribeSidebarWidth, readSidebarWidth, () => SIDEBAR_DEFAULT_WIDTH);
+  const handleSidebarWidth = useCallback((w: number) => {
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w));
+    } catch {
+      // Width just isn't remembered past this visit.
+    }
+    sidebarWidthFallback = w;
+    window.dispatchEvent(new Event(SIDEBAR_WIDTH_EVENT));
+  }, []);
 
   // Right-utility-panel state (Calendar / Teammates / Notifications /
   // Upcoming / Plan) lives here since it has to affect both
@@ -108,6 +141,9 @@ export function ShellLayout({
       {/* 1. Global Top Navigation Header */}
       <TopNav
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        sidebarOpen={sidebarOpen}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
         displayName={displayName}
         activePanel={activePanel}
         onSelectPanel={handleSelectPanel}
@@ -130,11 +166,15 @@ export function ShellLayout({
 
         {/* Column 2: Secondary Collapsible Sidebar — its content swaps
             entirely based on which primary-rail section is active */}
-        {sidebarOpen && (
-          <div className="hidden md:flex">
-            <SecondarySidebar work={work} settings={settings ?? <SettingsSidebar />} />
-          </div>
-        )}
+        <div className="hidden md:flex">
+          <SecondarySidebar
+            work={work}
+            settings={settings ?? <SettingsSidebar />}
+            open={sidebarOpen}
+            width={sidebarWidth}
+            onWidthChange={handleSidebarWidth}
+          />
+        </div>
 
         {/* Column 3: Main Page Area — shrinks (doesn't get covered) when
             the right utility panel opens, since that panel is a flex

@@ -160,10 +160,12 @@ function InstalledSkillsList({
                         <span className="min-w-0 flex-1 truncate font-medium" title={name}>
                           {name}
                         </span>
-                        {/* How many are on, as a small badge; red with a mark when one failed its last run. */}
+                        {/* How many are on, as a small grey badge. When any failed its
+                            last run the badge switches to how many are failing, in red
+                            with a warning mark, so "⚠ 1" means one skill needs you. */}
                         <span
-                          title={failing > 0 ? `${skills.length} on · ${failing} failed ${failing === 1 ? "its" : "their"} last run` : `${skills.length} on`}
-                          aria-label={failing > 0 ? `${skills.length} on, ${failing} failing` : `${skills.length} on`}
+                          title={failing > 0 ? `${failing} of ${skills.length} failed ${failing === 1 ? "its" : "their"} last run` : `${skills.length} on`}
+                          aria-label={failing > 0 ? `${failing} of ${skills.length} failing` : `${skills.length} on`}
                           className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums ${
                             failing > 0
                               ? "bg-rose-500/12 text-rose-600 ring-1 ring-inset ring-rose-500/25 dark:bg-rose-500/15 dark:text-rose-400"
@@ -171,7 +173,7 @@ function InstalledSkillsList({
                           }`}
                         >
                           {failing > 0 && <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.5} />}
-                          {skills.length}
+                          {failing > 0 ? failing : skills.length}
                         </span>
                       </button>
                       {engagementId && setupWorker && (

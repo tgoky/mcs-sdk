@@ -28,9 +28,9 @@ describe("the sidebar's enabled skills", () => {
     render(<SkillsNavList layout="grid" productIds={["showtime", "whop-agent"]} enabledWorkerIds={enabled} engagementId="e1" needsAttentionWorkerIds={new Set(["leak-map"])} />);
     // Distinct from the row's own "…" setup kebab, whose accessible name
     // ("Setup for Showtime") also contains the product name.
-    const showtime = screen.getByRole("button", { name: /Showtime\s*3 on/ });
+    const showtime = screen.getByRole("button", { name: /Showtime\s*1 of 3 failing/ });
     expect(showtime).toHaveAttribute("aria-expanded", "true");
-    expect(within(showtime).getByLabelText("3 on, 1 failing")).toBeInTheDocument();
+    expect(within(showtime).getByLabelText("1 of 3 failing")).toHaveTextContent(/^1$/);
     const here = screen.getByRole("link", { current: "page" });
     expect(here).toHaveAttribute("href", "/dashboard/engagements/e1/skills/win-back");
 
