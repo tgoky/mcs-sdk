@@ -2,29 +2,51 @@
 
 // src/components/skill-settings/skill-settings-panel.tsx
 //
-// One skill's own settings, edited in place (lib/skill-settings): what the
-// skill does, the knobs that change how it behaves, and what it runs on.
-// Tools, keys and destinations are shown as facts and changed in the
-// product's setup, which is linked, never embedded here.
+// One skill's Configure (lib/skill-settings): what it does, the tools it
+// runs on as logos to pick and connect right here (sign in, a saved
+// account, or a key, through the same connect route setup uses), what
+// each tool still needs (a Twilio number read from the account, a Slack
+// channel, an address to paste, a signing secret), and the knobs that
+// change how it behaves. One Save.
+//
+// Signing in leaves the page; the panel keeps what was typed and opens
+// again when the person comes back (see SkillConfigureMenu).
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowUpRight, Loader2, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { Check, ChevronDown, Copy, Loader2, NotebookPen, Plus, Tag, X, Ban } from "lucide-react";
 import { Switch } from "@/components/product-setup/skill-switch";
+import { ToolAvatar, type ToolActions } from "@/components/product-setup/tool-avatar";
+import { AnchoredCard } from "@/components/product-setup/anchored-card";
+import { PlatformLogo } from "@/components/platform-logo";
 import { cn } from "@/lib/utils";
-import { fieldKey, isShown, settingsFor, toShown, type SettingField, type SettingValue, type SettingValues } from "@/lib/skill-settings/schema";
+import { fieldKey, isShown, isValueless, settingsFor, toShown, type SettingField, type SettingValue, type SettingValues, type ToolChoice } from "@/lib/skill-settings/schema";
 import type { SkillSettingsView } from "@/lib/skill-settings/server";
+import type { SetupTool } from "@/lib/showtime-setup/catalog";
 
 const inputCls =
-  "w-full rounded-sm border border-zinc-200 bg-white/60 px-2.5 text-[13px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-white/25";
+  "w-full rounded-md border border-zinc-200 bg-white/70 px-2.5 text-[13px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-white/25";
+
+/** Kept across a sign-in redirect: which panel to open again, and its draft. */
+export const REOPEN_KEY = "skill-settings:reopen";
 
 function isSettingsView(v: unknown): v is SkillSettingsView {
   const o = v as Partial<SkillSettingsView> | null;
-  return Boolean(o && typeof o.name === "string" && o.values && Array.isArray(o.facts));
+  return Boolean(o && typeof o.name === "string" && o.values && Array.isArray(o.facts) && Array.isArray(o.tools));
 }
 
 function shownValues(fields: SettingField[], values: SettingValues): SettingValues {
-  return Object.fromEntries(fields.map((f) => [fieldKey(f), toShown(f, values[fieldKey(f)] ?? null)]));
+  return Object.fromEntries(fields.filter((f) => !isValueless(f) && f.kind !== "secret").map((f) => [fieldKey(f), toShown(f, values[fieldKey(f)] ?? null)]));
+}
+
+async function post(url: string, body: unknown): Promise<string | null> {
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return res.ok ? null : (json.error ?? "Something went wrong. Try again.");
+  } catch {
+    return "Couldn't reach the server. Check the connection and try again.";
+  }
 }
 
 export function SkillSettingsPanel({
@@ -36,12 +58,13 @@ export function SkillSettingsPanel({
   engagementId: string;
   skillId: string;
   onClose: () => void;
-  /** After a save went through. */
-  onSaved?: () => void;
+  /** After a save went through; `notice` says what it set off, if anything. */
+  onSaved?: (notice?: string) => void;
 }) {
   const spec = settingsFor(skillId);
   const fields = useMemo(() => spec?.fields ?? [], [spec]);
   const url = `/api/engagements/${encodeURIComponent(engagementId)}/skills/${encodeURIComponent(skillId)}/settings`;
+  const pathname = usePathname();
 
   const [view, setView] = useState<SkillSettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -49,47 +72,124 @@ export function SkillSettingsPanel({
   const [saved, setSaved] = useState<SettingValues>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ text: string; field?: string } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<SkillSettingsView | null> => {
+    const res = await fetch(url, { cache: "no-store" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !isSettingsView(body)) throw new Error((body as { error?: string }).error ?? "Couldn't load these settings.");
+    return body;
+  }, [url]);
 
   useEffect(() => {
     let live = true;
-    fetch(url, { cache: "no-store" })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (!live) return;
-        if (!res.ok || !isSettingsView(body)) return setLoadError((body as { error?: string }).error ?? "Couldn't load these settings.");
+    load()
+      .then((body) => {
+        if (!live || !body) return;
         setView(body);
         const shown = shownValues(fields, body.values);
-        setDraft(shown);
         setSaved(shown);
+        // Back from signing in: what was typed before leaving comes back.
+        let kept: SettingValues | null = null;
+        try {
+          const raw = sessionStorage.getItem(REOPEN_KEY);
+          const parsed = raw ? (JSON.parse(raw) as { engagementId?: string; skillId?: string; draft?: SettingValues }) : null;
+          if (parsed?.engagementId === engagementId && parsed.skillId === skillId && parsed.draft) kept = parsed.draft;
+          if (parsed?.skillId === skillId) sessionStorage.removeItem(REOPEN_KEY);
+        } catch {
+          // Nothing kept.
+        }
+        setDraft(kept ? { ...shown, ...kept } : shown);
       })
-      .catch(() => live && setLoadError("Couldn't load these settings."));
+      .catch((e) => live && setLoadError(e instanceof Error ? e.message : "Couldn't load these settings."));
     return () => {
       live = false;
     };
-  }, [url, fields]);
+  }, [load, fields, engagementId, skillId]);
+
+  /** Tool states and loaded choices change after a connection; the draft doesn't. */
+  const refresh = useCallback(async () => {
+    try {
+      const body = await load();
+      if (body) setView(body);
+    } catch {
+      // Keep what's shown.
+    }
+  }, [load]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const set = (key: string, value: SettingValue) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setError(null);
-    setNotice(null);
   };
+
+  const connectUrl = `/api/engagements/${encodeURIComponent(engagementId)}/setup/showtime/connect`;
+  /** Connecting from a tool's card also picks it for the row it's in. */
+  const actionsFor = (onChoose: (tool: SetupTool) => void): ToolActions => ({
+    useSaved: async (tool, vaultId) => {
+      const err = await post(connectUrl, { provider: tool.provider, vaultId });
+      if (err) return err;
+      onChoose(tool);
+      await refresh();
+      return null;
+    },
+    connectKey: async (tool, value, extra) => {
+      const err = await post(connectUrl, { provider: tool.provider, value, ...extra });
+      if (err) return err;
+      onChoose(tool);
+      await refresh();
+      return null;
+    },
+    signIn: async (tool) => {
+      try {
+        sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ engagementId, skillId, draft }));
+      } catch {
+        // Private mode: the panel opens again empty-handed.
+      }
+      try {
+        const res = await fetch("/api/composio/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: tool.provider, returnTo: pathname, engagementId }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { redirectUrl?: string; error?: string };
+        if (!res.ok || !json.redirectUrl) return json.error ?? `Couldn't start signing in to ${tool.label}.`;
+        window.location.assign(json.redirectUrl);
+        return null;
+      } catch {
+        return `Couldn't start signing in to ${tool.label}.`;
+      }
+    },
+    disconnect: async (tool) => {
+      const err = await post(connectUrl, { provider: tool.provider, disconnect: true });
+      if (err) return err;
+      await refresh();
+      return null;
+    },
+    choose: onChoose,
+    setExtra: async (tool, extras) => {
+      const err = await post(connectUrl, { provider: tool.provider, ...extras });
+      if (err) return err;
+      await refresh();
+      return null;
+    },
+  });
 
   async function save() {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
-      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; field?: string; notice?: string };
-      if (!res.ok || !body.ok) {
-        setError({ text: body.error ?? "Couldn't save.", field: body.field });
+      // Only what's shown is sent; hidden rows keep what's stored.
+      const body = Object.fromEntries(fields.filter((f) => !isValueless(f) && isShown(f, draft, fields) && fieldKey(f) in draft).map((f) => [fieldKey(f), draft[fieldKey(f)]]));
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; field?: string; notice?: string };
+      if (!res.ok || !json.ok) {
+        setError({ text: json.error ?? "Couldn't save.", field: json.field });
         return;
       }
-      setSaved(draft);
-      if (body.notice) setNotice(body.notice);
-      else onSaved?.();
+      const kept = Object.fromEntries(Object.entries(draft).filter(([k]) => !k.startsWith("secret:")));
+      setSaved(kept);
+      setDraft(kept);
+      onSaved?.(json.notice);
     } catch {
       setError({ text: "Couldn't save. Check your connection and try again." });
     } finally {
@@ -106,8 +206,8 @@ export function SkillSettingsPanel({
     );
   }
 
-  const shown = fields.filter((f) => isShown(f, draft));
-  const hasSettings = fields.length > 0 && !view.blocked;
+  const shown = fields.filter((f) => isShown(f, draft, fields));
+  const editable = fields.some((f) => !isValueless(f)) && !view.blocked;
 
   return (
     <div className="space-y-4 p-4">
@@ -116,58 +216,105 @@ export function SkillSettingsPanel({
         <p className="line-clamp-2 text-[12.5px] leading-relaxed text-zinc-500 dark:text-zinc-400">{view.description}</p>
       </header>
 
+      {view.alert && <AlertRow alert={view.alert} onDone={refresh} />}
+
       {view.blocked ? (
         <p className="text-[13px] text-zinc-600 dark:text-zinc-300">{view.blocked}</p>
-      ) : hasSettings ? (
-        <div className="space-y-3.5">
+      ) : fields.length > 0 ? (
+        <div className="space-y-4">
           {shown.map((f) => (
-            <FieldRow key={fieldKey(f)} field={f} value={draft[fieldKey(f)] ?? null} onChange={(v) => set(fieldKey(f), v)} view={view} error={error?.field === fieldKey(f) ? error.text : null} />
+            <FieldRow
+              key={fieldKey(f)}
+              field={f}
+              value={draft[fieldKey(f)] ?? null}
+              draft={draft}
+              onChange={(v) => set(fieldKey(f), v)}
+              view={view}
+              engagementId={engagementId}
+              actionsFor={actionsFor}
+              error={error?.field === fieldKey(f) ? error.text : null}
+            />
           ))}
         </div>
       ) : (
-        <p className="text-[13px] text-zinc-600 dark:text-zinc-300">Nothing to set for this skill. It runs on its own.</p>
+        <p className="text-[13px] text-zinc-600 dark:text-zinc-300">It runs on its own; there&apos;s nothing to set.</p>
       )}
 
       {view.facts.length > 0 && (
-        <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5 border-t border-zinc-200/70 pt-3 text-[12.5px] dark:border-white/10">
+        <dl className="space-y-1.5 border-t border-zinc-200/70 pt-3 text-[12.5px] dark:border-white/10">
           {view.facts.map((fact) => (
-            <div key={fact.label} className="contents">
-              <dt className="text-zinc-500 dark:text-zinc-400">{fact.label}</dt>
-              <dd className="min-w-0 break-words text-zinc-800 dark:text-zinc-200">{fact.value}</dd>
+            <div key={fact.label} className="flex items-baseline justify-between gap-4">
+              <dt className="shrink-0 text-zinc-500 dark:text-zinc-400">{fact.label}</dt>
+              <dd className="min-w-0 text-right text-zinc-800 dark:text-zinc-200">{fact.value}</dd>
             </div>
           ))}
         </dl>
       )}
 
-      {error && !error.field && <p className="text-[12.5px] text-rose-600 dark:text-rose-400">{error.text}</p>}
-      {notice && <p className="text-[12.5px] text-amber-700 dark:text-amber-300">{notice}</p>}
+      {error && (!error.field || !shown.some((f) => fieldKey(f) === error.field)) && <p className="text-[12.5px] text-rose-600 dark:text-rose-400">{error.text}</p>}
 
-      <footer className="flex items-center justify-between gap-3 border-t border-zinc-200/70 pt-3 dark:border-white/10">
-        <Link href={view.setupHref} className="inline-flex items-center gap-1 text-[12.5px] text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
-          Tools and connections in setup <ArrowUpRight className="h-3 w-3" />
-        </Link>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onClose} className="h-8 rounded-sm px-3 text-[13px] text-zinc-600 transition-colors hover:bg-zinc-900/5 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer">
-            {hasSettings ? "Cancel" : "Close"}
+      <footer className="flex items-center justify-end gap-2 border-t border-zinc-200/70 pt-3 dark:border-white/10">
+        <button type="button" onClick={onClose} className="h-8 rounded-md px-3 text-[13px] text-zinc-600 transition-colors hover:bg-zinc-900/5 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer">
+          {editable ? "Cancel" : "Close"}
+        </button>
+        {editable && (
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || saving}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 cursor-pointer disabled:cursor-default"
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Save
           </button>
-          {hasSettings && (
-            <button
-              type="button"
-              onClick={save}
-              disabled={!dirty || saving}
-              className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-zinc-900 px-3 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 cursor-pointer disabled:cursor-default"
-            >
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Save
-            </button>
-          )}
-        </div>
+        )}
       </footer>
     </div>
   );
 }
 
-function FieldRow({ field: f, value, onChange, view, error }: { field: SettingField; value: SettingValue; onChange: (v: SettingValue) => void; view: SkillSettingsView; error: string | null }) {
+function AlertRow({ alert, onDone }: { alert: NonNullable<SkillSettingsView["alert"]>; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <div className="space-y-2 rounded-md border border-amber-300/60 bg-amber-50/70 px-3 py-2.5 text-[12.5px] leading-relaxed text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/[0.06] dark:text-amber-200">
+      <p>{alert.text}</p>
+      {err && <p className="text-rose-700 dark:text-rose-300">{err}</p>}
+      {alert.action && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setErr(null);
+            const e = await post(alert.action!.endpoint, {});
+            setBusy(false);
+            if (e) setErr(e);
+            else onDone();
+          }}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-400/70 px-2.5 font-medium hover:bg-amber-100 disabled:opacity-50 dark:border-amber-300/30 dark:hover:bg-amber-300/10 cursor-pointer"
+        >
+          {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+          {alert.action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface RowProps {
+  field: SettingField;
+  value: SettingValue;
+  draft: SettingValues;
+  onChange: (v: SettingValue) => void;
+  view: SkillSettingsView;
+  engagementId: string;
+  actionsFor: (onChoose: (tool: SetupTool) => void) => ToolActions;
+  error: string | null;
+}
+
+function FieldRow(p: RowProps) {
+  const { field: f, view, error } = p;
   const locked = f.lockedIf && view.context[f.lockedIf.path] === f.lockedIf.equals ? f.lockedIf : null;
   const help = locked ? locked.reason : f.help;
 
@@ -180,24 +327,72 @@ function FieldRow({ field: f, value, onChange, view, error }: { field: SettingFi
           {error && <p className="mt-0.5 text-[12px] text-rose-600 dark:text-rose-400">{error}</p>}
         </div>
         <div className={cn(locked && "pointer-events-none opacity-50")}>
-          <Switch on={locked ? Boolean(locked.value) : value === true} onChange={(on) => onChange(on)} label={f.label} />
+          <Switch on={locked ? Boolean(locked.value) : p.value === true} onChange={(on) => p.onChange(on)} label={f.label} />
         </div>
       </div>
     );
   }
 
   return (
-    <label className="block space-y-1">
-      <span className="text-[12.5px] font-medium text-zinc-700 dark:text-zinc-300">{f.label}</span>
-      <Control field={f} value={value} onChange={onChange} options={view.options[fieldKey(f)]} />
-      {help && <span className="block text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">{help}</span>}
-      {error && <span className="block text-[12px] text-rose-600 dark:text-rose-400">{error}</span>}
-    </label>
+    <div className="space-y-1.5">
+      <p className="text-[12.5px] font-medium text-zinc-700 dark:text-zinc-300">{f.label}</p>
+      <Control {...p} />
+      {help && <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">{help}</p>}
+      {error && <p className="text-[12px] text-rose-600 dark:text-rose-400">{error}</p>}
+    </div>
   );
 }
 
-function Control({ field: f, value, onChange, options }: { field: SettingField; value: SettingValue; onChange: (v: SettingValue) => void; options?: { value: string; label: string }[] }) {
+function Control(p: RowProps) {
+  const { field: f, value, onChange, view } = p;
   switch (f.kind) {
+    case "tool":
+      return <ToolRow {...p} field={f} />;
+    case "connect":
+      return (
+        <div className="flex flex-wrap gap-4">
+          {f.tools.map((tool) => {
+            const state = view.tools.find((t) => t.provider === tool.provider);
+            return <ToolAvatar key={tool.provider} tool={tool} state={state} selected={Boolean(state?.linked)} buyer={view.buyer} actions={p.actionsFor(() => undefined)} size={40} />;
+          })}
+        </div>
+      );
+    case "pick":
+      return <LivePick {...p} field={f} />;
+    case "copy":
+      return <CopyValue value={view.copies[f.from] ?? null} />;
+    case "secret": {
+      const isSet = view.secretsSet.includes(fieldKey(f));
+      return (
+        <input
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={isSet ? "Saved. Paste a new one to replace it." : (f.placeholder ?? "Paste it here")}
+          aria-label={f.label}
+          className={cn(inputCls, "h-8 font-mono")}
+        />
+      );
+    }
+    case "map": {
+      const keys = view.mapKeys[fieldKey(f)] ?? [];
+      const campaigns = view.options[fieldKey(f)] ?? [];
+      const map = (value && typeof value === "object" && !Array.isArray(value) ? value : {}) as Record<string, string>;
+      if (keys.length === 0) return <p className="text-[12.5px] text-zinc-500">No customer types yet.</p>;
+      if (campaigns.length === 0) return <p className="text-[12.5px] text-zinc-500">No campaigns found in the sending tool yet. Create one there, then open this again.</p>;
+      return (
+        <div className="space-y-2">
+          {keys.map((k) => (
+            <div key={k.value} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-2">
+              <span className="truncate text-[12.5px] text-zinc-600 dark:text-zinc-300">{k.label}</span>
+              <ChoiceSelect label={`Campaign for ${k.label}`} value={map[k.value] ?? null} options={[{ value: "", label: "Not sent" }, ...campaigns]} onChange={(v) => onChange({ ...map, [k.value]: v })} />
+            </div>
+          ))}
+        </div>
+      );
+    }
     case "number":
       return (
         <span className="flex items-center gap-2">
@@ -215,28 +410,22 @@ function Control({ field: f, value, onChange, options }: { field: SettingField; 
           {f.unit && <span className="text-[12.5px] text-zinc-500 dark:text-zinc-400">{f.unit}</span>}
         </span>
       );
-    case "select":
-      return (
-        <select value={value === null || value === undefined ? "" : String(value)} onChange={(e) => onChange(e.target.value)} aria-label={f.label} className={cn(inputCls, "h-8 cursor-pointer")}>
-          {f.default === null && <option value="">Choose…</option>}
-          {f.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      );
+    case "select": {
+      const opts = f.optionsFrom ? (view.options[fieldKey(f)] ?? []) : f.options;
+      if (f.optionsFrom && opts.length === 0) return <p className="text-[12.5px] text-zinc-500">Nothing to pick yet.</p>;
+      return <ChoiceSelect label={f.label} value={value === null || value === undefined ? null : String(value)} options={opts} onChange={onChange} />;
+    }
     case "text":
       return <input type="text" value={typeof value === "string" ? value : ""} maxLength={f.maxLength} placeholder={f.placeholder} onChange={(e) => onChange(e.target.value)} aria-label={f.label} className={cn(inputCls, "h-8")} />;
     case "textarea":
       return (
         <span className="block space-y-1">
-          <textarea rows={3} value={typeof value === "string" ? value : ""} maxLength={f.maxLength} onChange={(e) => onChange(e.target.value)} aria-label={f.label} className={cn(inputCls, "resize-y py-2 leading-relaxed")} />
+          <textarea rows={f.maxLength > 2000 ? 6 : 3} value={typeof value === "string" ? value : ""} maxLength={f.maxLength} onChange={(e) => onChange(e.target.value)} aria-label={f.label} className={cn(inputCls, "resize-y py-2 leading-relaxed")} />
           {f.tokens && <span className="block text-[11.5px] text-zinc-400 dark:text-zinc-500">You can use {f.tokens.join(", ")}.</span>}
         </span>
       );
     case "multi": {
-      const choices = f.options ?? options ?? [];
+      const choices = f.options ?? view.options[fieldKey(f)] ?? [];
       const picked = Array.isArray(value) ? value : [];
       if (choices.length === 0) return <span className="block text-[12.5px] text-zinc-500">Nothing to choose from yet.</span>;
       return (
@@ -249,9 +438,9 @@ function Control({ field: f, value, onChange, options }: { field: SettingField; 
                   key={o.value}
                   type="button"
                   aria-pressed={on}
-                  onClick={() => onChange(on ? picked.filter((p) => p !== o.value) : [...picked, o.value])}
+                  onClick={() => onChange(on ? picked.filter((x) => x !== o.value) : [...picked, o.value])}
                   className={cn(
-                    "h-7 rounded-sm border px-2.5 text-[12.5px] transition-colors cursor-pointer",
+                    "h-7 rounded-md border px-2.5 text-[12.5px] transition-colors cursor-pointer",
                     on ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-200 text-zinc-600 hover:border-zinc-400 dark:border-white/10 dark:text-zinc-300 dark:hover:border-white/25"
                   )}
                 >
@@ -270,8 +459,8 @@ function Control({ field: f, value, onChange, options }: { field: SettingField; 
         <span className="block space-y-1.5">
           {items.map((item, i) => (
             <span key={i} className="flex items-center gap-1.5">
-              <input type="text" value={item} maxLength={f.maxLength} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${f.label} ${i + 1}`} className={cn(inputCls, "h-8")} />
-              <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove" className="grid h-8 w-8 shrink-0 place-items-center rounded-sm text-zinc-400 hover:bg-zinc-900/5 hover:text-zinc-700 dark:hover:bg-white/5 dark:hover:text-zinc-200 cursor-pointer">
+              <input type="text" value={item} maxLength={f.maxLength} placeholder={f.placeholder} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${f.label} ${i + 1}`} className={cn(inputCls, "h-8")} />
+              <button type="button" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-zinc-400 hover:bg-zinc-900/5 hover:text-zinc-700 dark:hover:bg-white/5 dark:hover:text-zinc-200 cursor-pointer">
                 <X className="h-3.5 w-3.5" />
               </button>
             </span>
@@ -287,4 +476,198 @@ function Control({ field: f, value, onChange, options }: { field: SettingField; 
     default:
       return null;
   }
+}
+
+/** The tools as round logos: a tool is picked from its card (connecting it
+ * there if it isn't yet); a choice with nothing to connect is picked by a click. */
+function ToolRow(p: RowProps & { field: Extract<SettingField, { kind: "tool" }> }) {
+  const { field: f, value, onChange, view } = p;
+  const picked = f.multi ? (Array.isArray(value) ? value : []) : typeof value === "string" ? [value] : [];
+  const pick = (c: ToolChoice) => {
+    if (f.multi) onChange(picked.includes(c.value) ? picked.filter((x) => x !== c.value) : [...picked, c.value]);
+    else onChange(c.value);
+  };
+  const unknown = !f.multi && typeof value === "string" && value && !f.choices.some((c) => c.value === value);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-3 gap-y-3">
+        {f.choices.map((c) => {
+          const on = picked.includes(c.value);
+          if (c.tool) {
+            const tool = c.label ? { ...c.tool, label: c.label } : c.tool;
+            const state = view.tools.find((t) => t.provider === c.tool!.provider);
+            return (
+              <div key={c.value} className="relative">
+                <ToolAvatar tool={tool} state={state} selected={on} buyer={view.buyer} actions={p.actionsFor(() => (f.multi ? !on && pick(c) : onChange(c.value)))} size={40} />
+                {f.multi && on && (
+                  <button type="button" onClick={() => pick(c)} className="mt-1 block w-full text-center text-[10.5px] text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer">
+                    Remove
+                  </button>
+                )}
+              </div>
+            );
+          }
+          return <PlainChoice key={c.value} choice={c} on={on} onPick={() => pick(c)} />;
+        })}
+      </div>
+      {unknown && <p className="text-[12px] text-zinc-500 dark:text-zinc-400">Set to something not listed here. Pick one above to change it.</p>}
+    </div>
+  );
+}
+
+function PlainChoice({ choice: c, on, onPick }: { choice: ToolChoice; on: boolean; onPick: () => void }) {
+  const Icon = c.icon === "off" ? Ban : c.icon === "note" ? NotebookPen : c.icon === "tag" ? Tag : null;
+  return (
+    <button type="button" onClick={onPick} aria-pressed={on} aria-label={c.label} className="group flex flex-col items-center gap-1.5 outline-none cursor-pointer">
+      <span
+        className={cn(
+          "relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-elevation-1 ring-1 ring-black/10 transition-shadow group-hover:shadow-elevation-2 dark:bg-zinc-900 dark:ring-white/10",
+          on && "ring-2 ring-[var(--ink)] dark:ring-[var(--ink)]"
+        )}
+      >
+        {c.logo ? <PlatformLogo provider={c.logo} size={21} monogram={c.label} /> : Icon ? <Icon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" /> : null}
+        {on && (
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-background bg-[var(--ink)] text-[var(--ink-foreground)]">
+            <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
+          </span>
+        )}
+      </span>
+      <span className={cn("max-w-[72px] truncate text-[11px] leading-none", on ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)]")}>{c.label}</span>
+    </button>
+  );
+}
+
+/** A choice from a styled list, opened under its button. */
+export function ChoiceSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  options: { value: string; label: string; hint?: string }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const current = options.find((o) => o.value === value) ?? null;
+  const shown = query ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())) : options;
+  return (
+    <AnchoredCard
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setQuery("");
+      }}
+      label={label}
+      width={300}
+      placement="bottom-start"
+      anchor={(props) => (
+        <button type="button" {...props} aria-haspopup="listbox" aria-label={label} className={cn(inputCls, "flex h-8 items-center justify-between gap-2 text-left cursor-pointer")}>
+          <span className={cn("truncate", !current && "text-zinc-400 dark:text-zinc-500")}>{current?.label ?? "Choose…"}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+        </button>
+      )}
+    >
+      <div className="p-1.5">
+        {options.length > 8 && (
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label={`Search ${label}`} className={cn(inputCls, "mb-1.5 h-8")} />
+        )}
+        <ul role="listbox" aria-label={label} className="max-h-64 overflow-y-auto">
+          {shown.map((o) => {
+            const active = o.value === value;
+            return (
+              <li key={o.value} role="option" aria-selected={active}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  className={cn("flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors cursor-pointer", active ? "bg-[var(--accent-dim)]" : "hover:bg-[var(--accent-dim)]")}
+                >
+                  <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", active ? "opacity-100" : "opacity-0")} />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] text-[var(--text-primary)]">{o.label}</span>
+                    {o.hint && <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[var(--text-muted)]">{o.hint}</span>}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {shown.length === 0 && <li className="px-2 py-1.5 text-[12.5px] text-[var(--text-muted)]">No matches.</li>}
+        </ul>
+      </div>
+    </AnchoredCard>
+  );
+}
+
+/** One of a list read from the connected account, once it's connected. */
+function LivePick(p: RowProps & { field: Extract<SettingField, { kind: "pick" }> }) {
+  const { field: f, value, onChange, view, draft, engagementId } = p;
+  const connected = Boolean(view.tools.find((t) => t.provider === f.needs)?.linked);
+  const params = useMemo(() => Object.fromEntries(Object.entries(f.params ?? {}).map(([k, path]) => [k, typeof draft[path] === "string" ? (draft[path] as string) : ""])), [f.params, draft]);
+  const missing = Object.entries(params).find(([, v]) => !v);
+  const qs = new URLSearchParams(params).toString();
+  const [state, setState] = useState<{ key: string; options?: { value: string; label: string }[]; error?: string } | null>(null);
+  const key = `${f.resource}?${qs}`;
+
+  useEffect(() => {
+    if (!connected || missing) return;
+    let live = true;
+    fetch(`/api/engagements/${encodeURIComponent(engagementId)}/stack-options/${f.resource}${qs ? `?${qs}` : ""}`)
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as { options?: { id: string; name: string }[]; error?: string };
+        if (!live) return;
+        if (!res.ok) setState({ key, error: body.error ?? "Couldn't read the list." });
+        else setState({ key, options: (body.options ?? []).map((o) => ({ value: o.id, label: o.name })) });
+      })
+      .catch(() => live && setState({ key, error: "Couldn't read the list." }));
+    return () => {
+      live = false;
+    };
+  }, [connected, missing, engagementId, f.resource, qs, key]);
+
+  if (!connected) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Connect it above and the list shows here.</p>;
+  if (missing) return <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Fill in the field above first.</p>;
+  const current = state?.key === key ? state : null;
+  if (!current) {
+    return (
+      <p className="flex items-center gap-2 text-[12.5px] text-zinc-500">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading from the account…
+      </p>
+    );
+  }
+  if (current.error) return <p className="text-[12.5px] text-rose-600 dark:text-rose-400">{current.error}</p>;
+  const options = current.options ?? [];
+  if (options.length === 0) return <p className="text-[12.5px] text-zinc-500">The account has none yet.</p>;
+  return <ChoiceSelect label={f.label} value={typeof value === "string" ? value : null} options={[{ value: "", label: "None" }, ...options]} onChange={(v) => onChange(v || null)} />;
+}
+
+function CopyValue({ value }: { value: string | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return <p className="text-[12.5px] text-zinc-500">Not available for this tool.</p>;
+  return (
+    <div className="flex items-center gap-1.5">
+      <code className="min-w-0 flex-1 truncate rounded-md border border-zinc-200 bg-white/60 px-2.5 py-1.5 font-mono text-[11.5px] text-zinc-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300" title={value}>
+        {value}
+      </code>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(value).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+        aria-label="Copy"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-zinc-500 hover:bg-zinc-900/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-zinc-100 cursor-pointer"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
 }

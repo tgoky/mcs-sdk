@@ -104,6 +104,10 @@ const LOGO_DOMAINS: Record<string, string> = {
   wordpress: "wordpress.org",
   nextjs_vercel: "vercel.com",
   lovable: "lovable.dev",
+  twilio: "twilio.com",
+  slack: "slack.com",
+  hyros: "hyros.com",
+  google_sheets: "sheets.google.com",
   // smtp has no company/domain of its own — stays on the local PNG / plain
   // icon fallback, which is the honest outcome for a protocol, not a brand.
 };

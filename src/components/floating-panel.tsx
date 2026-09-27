@@ -84,6 +84,8 @@ export function FloatingPanel({
       close();
     }
     function onKeyDown(e: KeyboardEvent) {
+      // Escape in a card opened from inside (a tool's connect card) closes that card only.
+      if (e.target instanceof Element && e.target.closest("[data-floating-layer]")) return;
       if (e.key === "Escape") close();
     }
 

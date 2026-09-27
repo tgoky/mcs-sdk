@@ -312,6 +312,12 @@ const TOOL_GROUP_BLURB: Record<SetupTool["group"], string> = {
   email: "Sends follow-ups and recovery emails",
   hosting: "Hosts the confirmation page",
   sending: "Sends your cold email",
+  sms: "Sends the texts",
+  ads: "Builds ad audiences from booked calls",
+  slack: "Posts to a Slack channel",
+  research: "Adds research about each prospect",
+  recording: "Records and transcribes calls",
+  video: "Reads who watched the video",
 };
 
 /** The extra value on a connected tool: shown when known, asked when not. */

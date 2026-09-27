@@ -5,9 +5,10 @@
 // One Worker's own page (Showtime, Reputation Manager) — where its Skills
 // actually get enabled and configured. Layout ported back from the
 // pre-two-tier Library page (commit afcb504's
-// dashboard/library/showtime/page.tsx): a screenshot gallery, a "how a
-// client moves through it" step flow, then every skill listed vertically
-// underneath each other (not a card grid) — while keeping everything
+// dashboard/library/showtime/page.tsx): a screenshot gallery, then every
+// skill listed vertically underneath each other (not a card grid), in
+// the order a client moves through them, each row with its own runs,
+// success rate and needs-attention count — while keeping everything
 // built since then: real Install/Uninstall at the Worker level. Status/
 // Categories filtering is a SegmentedTabs row above the list (not a
 // sidebar) so the skill list itself gets the page's full width. Configure
@@ -27,7 +28,6 @@ import { SKILL_PLAYBOOKS } from "@/lib/skill-playbooks";
 import { WorkerCard, WORKER_CARD_ICON_BUTTON_CLASS } from "@/components/library/worker-card";
 import { StatChip } from "@/components/library/stat-chip";
 import { MediaGallery } from "@/components/library/media-gallery";
-import { SkillSequence } from "@/components/library/skill-sequence";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SkillConfigureMenu } from "@/app/dashboard/engagements/[id]/skill-configure-menu";
 import { useToast } from "@/components/toast/toast-provider";
@@ -206,15 +206,6 @@ export function ProductDetailClient({
             Interface &amp; Workflow Previews ({galleryItems.length})
           </h2>
           <MediaGallery items={galleryItems} />
-        </div>
-      )}
-
-      {workers.length > 1 && (
-        <div className="space-y-3">
-          <h2 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-mono">
-            How a client moves through it
-          </h2>
-          <SkillSequence workers={workers} statsById={statsById} />
         </div>
       )}
 

@@ -2,8 +2,8 @@
 
 // src/app/dashboard/engagements/[id]/skill-configure-menu.tsx
 //
-// Configure: the skill's own settings (components/skill-settings), not its
-// product's setup. Tools and connections stay in setup, linked from the panel.
+// Configure: the skill's own settings (components/skill-settings), with the
+// tools it runs on picked and connected in the panel itself.
 //
 // "Configure" was only reachable from the Library or the Skills panel on
 // the main engagement page (bridges/[skill]/page.tsx, a full page nav
@@ -15,10 +15,11 @@
 // way ActionMenu does — see floating-panel.tsx's own doc for why that
 // matters here specifically).
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { FloatingPanel } from "@/components/floating-panel";
-import { SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
+import { REOPEN_KEY, SkillSettingsPanel } from "@/components/skill-settings/skill-settings-panel";
 import { WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { useToast } from "@/components/toast/toast-provider";
 
@@ -48,11 +49,37 @@ export function SkillConfigureMenu({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // Back from signing in to a tool from this panel: open it again (it keeps
+  // what was typed) and say how the sign-in went.
+  const [returning, setReturning] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const connected = url.searchParams.get("composio_connected");
+    const failed = url.searchParams.get("composio_error");
+    if (!connected && !failed) return;
+    let mine = false;
+    try {
+      const kept = JSON.parse(sessionStorage.getItem(REOPEN_KEY) ?? "null") as { engagementId?: string; skillId?: string } | null;
+      mine = kept?.engagementId === engagementId && kept?.skillId === skillId;
+    } catch {
+      mine = false;
+    }
+    if (!mine) return;
+    if (failed) toast.error(failed);
+    else toast.success("Connected.");
+    url.searchParams.delete("composio_connected");
+    url.searchParams.delete("composio_error");
+    window.history.replaceState(null, "", url.toString());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read once from the address bar after a redirect
+    setReturning(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engagementId, skillId]);
 
   return (
     <FloatingPanel
+      key={returning ? "reopened" : "initial"}
       align="end"
-      defaultOpen={defaultOpen}
+      defaultOpen={defaultOpen || returning}
       panelWidth={440}
       trigger={({ toggle, open }) => (
         <button
@@ -79,9 +106,9 @@ export function SkillConfigureMenu({
           close();
           router.refresh();
         };
-        const savedAndRefresh = () => {
+        const savedAndRefresh = (notice?: string) => {
           closeAndRefresh();
-          toast.success(`${WORKER_REGISTRY[skillId].name} configuration saved.`);
+          toast.success(notice ? `${WORKER_REGISTRY[skillId].name} saved. ${notice}` : `${WORKER_REGISTRY[skillId].name} saved.`);
         };
         return (
           <SkillSettingsPanel skillId={skillId} engagementId={engagementId} onClose={closeAndRefresh} onSaved={savedAndRefresh} />

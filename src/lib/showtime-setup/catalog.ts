@@ -10,8 +10,10 @@
 import { isComposioManagedProvider } from "@/lib/composio-providers";
 
 export type ToolGroupId = "booking" | "email" | "hosting";
-/** Showtime's groups, plus Cold Open's sending platforms. */
-export type SetupToolGroup = ToolGroupId | "sending";
+/** Showtime's groups, Cold Open's sending platforms, and the tools single
+ * skills run on (texts, ad audiences, Slack, research, recording, video). */
+export type SetupToolGroup = ToolGroupId | "sending" | SkillToolGroup;
+export type SkillToolGroup = "sms" | "ads" | "slack" | "research" | "recording" | "video";
 
 export interface SetupTool<G extends SetupToolGroup = SetupToolGroup> {
   provider: string;
@@ -136,9 +138,26 @@ export const COLD_OPEN_SEND_TOOLS: SetupTool<"sending">[] = [
   tool({ provider: "cold_open_reply_io", label: "Reply.io", group: "sending", keyPlaceholder: "API key", keyHowTo: "Reply.io → Settings → API key" }),
 ];
 
-/** Any tool a product's setup screen can connect (the shared connect route). */
+/** The tools single skills run on, connected from a skill's Configure.
+ * Provider keys are the credential keys the skills read (resolveCredential
+ * calls in sms.ts, slack-delivery.ts, ad-data.ts, brief-service.ts); the
+ * how-tos match Settings → Apps where it lists the tool. */
+export const SKILL_TOOLS: SetupTool<SkillToolGroup>[] = [
+  tool({ provider: "twilio", label: "Twilio", group: "sms", keyPlaceholder: "Auth Token", keyHowTo: "the Twilio Console, under Account Info" }),
+  tool({ provider: "slack", label: "Slack", group: "slack", keyPlaceholder: "Bot User OAuth Token", keyHowTo: "api.slack.com/apps → your app → OAuth & Permissions" }),
+  tool({ provider: "hyros", label: "Hyros", group: "ads", keyPlaceholder: "API key", keyHowTo: "your Hyros account's API settings" }),
+  tool({ provider: "google_sheets", label: "Google Sheets", group: "ads", keyPlaceholder: "Google access token", keyHowTo: "a Google access token with Sheets and Drive access" }),
+  tool({ provider: "apollo", label: "Apollo", group: "research", keyPlaceholder: "API key", keyHowTo: "Apollo.io → Settings → Integrations → API → Create key" }),
+  tool({ provider: "pdl", label: "People Data Labs", group: "research", keyPlaceholder: "API key", keyHowTo: "the PDL dashboard → API Keys → Create key" }),
+  tool({ provider: "recall_ai", label: "Recall.ai", group: "recording", keyPlaceholder: "API key", keyHowTo: "the Recall.ai dashboard → API Keys → Create key" }),
+  tool({ provider: "vidalytics", label: "Vidalytics", group: "video", keyPlaceholder: "API key", keyHowTo: "Vidalytics → Account → API" }),
+  tool({ provider: "wistia", label: "Wistia", group: "video", keyPlaceholder: "API token", keyHowTo: "Wistia → Account Settings → API Access → Create token" }),
+  tool({ provider: "youtube_analytics", label: "YouTube", group: "video", keyPlaceholder: "Google API key", keyHowTo: "Google Cloud Console → YouTube Data API → Credentials" }),
+];
+
+/** Any tool a product's setup screen or a skill's Configure can connect (the shared connect route). */
 export function findSetupTool(provider: string): SetupTool | undefined {
-  return findShowtimeTool(provider) ?? COLD_OPEN_SEND_TOOLS.find((t) => t.provider === provider);
+  return findShowtimeTool(provider) ?? COLD_OPEN_SEND_TOOLS.find((t) => t.provider === provider) ?? SKILL_TOOLS.find((t) => t.provider === provider);
 }
 
 export function findShowtimeTool(provider: string, group?: ToolGroupId): SetupTool<ToolGroupId> | undefined {

@@ -14,11 +14,14 @@ export function ActionMenu({
   children,
   align = "end",
   panelWidth = PANEL_WIDTH,
+  panelClassName,
 }: {
   trigger: (props: { open: boolean; toggle: () => void }) => ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
   align?: "start" | "end";
   panelWidth?: number;
+  /** Replaces the panel's corner radius (default rounded-2xl). */
+  panelClassName?: string;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,7 +113,7 @@ export function ActionMenu({
             <div
               ref={panelRef}
               role="menu"
-              className="rounded-2xl surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5"
+              className={cn(panelClassName ?? "rounded-2xl", "surface-glass-3 text-zinc-900 dark:text-zinc-100 p-1.5 max-h-[70vh] overflow-y-auto font-sans tracking-tight antialiased space-y-0.5")}
             >
               {typeof children === "function" ? children(close) : children}
             </div>

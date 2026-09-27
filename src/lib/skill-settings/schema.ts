@@ -1,30 +1,50 @@
 // src/lib/skill-settings/schema.ts
 //
-// Each skill's own settings: the knobs that change how that skill behaves,
-// edited in place from Configure (components/skill-settings). Not the
-// product's setup: tools, keys and destinations (which have to be checked
-// or registered when they change) stay in setup, and a skill's settings
-// only show them as facts with a link there.
+// Each skill's own settings, edited in place from Configure
+// (components/skill-settings): the knobs that change how it behaves, and
+// the tools it runs on. A tool is picked from its logo and connected right
+// there (sign in, a saved account, or a key), with whatever else it needs
+// (a Twilio number, a Slack channel, a webhook address to paste, a
+// signing secret). Nothing a skill needs is left to another page.
 //
 // Every field names where it's stored and the default the running code
 // uses when it's unset; saving a value equal to that default clears it, so
 // "unset" keeps meaning "the default". Client-safe: no db imports.
 
 import type { WorkerId } from "@/lib/worker-registry";
+import { COLD_OPEN_SEND_TOOLS, SHOWTIME_TOOL_GROUPS, SKILL_TOOLS, type SetupTool } from "@/lib/showtime-setup/catalog";
+import { TEMPLATE_IDS, TEMPLATE_META } from "@/features/pin-down/server/templates/types";
 import { DEFAULT_CHECK_IN_MESSAGE } from "@/lib/at-risk";
 import { DEFAULT_RECOVERY_MESSAGE } from "@/features/whop-agent/server/recovery-message";
 import { DEFAULT_REVIEW_MESSAGE, DEFAULT_REVIEW_SUBJECT, DEFAULT_REVIEW_DELAY_HOURS } from "@/features/reputation-manager/server/review-request-message";
 
-/** Where a value lives: the engagement's stack, Cold Open's config row, or
- * Reputation Manager's identity graph. `path` may be nested ("a.b"). */
-export type SettingStore = "stack" | "coldOpen" | "rep";
+/** Where a value lives: the engagement's stack, Cold Open's config row,
+ * Reputation Manager's identity graph, or a column on the engagement
+ * itself. `path` may be nested ("a.b"). "none" is for rows that store
+ * nothing of their own (a connection, an address to copy, a secret). */
+export type SettingStore = "stack" | "coldOpen" | "rep" | "engagement" | "none";
+
+/** One logo in a tool row. `tool` is what gets connected, null when the
+ * choice has nothing to connect ("No texts", "A note in the CRM"). */
+export interface ToolChoice {
+  value: string;
+  tool: SetupTool | null;
+  /** Under the logo; the tool's own name when not given. */
+  label?: string;
+  /** For a choice without a tool: whose mark to draw, or a plain glyph. */
+  logo?: string;
+  icon?: "off" | "note" | "tag";
+}
+
+/** Addresses a client pastes into another tool, made per client. */
+export type CopyId = "twilioReplyUrl" | "replyCatcherUrl" | "deliveryWebhookUrl" | "recallWebhookUrl";
 
 interface FieldBase {
   store: SettingStore;
   path: string;
   label: string;
   help?: string;
-  /** Shown only when another field has one of these values. */
+  /** Shown only when another field has one of these values (and is shown itself). */
   showIf?: { path: string; equals: (string | number | boolean)[] };
   /** Can't be changed while another field has this value (and why). */
   lockedIf?: { path: string; equals: string | number | boolean; reason: string; value: string | number | boolean };
@@ -45,7 +65,14 @@ export type SettingField =
       integer?: boolean;
       default: number | null;
     })
-  | (FieldBase & { kind: "select"; options: { value: string; label: string }[]; numeric?: boolean; default: string | null })
+  | (FieldBase & {
+      kind: "select";
+      options: { value: string; label: string; hint?: string }[];
+      /** Choices read for this client instead (the connected Slack's channels). */
+      optionsFrom?: "slackChannels";
+      numeric?: boolean;
+      default: string | null;
+    })
   | (FieldBase & {
       kind: "text";
       placeholder?: string;
@@ -58,9 +85,29 @@ export type SettingField =
   /** Several of a fixed or loaded list. `optionsFrom` loads them per client. */
   | (FieldBase & { kind: "multi"; options?: { value: string; label: string }[]; optionsFrom?: "coldOpenIcps"; allWhenEmpty?: boolean; default: string[] | null })
   /** A short list of phrases the client types. */
-  | (FieldBase & { kind: "list"; maxItems: number; maxLength: number; placeholder?: string; default: string[] | null });
+  | (FieldBase & { kind: "list"; maxItems: number; maxLength: number; placeholder?: string; default: string[] | null })
+  /** The tool the skill runs on, as a row of logos; `multi` for several at once. */
+  | (FieldBase & { kind: "tool"; choices: ToolChoice[]; multi?: boolean; default: string | string[] | null })
+  /** A connection the skill needs, with nothing to choose. */
+  | (FieldBase & { kind: "connect"; tools: SetupTool[]; default: null })
+  /** One of a list read live from the connected account (stack-options). */
+  | (FieldBase & {
+      kind: "pick";
+      resource: string;
+      /** Query values the list needs, from other fields (Twilio's Account SID). */
+      params?: Record<string, string>;
+      /** The connection the list is read through. */
+      needs: string;
+      default: string | null;
+    })
+  /** An address to paste into another tool. Read only. */
+  | (FieldBase & { kind: "copy"; from: CopyId; default: null })
+  /** A secret that's saved but never shown back (a webhook signing secret). */
+  | (FieldBase & { kind: "secret"; secret: { credential: string } | { signing: "recall" }; placeholder?: string; default: null })
+  /** One choice per key: a campaign for each Cold Open customer type. */
+  | (FieldBase & { kind: "map"; keysFrom: "coldOpenIcps"; optionsFrom: "coldOpenCampaigns"; default: null });
 
-export type SettingValue = string | number | boolean | string[] | null;
+export type SettingValue = string | number | boolean | string[] | Record<string, string> | null;
 export type SettingValues = Record<string, SettingValue>;
 
 export interface SkillSettingsSpec {
@@ -75,11 +122,130 @@ const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 =
 // 1-28 only: every month has them, so a deep-dive is never skipped.
 const monthDays = Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `The ${ordinal(i + 1)}` }));
 
+// ── Tools ────────────────────────────────────────────────────────────────
+
+const groupTools = (id: "booking" | "email" | "hosting") => SHOWTIME_TOOL_GROUPS.find((g) => g.id === id)!.tools;
+const skillTool = (provider: string) => SKILL_TOOLS.find((t) => t.provider === provider)!;
+const emailTool = (provider: string) => groupTools("email").find((t) => t.provider === provider)!;
+const choices = (tools: SetupTool[]): ToolChoice[] => tools.map((t) => ({ value: t.provider, tool: t }));
+
+/** Changing one of these sets Showtime up again (webhooks, the page). */
+export const SHOWTIME_CORE_TOOLS = ["booking_platform", "email_platform", "hosting_platform"] as const;
+const CORE_NOTE = "Every Showtime skill uses this. Saving a different one sets Showtime up again with it.";
+
+const BOOKING_TOOL: SettingField = { kind: "tool", store: "stack", path: "booking_platform", label: "Bookings from", help: CORE_NOTE, choices: choices(groupTools("booking")), default: null };
+const EMAIL_TOOL: SettingField = { kind: "tool", store: "stack", path: "email_platform", label: "Emails through", help: CORE_NOTE, choices: choices(groupTools("email")), default: null };
+const HOSTING_TOOL: SettingField = { kind: "tool", store: "stack", path: "hosting_platform", label: "Confirmation page on", help: CORE_NOTE, choices: choices(groupTools("hosting")), default: null };
+
+const TEXTING = ["twilio", "ghl_sms"];
+const SMS_TOOL: SettingField = {
+  kind: "tool",
+  store: "stack",
+  path: "sms_platform",
+  label: "Texts through",
+  help: "Used by every Showtime skill that texts.",
+  choices: [
+    { value: "twilio", tool: skillTool("twilio") },
+    { value: "ghl_sms", tool: emailTool("ghl"), label: "GoHighLevel" },
+    { value: "hubspot_sms", tool: emailTool("hubspot"), label: "HubSpot" },
+    { value: "none", tool: null, label: "No texts", icon: "off" },
+  ],
+  default: null,
+};
+const onTwilio = { path: "sms_platform", equals: ["twilio"] };
+const TWILIO_FIELDS: SettingField[] = [
+  { kind: "text", store: "stack", path: "sms_platform_meta.twilio_account_sid", label: "Twilio Account SID", placeholder: "Starts with AC", maxLength: 64, default: null, showIf: onTwilio, help: "On the Twilio Console home, beside the Auth Token." },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "sms_platform_meta.twilio_messaging_service_sid",
+    label: "Messaging Service",
+    resource: "twilio-messaging-services",
+    params: { accountSid: "sms_platform_meta.twilio_account_sid" },
+    needs: "twilio",
+    default: null,
+    showIf: onTwilio,
+    help: "Texts go out from its numbers, and its A2P registration is checked before anything sends.",
+  },
+  {
+    kind: "pick",
+    store: "stack",
+    path: "sms_platform_meta.twilio_from_number",
+    label: "Or send from one number",
+    resource: "twilio-phone-numbers",
+    params: { accountSid: "sms_platform_meta.twilio_account_sid" },
+    needs: "twilio",
+    default: null,
+    showIf: onTwilio,
+  },
+  {
+    kind: "copy",
+    store: "none",
+    path: "copy:twilioReplyUrl",
+    label: "Replies come back to",
+    from: "twilioReplyUrl",
+    default: null,
+    showIf: onTwilio,
+    help: "In Twilio, set \"A message comes in\" on the Messaging Service (or number) to this address. STOP ends every text to that person; other replies land in the Queue.",
+  },
+];
+
+const SLACK = skillTool("slack");
+const slackFields = (showIf: FieldBase["showIf"]): SettingField[] => [
+  { kind: "connect", store: "none", path: "connect:slack", label: "Slack", tools: [SLACK], default: null, showIf },
+  { kind: "select", store: "stack", path: "slack_channel_id", label: "Channel", options: [], optionsFrom: "slackChannels", default: null, showIf, help: "Invite the Slack app to the channel. Channels show once Slack is connected." },
+  { kind: "text", store: "stack", path: "slack_webhook_url", label: "Or post through an incoming webhook", format: "url", maxLength: 500, placeholder: "https://hooks.slack.com/services/…", default: null, showIf, help: "Keeps the Approve and Reject buttons on each post." },
+];
+
+const RECALL_REGIONS = [
+  { value: "us-east-1", label: "US East" },
+  { value: "us-west-2", label: "US West" },
+  { value: "eu-central-1", label: "EU Central" },
+  { value: "ap-northeast-1", label: "Asia Pacific (Northeast)" },
+];
+const onRecall = { path: "conversation_intelligence_provider", equals: ["recall_ai"] };
+const DELIVERY_EMAIL = ["klaviyo", "activecampaign", "mailchimp", "convertkit"];
+
+/** Cold Open's sending tool. Values are Cold Open's platform ids. */
+const SEND_TOOL: SettingField = {
+  kind: "tool",
+  store: "coldOpen",
+  path: "sendPlatform.platform",
+  label: "Sending tool",
+  help: "Where the emails go out. A different tool needs its campaigns picked again.",
+  choices: COLD_OPEN_SEND_TOOLS.map((t) => ({ value: t.provider.replace(/^cold_open_/, ""), tool: t })),
+  default: null,
+};
+
 export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   // ── Showtime ───────────────────────────────────────────────────────────
+  "pin-down": {
+    fields: [
+      BOOKING_TOOL,
+      EMAIL_TOOL,
+      HOSTING_TOOL,
+      {
+        kind: "select",
+        store: "engagement",
+        path: "confirmationPageTemplate",
+        label: "Page design",
+        options: TEMPLATE_IDS.map((id) => ({ value: id, label: TEMPLATE_META[id].name, hint: TEMPLATE_META[id].bestFor })),
+        default: "contract",
+      },
+      { kind: "text", store: "engagement", path: "heroVideoUrl", label: "Video at the top", format: "url", maxLength: 500, placeholder: "A YouTube, Vimeo or Loom link", default: null },
+      { kind: "toggle", store: "engagement", path: "offerDetails.hybrid_mode_enabled", label: "Personal intro", help: "An AI-written opening paragraph for each booker.", default: false },
+      { kind: "toggle", store: "engagement", path: "confirmationPageAnimationsEnabled", label: "Animations", help: "Sections fade in as the page loads.", default: false },
+      { kind: "text", store: "engagement", path: "prospectMeets", label: "Who runs the calls", maxLength: 120, placeholder: "The founder, or a closer named Sam", default: null },
+      { kind: "list", store: "engagement", path: "topCallQuestions", label: "Questions prospects ask on calls", maxItems: 10, maxLength: 200, default: null },
+      { kind: "list", store: "engagement", path: "topObjections", label: "What makes prospects hesitate", maxItems: 10, maxLength: 200, default: null },
+      { kind: "textarea", store: "engagement", path: "rawVoiceCorpus", label: "Brand voice", help: "Copy that sounds like the client. Scripts and briefs are written to match it.", maxLength: 20000, default: null },
+    ],
+  },
   "pile-on": {
     fields: [
-      { kind: "toggle", store: "stack", path: "at_risk_check_in", label: "Check in with at-risk calls", help: "One extra text 3 hours before a call whose estimated show chance is low. Replies come back like any text: YES confirms, a new time lands in the Queue.", default: false },
+      SMS_TOOL,
+      ...TWILIO_FIELDS,
+      { kind: "toggle", store: "stack", path: "at_risk_check_in", label: "Check in with at-risk calls", help: "One extra text 3 hours before a call whose estimated show chance is low. Replies come back like any text: YES confirms, a new time lands in the Queue.", default: false, showIf: { path: "sms_platform", equals: TEXTING } },
       { kind: "number", store: "stack", path: "at_risk_threshold", label: "At risk under", unit: "%", min: 10, max: 90, step: 5, integer: true, default: 50, showIf: { path: "at_risk_check_in", equals: [true] } },
       { kind: "textarea", store: "stack", path: "at_risk_check_in_message", label: "Check-in text", maxLength: 320, tokens: ["{name}", "{time}"], default: DEFAULT_CHECK_IN_MESSAGE, showIf: { path: "at_risk_check_in", equals: [true] } },
       {
@@ -88,6 +254,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         path: "reminder_holdout_percent",
         label: "Holdout",
         help: "A small random share of bookings gets no reminder texts, to prove what reminders are worth on this client's own calls.",
+        showIf: { path: "sms_platform", equals: TEXTING },
         numeric: true,
         options: [
           { value: "0", label: "Remind everyone" },
@@ -100,6 +267,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         store: "stack",
         path: "sms_compliance_footer_variant",
         label: "Opt-out line on texts",
+        showIf: { path: "sms_platform", equals: TEXTING },
         options: [
           { value: "standard", label: "Standard (Reply STOP to opt out)" },
           { value: "custom", label: "Your own wording" },
@@ -107,6 +275,41 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         default: "standard",
       },
       { kind: "text", store: "stack", path: "sms_compliance_footer_custom", label: "Your opt-out line", maxLength: 120, placeholder: "Text STOP to stop these messages", default: null, showIf: { path: "sms_compliance_footer_variant", equals: ["custom"] } },
+      {
+        kind: "tool",
+        store: "stack",
+        path: "ad_data_platform",
+        label: "Ad audiences",
+        help: "Booked leads are added to an audience your ads can target or exclude.",
+        choices: [
+          { value: "hyros", tool: skillTool("hyros") },
+          { value: "google_sheets", tool: skillTool("google_sheets") },
+          { value: "native_crm", tool: null, label: "Tag in the CRM", icon: "tag" },
+          { value: "none", tool: null, label: "Don't sync", icon: "off" },
+        ],
+        default: null,
+      },
+      {
+        kind: "pick",
+        store: "stack",
+        path: "ad_data_platform_meta.google_sheets_spreadsheet_id",
+        label: "Spreadsheet",
+        resource: "google-sheets-spreadsheets",
+        needs: "google_sheets",
+        default: null,
+        showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
+      },
+      {
+        kind: "pick",
+        store: "stack",
+        path: "ad_data_platform_meta.google_sheets_cohort_sheet_name",
+        label: "Tab",
+        resource: "google-sheets-tabs",
+        params: { spreadsheetId: "ad_data_platform_meta.google_sheets_spreadsheet_id" },
+        needs: "google_sheets",
+        default: null,
+        showIf: { path: "ad_data_platform", equals: ["google_sheets"] },
+      },
     ],
     check: (v) =>
       v.sms_compliance_footer_variant === "custom" && !(typeof v.sms_compliance_footer_custom === "string" && /stop/i.test(v.sms_compliance_footer_custom))
@@ -115,6 +318,9 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
   },
   "win-back": {
     fields: [
+      EMAIL_TOOL,
+      SMS_TOOL,
+      ...TWILIO_FIELDS,
       {
         kind: "select",
         store: "stack",
@@ -151,10 +357,56 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
       { kind: "number", store: "stack", path: "win_back_bounce_rate_threshold", label: "Pause if bounces pass", unit: "%", percent: true, min: 1, max: 20, step: 0.5, default: 0.05 },
       { kind: "number", store: "stack", path: "win_back_complaint_rate_threshold", label: "Pause if spam complaints pass", unit: "%", percent: true, min: 0.05, max: 1, step: 0.05, default: 0.001 },
       { kind: "number", store: "stack", path: "win_back_delivery_sample_minimum", label: "Only judge after", unit: "emails", min: 5, max: 500, integer: true, default: 20 },
+      {
+        kind: "copy",
+        store: "none",
+        path: "copy:deliveryWebhookUrl",
+        label: "Bounce and complaint webhook",
+        from: "deliveryWebhookUrl",
+        default: null,
+        showIf: { path: "email_platform", equals: DELIVERY_EMAIL },
+        help: "Add this address as a webhook in the email tool, so bounces and complaints are counted and sending pauses on its own.",
+      },
+      { kind: "secret", store: "none", path: "secret:klaviyo", label: "Klaviyo webhook secret", secret: { credential: "klaviyo_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["klaviyo"] } },
+      { kind: "secret", store: "none", path: "secret:mailchimp", label: "Your own secret on the address (optional)", secret: { credential: "mailchimp_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["mailchimp"] }, help: "The address already carries this client's token. To add your own too, append &secret= and it to the address in Mailchimp, and save the same value here." },
+      { kind: "secret", store: "none", path: "secret:activecampaign", label: "ActiveCampaign webhook secret", secret: { credential: "activecampaign_webhook_secret" }, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] } },
+      { kind: "text", store: "stack", path: "activecampaign_webhook_signature_header", label: "Signature header name", placeholder: "The header you marked as the signature", maxLength: 100, default: null, showIf: { path: "email_platform", equals: ["activecampaign"] } },
+      {
+        kind: "select",
+        store: "stack",
+        path: "inbound_reply_mode",
+        label: "When someone replies",
+        options: [
+          { value: "none", label: "Keep going", hint: "Only a rebooking or the window ending stops the sequence." },
+          { value: "forwarding", label: "Stop, from forwarded replies", hint: "Point an inbound-parse service (Postmark, SendGrid) at the address below." },
+          { value: "native", label: "Stop, from HubSpot Conversations", hint: "Needs HubSpot as the email tool." },
+        ],
+        default: "none",
+      },
+      { kind: "copy", store: "none", path: "copy:replyCatcherUrl", label: "Forward replies to", from: "replyCatcherUrl", default: null, showIf: { path: "inbound_reply_mode", equals: ["forwarding"] } },
+      { kind: "text", store: "stack", path: "hubspot_portal_id", label: "HubSpot account ID", placeholder: "12345678", maxLength: 20, default: null, showIf: { path: "inbound_reply_mode", equals: ["native"] }, help: "Read from HubSpot when it's connected; otherwise under Settings, Account Setup, Account Defaults." },
     ],
+    check: (v) =>
+      v.inbound_reply_mode === "native" && v.email_platform !== "hubspot"
+        ? "HubSpot Conversations needs HubSpot as the email tool."
+        : v.inbound_reply_mode === "native" && !(typeof v.hubspot_portal_id === "string" && v.hubspot_portal_id.trim())
+          ? "Add the HubSpot account ID, so replies can be matched."
+          : null,
   },
   "pre-call-read": {
     fields: [
+      {
+        kind: "tool",
+        store: "stack",
+        path: "brief_landing_destination",
+        label: "Briefs land in",
+        choices: [
+          { value: "slack", tool: SLACK },
+          { value: "crm_note", tool: null, label: "CRM note", icon: "note" },
+        ],
+        default: null,
+      },
+      ...slackFields({ path: "brief_landing_destination", equals: ["slack"] }),
       {
         kind: "select",
         store: "stack",
@@ -177,6 +429,51 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         default: false,
         lockedIf: { path: "at_risk_check_in", equals: true, value: true, reason: "On while Pile-On checks in with at-risk calls, which need it." },
       },
+      {
+        kind: "tool",
+        store: "stack",
+        path: "prospect_research_sources_used",
+        label: "Research from",
+        help: "The public web always. Add one of these only if the client already pays for it.",
+        multi: true,
+        choices: [
+          { value: "apollo", tool: skillTool("apollo") },
+          { value: "pdl", tool: skillTool("pdl") },
+        ],
+        default: null,
+      },
+      {
+        kind: "tool",
+        store: "stack",
+        path: "conversation_intelligence_provider",
+        label: "Calls recorded by",
+        choices: [
+          { value: "recall_ai", tool: skillTool("recall_ai") },
+          { value: "none", tool: null, label: "Not recorded", icon: "off" },
+        ],
+        default: null,
+      },
+      { kind: "select", store: "stack", path: "conversation_intelligence_meta.recall_region", label: "Recall region", options: RECALL_REGIONS, default: null, showIf: onRecall, help: "Must match the region in this client's Recall.ai dashboard." },
+      { kind: "text", store: "stack", path: "conversation_intelligence_meta.recall_bot_name", label: "Notetaker's name", placeholder: "Notetaker", maxLength: 60, default: null, showIf: onRecall },
+      { kind: "copy", store: "none", path: "copy:recallWebhookUrl", label: "Recall webhook address", from: "recallWebhookUrl", default: null, showIf: onRecall, help: "In Recall.ai → Webhooks, point a webhook here, then paste its signing secret below." },
+      { kind: "secret", store: "none", path: "secret:recall", label: "Recall webhook signing secret", secret: { signing: "recall" }, default: null, showIf: onRecall },
+      {
+        kind: "tool",
+        store: "stack",
+        path: "video_engagement_platform",
+        label: "Video watch data from",
+        choices: [
+          { value: "vidalytics", tool: skillTool("vidalytics") },
+          { value: "wistia", tool: skillTool("wistia") },
+          { value: "youtube_analytics", tool: skillTool("youtube_analytics") },
+          { value: "loom", tool: null, label: "Loom", logo: "loom" },
+          { value: "none", tool: null, label: "None", icon: "off" },
+        ],
+        default: null,
+      },
+      { kind: "text", store: "stack", path: "hero_video_id", label: "Video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["vidalytics", "youtube_analytics"] } },
+      { kind: "text", store: "stack", path: "video_engagement_meta.wistia_video_id", label: "Wistia video ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["wistia"] } },
+      { kind: "text", store: "stack", path: "video_engagement_meta.youtube_channel_id", label: "YouTube channel ID", maxLength: 100, default: null, showIf: { path: "video_engagement_platform", equals: ["youtube_analytics"] } },
     ],
   },
   "leak-map": {
@@ -198,6 +495,7 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         default: "dashboard_only",
       },
       { kind: "text", store: "stack", path: "leak_map_report_email", label: "Email it to", format: "email", maxLength: 254, required: true, default: null, showIf: { path: "audit_output_format", equals: ["email"] } },
+      ...slackFields({ path: "audit_output_format", equals: ["slack"] }),
       { kind: "number", store: "stack", path: "sample_size_minimum", label: "Trust a number only after", unit: "calls", min: 1, max: 200, integer: true, default: 5 },
       { kind: "number", store: "stack", path: "aging_threshold_days", label: "Deals count as stuck after", unit: "days", min: 1, max: 365, integer: true, default: 30 },
     ],
@@ -248,12 +546,16 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
         ],
         default: "email",
       },
+      { kind: "connect", store: "none", path: "connect:smtp", label: "Emails through", tools: [emailTool("smtp")], default: null, help: "Your own mail server, or Resend. Requests go out from the client's address." },
+      SMS_TOOL,
+      ...TWILIO_FIELDS,
     ],
   },
 
   // ── Cold Open ──────────────────────────────────────────────────────────
   "daily-send": {
     fields: [
+      SEND_TOOL,
       { kind: "toggle", store: "coldOpen", path: "dailySendSettings.liveSendEnabled", label: "Send for real", help: "Off, each run only shows what it would push.", default: false },
       { kind: "number", store: "coldOpen", path: "dailySendSettings.volume", label: "Leads a day", min: 1, max: 500, integer: true, default: 25 },
       { kind: "select", store: "coldOpen", path: "dailySendSettings.localHour", label: "At", options: hours, numeric: true, default: "9" },
@@ -272,7 +574,11 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
     ],
   },
   "send-connect": {
-    fields: [{ kind: "multi", store: "coldOpen", path: "autoPushIcps", label: "Push without review", optionsFrom: "coldOpenIcps", help: "Leads for these customer types go straight to the sending tool, even if they're marked for review.", default: null }],
+    fields: [
+      SEND_TOOL,
+      { kind: "map", store: "coldOpen", path: "campaignMap", label: "Campaign for each customer type", keysFrom: "coldOpenIcps", optionsFrom: "coldOpenCampaigns", default: null, help: "Leads go into this campaign in the sending tool." },
+      { kind: "multi", store: "coldOpen", path: "autoPushIcps", label: "Push without review", optionsFrom: "coldOpenIcps", help: "Leads for these customer types go straight to the sending tool, even if they're marked for review.", default: null },
+    ],
   },
   "icp-lock": {
     fields: [
@@ -314,6 +620,9 @@ export const SKILL_SETTINGS: Partial<Record<WorkerId, SkillSettingsSpec>> = {
       { kind: "number", store: "stack", path: "min_payment_sample_size", label: "Only judge a week with at least", unit: "payments", min: 1, max: 1000, integer: true, default: 10 },
     ],
   },
+  "whop-bridge-manager": {
+    fields: [{ kind: "text", store: "stack", path: "whop_bridge_destination_url", label: "Forward events to", format: "url", maxLength: 500, placeholder: "https://…", default: null, help: "A public https address. Verified Whop events are posted there as they arrive." }],
+  },
   "whop-payment-recovery": {
     fields: [{ kind: "textarea", store: "stack", path: "whop_recovery_message", label: "Message to the buyer", maxLength: 1000, tokens: ["{name}", "{product}", "{amount}", "{link}"], default: DEFAULT_RECOVERY_MESSAGE, help: "Sent as a Whop message, only after you approve it. Nothing is sent if they pay first." }],
   },
@@ -333,10 +642,17 @@ export function defaultValue(f: SettingField): SettingValue {
   return f.default;
 }
 
-export function isShown(f: SettingField, values: SettingValues): boolean {
+/** Shown when its condition holds and the field it depends on is shown too
+ * (the at-risk level hides with the at-risk switch when texts are off). */
+export function isShown(f: SettingField, values: SettingValues, fields?: SettingField[], depth = 0): boolean {
   if (!f.showIf) return true;
-  return f.showIf.equals.includes(values[f.showIf.path] as string | number | boolean);
+  if (!f.showIf.equals.includes(values[f.showIf.path] as string | number | boolean)) return false;
+  const parent = fields?.find((x) => fieldKey(x) === f.showIf!.path);
+  return !parent || depth > 5 || isShown(parent, values, fields, depth + 1);
 }
+
+/** Rows that store nothing of their own: not sent, not saved as values. */
+export const isValueless = (f: SettingField) => f.kind === "connect" || f.kind === "copy";
 
 const TIMEZONE_OK = (tz: string) => {
   try {
@@ -365,9 +681,39 @@ export function cleanValue(f: SettingField, raw: unknown): { value: SettingValue
     case "select": {
       if (empty) return { value: null };
       const s = String(raw);
-      if (!f.options.some((o) => o.value === s)) return { error: `${f.label}: pick one of the choices.` };
+      // Loaded choices are checked by the server against this client's list.
+      if (!f.optionsFrom && !f.options.some((o) => o.value === s)) return { error: `${f.label}: pick one of the choices.` };
       return { value: f.numeric ? Number(s) : s };
     }
+    case "tool": {
+      if (empty || (Array.isArray(raw) && raw.length === 0)) return { value: null };
+      const allowed = new Set(f.choices.map((c) => c.value));
+      if (f.multi) {
+        if (!Array.isArray(raw) || raw.some((x) => typeof x !== "string" || !allowed.has(x))) return { error: `${f.label}: pick from the tools shown.` };
+        return { value: [...new Set(raw as string[])] };
+      }
+      if (typeof raw !== "string" || !allowed.has(raw)) return { error: `${f.label}: pick one of the tools shown.` };
+      return { value: raw };
+    }
+    case "pick": {
+      if (empty) return { value: null };
+      if (typeof raw !== "string" || raw.length > 200) return { error: `${f.label}: pick one from the list.` };
+      return { value: raw.trim() };
+    }
+    case "secret": {
+      // Empty keeps the saved one.
+      if (empty) return { value: null };
+      if (typeof raw !== "string" || raw.trim().length > 500) return { error: `${f.label}: paste the secret as shown.` };
+      return { value: raw.trim() };
+    }
+    case "map": {
+      if (empty) return { value: null };
+      if (typeof raw !== "object" || Array.isArray(raw) || Object.values(raw as object).some((x) => typeof x !== "string")) return { error: `${f.label}: pick a campaign for each.` };
+      return { value: Object.fromEntries(Object.entries(raw as Record<string, string>).filter(([, id]) => id)) };
+    }
+    case "connect":
+    case "copy":
+      return { value: null };
     case "text": {
       if (empty) return f.required ? { error: `${f.label} is needed.` } : { value: null };
       if (typeof raw !== "string") return { error: `${f.label} must be text.` };
@@ -419,8 +765,9 @@ export function cleanSettings(spec: SkillSettingsSpec, raw: Record<string, unkno
   // Visibility is judged on the incoming values (a toggle just switched on shows its fields).
   const incoming = { ...raw } as SettingValues;
   for (const f of spec.fields) {
+    if (isValueless(f)) continue;
     if (!(fieldKey(f) in raw)) continue;
-    if (!isShown(f, incoming)) continue;
+    if (!isShown(f, incoming, spec.fields)) continue;
     const r = cleanValue(f, raw[fieldKey(f)]);
     if ("error" in r) return { error: r.error, field: fieldKey(f) };
     values[fieldKey(f)] = r.value;

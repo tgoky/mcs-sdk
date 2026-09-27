@@ -169,6 +169,7 @@ function InstalledSkillsList({
                         <ActionMenu
                           align="end"
                           panelWidth={240}
+                          panelClassName="rounded-lg"
                           trigger={({ toggle, open: menuOpen }) => (
                             <button
                               type="button"
@@ -190,7 +191,7 @@ function InstalledSkillsList({
                           <ActionMenuSection label={name}>
                             <Link
                               href={`/dashboard/engagements/${engagementId}/bridges/${setupWorker}`}
-                              className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
+                              className="group/setup flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors select-none cursor-pointer hover-lift press-settle hover:bg-zinc-100 dark:hover:bg-zinc-800/80"
                             >
                               <AnySkillBadge skill={setupWorker} size={18} />
                               <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
