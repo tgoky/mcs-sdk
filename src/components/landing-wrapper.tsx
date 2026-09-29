@@ -99,7 +99,7 @@ export function LandingWrapper({
    <div className="flex items-center z-10">
   <img
     src="/images/logo.png"
-    alt="Unified Tools Platform"
+    alt="United Tools Platform"
     className="h-11 md:h-14 w-auto object-contain"
   />
 </div>
