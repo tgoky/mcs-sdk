@@ -254,7 +254,7 @@ export default async function DashboardPage() {
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               {copy.pageTitle}
             </h1>
-            <p className="text-sm font-normal text-zinc-500 dark:text-zinc-400">
+            <p className="text-base font-normal text-zinc-500 dark:text-zinc-400">
               {copy.pageSubtitle}
             </p>
           </div>

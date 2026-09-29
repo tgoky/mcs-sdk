@@ -109,13 +109,13 @@ export function OverviewStatsPanel({
     return (
       <div className="border-b border-zinc-200 dark:border-zinc-900 pb-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
+          <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase">
             {copy.stat.automatedActions} · {copy.stat.automatedActionsThisWeek}
           </p>
           <button
             type="button"
             onClick={() => setExpandedSection(null)}
-            className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" /> Close
           </button>
@@ -127,9 +127,9 @@ export function OverviewStatsPanel({
             <div>
               <div className="flex items-baseline space-x-1.5">
                 <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{completedThisWeek}</span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
+                <span className="text-sm text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
               </div>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono">
                 {weeklyTrend ?? "No completions yet this week"} · {copy.stat.automatedActionsAllTime(completedAllTime)}
               </p>
             </div>
@@ -138,7 +138,7 @@ export function OverviewStatsPanel({
               <div className="space-y-1.5">
                 {visibleSkillBreakdown.map((s) => (
                   <div key={s.skillName} className="space-y-0.5">
-                    <div className="flex items-center justify-between text-[11px] font-mono">
+                    <div className="flex items-center justify-between text-[13px] font-mono">
                       <span className="text-zinc-600 dark:text-zinc-400">{skillName(s.skillName)}</span>
                       <span className="text-zinc-400 dark:text-zinc-500">{s.count}</span>
                     </div>
@@ -154,7 +154,7 @@ export function OverviewStatsPanel({
                   <button
                     type="button"
                     onClick={() => setShowAllSkills(true)}
-                    className="text-[10.5px] font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                    className="text-xs font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
                   >
                     +{hiddenSkillBreakdownCount} more
                   </button>
@@ -164,7 +164,7 @@ export function OverviewStatsPanel({
                     <button
                       type="button"
                       onClick={() => setShowAllSkills(false)}
-                      className="text-[10.5px] font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                      className="text-xs font-mono font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
                     >
                       Show less
                     </button>
@@ -177,7 +177,7 @@ export function OverviewStatsPanel({
           {/* Recent completions */}
           <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4 min-w-0">
             {recentCompletions.length === 0 ? (
-              <p className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">Nothing completed yet this week.</p>
+              <p className="text-sm text-zinc-400 dark:text-zinc-600 font-mono">Nothing completed yet this week.</p>
             ) : (
               <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
                 {recentCompletions.map((r) => (
@@ -187,17 +187,17 @@ export function OverviewStatsPanel({
                     className="flex items-start justify-between gap-3 py-1.5 group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 -mx-1.5 px-1.5 rounded-md transition-colors"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
                         {skillName(r.skillName)} <span className="text-zinc-400 dark:text-zinc-600 font-normal">· {r.buyerName}</span>
                       </p>
                       {r.subjectLabel && (
-                        <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">{r.subjectLabel}</p>
+                        <p className="text-[13px] font-mono text-zinc-500 dark:text-zinc-400 truncate">{r.subjectLabel}</p>
                       )}
                     </div>
                     <VerboseTime
                       isoString={r.completedAt}
                       showFreshIndicator={false}
-                      className="text-[11px] shrink-0 whitespace-nowrap"
+                      className="text-[13px] shrink-0 whitespace-nowrap"
                     />
                   </Link>
                 ))}
@@ -206,7 +206,7 @@ export function OverviewStatsPanel({
 
             <Link
               href="/dashboard/runs"
-              className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
+              className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
             >
               View all executions <ArrowUpRight className="w-3 h-3" />
             </Link>
@@ -220,14 +220,14 @@ export function OverviewStatsPanel({
     return (
       <div className="border-b border-zinc-200 dark:border-zinc-900 pb-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase flex items-center gap-1.5">
+          <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500 font-mono tracking-wider uppercase flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
             {copy.stat.systemIntegrity} · Breakdown
           </p>
           <button
             type="button"
             onClick={() => setExpandedSection(null)}
-            className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" /> Close
           </button>
@@ -240,20 +240,20 @@ export function OverviewStatsPanel({
               <div className="flex items-baseline space-x-2">
                 <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{liveIssuesCount}</span>
                 <span
-                  className={`text-xs font-mono ${
+                  className={`text-sm font-mono ${
                     liveIssuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
                   }`}
                 >
                   {liveIssuesCount > 0 ? copy.stat.systemIntegrityFound : copy.stat.systemIntegrityClear}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
                 {liveIssuesBreakdown ?? "All systems operating normally"}
               </p>
             </div>
 
             {liveIssuesCount > 0 && (
-              <div className="space-y-1.5 text-[11px] font-mono">
+              <div className="space-y-1.5 text-[13px] font-mono">
                 {approveCount > 0 && (
                   <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400">
                     <span>Pending approvals</span>
@@ -279,7 +279,7 @@ export function OverviewStatsPanel({
           {/* Actionable issues list */}
           <div className="space-y-1 sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4 min-w-0">
             {actionableIssues.length === 0 ? (
-              <div className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-600 font-mono py-2">
+              <div className="flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-600 font-mono py-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                 <span>No active issues or pending actions right now.</span>
               </div>
@@ -303,7 +303,7 @@ export function OverviewStatsPanel({
                         className="flex items-start justify-between gap-3 group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 -mx-1.5 px-1.5 rounded-md transition-colors"
                       >
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                          <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
                             <span
                               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                 item.category === "approve"
@@ -317,13 +317,13 @@ export function OverviewStatsPanel({
                             )}
                           </div>
                           {item.subtitle && (
-                            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate pl-3">{item.subtitle}</p>
+                            <p className="text-[13px] font-mono text-zinc-500 dark:text-zinc-400 truncate pl-3">{item.subtitle}</p>
                           )}
                         </div>
                         <VerboseTime
                           isoString={item.createdAt}
                           showFreshIndicator={false}
-                          className="text-[11px] shrink-0 whitespace-nowrap"
+                          className="text-[13px] shrink-0 whitespace-nowrap"
                         />
                       </Link>
 
@@ -365,7 +365,7 @@ export function OverviewStatsPanel({
                               type="button"
                               disabled={isBusy}
                               onClick={() => decide(item, "rejected")}
-                              className="text-[10.5px] font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer disabled:opacity-60"
+                              className="text-xs font-medium text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer disabled:opacity-60"
                             >
                               Not sure, dismiss
                             </button>
@@ -422,7 +422,7 @@ export function OverviewStatsPanel({
                               <X size={11} /> Not now
                             </button>
                             {triggerErrorId === item.id && (
-                              <p className="w-full text-[10.5px] text-rose-600 dark:text-rose-400 font-mono">
+                              <p className="w-full text-xs text-rose-600 dark:text-rose-400 font-mono">
                                 Couldn&apos;t start the run. Try again from the Queue.
                               </p>
                             )}
@@ -464,7 +464,7 @@ export function OverviewStatsPanel({
                       </div>
 
                       {errors.get(item.id) && (
-                        <p className="text-[10.5px] text-rose-600 dark:text-rose-400 font-mono pl-3">{errors.get(item.id)}</p>
+                        <p className="text-xs text-rose-600 dark:text-rose-400 font-mono pl-3">{errors.get(item.id)}</p>
                       )}
                     </div>
                   );
@@ -474,7 +474,7 @@ export function OverviewStatsPanel({
 
             <Link
               href="/dashboard/queue"
-              className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
+              className="inline-flex items-center gap-1 text-[13px] font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors pt-2"
             >
               View full Queue <ArrowUpRight className="w-3 h-3" />
             </Link>
@@ -486,7 +486,7 @@ export function OverviewStatsPanel({
 
   return (
     <div className="border-b border-zinc-200 dark:border-zinc-900 pb-4">
-      <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 mb-3 font-mono tracking-wider uppercase">
+      <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500 mb-3 font-mono tracking-wider uppercase">
         {copy.overviewSectionTitle}
       </p>
 
@@ -497,15 +497,15 @@ export function OverviewStatsPanel({
           onClick={() => setExpandedSection("tasks")}
           className="group space-y-1 text-left cursor-pointer rounded-md -m-1 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
         >
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
             {copy.stat.automatedActions} <span className="text-zinc-400 dark:text-zinc-600">· {copy.stat.automatedActionsThisWeek}</span>
             <ChevronRight className="w-3 h-3 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
           </p>
           <div className="flex items-baseline space-x-1.5">
             <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{completedThisWeek}</span>
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
+            <span className="text-sm text-zinc-400 dark:text-zinc-500 font-mono">{copy.stat.automatedActionsUnit}</span>
           </div>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+          <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono">
             {weeklyTrend ?? "No completions yet this week"} · {copy.stat.automatedActionsAllTime(completedAllTime)}
           </p>
         </button>
@@ -516,14 +516,14 @@ export function OverviewStatsPanel({
           onClick={() => setExpandedSection("issues")}
           className="group space-y-1 text-left sm:border-l border-zinc-200 dark:border-zinc-900 sm:pl-4 cursor-pointer rounded-md -m-1 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
         >
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
             {copy.stat.systemIntegrity}
             <ChevronRight className="w-3 h-3 text-zinc-300 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" />
           </p>
           <div className="flex items-baseline space-x-2">
             <span className="text-3xl font-light text-zinc-900 dark:text-zinc-100">{liveIssuesCount}</span>
             <span
-              className={`text-xs font-mono ${
+              className={`text-sm font-mono ${
                 liveIssuesCount > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-600"
               }`}
             >
@@ -531,9 +531,9 @@ export function OverviewStatsPanel({
             </span>
           </div>
           {liveIssuesBreakdown ? (
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">{liveIssuesBreakdown}</p>
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono">{liveIssuesBreakdown}</p>
           ) : (
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">Click to view breakdown</p>
+            <p className="text-[13px] text-zinc-400 dark:text-zinc-500 font-mono">Click to view breakdown</p>
           )}
         </button>
       </div>
