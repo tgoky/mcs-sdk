@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "United Tools Platform",
-  description: "One workspace, one client. Every worker's status, configuration, and analytics in one place.",
+  description: "Your entire stack, united",
   icons: {
     icon: "/logos/homelg.png",
   },
