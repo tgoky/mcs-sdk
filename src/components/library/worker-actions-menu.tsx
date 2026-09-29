@@ -10,25 +10,17 @@
 // Visit analysis (the one destination that still leaves the card, for
 // the full rebuilt per-worker page).
 //
-// Hover-driven, not click-driven — opens the instant the pointer lands
-// on the trigger, no fade/zoom entrance, so it reads as "the menu was
-// already there" rather than something loading in. The tradeoff hover
-// menus normally have — moving the pointer from a parent row into its
-// flyout submenu closes it before you get there — is handled with a
-// short shared close-delay timer between the Compare row and its
-// submenu panel: leaving one starts a ~180ms countdown, entering the
-// other cancels it, so the diagonal move from "Compare" into the
-// checkbox list survives even though the two floating panels aren't
-// adjacent DOM siblings CSS :hover chains could otherwise cover.
+// Behaves like the top nav's Create menu: click the trigger to open, click
+// anywhere outside to close. Pointing at Compare opens its flyout beside
+// the row, top edges lined up; it stays open until you point at another
+// row. No close timers, so nothing races when the pointer crosses the gap.
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GitCompareArrows, Activity, TrendingUp, ExternalLink, ChevronRight, ChevronLeft, ChevronDown, Loader2 } from "lucide-react";
 import { useFloating, offset, flip, shift, autoUpdate, FloatingPortal } from "@floating-ui/react";
 import type { WorkerId } from "@/lib/worker-registry";
 import type { ProductId } from "@/lib/product-catalog";
-
-const CLOSE_DELAY_MS = 180;
 
 interface EnabledWorkerOption {
   workerId: WorkerId;
@@ -95,17 +87,11 @@ export function WorkerActionsMenu({
     return Array.from(groups.entries());
   }, [options]);
 
-  const menuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const compareCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const { refs, floatingStyles } = useFloating({
     open,
-    onOpenChange: (next) => {
-      setOpen(next);
-      if (!next) setCompareOpen(false);
-    },
     placement: "bottom-end",
     whileElementsMounted: autoUpdate,
+    // flip only moves the menu above the button when there is no room below.
     middleware: [offset(6), flip({ padding: 12 }), shift({ padding: 12 })],
   });
 
@@ -117,7 +103,14 @@ export function WorkerActionsMenu({
     open: compareOpen,
     placement: "right-start",
     whileElementsMounted: autoUpdate,
-    middleware: [offset(6), flip({ padding: 12 }), shift({ padding: 12 })],
+    middleware: [
+      // Lines the flyout's top edge up with the menu's top edge (the menu
+      // has 6px of padding above the Compare row), like Create's flyouts.
+      offset({ mainAxis: 6, alignmentAxis: -6 }),
+      // Only ever swaps sides (right to left); never jumps above or below.
+      flip({ padding: 12, crossAxis: false }),
+      shift({ padding: 12 }),
+    ],
   });
   // flip() can resolve to "left-start" when there's no room on the right
   // (a card near the viewport's right edge) — the trigger row's chevron
@@ -130,29 +123,7 @@ export function WorkerActionsMenu({
     setCompareOpen(false);
   }
 
-  function openMenu() {
-    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
-    setOpen(true);
-  }
-
-  function scheduleMenuClose() {
-    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
-    menuCloseTimer.current = setTimeout(closeAll, CLOSE_DELAY_MS);
-  }
-
   function openCompareFlyout() {
-    // Also pin the parent menu open — without this, the diagonal mouse
-    // move from the "Compare" row across the gap into its flyout panel
-    // crosses through space neither element covers, which independently
-    // trips the PARENT menu's own close timer (started the instant the
-    // pointer left the Compare row) even though openCompareFlyout only
-    // ever cancelled the flyout's own timer. That's the exact "vanishes
-    // when I try to compare, it's on and off" bug — the two floating
-    // panels had two independent close timers racing each other during
-    // that one transit instead of one shared "still using this widget"
-    // signal.
-    openMenu();
-    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
     setCompareOpen(true);
     if (options || !engagementId) return;
     setLoadingOptions(true);
@@ -167,18 +138,8 @@ export function WorkerActionsMenu({
       .finally(() => setLoadingOptions(false));
   }
 
-  function scheduleCompareClose() {
-    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
-    compareCloseTimer.current = setTimeout(() => setCompareOpen(false), CLOSE_DELAY_MS);
-  }
-
-  function cancelCompareClose() {
-    // Same reasoning as openCompareFlyout above — hovering the flyout
-    // itself must also keep the parent menu pinned open, not just cancel
-    // the flyout's own close timer.
-    openMenu();
-    if (compareCloseTimer.current) clearTimeout(compareCloseTimer.current);
-  }
+  // Pointing at any other row closes the flyout, like Create's "leaf" rows.
+  const leaf = { onMouseEnter: () => setCompareOpen(false) };
 
   function toggleOption(id: WorkerId) {
     if (id === workerId) return; // this card's own skill is always included
@@ -201,9 +162,9 @@ export function WorkerActionsMenu({
       <button
         ref={refs.setReference}
         type="button"
-        onMouseEnter={openMenu}
-        onMouseLeave={scheduleMenuClose}
-        onClick={() => (open ? closeAll() : openMenu())}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => (open ? closeAll() : setOpen(true))}
         title="Analytics"
         className={triggerClassName}
       >
@@ -212,20 +173,21 @@ export function WorkerActionsMenu({
 
       {open && (
         <FloatingPortal>
-          <div
-            ref={refs.setFloating}
-            style={floatingStyles}
-            onMouseEnter={openMenu}
-            onMouseLeave={scheduleMenuClose}
-            className={`z-[9991] w-64 p-1.5 ${MENU_PANEL_CLASS}`}
-          >
+          <div className="fixed inset-0 z-[9990]" onClick={closeAll} />
+          <div ref={refs.setFloating} style={floatingStyles} role="menu" className={`z-[9991] w-64 p-1.5 ${MENU_PANEL_CLASS}`}>
             <button
               ref={subRefs.setReference}
               type="button"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded={compareOpen}
               onMouseEnter={openCompareFlyout}
-              onMouseLeave={scheduleCompareClose}
-              onClick={(e) => e.stopPropagation()}
-              className={MENU_ITEM_CLASS}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (compareOpen) setCompareOpen(false);
+                else openCompareFlyout();
+              }}
+              className={`${MENU_ITEM_CLASS} ${compareOpen ? "bg-zinc-900/[0.06] dark:bg-white/[0.08]" : ""}`}
             >
               <span className="flex items-center gap-2.5">
                 <GitCompareArrows size={16} className={MENU_ICON_CLASS} /> Compare
@@ -239,11 +201,13 @@ export function WorkerActionsMenu({
 
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 onOpenPanel("run-analysis");
                 closeAll();
               }}
               className={MENU_ITEM_CLASS}
+              {...leaf}
             >
               <span className="flex items-center gap-2.5">
                 <Activity size={16} className={MENU_ICON_CLASS} /> Run analysis
@@ -252,11 +216,13 @@ export function WorkerActionsMenu({
 
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 router.push(`/dashboard/analytics/${workerId}`);
                 closeAll();
               }}
               className={MENU_ITEM_CLASS}
+              {...leaf}
             >
               <span className="flex items-center gap-2.5">
                 <ExternalLink size={16} className={MENU_ICON_CLASS} /> Visit analysis
@@ -265,11 +231,13 @@ export function WorkerActionsMenu({
 
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 onOpenPanel("inspect");
                 closeAll();
               }}
               className={MENU_ITEM_CLASS}
+              {...leaf}
             >
               <span className="flex items-center gap-2.5">
                 <TrendingUp size={16} className={MENU_ICON_CLASS} /> Inspect performance
@@ -284,9 +252,9 @@ export function WorkerActionsMenu({
           <div
             ref={subRefs.setFloating}
             style={subFloatingStyles}
+            role="menu"
+            aria-label={`Compare ${workerName} with`}
             onClick={(e) => e.stopPropagation()}
-            onMouseEnter={cancelCompareClose}
-            onMouseLeave={scheduleCompareClose}
             className={`z-[9992] w-64 p-3 ${MENU_PANEL_CLASS}`}
           >
             <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-2">
