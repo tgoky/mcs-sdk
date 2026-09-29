@@ -43,8 +43,14 @@ const PRODUCT_LABELS: Record<ProductId, string> = {
   "whop-agent": "Whop Agent",
 };
 
+// Same look as the top nav's Create menu (itemCls / iconCls / panelCls in
+// top-nav.tsx), minus its fade/zoom entrance: this menu is meant to read as
+// already there when the pointer lands on the trigger.
+const MENU_PANEL_CLASS = "rounded-xl surface-frost text-zinc-900 dark:text-zinc-100 font-sans antialiased";
 const MENU_ITEM_CLASS =
-  "w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer";
+  "group w-full flex items-center justify-between gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] transition-colors cursor-pointer";
+const MENU_ICON_CLASS =
+  "text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors shrink-0";
 
 export function WorkerActionsMenu({
   workerId,
@@ -211,7 +217,7 @@ export function WorkerActionsMenu({
             style={floatingStyles}
             onMouseEnter={openMenu}
             onMouseLeave={scheduleMenuClose}
-            className="z-[9991] w-56 rounded-lg border border-border bg-background shadow-2xl py-1.5 font-sans antialiased"
+            className={`z-[9991] w-64 p-1.5 ${MENU_PANEL_CLASS}`}
           >
             <button
               ref={subRefs.setReference}
@@ -221,8 +227,8 @@ export function WorkerActionsMenu({
               onClick={(e) => e.stopPropagation()}
               className={MENU_ITEM_CLASS}
             >
-              <span className="flex items-center gap-2">
-                <GitCompareArrows size={13} className="text-zinc-400 dark:text-zinc-500" /> Compare
+              <span className="flex items-center gap-2.5">
+                <GitCompareArrows size={16} className={MENU_ICON_CLASS} /> Compare
               </span>
               {compareOpensLeft ? (
                 <ChevronLeft size={12} className="text-zinc-400 dark:text-zinc-600" />
@@ -239,8 +245,8 @@ export function WorkerActionsMenu({
               }}
               className={MENU_ITEM_CLASS}
             >
-              <span className="flex items-center gap-2">
-                <Activity size={13} className="text-zinc-400 dark:text-zinc-500" /> Run analysis
+              <span className="flex items-center gap-2.5">
+                <Activity size={16} className={MENU_ICON_CLASS} /> Run analysis
               </span>
             </button>
 
@@ -252,8 +258,8 @@ export function WorkerActionsMenu({
               }}
               className={MENU_ITEM_CLASS}
             >
-              <span className="flex items-center gap-2">
-                <ExternalLink size={13} className="text-zinc-400 dark:text-zinc-500" /> Visit analysis
+              <span className="flex items-center gap-2.5">
+                <ExternalLink size={16} className={MENU_ICON_CLASS} /> Visit analysis
               </span>
             </button>
 
@@ -265,8 +271,8 @@ export function WorkerActionsMenu({
               }}
               className={MENU_ITEM_CLASS}
             >
-              <span className="flex items-center gap-2">
-                <TrendingUp size={13} className="text-zinc-400 dark:text-zinc-500" /> Inspect performance
+              <span className="flex items-center gap-2.5">
+                <TrendingUp size={16} className={MENU_ICON_CLASS} /> Inspect performance
               </span>
             </button>
           </div>
@@ -281,7 +287,7 @@ export function WorkerActionsMenu({
             onClick={(e) => e.stopPropagation()}
             onMouseEnter={cancelCompareClose}
             onMouseLeave={scheduleCompareClose}
-            className="z-[9992] w-64 rounded-lg border border-border bg-background shadow-2xl p-3 font-sans antialiased"
+            className={`z-[9992] w-64 p-3 ${MENU_PANEL_CLASS}`}
           >
             <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600 mb-2">
               Compare {workerName} with
@@ -300,7 +306,7 @@ export function WorkerActionsMenu({
                       <button
                         type="button"
                         onClick={() => setExpandedProduct(isExpanded ? null : productId)}
-                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
                       >
                         <span className="flex items-center gap-1.5">
                           {PRODUCT_LABELS[productId]}
@@ -324,7 +330,7 @@ export function WorkerActionsMenu({
                                 className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
                                   isSelf
                                     ? "text-zinc-400 dark:text-zinc-600 cursor-default"
-                                    : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 cursor-pointer"
+                                    : "text-zinc-700 dark:text-zinc-200 hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] cursor-pointer"
                                 }`}
                               >
                                 <input
