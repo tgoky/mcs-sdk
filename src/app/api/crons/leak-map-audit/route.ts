@@ -57,6 +57,7 @@ export async function GET(request: Request) {
         skillName: "leak-map",
         phase: "stage_1_data_pull",
        label: `${type === "monthly" ? "Monthly" : "Weekly"} Funnel Audit`,
+        queued: true,
       });
 
       await inngest.send(

@@ -41,7 +41,7 @@ export async function dispatchSkillRun(
 ): Promise<string> {
   const runId = crypto.randomUUID();
   try {
-    await startRun({ id: runId, engagementId, skillName, phase: options?.phase ?? "onboarding_start", label });
+    await startRun({ id: runId, engagementId, skillName, phase: options?.phase ?? "onboarding_start", label, queued: true });
 
     for (const step of options?.completedSteps ?? []) {
       await logStep(runId, { phase: step.phase, status: "success", detail: step.detail });

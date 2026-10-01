@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { timeoutRun, findStaleRunIds } from "@/lib/run-log";
-import { isDispatchedSkill } from "@/inngest/skill";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 
 /**
@@ -22,7 +21,7 @@ export async function GET(request: Request) {
 
   try {
     // Same rules as the scheduled reaper (src/inngest/crons.ts).
-    const stuck = (await findStaleRunIds(isDispatchedSkill)).map((id) => ({ id }));
+    const stuck = (await findStaleRunIds()).map((id) => ({ id }));
 
     let reaped = 0;
     for (const run of stuck) {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { executeSkillRun, SKILL_RUNS_PER_CLIENT, isDispatchedSkill } from "@/inngest/skill";
+import { executeSkillRun, SKILL_RUNS_PER_CLIENT } from "@/inngest/skill";
 import { processSingleProspectBrief } from "@/features/pre-call-read/server/brief-service";
 import { skillRunEvent, skillRunLane } from "@/lib/inngest";
 import { inngestOptions } from "../helpers/inngest-fn";
@@ -39,10 +39,5 @@ describe("skill run lock", () => {
   it("lets each client brief calls in parallel under an app-wide cap, instead of five slots for everyone", () => {
     const opts = inngestOptions(processSingleProspectBrief) as { concurrency: { key?: string; limit: number }[] };
     expect(opts.concurrency).toEqual([{ key: "event.data.engagementId", limit: 3 }, { limit: 10 }]);
-  });
-
-  it("knows which skills go through the dispatcher", () => {
-    expect(isDispatchedSkill("leak-map")).toBe(true);
-    expect(isDispatchedSkill("pile-on")).toBe(false);
   });
 });

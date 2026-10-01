@@ -27,7 +27,7 @@ d("stale-run reaper rules", () => {
   it("times running work from its real start and lets queued work wait", async () => {
     const { db } = await import("@/lib/db");
     const { engagements, workspaces, skillRuns } = await import("@/models/schema");
-    const { findStaleRunIds, markRunExecuting } = await import("@/lib/run-log");
+    const { findStaleRunIds, markRunExecuting, startRun, startRuns } = await import("@/lib/run-log");
     await db.insert(workspaces).values({ workspaceId, whopUserId, name: "Test Workspace" });
     await db.insert(engagements).values({ engagementId, whopUserId, workspaceId, buyer: "Test Buyer" });
 
@@ -40,15 +40,16 @@ d("stale-run reaper rules", () => {
     const executingLong = await run("leak-map", hours(3), hours(3));
     const queuedThenStarted = await run("leak-map", hours(3), hours(0.5));
     const queuedForever = await run("leak-map", hours(25), null);
-    const immediateLong = await run("pile-on", hours(3), null);
+    // Win-Back has a dispatcher too, but the booking webhook and the sweeps
+    // run it inline; those runs start their clock at creation.
+    const inlineWinBackLong = await run("win-back", hours(3), hours(3));
 
-    const dispatched = (name: string) => name === "leak-map";
-    const stale = new Set(await findStaleRunIds(dispatched));
+    const stale = new Set(await findStaleRunIds());
     expect(stale.has(queuedLong)).toBe(false);
     expect(stale.has(queuedThenStarted)).toBe(false);
     expect(stale.has(executingLong)).toBe(true);
     expect(stale.has(queuedForever)).toBe(true);
-    expect(stale.has(immediateLong)).toBe(true);
+    expect(stale.has(inlineWinBackLong)).toBe(true);
 
     // The dispatcher's mark only records the first start.
     const fresh = await run("leak-map", hours(0), null);
@@ -60,5 +61,15 @@ d("stale-run reaper rules", () => {
     const [second] = await db.select({ at: skillRuns.executionStartedAt }).from(skillRuns).where(eq(skillRuns.id, fresh));
     expect(first.at).not.toBeNull();
     expect(second.at?.getTime()).toBe(first.at?.getTime());
+
+    // Only a run handed to the queue waits for the dispatcher's mark.
+    const [inline, queued, bulkQueued] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await startRun({ id: inline, engagementId, skillName: "win-back", phase: "p" });
+    await startRun({ id: queued, engagementId, skillName: "leak-map", phase: "p", queued: true });
+    await startRuns([{ id: bulkQueued, engagementId, skillName: "leak-map", phase: "p", queued: true }]);
+    const { inArray } = await import("drizzle-orm");
+    const rows = await db.select({ id: skillRuns.id, at: skillRuns.executionStartedAt }).from(skillRuns).where(inArray(skillRuns.id, [inline, queued, bulkQueued]));
+    const started = Object.fromEntries(rows.map((r) => [r.id, r.at !== null]));
+    expect(started).toEqual({ [inline]: true, [queued]: false, [bulkQueued]: false });
   });
 });

@@ -87,7 +87,7 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
         const rows = await opts.loadPage(after, pageSize);
         const picked = await opts.select(rows, new Date(nowIso));
         const runs = picked.map((c) => ({ runId: crypto.randomUUID(), engagementId: c.engagementId, label: c.label ?? opts.label, extra: c.extra }));
-        await startRuns(runs.map((r) => ({ id: r.runId, engagementId: r.engagementId, skillName: opts.skillName, phase: opts.phase, label: r.label })));
+        await startRuns(runs.map((r) => ({ id: r.runId, engagementId: r.engagementId, skillName: opts.skillName, phase: opts.phase, label: r.label, queued: true })));
         return {
           runs: runs.map(({ runId, engagementId, extra }) => ({ runId, engagementId, extra })),
           lastId: rows.length > 0 ? rows[rows.length - 1].engagementId : null,

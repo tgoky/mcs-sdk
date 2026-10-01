@@ -70,6 +70,7 @@ export async function GET(request: Request) {
         skillName: "pre-call-read",
         phase: "roster_fetch",
      label: "Scheduled call briefing cycle",
+        queued: true,
       });
 
       await inngest.send(

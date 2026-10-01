@@ -61,6 +61,7 @@ export async function triggerSkillRunForEngagement(
       skillName,
       phase: skillName === "pre-call-read" ? "roster_fetch" : "stage_1_data_pull",
       label: "Manually triggered via dashboard",
+      queued: true,
     });
 
     try {

@@ -56,7 +56,7 @@ export async function triggerChatSkillForEngagement(
   if (isEngagementPaused(tenant)) return { ok: false, error: "This client is paused. Resume it before running anything for them." };
 
   const runId = crypto.randomUUID();
-  await startRun({ id: runId, engagementId, skillName: skillId, phase: initialPhase, label: initialLabel });
+  await startRun({ id: runId, engagementId, skillName: skillId, phase: initialPhase, label: initialLabel, queued: true });
 
   try {
     await inngest.send(skillRunEvent({ runId, engagementId, skillName: skillId, manualOverride: true, interactive: true, ...ctx }));

@@ -39,11 +39,6 @@ const SKILL_CATALOGS: { isId: (v: string) => boolean; registry: Record<string, S
   { isId: isWhopAgentSkillId, registry: WHOP_AGENT_SKILL_REGISTRY },
 ];
 
-/** True for a skill this dispatcher runs (so its runs can sit queued). */
-export function isDispatchedSkill(skillName: string): boolean {
-  return Boolean(resolveSkillDefinition(skillName)?.execute);
-}
-
 function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | ChatSkillDefinition | ColdOpenSkillDefinition | WhopAgentSkillDefinition | null {
   for (const { isId, registry } of SKILL_CATALOGS) {
     if (isId(skillName)) return registry[skillName];

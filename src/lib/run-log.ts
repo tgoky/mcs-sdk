@@ -34,7 +34,7 @@
 
 import { db } from "@/lib/db";
 import { skillRuns, engagements, users, type EngagementStack } from "@/models/schema";
-import { and, eq, gt, isNotNull, ne, sql, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNotNull, ne, or, sql, isNull, lt } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { skillName as skillDisplayName } from "@/lib/copy";
 
@@ -106,6 +106,11 @@ export interface StartRunOptions {
   skillName: string;
   phase: string;
   label?: string;
+  /** True when the run is handed to the dispatcher queue rather than
+   * executed right away by the caller. A queued run's clock starts when
+   * the dispatcher picks it up (markRunExecuting); any other run starts
+   * now. */
+  queued?: boolean;
 }
 
 /**
@@ -122,29 +127,6 @@ export interface StartRunOptions {
  * other two (pin-down, the booking webhook) did not. This marker design
  * removes the bug at the root instead of patching each call site.
  */
-/**
- * startRun for many runs at once: one INSERT per 500 runs instead of one
- * per run. Scheduled fan-outs create a run for every due client; doing that
- * one round trip at a time inside a single step grew with the client count.
- */
-export async function startRuns(runs: StartRunOptions[]): Promise<void> {
-  const nowIso = new Date().toISOString();
-  for (let i = 0; i < runs.length; i += 500) {
-    const chunk = runs.slice(i, i + 500);
-    await db.insert(skillRuns).values(
-      chunk.map((opts) => ({
-        id: opts.id,
-        engagementId: opts.engagementId,
-        skillName: opts.skillName,
-        phase: opts.phase,
-        status: "running",
-        steps: [{ phase: "run_started", label: opts.label, status: "success" as const, startedAt: nowIso, completedAt: nowIso }],
-        startedAt: new Date(nowIso),
-      }))
-    );
-  }
-}
-
 export async function startRun(opts: StartRunOptions): Promise<void> {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -164,7 +146,32 @@ export async function startRun(opts: StartRunOptions): Promise<void> {
     status: "running",
     steps: [startMarker],
     startedAt: now,
+    executionStartedAt: opts.queued ? null : now,
   });
+}
+
+/**
+ * startRun for many runs at once: one INSERT per 500 runs instead of one
+ * per run. Scheduled fan-outs create a run for every due client; doing that
+ * one round trip at a time inside a single step grew with the client count.
+ */
+export async function startRuns(runs: StartRunOptions[]): Promise<void> {
+  const nowIso = new Date().toISOString();
+  for (let i = 0; i < runs.length; i += 500) {
+    const chunk = runs.slice(i, i + 500);
+    await db.insert(skillRuns).values(
+      chunk.map((opts) => ({
+        id: opts.id,
+        engagementId: opts.engagementId,
+        skillName: opts.skillName,
+        phase: opts.phase,
+        status: "running",
+        steps: [{ phase: "run_started", label: opts.label, status: "success" as const, startedAt: nowIso, completedAt: nowIso }],
+        startedAt: new Date(nowIso),
+        executionStartedAt: opts.queued ? null : new Date(nowIso),
+      }))
+    );
+  }
 }
 
 /**
@@ -466,25 +473,23 @@ export async function markRunExecuting(runId: string, notBefore?: string): Promi
  * Runs the reaper should close. Running work is timed from when it
  * actually began, not from when it was queued: under load a dispatched run
  * can wait in line for a while, and the reaper used to close those before
- * they ever started. A dispatched run still waiting gets the much longer
- * queue ceiling; a run created by code that executes it immediately (not
- * through the dispatcher) never gets executionStartedAt, so it's timed
- * from creation exactly as before.
+ * they ever started. A run is still queued only when it was created with
+ * `queued` and the dispatcher hasn't picked it up; those get the much
+ * longer queue ceiling. Every other run starts its clock at creation.
  */
-export async function findStaleRunIds(isDispatchedSkill: (skillName: string) => boolean, now = Date.now()): Promise<string[]> {
+export async function findStaleRunIds(now = Date.now()): Promise<string[]> {
   const runningCutoff = new Date(now - STALE_RUN_CEILING_MS);
   const queuedCutoff = new Date(now - QUEUED_RUN_CEILING_MS);
   const rows = await db
-    .select({ id: skillRuns.id, skillName: skillRuns.skillName, startedAt: skillRuns.startedAt, executionStartedAt: skillRuns.executionStartedAt })
+    .select({ id: skillRuns.id })
     .from(skillRuns)
-    .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, runningCutoff)));
-  return rows
-    .filter((r) =>
-      r.executionStartedAt
-        ? r.executionStartedAt < runningCutoff
-        : !isDispatchedSkill(r.skillName) || r.startedAt < queuedCutoff
-    )
-    .map((r) => r.id);
+    .where(
+      and(
+        eq(skillRuns.status, "running"),
+        or(lt(skillRuns.executionStartedAt, runningCutoff), and(isNull(skillRuns.executionStartedAt), lt(skillRuns.startedAt, queuedCutoff)))
+      )
+    );
+  return rows.map((r) => r.id);
 }
 
 export async function closeStaleRun(

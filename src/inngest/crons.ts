@@ -53,7 +53,6 @@ import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
 import { getAppUrl } from "@/lib/app-url";
 import { dispatchScheduledSkillRuns, scheduledNow, sendEventsInBatches, staggeredNotBefore, waitForStagger } from "@/inngest/fan-out";
 import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
-import { isDispatchedSkill } from "@/inngest/skill";
 
 // Scheduled skill crons page through clients 500 at a time, create each
 // page's runs in one INSERT, and send them in batches, each run carrying a
@@ -208,7 +207,7 @@ export const staleRunReaperCron = inngest.createFunction(
   { id: "stale-run-reaper-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
     const reaped = await step.run("reap-stale-runs", async () => {
-      const stuck = (await findStaleRunIds(isDispatchedSkill)).map((id) => ({ id }));
+      const stuck = (await findStaleRunIds()).map((id) => ({ id }));
 
       // closeStaleRun() re-checks status="running" at write time and
       // returns null if the run resolved on its own between this scan and

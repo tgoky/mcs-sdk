@@ -113,7 +113,7 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
 export async function dispatchWeeklyOpsReportRun(engagementId: string): Promise<string> {
   const { inngest, skillRunEvent } = await import("@/lib/inngest");
   const runId = crypto.randomUUID();
-  await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report" });
+  await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report", queued: true });
   await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-weekly-ops-report" }));
   return runId;
 }
