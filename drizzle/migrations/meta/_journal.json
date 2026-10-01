@@ -519,6 +519,13 @@
       "when": 1790856732309,
       "tag": "0073_brief_call_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790857003993,
+      "tag": "0074_crisis_window_claim",
+      "breakpoints": true
     }
   ]
 }

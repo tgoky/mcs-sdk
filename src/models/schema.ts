@@ -2574,6 +2574,11 @@ export const repIdentityGraphs = pgTable(
     // succeeds, so a finding saved while a run is in progress lands in the
     // next window instead of being skipped.
     crisisCheckedThrough: timestamp("crisis_checked_through"),
+    // The Crisis Response run currently assessing this client's window, and
+    // since when. Taken before assessing so two overlapping runs can't both
+    // declare the same incident and page the operator twice.
+    crisisClaimRunId: uuid("crisis_claim_run_id"),
+    crisisClaimedAt: timestamp("crisis_claimed_at"),
 
     // The client's own Google Maps listing, found at setup (matched by its
     // website to the client's domain) and confirmed by a person. Read by

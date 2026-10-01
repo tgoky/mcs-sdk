@@ -90,8 +90,50 @@ async function databaseNow(): Promise<string> {
   return new Date(value ?? Date.now()).toISOString();
 }
 
+async function crisisCheckedThroughFor(engagementId: string): Promise<string | null> {
+  const [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId)).limit(1);
+  return row?.at ? new Date(row.at).toISOString() : null;
+}
+
+/** Moves the window forward and releases this run's claim. */
 async function markCheckedThrough(engagementId: string, upTo: Date): Promise<void> {
-  await db.update(repIdentityGraphs).set({ crisisCheckedThrough: upTo }).where(eq(repIdentityGraphs.engagementId, engagementId));
+  await db
+    .update(repIdentityGraphs)
+    .set({ crisisCheckedThrough: upTo, crisisClaimRunId: null, crisisClaimedAt: null })
+    .where(eq(repIdentityGraphs.engagementId, engagementId));
+}
+
+/** A claim older than this is assumed to belong to a run that died. */
+const CRISIS_CLAIM_STALE_MINUTES = 30;
+
+/**
+ * Takes this client's crisis window for this run, in one statement. Fails
+ * while another run holds a fresh claim; this run's own retry may re-take
+ * it. Without it, two overlapping runs read the same window and both
+ * declared the incident: two incident rows, two operator pages.
+ */
+export async function claimCrisisWindow(engagementId: string, runId: string): Promise<boolean> {
+  const [row] = await db
+    .update(repIdentityGraphs)
+    .set({ crisisClaimRunId: runId, crisisClaimedAt: new Date() })
+    .where(
+      and(
+        eq(repIdentityGraphs.engagementId, engagementId),
+        sql`(${repIdentityGraphs.crisisClaimedAt} is null
+          or ${repIdentityGraphs.crisisClaimRunId} = ${runId}
+          or ${repIdentityGraphs.crisisClaimedAt} < now() - make_interval(mins => ${CRISIS_CLAIM_STALE_MINUTES}))`
+      )
+    )
+    .returning({ id: repIdentityGraphs.id });
+  return Boolean(row);
+}
+
+/** Releases this run's claim without moving the window (a failed run). */
+async function releaseCrisisWindow(engagementId: string, runId: string): Promise<void> {
+  await db
+    .update(repIdentityGraphs)
+    .set({ crisisClaimRunId: null, crisisClaimedAt: null })
+    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)));
 }
 
 /** Only used until a client's first run under the window above records
@@ -308,6 +350,14 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       return;
     }
 
+    const claimed = await (step ? step.run("claim-window", () => claimCrisisWindow(engagementId, runId)) : claimCrisisWindow(engagementId, runId));
+    if (!claimed) {
+      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "Another Crisis Response run is assessing this client right now." });
+      summary.openItems.push("Skipped: another run was already assessing this client.");
+      await finishRun(runId, { summary, status: "skipped" });
+      return;
+    }
+
     // Anomaly detection runs independent of flagged findings — a spike can
     // fire on ordinary-looking mentions arriving too fast, with zero
     // individual records ever flagged. Checked before the "nothing
@@ -321,8 +371,11 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
 
     // The window this run covers: (since, upTo]. upTo comes from the
     // database clock, the same clock the findings' timestamps use.
-    const sinceRaw = graph.crisisCheckedThrough
-      ? graph.crisisCheckedThrough
+    // Read after the claim, not from the graph loaded above: a run that
+    // finished in between has moved the window on.
+    const checkedThrough = await (step ? step.run("window-start", () => crisisCheckedThroughFor(engagementId)) : crisisCheckedThroughFor(engagementId));
+    const sinceRaw = checkedThrough
+      ? checkedThrough
       : await (step ? step.run("find-last-run", () => lastSuccessfulRunAt(engagementId)) : lastSuccessfulRunAt(engagementId));
     const since = sinceRaw ? new Date(sinceRaw) : null;
     const upToRaw = await (step ? step.run("window-end", () => databaseNow()) : databaseNow());
@@ -523,6 +576,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     await advanceWindow();
     await finishRun(runId, { summary });
   } catch (err) {
+    await releaseCrisisWindow(engagementId, runId).catch(() => {});
     await failRun(runId, err, { summary }).catch(() => {});
     throw err;
   }
