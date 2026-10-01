@@ -110,4 +110,18 @@ d("outbound sends happen once", () => {
     expect(second).toEqual({ sent: false, reason: "Already sent." });
     expect(texts).toEqual(["+15550001111"]);
   });
+
+  it("at-risk check-in: one scheduled for a call that has since moved stands down", async () => {
+    const { db } = await import("@/lib/db");
+    const { bookingRoster } = await import("@/models/schema");
+    const { sendCheckIn } = await import("@/features/pile-on/server/at-risk-check-in");
+    const callTime = new Date(Date.now() + 5 * 3600_000);
+    await db.insert(bookingRoster).values({ engagementId, externalCallId: "call_3", callTime, prospectEmail: "jo@example.com", prospectPhone: "+15550002222" } as never);
+
+    const oldTime = new Date(callTime.getTime() + 3 * 3600_000);
+    expect(await sendCheckIn(engagementId, "call_3", new Date(), oldTime)).toEqual({ sent: false, reason: "The call was rescheduled." });
+    // The platform's copy of the time can differ slightly from the stored one.
+    const sameCall = new Date(callTime.getTime() + 1000);
+    expect((await sendCheckIn(engagementId, "call_3", new Date(), sameCall)).sent).toBe(true);
+  });
 });

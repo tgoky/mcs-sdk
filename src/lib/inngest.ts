@@ -393,7 +393,7 @@ export const smsReplyReceived = eventType("sms/reply-received", {
 
 // A call looks at risk of a no-show; inngest/at-risk-check-in.ts sends one
 // check-in text at sendAt if it still should.
-export type AtRiskCheckInData = { engagementId: string; bookingId: string; sendAt: string };
+export type AtRiskCheckInData = { engagementId: string; bookingId: string; sendAt: string; /** The call time it was scheduled for (ISO); absent on events sent before it was added. */ callTime?: string };
 export const atRiskCheckInScheduled = eventType("showtime/at-risk-check-in.scheduled", {
   schema: staticSchema<AtRiskCheckInData>(),
 });

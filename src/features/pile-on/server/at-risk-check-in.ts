@@ -28,14 +28,14 @@ export async function maybeScheduleCheckIn(engagementId: string, stack: Pick<Eng
   if (!isAtRisk(call.probability, stack.at_risk_threshold, null)) return false;
   const sendAt = checkInSendAt(call.callTime, now);
   if (!sendAt) return false;
-  await inngest.send(atRiskCheckInScheduled.create({ engagementId, bookingId: call.bookingId, sendAt: sendAt.toISOString() }));
+  await inngest.send(atRiskCheckInScheduled.create({ engagementId, bookingId: call.bookingId, sendAt: sendAt.toISOString(), callTime: call.callTime.toISOString() }));
   return true;
 }
 
 export type CheckInResult = { sent: true; messageLogId: string } | { sent: false; reason: string };
 
 /** Sends the check-in if it still should: call still on, no outcome, not sent already, texts possible. */
-export async function sendCheckIn(engagementId: string, bookingId: string, now = new Date()): Promise<CheckInResult> {
+export async function sendCheckIn(engagementId: string, bookingId: string, now = new Date(), scheduledForCallTime?: Date): Promise<CheckInResult> {
   const [tenant] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!tenant || tenant.deletedAt || isEngagementPaused(tenant)) return { sent: false, reason: "The client is paused or removed." };
   const stack = tenant.stack as EngagementStack | null;
@@ -49,6 +49,10 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
     .where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.externalCallId, bookingId)))
     .limit(1);
   if (!booking || booking.status === "cancelled") return { sent: false, reason: "The booking was cancelled." };
+  // The call moved since this was scheduled: the check-in scheduled for the
+  // new time sends instead, when it's due. The scheduled time came from the
+  // booking platform, so small differences from the stored one don't count.
+  if (scheduledForCallTime && Math.abs(scheduledForCallTime.getTime() - booking.callTime.getTime()) > 5 * 60_000) return { sent: false, reason: "The call was rescheduled." };
   if (booking.callTime.getTime() - now.getTime() < 10 * 60_000) return { sent: false, reason: "Too close to the call." };
   if (!booking.phone && platform === "twilio") return { sent: false, reason: "No phone number on the booking." };
 

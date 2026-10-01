@@ -79,7 +79,7 @@ describe("at-risk calls", () => {
 
   it("schedules only when the client turned check-ins on and the call is at risk", async () => {
     expect(await maybeScheduleCheckIn("e1", { at_risk_check_in: true }, { bookingId: "b1", callTime: inHours(24), probability: 30 }, now)).toBe(true);
-    expect(send).toHaveBeenCalledWith({ engagementId: "e1", bookingId: "b1", sendAt: inHours(21).toISOString() });
+    expect(send).toHaveBeenCalledWith({ engagementId: "e1", bookingId: "b1", sendAt: inHours(21).toISOString(), callTime: inHours(24).toISOString() });
     expect(await maybeScheduleCheckIn("e1", {}, { bookingId: "b1", callTime: inHours(24), probability: 30 }, now)).toBe(false);
     expect(await maybeScheduleCheckIn("e1", { at_risk_check_in: true }, { bookingId: "b1", callTime: inHours(24), probability: 80 }, now)).toBe(false);
   });
