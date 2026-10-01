@@ -53,6 +53,9 @@ d("Whop Agent — real-database race and failure-mode checks", () => {
   const whopUserId = `test-user-${crypto.randomUUID()}`;
 
   beforeAll(async () => {
+    // Webhook registration builds its receiver address from this; there is
+    // no fallback address any more (see src/lib/app-url.ts).
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.example.com");
     const { db } = await import("@/lib/db");
     const { engagements, workspaces, whopAgentConnections } = await import("@/models/schema");
 
