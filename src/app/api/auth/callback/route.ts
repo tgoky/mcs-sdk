@@ -18,6 +18,21 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
+// Whop activates a membership by webhook shortly after the payment, so a
+// sign-in that follows a checkout can arrive before it's active. Waits
+// between re-checks, about 5 seconds in all.
+const AFTER_CHECKOUT_RETRY_DELAYS_MS = [1000, 1500, 2500];
+
+async function membershipAfterCheckout(whopUserId: string) {
+  let membership = await checkActiveMembership(whopUserId);
+  for (const delay of AFTER_CHECKOUT_RETRY_DELAYS_MS) {
+    if (membership.hasAccess) break;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    membership = await checkActiveMembership(whopUserId);
+  }
+  return membership;
+}
+
 function sameString(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -75,7 +90,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const { codeVerifier, redirectTo } = stateData;
+    const { codeVerifier, redirectTo, afterCheckout } = stateData;
 
     // 2. Exchange authorization code for tokens
     const tokens = await exchangeCode(code, codeVerifier);
@@ -88,6 +103,8 @@ export async function GET(request: Request) {
     const admin = isAdminEmail(whopUser.email);
     const membership = admin
       ? { hasAccess: true, status: "admin" as const }
+      : afterCheckout
+      ? await membershipAfterCheckout(whopUserId)
       : await checkActiveMembership(whopUserId);
 
     // 5. Upsert user record
@@ -120,7 +137,13 @@ export async function GET(request: Request) {
     // than "just signed in for the first time."
     // Checked again here: the state decrypts to whatever the login route
     // put in it, and older states predate the stricter check.
-    const destination = membership.hasAccess ? safeRelativePath(redirectTo, "/home")! : "/checkout";
+    // Still nothing right after paying: /checkout?pending=1 tells them not
+    // to pay again, and re-checks Whop each time it loads.
+    const destination = membership.hasAccess
+      ? safeRelativePath(redirectTo, "/home")!
+      : afterCheckout
+      ? "/checkout?pending=1"
+      : "/checkout";
 
     // 6. Create the NextResponse object with the redirect HTML payload
     const response = new NextResponse(buildOAuthRedirectHtml(destination, "Authenticated. Redirecting..."), {

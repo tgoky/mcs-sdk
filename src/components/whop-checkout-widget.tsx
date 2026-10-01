@@ -40,7 +40,7 @@ export function WhopCheckoutWidget({
         // skipRedirect is implied by onComplete, so nothing navigates us
         // away on its own — send the buyer into the OAuth flow to
         // establish the app session now that the membership exists.
-        window.location.href = "/api/auth/login?redirect_to=/home";
+        window.location.href = "/api/auth/login?redirect_to=/home&after_checkout=1";
       }}
       onPaymentError={(error) => {
         console.error("[checkout] Payment error:", error.message, error.code);

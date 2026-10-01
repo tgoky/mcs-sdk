@@ -28,5 +28,5 @@ export default async function CheckoutCompletePage({
   // status === "success" (or missing) — the membership now exists on
   // Whop's side. Hand off to the existing OAuth login to actually
   // establish this app's session.
-  redirect("/api/auth/login?redirect_to=/home");
+  redirect("/api/auth/login?redirect_to=/home&after_checkout=1");
 }

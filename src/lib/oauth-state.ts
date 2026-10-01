@@ -18,6 +18,9 @@ export interface OAuthStateData {
   nonce?: string;
   /** When the login started (ms). States older than OAUTH_STATE_MAX_AGE_MS are refused. */
   issuedAt?: number;
+  /** Started right after a completed checkout: the callback waits briefly
+   * for Whop to activate the new membership before deciding. */
+  afterCheckout?: boolean;
 }
 
 export const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;

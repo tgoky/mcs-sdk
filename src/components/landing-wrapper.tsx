@@ -110,15 +110,17 @@ export function LandingWrapper({
         </nav>
 
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Same destination as Enter Dashboard (see page.tsx): the sign-in
-              route for a visitor with no session, /home for a member. A
-              plain link, since /api/auth/login is a route handler. */}
-          <a
-            href={destinationHref}
-            className="shrink-0 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-white transition-colors"
-          >
-            Sign in
-          </a>
+          {/* Only for a visitor with no session; Enter Dashboard covers
+              anyone already signed in. A plain link, since /api/auth/login
+              is a route handler. */}
+          {!hasWhopUser && (
+            <a
+              href={destinationHref}
+              className="shrink-0 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-white transition-colors"
+            >
+              Sign in
+            </a>
+          )}
           <HeaderCtaBtn href={getStartedHref} onNavigateStart={() => setIsExiting(true)}>
             Get Started
           </HeaderCtaBtn>

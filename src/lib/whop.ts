@@ -62,7 +62,11 @@ export type WhopUserInfo = {
 export function generateAuthUrl(
   state: string,
   codeVerifier: string,
-  nonce: string
+  nonce: string,
+  // OIDC "prompt=login" asks Whop to show its sign-in screen even when the
+  // browser is already signed in to Whop, so someone can pick a different
+  // account. Only sent when switching accounts.
+  options: { forceLogin?: boolean } = {}
 ) {
   const codeChallenge = crypto
     .createHash("sha256")
@@ -79,6 +83,7 @@ export function generateAuthUrl(
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
+  if (options.forceLogin) params.set("prompt", "login");
 
   return `${WHOP_OAUTH_BASE}/authorize?${params.toString()}`;
 }

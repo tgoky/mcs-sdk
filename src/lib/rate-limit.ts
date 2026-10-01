@@ -88,6 +88,8 @@ export const RATE_LIMITS = {
   skillTrigger: { name: "skill-trigger", limit: 30, windowSeconds: 10 * 60 },
   /** Per IP: sign-in redirects. */
   authLogin: { name: "auth-login", limit: 30, windowSeconds: 60 },
+  /** Per user: /checkout asking Whop whether a membership is active now. */
+  membershipRefresh: { name: "membership-refresh", limit: 20, windowSeconds: 60 },
   /** Per user: page-crash reports. */
   clientErrors: { name: "client-errors", limit: 30, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
