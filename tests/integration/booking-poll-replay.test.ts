@@ -182,4 +182,24 @@ d("booking poller across an Inngest re-run", () => {
     expect(result).toMatchObject({ polled: 2, newBookings: 1, duplicates: 1 });
     expect(handled).toHaveLength(1);
   });
+
+  it("stops holding the window after a day of polls that couldn't start a booking, and says so", async () => {
+    await setup();
+    behavior.mode = "finish";
+    behavior.enabledFailures = 1;
+    const { db } = await import("@/lib/db");
+    const { engagements } = await import("@/models/schema");
+    const { eq } = await import("drizzle-orm");
+    const { stackPatchSql } = await import("@/lib/engagement-stack");
+    const { pollBookingsForEngagement } = await import("@/features/pin-down/server/booking-poller");
+    const dayAgo = new Date(Date.now() - 25 * 60 * 60_000).toISOString();
+    await db.update(engagements).set({ stack: stackPatchSql({ webhook_poll_held_since: dayAgo }) }).where(eq(engagements.engagementId, engagementId));
+
+    await pollBookingsForEngagement(engagementId, memoStep() as never);
+    const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId));
+    const stack = row.stack as { webhook_receiver_last_polled_at?: string; webhook_poll_held_since?: string; webhook_last_error?: string };
+    expect(Date.now() - Date.parse(stack.webhook_receiver_last_polled_at!)).toBeLessThan(60_000);
+    expect(stack.webhook_poll_held_since).toBeUndefined();
+    expect(stack.webhook_last_error).toMatch(/gave up on 1 booking/);
+  });
 });

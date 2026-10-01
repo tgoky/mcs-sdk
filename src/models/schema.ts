@@ -79,6 +79,9 @@ export type EngagementStack = {
   // poll cycle reads forward from. Only meaningful when
   // webhook_receiver_mode === "polling".
   webhook_receiver_last_polled_at?: string;
+  // Set while the poller holds its window back because a booking couldn't
+  // be started (booking-poller.ts); it gives up holding after a day.
+  webhook_poll_held_since?: string;
   // ── Booking sync observability (Settings → Booking Sync card) ─────────
   // ISO timestamp of the last inbound webhook delivery this engagement
   // accepted (signature verified, whether or not it turned out to be a

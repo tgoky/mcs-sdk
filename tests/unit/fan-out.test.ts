@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const startRuns = vi.fn(async () => undefined);
-const failUndispatchedRuns = vi.fn(async () => undefined);
 vi.mock("@/lib/db", () => ({ db: {} }));
-vi.mock("@/lib/run-log", () => ({ startRuns: (...a: unknown[]) => startRuns(...(a as [])), failUndispatchedRuns: (...a: unknown[]) => failUndispatchedRuns(...(a as [])) }));
+vi.mock("@/lib/run-log", () => ({ startRuns: (...a: unknown[]) => startRuns(...(a as [])) }));
 
 import { dispatchScheduledSkillRuns, staggerOffsetMs, staggeredNotBefore, waitForStagger, sendEventsInBatches } from "@/inngest/fan-out";
 import { fakeStep } from "../helpers/inngest-fn";
@@ -77,44 +76,5 @@ describe("dispatchScheduledSkillRuns", () => {
     const snapshot = new Date(staggeredNotBefore("weekly:e1", 45, from)).getTime();
     const review = new Date(staggeredNotBefore("weekly:e1", 45, later)).getTime();
     expect(review - snapshot).toBe(10 * 60_000);
-  });
-});
-
-describe("a page whose events can't be sent", () => {
-  it("closes that page's runs instead of leaving them queued, and still fails the cron", async () => {
-    const step = fakeStep();
-    step.sendEvent.mockRejectedValueOnce(new Error("Inngest unavailable"));
-    await expect(
-      dispatchScheduledSkillRuns(step as never, {
-        id: "t",
-        skillName: "leak-map",
-        phase: "p",
-        spreadMinutes: 10,
-        loadPage: async (after) => (after ? [] : [{ engagementId: "e1" }, { engagementId: "e2" }]),
-        select: (rows) => rows.map((r) => ({ engagementId: r.engagementId })),
-      })
-    ).rejects.toThrow("Inngest unavailable");
-    const [ids] = failUndispatchedRuns.mock.calls[0] as unknown as [string[]];
-    expect(ids).toHaveLength(2);
-  });
-
-  it("closes only the runs of batches that weren't sent", async () => {
-    failUndispatchedRuns.mockClear();
-    const step = fakeStep();
-    step.sendEvent.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Inngest unavailable"));
-    const ids = Array.from({ length: 700 }, (_, i) => ({ engagementId: `e${String(i).padStart(4, "0")}` }));
-    await expect(
-      dispatchScheduledSkillRuns(step as never, {
-        id: "t2",
-        skillName: "leak-map",
-        phase: "p",
-        spreadMinutes: 10,
-        pageSize: 1000,
-        loadPage: async (after) => (after ? [] : ids),
-        select: (rows) => rows.map((r) => ({ engagementId: r.engagementId })),
-      })
-    ).rejects.toThrow("Inngest unavailable");
-    const [closed] = failUndispatchedRuns.mock.calls[0] as unknown as [string[]];
-    expect(closed).toHaveLength(200);
   });
 });

@@ -437,45 +437,34 @@ const QUEUED_RUN_CEILING_MS = QUEUED_RUN_CEILING_MINUTES * 60 * 1000;
 /**
  * Records that the dispatcher has begun this run (first time only), and how
  * long it waited for a slot: from when it was created, or from its
- * scheduled start (`notBefore`) when that was later. A run closed because
- * its dispatch looked failed (failUndispatchedRuns) is reopened: its event
- * did arrive after all, so the work goes ahead and the history says so.
+ * scheduled start (`notBefore`) when that was later. Returns false when the
+ * run is no longer open (cancelled, timed out by the reaper, or failed
+ * while it was being dispatched), so the dispatcher doesn't do work nobody
+ * expects any more.
  */
-export async function markRunExecuting(runId: string, notBefore?: string): Promise<void> {
+export async function markRunExecuting(runId: string, notBefore?: string): Promise<boolean> {
   const now = new Date();
   const scheduled = notBefore ? new Date(notBefore) : null;
   const readyFrom = scheduled && !Number.isNaN(scheduled.getTime()) ? sql`greatest(${skillRuns.startedAt}, ${scheduled.toISOString()}::timestamp)` : sql`${skillRuns.startedAt}`;
-  const undispatched = sql`${skillRuns.status} = 'failed' and ${skillRuns.errorMessage} = ${UNDISPATCHED_REASON}`;
   await db
     .update(skillRuns)
     .set({
       executionStartedAt: now,
       queueWaitMs: sql`greatest(0, (extract(epoch from (${now.toISOString()}::timestamp - ${readyFrom})) * 1000)::int)`,
-      status: sql`case when ${undispatched} then 'running' else ${skillRuns.status} end`,
-      errorMessage: sql`case when ${undispatched} then null else ${skillRuns.errorMessage} end`,
-      completedAt: sql`case when ${undispatched} then null else ${skillRuns.completedAt} end`,
     })
     .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
-}
-
-const UNDISPATCHED_REASON = "Couldn't hand this run to the queue.";
-
-/** Closes queued runs whose dispatch failed, so they don't sit "running"
- * (and count as queued) until the reaper's ceiling. Quietly: the client
- * isn't alerted for a run that never began. If the event did get through
- * after all, markRunExecuting reopens the run. */
-export async function failUndispatchedRuns(runIds: string[]): Promise<void> {
-  if (runIds.length === 0) return;
-  await db
-    .update(skillRuns)
-    .set({ status: "failed", completedAt: new Date(), errorMessage: UNDISPATCHED_REASON })
-    .where(and(inArray(skillRuns.id, runIds), eq(skillRuns.status, "running"), isNull(skillRuns.executionStartedAt)));
+  const [row] = await db.select({ status: skillRuns.status }).from(skillRuns).where(eq(skillRuns.id, runId)).limit(1);
+  // No row: a caller that never created one. Run it, as before.
+  return !row || row.status === "running";
 }
 
 /** Of these clients, the ones with a run of this skill still waiting in
  * the queue (created with `queued`, not yet picked up by the dispatcher)
- * that was created within `withinMs`. */
-export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[], withinMs = QUEUED_RUN_CEILING_MS): Promise<Set<string>> {
+ * that was created within `withinMs`. The limit keeps a run whose event
+ * never reached Inngest from counting until the reaper closes it; a caller
+ * that dispatches when this comes back empty adds at most one run per
+ * window, since the run it adds counts in turn. */
+export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[], withinMs = STALE_RUN_CEILING_MS): Promise<Set<string>> {
   if (engagementIds.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ engagementId: skillRuns.engagementId })

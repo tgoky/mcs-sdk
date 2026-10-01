@@ -336,15 +336,18 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
 
   // A booking given back above is only picked up again if the next poll
   // lists it, so the window starts where this one did (the bookings
-  // already handled come back as duplicates). Not past a day, though: a
-  // booking that can never be started would otherwise hold it forever.
-  const heldSince = Date.parse(fetched.sinceISO);
-  if (released > 0 && now.getTime() - heldSince < 24 * 60 * 60_000) {
+  // already handled come back as duplicates). Not for more than a day of
+  // polls in a row, though: a booking that can never be started would
+  // otherwise hold it forever.
+  const windowStart = "sinceISO" in fetched && typeof fetched.sinceISO === "string" ? fetched.sinceISO : stack.webhook_receiver_last_polled_at;
+  const holdingSince = stack.webhook_poll_held_since ? Date.parse(stack.webhook_poll_held_since) : now.getTime();
+  if (released > 0 && windowStart && now.getTime() - holdingSince < 24 * 60 * 60_000) {
     await db
       .update(engagements)
       .set({
         stack: stackPatchSql({
-          webhook_receiver_last_polled_at: fetched.sinceISO,
+          webhook_receiver_last_polled_at: windowStart,
+          webhook_poll_held_since: stack.webhook_poll_held_since ?? now.toISOString(),
           webhook_last_error: `Poll at ${now.toISOString()}: ${released} booking(s) couldn't be started and will be retried on the next poll.`,
         }),
         updatedAt: now,
@@ -364,7 +367,8 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     .set({
       stack: stackPatchSql({
         webhook_receiver_last_polled_at: now.toISOString(),
-        webhook_last_error: released > 0 ? `Poll at ${now.toISOString()}: gave up on ${released} booking(s) that couldn't be started for a day.` : undefined,
+        webhook_poll_held_since: undefined,
+        webhook_last_error: released > 0 ? `Poll at ${now.toISOString()}: gave up on ${released} booking(s) that couldn't be started.` : undefined,
       }),
       updatedAt: now,
     })

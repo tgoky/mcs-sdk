@@ -425,8 +425,11 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     // same findings, and both would alert.
     const confirmClaim = () => (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId, checkedThrough)) : renewCrisisClaim(engagementId, runId, checkedThrough));
     const standDown = async () => {
-      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "A newer Crisis Response run took over this client's assessment." });
-      summary.openItems.push("Skipped: a newer run took over this client's assessment.");
+      // Lets go of the claim if this run still holds it, so the next run
+      // isn't turned away for the claim's 30 minutes.
+      await releaseCrisisWindow(engagementId, runId).catch(() => {});
+      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "Another Crisis Response run took over this client's assessment or already covered these findings." });
+      summary.openItems.push("Skipped: another run took over or already covered these findings.");
       await finishRun(runId, { summary, status: "skipped" });
     };
 

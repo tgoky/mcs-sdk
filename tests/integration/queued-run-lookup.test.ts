@@ -37,7 +37,8 @@ d("queued run lookup", () => {
     await startRun({ id: crypto.randomUUID(), engagementId: inline, skillName: "pre-call-read", phase: "p" });
 
     expect([...(await engagementsWithQueuedRun("pre-call-read", ids))]).toEqual([waiting]);
-    // One left behind long ago (its event never reached the queue) doesn't count.
+    // One queued longer ago than the window (its event may never have
+    // reached the queue) doesn't count.
     expect((await engagementsWithQueuedRun("pre-call-read", ids, -60_000)).size).toBe(0);
     expect((await engagementsWithQueuedRun("leak-map", ids)).size).toBe(0);
   });
