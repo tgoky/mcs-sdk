@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// The cross-copy throttle is covered against Postgres in
+// tests/integration/error-alert-throttle.test.ts; here it always allows.
+vi.mock("@/lib/rate-limit", () => ({ hitRateLimit: vi.fn(async () => ({ allowed: true, count: 1, retryAfterSeconds: 0 })) }));
+
 import { normalizeError, fingerprint, parseSentryDsn, sentryEnvelope, shouldAlert, reportError } from "@/lib/error-reporting";
 
 describe("error reporting", () => {
