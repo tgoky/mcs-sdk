@@ -15,7 +15,7 @@
 
 import { db } from "@/lib/db";
 import { bookingRoster, engagements, reviewRequests, sequenceMessageLog, type EngagementStack } from "@/models/schema";
-import { and, eq, gte, ne, or } from "drizzle-orm";
+import { and, eq, gte, ne, or, sql } from "drizzle-orm";
 import { inngest, reviewRequestScheduled } from "@/lib/inngest";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isEngagementPaused } from "@/lib/engagement-status";
@@ -89,17 +89,48 @@ async function finish(row: RequestRow, set: Partial<typeof reviewRequests.$infer
   return { status: set.status ?? row.status, detail: set.detail };
 }
 
-/** Was this person already asked (by any trigger) recently? */
-async function askedRecently(row: RequestRow): Promise<boolean> {
+type DbOrTx = Pick<typeof db, "select">;
+
+/** Was this person already asked (by any trigger) recently, or is another
+ * request to them being sent right now? */
+async function askedRecently(row: RequestRow, client: DbOrTx = db): Promise<boolean> {
   const since = new Date(Date.now() - ASK_AGAIN_AFTER_DAYS * 24 * 60 * 60 * 1000);
   const who = [row.email ? eq(reviewRequests.email, row.email) : null, row.phone ? eq(reviewRequests.phone, row.phone) : null].filter((c): c is NonNullable<typeof c> => c !== null);
   if (!who.length) return false;
-  const [other] = await db
+  const [other] = await client
     .select({ id: reviewRequests.id })
     .from(reviewRequests)
-    .where(and(eq(reviewRequests.engagementId, row.engagementId), ne(reviewRequests.id, row.id), eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, since), or(...who)))
+    .where(
+      and(
+        eq(reviewRequests.engagementId, row.engagementId),
+        ne(reviewRequests.id, row.id),
+        or(and(eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, since)), eq(reviewRequests.status, "sending")),
+        or(...who)
+      )
+    )
     .limit(1);
   return Boolean(other);
+}
+
+/**
+ * Claims this request for sending ("scheduled" -> "sending"), under a lock
+ * on the person so two requests to them (a show and a payment due at the
+ * same moment) can't both pass the "asked recently?" check. Returns false
+ * when it was already claimed, or the person was just asked. A request left
+ * "sending" by a crash is never retried: it may have gone out.
+ */
+async function claimForSending(row: RequestRow): Promise<"claimed" | "taken" | "asked"> {
+  const person = `${row.engagementId}:${row.email ?? ""}:${row.phone ?? ""}`;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${person}))`);
+    if (await askedRecently(row, tx)) return "asked";
+    const [claimed] = await tx
+      .update(reviewRequests)
+      .set({ status: "sending", updatedAt: new Date() })
+      .where(and(eq(reviewRequests.id, row.id), eq(reviewRequests.status, "scheduled")))
+      .returning({ id: reviewRequests.id });
+    return claimed ? "claimed" : "taken";
+  });
 }
 
 /** Sends one scheduled request, if it should still go. Safe to call twice. */
@@ -114,19 +145,31 @@ export async function sendReviewRequest(engagementId: string, requestId: string)
   const stack = tenant.stack as EngagementStack | null;
   const link = stack?.rep_review_link?.trim();
   if (!link) return finish(row, { status: "skipped", detail: "No review link is set." });
-  if (await askedRecently(row)) return finish(row, { status: "skipped", detail: `Already asked in the last ${ASK_AGAIN_AFTER_DAYS} days.` });
+  const claim = await claimForSending(row);
+  if (claim === "asked") return finish(row, { status: "skipped", detail: `Already asked in the last ${ASK_AGAIN_AFTER_DAYS} days.` });
+  if (claim === "taken") return { status: "sending", detail: "Another attempt is already sending this request." };
 
-  // A booking may have gained a phone or name since it was scheduled.
-  if (row.trigger === "showed" && (!row.phone || !row.personName)) {
-    const [b] = await db.select({ phone: bookingRoster.prospectPhone, name: bookingRoster.prospectName }).from(bookingRoster).where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.externalCallId, row.refId))).limit(1);
-    row.phone ??= b?.phone ?? null;
-    row.personName ??= b?.name ?? null;
+  // Nothing has been sent yet: if any of this fails, put the request back
+  // so the retry can send it (a claim is only kept once sending starts).
+  let emailCredential: string | null;
+  let smsPlatform: "twilio" | "ghl_sms" | null;
+  let channel: ReturnType<typeof pickReviewChannel>;
+  try {
+    // A booking may have gained a phone or name since it was scheduled.
+    if (row.trigger === "showed" && (!row.phone || !row.personName)) {
+      const [b] = await db.select({ phone: bookingRoster.prospectPhone, name: bookingRoster.prospectName }).from(bookingRoster).where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.externalCallId, row.refId))).limit(1);
+      row.phone ??= b?.phone ?? null;
+      row.personName ??= b?.name ?? null;
+    }
+
+    emailCredential = row.email ? await resolveCredential(engagementId, "smtp").catch(() => null) : null;
+    smsPlatform = stack?.sms_platform === "twilio" || stack?.sms_platform === "ghl_sms" ? stack.sms_platform : null;
+    const smsOk = Boolean(row.phone && smsPlatform && !(await isOptedOut(engagementId, row.phone)));
+    channel = pickReviewChannel({ prefer: stack?.rep_review_request_channel ?? "email", emailReady: Boolean(row.email && emailCredential), smsReady: smsOk });
+  } catch (err) {
+    await db.update(reviewRequests).set({ status: "scheduled", updatedAt: new Date() }).where(and(eq(reviewRequests.id, row.id), eq(reviewRequests.status, "sending")));
+    throw err;
   }
-
-  const emailCredential = row.email ? await resolveCredential(engagementId, "smtp").catch(() => null) : null;
-  const smsPlatform = stack?.sms_platform === "twilio" || stack?.sms_platform === "ghl_sms" ? stack.sms_platform : null;
-  const smsOk = Boolean(row.phone && smsPlatform && !(await isOptedOut(engagementId, row.phone)));
-  const channel = pickReviewChannel({ prefer: stack?.rep_review_request_channel ?? "email", emailReady: Boolean(row.email && emailCredential), smsReady: smsOk });
   if (!channel) {
     return finish(row, { status: "skipped", detail: row.email || row.phone ? "No way to reach them: connect an email sender (SMTP or Resend) or a texting tool, or they opted out of texts." : "No email or phone on file." });
   }

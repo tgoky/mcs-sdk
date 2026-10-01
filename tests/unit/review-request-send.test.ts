@@ -11,18 +11,28 @@ vi.mock("@/lib/db", () => {
     const chain = { where: () => chain, limit: async () => rows(), then: (r: (v: unknown) => unknown) => Promise.resolve(rows()).then(r) };
     return chain;
   };
-  return {
-    db: {
-      select: () => ({ from: (t: unknown) => read(t) }),
-      insert: (t: unknown) => ({
-        values: (v: Record<string, unknown>) => {
-          inserted.push({ table: t, values: v });
-          return { returning: async () => [{ id: "log-1" }], onConflictDoNothing: () => ({ returning: async () => [{ id: "req-1" }] }) };
+  const db: Record<string, unknown> = {
+    select: () => ({ from: (t: unknown) => read(t) }),
+    insert: (t: unknown) => ({
+      values: (v: Record<string, unknown>) => {
+        inserted.push({ table: t, values: v });
+        return { returning: async () => [{ id: "log-1" }], onConflictDoNothing: () => ({ returning: async () => [{ id: "req-1" }] }) };
+      },
+    }),
+    // A plain update records its values; the claim (update ... returning)
+    // wins, since one request is in play.
+    update: () => ({
+      set: (s: Record<string, unknown>) => ({
+        where: () => {
+          updated.push(s);
+          return { returning: async () => [{ id: "req-1" }], then: (r: (v: unknown) => unknown) => Promise.resolve().then(r) };
         },
       }),
-      update: () => ({ set: (s: Record<string, unknown>) => ({ where: async () => void updated.push(s) }) }),
-    },
+    }),
+    execute: async () => [],
   };
+  db.transaction = async (fn: (tx: unknown) => unknown) => fn(db);
+  return { db };
 });
 
 const sendEmail = vi.fn();
@@ -73,6 +83,8 @@ describe("sending a review request", () => {
     expect(sendSms).not.toHaveBeenCalled();
     const log = inserted.find((i) => i.table === sequenceMessageLog)!.values;
     expect(log).toMatchObject({ sequenceType: "review_request_email", channel: "email", status: "sent", provider: "smtp", providerMessageId: "msg-9", deliveryStatus: "accepted", bookingId: "b1" });
+    // Claimed before sending, then marked sent.
+    expect(updated[0]).toMatchObject({ status: "sending" });
     expect(updated.at(-1)).toMatchObject({ status: "sent", channel: "email", messageLogId: "log-1" });
   });
 

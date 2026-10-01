@@ -3,6 +3,7 @@ import { bookingRoster, briefOutcomeLog, engagements, reminderHoldouts, sequence
 
 const tables = new Map<unknown, Record<string, unknown>[]>();
 const inserted: { table: unknown; values: Record<string, unknown> }[] = [];
+const updatedValues: Record<string, unknown>[] = [];
 const updates: unknown[] = [];
 vi.mock("@/lib/db", () => {
   const read = (t: unknown) => {
@@ -21,7 +22,12 @@ vi.mock("@/lib/db", () => {
         },
       }),
       update: (t: unknown) => ({
-        set: () => ({ where: () => ({ returning: async () => (updates.push(t), tables.get("share") ?? []) }) }),
+        set: (v: Record<string, unknown>) => ({
+          where: () => {
+            updatedValues.push(v);
+            return { returning: async () => (updates.push(t), tables.get("share") ?? []) };
+          },
+        }),
       }),
     },
   };
@@ -87,7 +93,9 @@ describe("at-risk calls", () => {
     sms.mockResolvedValue({ provider: "twilio", providerMessageId: "SM-1" });
     expect(await sendCheckIn("e1", "b1", now)).toEqual({ sent: true, messageLogId: "log-1" });
     expect(sms.mock.calls[0][4]).toContain("Hi Sam, just checking you're still good for our call");
-    expect(inserted.find((i) => i.table === sequenceMessageLog)!.values).toMatchObject({ sequenceType: "at_risk_sms", bookingId: "b1", status: "sent", providerMessageId: "SM-1" });
+    // Logged as "sending" before the text, then marked sent with the receipt.
+    expect(inserted.find((i) => i.table === sequenceMessageLog)!.values).toMatchObject({ sequenceType: "at_risk_sms", bookingId: "b1", status: "sending" });
+    expect(updatedValues.at(-1)).toMatchObject({ status: "sent", providerMessageId: "SM-1" });
   });
 
   it("doesn't send when an outcome is in, it already went, they opted out, or they're held out", async () => {

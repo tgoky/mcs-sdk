@@ -61,6 +61,9 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
 
   const body = renderCheckIn(stack.at_risk_check_in_message?.trim() || DEFAULT_CHECK_IN_MESSAGE, booking.name, booking.callTime, stack.timezone);
   const base = { engagementId, sequenceType: AT_RISK_SEQUENCE, bookingId, messageId: "at_risk_check_in", channel: "sms", prospectEmail: booking.email, prospectPhone: booking.phone };
+  // Logged before the text goes out, so a retry after a send whose log
+  // write failed finds this row ("Already sent") instead of texting again.
+  const [claim] = await db.insert(sequenceMessageLog).values({ ...base, status: "sending" }).returning({ id: sequenceMessageLog.id });
   try {
     const receipt = await sendSmsForTenant(
       platform,
@@ -71,11 +74,11 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
       stack.sms_a2p_10dlc_status,
       { statusCallbackUrl: twilioStatusCallbackUrl(engagementId) ?? undefined }
     );
-    const [logged] = await db.insert(sequenceMessageLog).values({ ...base, status: "sent", ...receiptColumns(receipt) }).returning({ id: sequenceMessageLog.id });
-    return { sent: true, messageLogId: logged.id };
+    await db.update(sequenceMessageLog).set({ status: "sent", ...receiptColumns(receipt) }).where(eq(sequenceMessageLog.id, claim.id));
+    return { sent: true, messageLogId: claim.id };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    await db.insert(sequenceMessageLog).values({ ...base, status: "failed", error });
+    await db.update(sequenceMessageLog).set({ status: "failed", error }).where(eq(sequenceMessageLog.id, claim.id));
     return { sent: false, reason: error };
   }
 }
