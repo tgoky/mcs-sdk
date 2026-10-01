@@ -39,7 +39,7 @@ export const coldOpenDailySendCron = inngest.createFunction(
       spreadMinutes: 45,
       loadPage: coldOpenPage,
       select: async (rows, now) => {
-        const disabled = await getDisabledEngagementIdsForSkill("daily-send");
+        const disabled = await getDisabledEngagementIdsForSkill("daily-send", rows.map((r) => r.engagementId));
         return rows
           .filter((r) => {
             if (disabled.has(r.engagementId)) return false;
@@ -71,7 +71,7 @@ export const coldOpenReplySortCron = inngest.createFunction(
       spreadMinutes: 60,
       loadPage: coldOpenPage,
       select: async (rows) => {
-        const disabled = await getDisabledEngagementIdsForSkill("reply-sort");
+        const disabled = await getDisabledEngagementIdsForSkill("reply-sort", rows.map((r) => r.engagementId));
         return rows
           .filter((r) => !disabled.has(r.engagementId) && !isEngagementPaused({ pausedAt: r.pausedAt }) && r.config.phaseState.send_connect === "complete")
           .map((r) => ({ engagementId: r.engagementId }));

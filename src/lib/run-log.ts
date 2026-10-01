@@ -34,7 +34,7 @@
 
 import { db } from "@/lib/db";
 import { skillRuns, engagements, users, type EngagementStack } from "@/models/schema";
-import { and, eq, gt, isNotNull, ne, or, sql, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, ne, or, sql, isNull, lt } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { skillName as skillDisplayName } from "@/lib/copy";
 
@@ -467,6 +467,17 @@ export async function markRunExecuting(runId: string, notBefore?: string): Promi
       queueWaitMs: sql`greatest(0, (extract(epoch from (${now.toISOString()}::timestamp - ${readyFrom})) * 1000)::int)`,
     })
     .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
+}
+
+/** Of these clients, the ones with a run of this skill still waiting in
+ * the queue (created with `queued`, not yet picked up by the dispatcher). */
+export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[]): Promise<Set<string>> {
+  if (engagementIds.length === 0) return new Set();
+  const rows = await db
+    .selectDistinct({ engagementId: skillRuns.engagementId })
+    .from(skillRuns)
+    .where(and(eq(skillRuns.skillName, skillName), eq(skillRuns.status, "running"), isNull(skillRuns.executionStartedAt), inArray(skillRuns.engagementId, engagementIds)));
+  return new Set(rows.map((r) => r.engagementId));
 }
 
 /**

@@ -71,7 +71,7 @@ function dailyRepCron(skillName: string, phase: string, localHour: number) {
             .orderBy(asc(engagements.engagementId))
             .limit(limit),
         select: async (rows, now) => {
-          const disabled = await getDisabledEngagementIdsForSkill(skillName);
+          const disabled = await getDisabledEngagementIdsForSkill(skillName, rows.map((r) => r.engagementId));
           return rows
             .filter((row) => !isEngagementPaused(row) && !disabled.has(row.engagementId))
             .filter((row) => matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, localHour, now))

@@ -30,7 +30,7 @@ import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChange
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
-import { closeStaleRun, notifyRunOutcome, findStaleRunIds } from "@/lib/run-log";
+import { closeStaleRun, notifyRunOutcome, findStaleRunIds, engagementsWithQueuedRun } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -93,7 +93,7 @@ export const nightlyBriefsCron = inngest.createFunction(
       select: async (rows, now) => {
         // Ghost-run fix: enablement is checked before a run is created, so a
         // disabled engagement never shows a run that then does nothing.
-        const disabledForPreCallRead = await getDisabledEngagementIdsForSkill("pre-call-read");
+        const disabledForPreCallRead = await getDisabledEngagementIdsForSkill("pre-call-read", rows.map((r) => r.engagementId));
         return rows
           .filter((t) => {
             const stack = t.stack as EngagementStack;
@@ -146,7 +146,7 @@ export const leakMapScheduleCron = inngest.createFunction(
           .orderBy(asc(engagements.engagementId))
           .limit(limit),
       select: async (rows, now) => {
-        const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map");
+        const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map", rows.map((r) => r.engagementId));
         const out: { engagementId: string; label: string; extra: { auditType: "weekly" | "monthly" } }[] = [];
         for (const tenant of rows) {
           if (isEngagementPaused(tenant) || disabledForLeakMap.has(tenant.engagementId)) continue;
@@ -621,7 +621,7 @@ export const dynamicBriefCron = inngest.createFunction(
           .orderBy(asc(engagements.engagementId))
           .limit(limit),
       select: async (rows) => {
-        const disabled = await getDisabledEngagementIdsForSkill("pre-call-read");
+        const disabled = await getDisabledEngagementIdsForSkill("pre-call-read", rows.map((r) => r.engagementId));
         const candidates = rows.filter((t) => {
           const stack = t.stack as EngagementStack;
           return (
@@ -632,15 +632,18 @@ export const dynamicBriefCron = inngest.createFunction(
             Boolean(stack?.booking_platform_credentials_ref)
           );
         });
-        const out: { engagementId: string; extra: { briefTrigger: "dynamic_webhook" } }[] = [];
-        for (const tenant of candidates) {
-          // The dispatcher fails a run whose required setup is missing, and
-          // a failed run notifies the client. Every 30 minutes that would be
-          // 48 notices a day, so an incomplete client is skipped here.
-          if ((await getMissingRequiredFields("pre-call-read", tenant.engagementId)).length > 0) continue;
-          out.push({ engagementId: tenant.engagementId, extra: { briefTrigger: "dynamic_webhook" } });
-        }
-        return out;
+        // A client whose last brief run is still waiting for its lane (behind
+        // a long nightly run, say) needs no second one: when it runs it
+        // briefs everything due, so more would only pile up behind it.
+        const alreadyQueued = await engagementsWithQueuedRun("pre-call-read", candidates.map((t) => t.engagementId));
+        const due = candidates.filter((t) => !alreadyQueued.has(t.engagementId));
+        // The dispatcher fails a run whose required setup is missing, and
+        // a failed run notifies the client. Every 30 minutes that would be
+        // 48 notices a day, so an incomplete client is skipped here.
+        const missing = await Promise.all(due.map((t) => getMissingRequiredFields("pre-call-read", t.engagementId)));
+        return due
+          .filter((_, i) => missing[i].length === 0)
+          .map((t) => ({ engagementId: t.engagementId, extra: { briefTrigger: "dynamic_webhook" as const } }));
       },
     });
     return { dispatched };

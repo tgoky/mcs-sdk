@@ -79,11 +79,20 @@ export async function getRepEngagementSkillStates(engagementId: string): Promise
  * itself as skipped; it should simply not appear.
  */
 /** skillId widened to string, same reasoning as isSkillEnabledForEngagement above — needed by rep-engine-panel's cron for the same efficient bulk-disabled-check pattern Showtime's crons already use. */
-export async function getDisabledEngagementIdsForSkill(skillId: string): Promise<Set<string>> {
+export async function getDisabledEngagementIdsForSkill(skillId: string, amongEngagementIds?: string[]): Promise<Set<string>> {
+  // Scheduled fan-outs ask one page of clients at a time; reading only
+  // that page keeps each page's read small instead of the whole table.
+  if (amongEngagementIds && amongEngagementIds.length === 0) return new Set();
   const rows = await db
     .select({ engagementId: engagementSkills.engagementId })
     .from(engagementSkills)
-    .where(and(eq(engagementSkills.skillId, skillId), eq(engagementSkills.enabled, false)));
+    .where(
+      and(
+        eq(engagementSkills.skillId, skillId),
+        eq(engagementSkills.enabled, false),
+        amongEngagementIds ? inArray(engagementSkills.engagementId, amongEngagementIds) : undefined
+      )
+    );
 
   return new Set(rows.map((r) => r.engagementId));
 }

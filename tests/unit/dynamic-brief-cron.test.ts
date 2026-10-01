@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 const rows = [
   { engagementId: "ready", deletedAt: null, pausedAt: null, stack: { brief_trigger_type: "dynamic_webhook", booking_platform: "calendly", booking_platform_credentials_ref: "secrets://ready/calendly_key" } },
   { engagementId: "incomplete", deletedAt: null, pausedAt: null, stack: { brief_trigger_type: "dynamic_webhook", booking_platform: "calendly", booking_platform_credentials_ref: "secrets://incomplete/calendly_key" } },
+  { engagementId: "waiting", deletedAt: null, pausedAt: null, stack: { brief_trigger_type: "dynamic_webhook", booking_platform: "calendly", booking_platform_credentials_ref: "secrets://waiting/calendly_key" } },
   { engagementId: "nightly", deletedAt: null, pausedAt: null, stack: { brief_trigger_type: "nightly", booking_platform: "calendly", booking_platform_credentials_ref: "x" } },
 ];
 // One page of clients, then an empty page.
@@ -15,13 +16,13 @@ vi.mock("@/lib/worker-config-completeness", () => ({
   getMissingRequiredFields: async (_skill: string, id: string) => (id === "incomplete" ? [{ label: "Brief destination", reason: "not set" }] : []),
 }));
 const startRun = vi.fn(async () => undefined);
-vi.mock("@/lib/run-log", () => ({ startRuns: (...a: unknown[]) => startRun(...(a as [])), startRun: vi.fn(), closeStaleRun: vi.fn(), notifyRunOutcome: vi.fn(), failRun: vi.fn(), findStaleRunIds: vi.fn(), markRunExecuting: vi.fn(), logStep: vi.fn(), finishRun: vi.fn(), QUEUED_RUN_CEILING_MINUTES: 1440 }));
+vi.mock("@/lib/run-log", () => ({ startRuns: (...a: unknown[]) => startRun(...(a as [])), startRun: vi.fn(), closeStaleRun: vi.fn(), notifyRunOutcome: vi.fn(), failRun: vi.fn(), findStaleRunIds: vi.fn(), engagementsWithQueuedRun: async (_skill: string, ids: string[]) => new Set(ids.filter((id) => id === "waiting")), markRunExecuting: vi.fn(), logStep: vi.fn(), finishRun: vi.fn(), QUEUED_RUN_CEILING_MINUTES: 1440 }));
 
 import { dynamicBriefCron } from "@/inngest/crons";
 import { fakeStep, runInngestHandler } from "../helpers/inngest-fn";
 
 describe("dynamic-brief cron", () => {
-  it("sends dynamic clients through the shared pre-call-read dispatcher, skipping incomplete setups", async () => {
+  it("sends dynamic clients through the shared pre-call-read dispatcher, skipping incomplete setups and clients whose last brief run is still queued", async () => {
     const step = fakeStep();
     const result = await runInngestHandler(dynamicBriefCron, { step });
 

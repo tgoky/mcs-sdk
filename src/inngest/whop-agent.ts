@@ -176,7 +176,7 @@ export const whopWeeklyOpsReportCron = inngest.createFunction(
       spreadMinutes: 45,
       loadPage: listConnectedEngagementPage,
       select: async (rows) => {
-        const disabled = await getDisabledEngagementIdsForSkill("whop-weekly-ops-report");
+        const disabled = await getDisabledEngagementIdsForSkill("whop-weekly-ops-report", rows.map((r) => r.engagementId));
         return rows.filter((r) => !disabled.has(r.engagementId));
       },
     });
@@ -188,7 +188,7 @@ export const whopWeeklyOpsReportCron = inngest.createFunction(
       spreadMinutes: 45,
       loadPage: listConnectedEngagementPage,
       select: async (rows) => {
-        const disabled = await getDisabledEngagementIdsForSkill("whop-attribution-report");
+        const disabled = await getDisabledEngagementIdsForSkill("whop-attribution-report", rows.map((r) => r.engagementId));
         return rows.filter((r) => !disabled.has(r.engagementId));
       },
     });
@@ -235,7 +235,7 @@ export const whopPortfolioRollupCron = inngest.createFunction(
       spreadMinutes: 45,
       loadPage: listConnectedEngagementPage,
       select: async (rows) => {
-        const disabled = await getDisabledEngagementIdsForSkill("whop-portfolio-rollup");
+        const disabled = await getDisabledEngagementIdsForSkill("whop-portfolio-rollup", rows.map((r) => r.engagementId));
         return rows.filter((r) => !disabled.has(r.engagementId));
       },
     });
