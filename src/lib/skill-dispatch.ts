@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { startRun, logStep, failRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 
 /**
  * Seeds a run row and dispatches a bridge's execute via Inngest — the
@@ -47,7 +47,7 @@ export async function dispatchSkillRun(
       await logStep(runId, { phase: step.phase, status: "success", detail: step.detail });
     }
 
-    await inngest.send(skillRunExecute.create({ runId, engagementId, skillName }));
+    await inngest.send(skillRunEvent({ runId, engagementId, skillName, interactive: true }));
     return runId;
   } catch (err) {
     await failRun(runId, err).catch(() => {});

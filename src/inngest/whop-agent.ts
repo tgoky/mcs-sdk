@@ -4,7 +4,7 @@
 // comment on whopWebhookProcess in src/lib/inngest.ts for why this is
 // split from the route's synchronous ack path.
 import crypto from "crypto";
-import { inngest, whopWebhookProcess, whopReceiverHealthSweepSingle, whopVelocityReconciliationSingle, whopBridgeDeliver, whopAdsDraftProcess, whopBulkPromoCodesProcess, skillRunExecute } from "@/lib/inngest";
+import { inngest, whopWebhookProcess, whopReceiverHealthSweepSingle, whopVelocityReconciliationSingle, whopBridgeDeliver, whopAdsDraftProcess, whopBulkPromoCodesProcess, skillRunEvent } from "@/lib/inngest";
 import { markWebhookDeliveryReceived } from "@/features/whop-agent/server/webhook-subscription-service";
 import { recordWhopChangeLedgerEntry, isUpdatedShapedEvent } from "@/features/whop-agent/server/webhook-envelope-service";
 import { sweepReceiverHealth, listConnectedEngagementIds } from "@/features/whop-agent/server/receiver-health-service";
@@ -199,8 +199,8 @@ export const whopWeeklyOpsReportCron = inngest.createFunction(
     );
 
     const events = [
-      ...opsReportRuns.map(({ runId, engagementId }) => skillRunExecute.create({ runId, engagementId, skillName: "whop-weekly-ops-report" })),
-      ...attributionRuns.map(({ runId, engagementId }) => skillRunExecute.create({ runId, engagementId, skillName: "whop-attribution-report" })),
+      ...opsReportRuns.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-weekly-ops-report" })),
+      ...attributionRuns.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-attribution-report" })),
     ];
     if (events.length > 0) {
       await step.sendEvent("dispatch-weekly-ops-and-attribution-reports", events);
@@ -253,7 +253,7 @@ export const whopPortfolioRollupCron = inngest.createFunction(
     if (runIds.length > 0) {
       await step.sendEvent(
         "dispatch-portfolio-rollups",
-        runIds.map(({ runId, engagementId }) => skillRunExecute.create({ runId, engagementId, skillName: "whop-portfolio-rollup" }))
+        runIds.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup" }))
       );
     }
     return { dispatched: runIds.length };

@@ -4,7 +4,7 @@ import { engagements } from "@/models/schema";
 import { and, eq, isNotNull, isNull } from "drizzle-orm"; // <--- Added isNull
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { startRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 import crypto from "crypto";
 
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       });
 
       await inngest.send(
-        skillRunExecute.create({
+        skillRunEvent({
           runId,
           engagementId: tenant.engagementId,
           skillName: "leak-map",

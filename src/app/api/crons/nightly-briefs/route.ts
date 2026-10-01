@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { startRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       });
 
       await inngest.send(
-        skillRunExecute.create({
+        skillRunEvent({
           runId,
           engagementId: tenant.engagementId,
           skillName: "pre-call-read",

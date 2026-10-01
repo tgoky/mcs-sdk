@@ -167,9 +167,9 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
 }
 
 export async function dispatchPortfolioRollupRun(engagementId: string): Promise<string> {
-  const { inngest, skillRunExecute } = await import("@/lib/inngest");
+  const { inngest, skillRunEvent } = await import("@/lib/inngest");
   const runId = crypto.randomUUID();
   await startRun({ id: runId, engagementId, skillName: "whop-portfolio-rollup", phase: "fan_out", label: "Portfolio Rollup Report" });
-  await inngest.send(skillRunExecute.create({ runId, engagementId, skillName: "whop-portfolio-rollup" }));
+  await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup" }));
   return runId;
 }

@@ -111,9 +111,9 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
  * src/inngest/whop-agent.ts once the cron cadence/staggering (Section
  * 9.8) is wired for the whole Whop Agent product together, not per-skill. */
 export async function dispatchWeeklyOpsReportRun(engagementId: string): Promise<string> {
-  const { inngest, skillRunExecute } = await import("@/lib/inngest");
+  const { inngest, skillRunEvent } = await import("@/lib/inngest");
   const runId = crypto.randomUUID();
   await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report" });
-  await inngest.send(skillRunExecute.create({ runId, engagementId, skillName: "whop-weekly-ops-report" }));
+  await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-weekly-ops-report" }));
   return runId;
 }

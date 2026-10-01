@@ -8,7 +8,7 @@
 // so a disabled engagement never gets a visible run created for it.
 
 import crypto from "crypto";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, coldOpenConfig } from "@/models/schema";
 import { eq, isNull } from "drizzle-orm";
@@ -51,7 +51,7 @@ export const coldOpenDailySendCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-cold-open-daily-send",
-        prepared.map(({ runId, engagementId }) => skillRunExecute.create({ runId, engagementId, skillName: "daily-send" }))
+        prepared.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "daily-send" }))
       );
     }
 
@@ -93,7 +93,7 @@ export const coldOpenReplySortCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-cold-open-reply-sort",
-        prepared.map(({ runId, engagementId }) => skillRunExecute.create({ runId, engagementId, skillName: "reply-sort" }))
+        prepared.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "reply-sort" }))
       );
     }
 

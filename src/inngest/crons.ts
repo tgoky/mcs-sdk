@@ -26,7 +26,7 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
+import { inngest, skillRunEvent, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
 import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChanged } from "@/features/reports/server/account-advisor";
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
@@ -125,7 +125,7 @@ export const nightlyBriefsCron = inngest.createFunction(
       await step.sendEvent(
         "dispatch-nightly-briefs",
         prepared.map((r) =>
-          skillRunExecute.create({
+          skillRunEvent({
             runId: r.runId,
             engagementId: r.engagementId,
             skillName: "pre-call-read",
@@ -205,7 +205,7 @@ export const leakMapScheduleCron = inngest.createFunction(
       await step.sendEvent(
         "dispatch-scheduled-audits",
         prepared.map((r) =>
-          skillRunExecute.create({
+          skillRunEvent({
             runId: r.runId,
             engagementId: r.engagementId,
             skillName: "leak-map",
@@ -684,7 +684,7 @@ export const dynamicBriefCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-dynamic-briefs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "pre-call-read", briefTrigger: "dynamic_webhook" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "pre-call-read", briefTrigger: "dynamic_webhook" }))
       );
     }
 

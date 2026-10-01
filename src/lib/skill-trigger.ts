@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { startRun, failRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { SKILL_REGISTRY } from "@/lib/skill-registry";
 import { isRepSkillId } from "@/lib/rep-skill-manifest";
@@ -65,11 +65,12 @@ export async function triggerSkillRunForEngagement(
 
     try {
       await inngest.send(
-        skillRunExecute.create({
+        skillRunEvent({
           runId,
           engagementId,
           skillName,
           manualOverride: true,
+          interactive: true,
           ...(skillName === "leak-map" && { auditType: "weekly" as const }),
         })
       );

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
 import { startRun } from "@/lib/run-log";
@@ -89,7 +89,7 @@ export const repEnginePanelCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-engine-panel-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-engine-panel" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-engine-panel" }))
       );
     }
 
@@ -135,7 +135,7 @@ function dailyRepWatchCron(skillName: string, phase: string, localHour: number) 
       if (prepared.length > 0) {
         await step.sendEvent(
           `dispatch-${skillName}-runs`,
-          prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName }))
+          prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName }))
         );
       }
       return { dispatched: prepared.length };
@@ -194,7 +194,7 @@ export const repTrustpilotWatchCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-trustpilot-watch-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-trustpilot-watch" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-trustpilot-watch" }))
       );
     }
 
@@ -247,7 +247,7 @@ export const repRedditWatchCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-reddit-watch-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-reddit-watch" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-reddit-watch" }))
       );
     }
 
@@ -300,7 +300,7 @@ export const repTwitterWatchCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-twitter-watch-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-twitter-watch" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-twitter-watch" }))
       );
     }
 
@@ -362,7 +362,7 @@ export const repCrisisResponseCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-crisis-response-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-crisis-response" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-crisis-response" }))
       );
     }
 
@@ -421,7 +421,7 @@ export const repDigestCron = inngest.createFunction(
     if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-rep-digest-runs",
-        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-digest" }))
+        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-digest" }))
       );
     }
 

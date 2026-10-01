@@ -27,6 +27,10 @@ export type SkillRunExecuteData = {
   // pre-call-read only: which roster window to brief. The dynamic-brief
   // cron sends "dynamic_webhook"; everything else leaves it unset (nightly).
   briefTrigger?: "nightly" | "dynamic_webhook";
+  // Set by skillRunEvent() below on every run: which lock lane the run
+  // takes (see SKILL_RUN_LANES) and whether a person is waiting on it.
+  lane?: string;
+  interactive?: boolean;
   manualOverride?: boolean;
   // Added for Teammates chat's pin-down-voice sub-skill (chat-skill-
   // registry.ts) — a public website URL, not secret state, so this is
@@ -81,6 +85,36 @@ export type SkillRunExecuteData = {
 export const skillRunExecute = eventType("skill/run.execute", {
   schema: staticSchema<SkillRunExecuteData>(),
 });
+
+/**
+ * Skills that share one lock lane with another skill because they write
+ * the same fields. Pin-Down's onboarding and its five chat sub-skills all
+ * write the voice profile, script pack, ad briefs, page audit or the
+ * confirmation page, so only one of them runs per client at a time. Every
+ * other skill is its own lane.
+ */
+const SKILL_RUN_LANES: Record<string, string> = {
+  "pin-down": "pin-down",
+  "pin-down-voice": "pin-down",
+  "pin-down-scripts": "pin-down",
+  "pin-down-ad-briefs": "pin-down",
+  "pin-down-page-audit": "pin-down",
+  "pin-down-confirmation-page": "pin-down",
+};
+
+export function skillRunLane(skillName: string): string {
+  return SKILL_RUN_LANES[skillName] ?? skillName;
+}
+
+/**
+ * The skill/run.execute event for a run. Use this rather than
+ * skillRunExecute.create: it stamps the lock lane and whether a person is
+ * waiting (interactive runs are taken ahead of scheduled ones), which the
+ * dispatcher's concurrency and priority read (src/inngest/skill.ts).
+ */
+export function skillRunEvent(data: Omit<SkillRunExecuteData, "lane">) {
+  return skillRunExecute.create({ ...data, lane: skillRunLane(data.skillName), interactive: data.interactive ?? false });
+}
 
 // Sent from the "Cancel run" button on the run-detail page. Only carries the
 // runId — cancelOn matching only needs this one field, and there's no reason

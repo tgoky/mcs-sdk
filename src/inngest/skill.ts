@@ -54,6 +54,9 @@ function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDe
  * Unified Background Skill Execution Worker
  * Decoupled from incoming client request thresholds to prevent gateway timeouts.
  */
+/** Concurrent skill runs per client; see the concurrency notes below. */
+export const SKILL_RUNS_PER_CLIENT = Math.max(1, Number(process.env.SKILL_RUNS_PER_CLIENT) || 3);
+
 export const executeSkillRun = inngest.createFunction(
   {
     id: "execute-skill-run",
@@ -63,10 +66,24 @@ export const executeSkillRun = inngest.createFunction(
     // A run that waited this long in the queue is abandoned; the stale-run
     // reaper closes its row on the same ceiling (src/lib/run-log.ts).
     timeouts: { start: `${QUEUED_RUN_CEILING_MINUTES}m` },
-    concurrency: {
-      key: "event.data.engagementId",
-      limit: 1,
-    },
+    // Correctness doesn't rest on this: the skills that act on the outside
+    // world claim their work in the database first (Daily Send per lead,
+    // Pre-Call Read per call, Crisis Response per client window), and an
+    // Inngest concurrency limit counts executing steps, so runs can still
+    // interleave between steps. This keeps load fair and predictable:
+    //   1. One run per client per lane: a skill never overlaps itself, and
+    //      Pin-Down's six skills (same fields) share one lane.
+    //   2. At most SKILL_RUNS_PER_CLIENT runs per client at once, so one
+    //      client's backlog can't take every slot.
+    // It used to be one run per client in total, so a slow Cold Open run
+    // held up that client's chat answers.
+    concurrency: [
+      { key: 'event.data.engagementId + ":" + event.data.lane', limit: 1 },
+      { key: "event.data.engagementId", limit: SKILL_RUNS_PER_CLIENT },
+    ],
+    // A person waiting on a run (chat, Run now, a setup save) goes ahead
+    // of scheduled work queued in the last 10 minutes.
+    priority: { run: "event.data.interactive == true ? 600 : 0" },
   },
   async ({ event, step }) => {
     const {

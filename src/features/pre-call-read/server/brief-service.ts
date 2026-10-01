@@ -646,14 +646,21 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
  * Fan-out worker: processes exactly ONE prospect. Invoked via
  * step.invoke() from executeNightlyBriefingCycle.
  *
- * concurrency here is function-scoped (not keyed to engagementId) and
- * deliberately caps the WHOLE app's concurrent brief pipelines at once.
+ * concurrency: per client, plus an app-wide cap on concurrent brief
+ * pipelines (see the option below).
  */
 export const processSingleProspectBrief = inngest.createFunction(
   {
     id: "process-single-prospect-brief",
     triggers: [prospectBriefDispatch],
-    concurrency: { limit: 5 },
+    // Was { limit: 5 } for the whole app, so at 8pm every client's briefs
+    // queued behind five slots. Now each client gets up to 3 at once, under
+    // an app-wide cap (PREBRIEF_MAX_CONCURRENCY) that protects the AI and
+    // research providers' rate limits.
+    concurrency: [
+      { key: "event.data.engagementId", limit: 3 },
+      { limit: Math.max(1, Number(process.env.PREBRIEF_MAX_CONCURRENCY) || 10) },
+    ],
   },
   async ({ event, step }) => {
     const { runId, engagementId, call: callData } = event.data;

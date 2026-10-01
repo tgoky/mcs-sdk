@@ -22,7 +22,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { startRun, failRun } from "@/lib/run-log";
-import { inngest, skillRunExecute } from "@/lib/inngest";
+import { inngest, skillRunEvent } from "@/lib/inngest";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { isChatSkillId, type ChatSkillId } from "@/lib/chat-skill-manifest";
 import type { ChatSkillContext } from "@/lib/chat-skill-registry";
@@ -59,7 +59,7 @@ export async function triggerChatSkillForEngagement(
   await startRun({ id: runId, engagementId, skillName: skillId, phase: initialPhase, label: initialLabel });
 
   try {
-    await inngest.send(skillRunExecute.create({ runId, engagementId, skillName: skillId, manualOverride: true, ...ctx }));
+    await inngest.send(skillRunEvent({ runId, engagementId, skillName: skillId, manualOverride: true, interactive: true, ...ctx }));
   } catch (dispatchErr: unknown) {
     await failRun(runId, dispatchErr);
     return { ok: false, error: "Failed to dispatch to background queue." };
