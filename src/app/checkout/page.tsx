@@ -31,6 +31,16 @@ export default async function CheckoutPage() {
             : "Complete checkout below. This creates your account too."}
         </p>
 
+        {!session.whopUserId && (
+          <p className="text-sm text-zinc-400 -mt-4 mb-8">
+            Already have an account?{" "}
+            {/* A plain link: /api/auth/login is a route handler, not a page. */}
+            <a href="/api/auth/login" className="text-white underline underline-offset-2 hover:text-zinc-200">
+              Sign in
+            </a>
+          </p>
+        )}
+
         {sessionId ? (
           <WhopCheckoutWidget sessionId={sessionId} prefillEmail={session.email} />
         ) : (

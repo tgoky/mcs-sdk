@@ -15,19 +15,29 @@ export function EnterDashboardBtn({
   const router = useRouter();
   const clickedRef = useRef(false);
 
+  // An /api/ href (the sign-in redirect) is a route handler, not a page:
+  // prefetching it would just fire the rate-limited login route on every
+  // landing view, and it needs a normal page load to navigate.
+  const isApiRoute = href.startsWith("/api/");
+
   useEffect(() => {
-    router.prefetch(href);
-  }, [href, router]);
+    if (!isApiRoute) router.prefetch(href);
+  }, [href, isApiRoute, router]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (clickedRef.current) return;
     clickedRef.current = true;
+    // If the page hasn't been left after a few seconds, let the button work again.
+    setTimeout(() => {
+      clickedRef.current = false;
+    }, 4000);
 
     if (onNavigateStart) onNavigateStart();
 
     setTimeout(() => {
-      router.push(href);
+      if (isApiRoute) window.location.assign(href);
+      else router.push(href);
     }, 380);
   };
 
