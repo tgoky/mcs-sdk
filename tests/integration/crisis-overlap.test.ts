@@ -82,8 +82,19 @@ d("Crisis Response: overlapping runs", () => {
     await markCheckedThrough(engagementId, later, newer);
 
     expect(await renewCrisisClaim(engagementId, slow)).toBe(false);
+    // The slow run's older end time doesn't move the window back...
     await markCheckedThrough(engagementId, new Date(Date.now() - 10 * 60_000), slow);
-    const [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
+    let [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
     expect(row.at?.getTime()).toBe(later.getTime());
+
+    // ...a later end time from it still counts, and it never clears a
+    // claim that isn't its own.
+    const third = crypto.randomUUID();
+    expect(await claimCrisisWindow(engagementId, third)).toBe(true);
+    const latest = new Date(Date.now() + 5000);
+    await markCheckedThrough(engagementId, latest, slow);
+    [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
+    expect(row.at?.getTime()).toBe(latest.getTime());
+    expect(await renewCrisisClaim(engagementId, third)).toBe(true);
   });
 });

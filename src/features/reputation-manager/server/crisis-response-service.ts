@@ -95,19 +95,20 @@ async function crisisCheckedThroughFor(engagementId: string): Promise<string | n
   return row?.at ? new Date(row.at).toISOString() : null;
 }
 
-/** Moves the window forward and releases this run's claim. Only while
- * this run still holds the claim, and never backwards: a run that went
- * slow and lost its claim to a newer run mustn't undo that run's window. */
+/** Moves the window forward and releases this run's claim. The window
+ * only ever moves forward, so a slow run that lost its claim can't undo a
+ * newer run's progress; the claim is cleared only if this run holds it. */
 export async function markCheckedThrough(engagementId: string, upTo: Date, runId: string): Promise<void> {
   const upToParam = sql.param(upTo, repIdentityGraphs.crisisCheckedThrough);
+  const ours = sql`${repIdentityGraphs.crisisClaimRunId} = ${runId}`;
   await db
     .update(repIdentityGraphs)
     .set({
       crisisCheckedThrough: sql`greatest(coalesce(${repIdentityGraphs.crisisCheckedThrough}, ${upToParam}), ${upToParam})`,
-      crisisClaimRunId: null,
-      crisisClaimedAt: null,
+      crisisClaimRunId: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimRunId} end`,
+      crisisClaimedAt: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimedAt} end`,
     })
-    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)));
+    .where(eq(repIdentityGraphs.engagementId, engagementId));
 }
 
 /** Confirms this run still holds the claim and restarts its clock, right
@@ -400,6 +401,15 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     const upToRaw = await (step ? step.run("window-end", () => databaseNow()) : databaseNow());
     const upTo = new Date(upToRaw);
     const advanceWindow = () => (step ? step.run("advance-window", () => markCheckedThrough(engagementId, upTo, runId)) : markCheckedThrough(engagementId, upTo, runId));
+    // Before anything goes to the operator: a run that went quiet past the
+    // stale limit may have lost the client to a newer run assessing the
+    // same findings, and both would alert.
+    const confirmClaim = () => (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId)) : renewCrisisClaim(engagementId, runId));
+    const standDown = async () => {
+      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "A newer Crisis Response run took over this client's assessment." });
+      summary.openItems.push("Skipped: a newer run took over this client's assessment.");
+      await finishRun(runId, { summary, status: "skipped" });
+    };
 
     const findings = await (step
       ? step.run("load-flagged-findings", () => loadFlaggedFindingsSince(engagementId, since, upTo))
@@ -456,8 +466,12 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       // in-app/Slack/email so the operator sees it today instead of tomorrow.
       // Below this floor, nothing fires here — digest.ts's next run is where
       // it surfaces, exactly as the spec intends.
+      if (!(await confirmClaim())) {
+        await standDown();
+        return;
+      }
       if (severityScore >= REP_THRESHOLD_DEFAULTS.realTimeAlertFloor) {
-        await notifyUser({
+        const warn = () => notifyUser({
           whopUserId: tenant.whopUserId,
           engagementId,
           runId,
@@ -469,6 +483,8 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
             "but above the real-time-alert floor, so this isn't waiting for the next digest.",
           slackWebhookUrl: (tenant.stack as { slack_webhook_url?: string } | null)?.slack_webhook_url,
         });
+        // A step, so a retry of a later step doesn't send the warning again.
+        await (step ? step.run("elevated-activity-warning", warn) : warn());
       }
 
       await logStep(runId, {
@@ -496,9 +512,6 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
         ? `Force-triggered by anomaly detection: ${anomalies.map((a) => a.anomalyClass).join(", ")} (declares regardless of score).`
         : `Severity ${severityScore}/100 crossed this engagement's threshold of ${floor}.`;
 
-    // One step: insert the incident and notify — see declareIncident's
-    // own comment for why both needed to move behind a single step.run
-    // rather than running directly here.
     const declareParams = {
       tenant,
       engagementId,
@@ -512,19 +525,20 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       soleAuthorityName: graph.soleAuthorityName,
       operatorPagePhone: graph.operatorPagePhone,
     };
+    if (!(await confirmClaim())) {
+      await standDown();
+      return;
+    }
     // One step: insert the incident and notify — see declareIncident's
     // own comment for why both needed to move behind a single step.run
     // rather than running directly here.
-    const stillOurs = await (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId)) : renewCrisisClaim(engagementId, runId));
-    if (!stillOurs) {
-      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "A newer Crisis Response run took over this client's assessment." });
-      summary.openItems.push("Skipped: a newer run took over before an incident was declared.");
-      await finishRun(runId, { summary, status: "skipped" });
-      return;
-    }
     const { incidentId } = await (step
       ? step.run("declare-incident", () => declareIncident(declareParams))
       : declareIncident(declareParams));
+    // The incident now covers these findings: move the window at once, so a
+    // run that takes over while this one is still routing them (slow
+    // drafting) doesn't find them again and declare a second incident.
+    await advanceWindow();
 
     // Cold email shouldn't keep going out under the client's name mid-crisis:
     // propose pausing Cold Open (approval first). Nothing when it isn't sending.
@@ -599,7 +613,6 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       `Incident ${incidentId} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
     );
 
-    await advanceWindow();
     await finishRun(runId, { summary });
   } catch (err) {
     await releaseCrisisWindow(engagementId, runId).catch(() => {});
