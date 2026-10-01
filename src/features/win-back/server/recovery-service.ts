@@ -11,6 +11,7 @@ import {
 } from "./cadence-builder";
 import type { GetStepTools, Inngest } from "inngest";
 import { webhookUrl } from "@/lib/webhook-url-token";
+import { getAppUrl } from "@/lib/app-url";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -47,7 +48,7 @@ export async function generateRecoveryCadence(
 
     await logStep(runId, { phase: "cadence_generation", status: "running" });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+    const appUrl = getAppUrl();
     const useFreshLinkMerge = stack.reschedule_mode === "fresh_link" && RESCHEDULE_LINK_MERGE[emailPlatform];
     const rescheduleUrlMergeField = useFreshLinkMerge
       ? RESCHEDULE_LINK_MERGE[emailPlatform]

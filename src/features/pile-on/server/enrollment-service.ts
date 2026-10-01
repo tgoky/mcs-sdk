@@ -17,6 +17,7 @@ import { gateOrExecute } from "@/lib/approval-gate";
 import { deriveProspectName } from "@/lib/prospect-identity";
 import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 import type { GetStepTools, Inngest } from "inngest";
+import { getAppUrl } from "@/lib/app-url";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -544,7 +545,7 @@ export async function handleInboundBookingEvent(
       // makes the fallback-to-time_slots-per-prospect promise in
       // reschedule.ts's module comment actually true: the prospect never
       // sees a broken/empty merge field either way.
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+      const appUrl = getAppUrl();
       const linkToDeliver = freshRescheduleLink ?? `${appUrl}/reschedule/${tenant.engagementId}`;
       try {
         await run("reschedule-link-delivery", () =>

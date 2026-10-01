@@ -1,5 +1,6 @@
 // src/lib/booking-sync-status.ts
 import type { EngagementStack } from "@/models/schema";
+import { getAppUrlOrNull } from "@/lib/app-url";
 
 export const PLATFORMS_REQUIRING_MANUAL_SETUP = new Set(["ghl_calendar", "oncehub"]);
 
@@ -33,8 +34,11 @@ function minutesAgo(iso: string | null | undefined): number | null {
   return (Date.now() - new Date(iso).getTime()) / 60_000;
 }
 
+// Shown to the user while settings pages render, never registered with a
+// platform here, so a missing app address can't be allowed to throw: it
+// falls back to a path on whatever address the page is served from.
 export function buildWebhookReceiverUrl(engagementId: string, appUrl?: string): string {
-  const base = appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+  const base = appUrl ?? getAppUrlOrNull() ?? "";
   return `${base}/api/webhooks/booking-event?engagement_id=${engagementId}`;
 }
 

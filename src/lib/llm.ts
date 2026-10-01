@@ -2,6 +2,14 @@ import { NO_DASHES_RULE, undash, undashDeep } from "@/lib/plain-punctuation";
 import { db } from "@/lib/db";
 import { skillRuns } from "@/models/schema";
 import { eq, sql } from "drizzle-orm";
+import { getAppUrlOrNull } from "@/lib/app-url";
+
+// OpenRouter only uses this to label traffic, so a missing app address
+// drops the header instead of failing the AI call.
+function refererHeader(): Record<string, string> {
+  const url = getAppUrlOrNull();
+  return url ? { "HTTP-Referer": url } : {};
+}
 
 // Provider config
 const USE_OPENROUTER = process.env.USE_OPENROUTER === "true";
@@ -157,7 +165,7 @@ async function fetchOpenRouterCompletion(
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app",
+      ...refererHeader(),
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },
@@ -408,7 +416,7 @@ async function callViaOpenRouterWithTools(opts: ClaudeToolCallOptions): Promise<
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app",
+      ...refererHeader(),
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },
@@ -596,7 +604,7 @@ async function callViaOpenRouterWithSearch(opts: ClaudeSearchCallOptions): Promi
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app",
+      ...refererHeader(),
       "X-Title": "Mudd Ventures Unified Interface",
       "Content-Type": "application/json",
     },

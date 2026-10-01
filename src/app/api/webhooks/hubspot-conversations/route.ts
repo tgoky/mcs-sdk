@@ -4,6 +4,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { eq, sql } from "drizzle-orm";
 import { inngest, inboundReplyReceived } from "@/lib/inngest";
 import crypto from "crypto";
+import { getAppUrl } from "@/lib/app-url";
 
 /**
  * HubSpot's v3 signature docs (developers.hubspot.com/docs/api/webhooks/
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
     // will fail closed and this route will 401 every real HubSpot
     // delivery while looking like it's "securely verifying." If inbound
     // replies stop working after a domain change, check this first.
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+    const appUrl = getAppUrl();
 
     let pathname: string;
     let search: string;

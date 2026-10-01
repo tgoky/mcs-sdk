@@ -36,6 +36,7 @@ import { notifyUser } from "@/lib/notify";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { REP_THRESHOLD_DEFAULTS } from "@/features/reputation-manager/rep-thresholds";
 import { OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
+import { getAppUrl } from "@/lib/app-url";
 
 export type PendingActionType =
   | "webhook_enrollment"
@@ -383,7 +384,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       return;
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+    const appUrl = getAppUrl();
     await db
       .update(engagements)
       .set({

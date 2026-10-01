@@ -115,7 +115,7 @@ export async function PATCH(
       ok: true,
       mode: nextStack.webhook_receiver_mode ?? null,
       pollIntervalMinutes: nextStack.webhook_poll_interval_minutes ?? null,
-      webhookUrl: buildWebhookReceiverUrl(id),
+      webhookUrl: buildWebhookReceiverUrl(id, process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") || new URL(req.url).origin),
       // Only ever returned right after it's (re)generated or on request —
       // this is a shared secret the buyer needs to configure their
       // platform's workflow with, not a one-time-reveal token, so it's

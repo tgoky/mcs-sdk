@@ -22,6 +22,7 @@ import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
 import crypto from "crypto";
 import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
+import { getAppUrl } from "@/lib/app-url";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -668,7 +669,7 @@ export async function runPinDownOnboarding(
     }
 
     // ── Confirmation page deploy ────────────────────────────────────────────
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+    const appUrl = getAppUrl();
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
     const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions, remoteResourceId } = await run(

@@ -52,6 +52,7 @@ import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-reso
 import { hasPostCallCrmActivity, describeCrmCheck } from "@/features/pre-call-read/server/crm-activity-check";
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
 import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
+import { getAppUrl } from "@/lib/app-url";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -1183,7 +1184,7 @@ export const pendingActionDigestCron = inngest.createFunction(
           });
           const overflow = rows.length - listed.length;
 
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+          const appUrl = getAppUrl();
           const text =
             `*${rows.length} call${rows.length === 1 ? "" : "s"} need${rows.length === 1 ? "s" : ""} a no-show review*\n` +
             lines.join("\n") +

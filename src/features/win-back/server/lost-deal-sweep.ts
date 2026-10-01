@@ -10,6 +10,7 @@ import { isEngagementPaused } from "@/lib/engagement-status";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 import { inngest, winBackSequenceStop } from "@/lib/inngest";
 import type { GetStepTools, Inngest } from "inngest";
+import { getAppUrl } from "@/lib/app-url";
 
 // Verified-defect fix (2026-08-08 handoff, defect #2). Was driven by a
 // literal "TZ=UTC 0 14 * * *" cron expression on lostDealSweepCron; that
@@ -170,7 +171,7 @@ export async function processLostDealsForEngagement(
   let nurtureEmails = (tenant.longTermNurtureAssetMap as any)?.emails;
   if (!nurtureEmails) {
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+      const appUrl = getAppUrl();
       const rescheduleUrl = `${appUrl}/reschedule/${engagementId}`;
       const emailPlatform = stack.email_platform ?? "klaviyo";
 

@@ -14,6 +14,7 @@ import { inngest, whopWebhookProcess } from "@/lib/inngest";
 import { duplicateGroupKey } from "./webhook-audit-service";
 import { mergeWebhookEvents } from "./webhook-events";
 import { isUniqueConstraintViolation } from "@/lib/db-errors";
+import { getAppUrl } from "@/lib/app-url";
 
 interface CreatedWebhookResponse {
   id: string;
@@ -26,7 +27,7 @@ interface CreatedWebhookResponse {
 }
 
 export function webhookReceiverUrl(engagementId: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+  const appUrl = getAppUrl();
   return `${appUrl}/api/webhooks/whop-agent/${engagementId}`;
 }
 

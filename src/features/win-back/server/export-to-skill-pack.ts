@@ -36,6 +36,7 @@
 import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
+import { getAppUrl } from "@/lib/app-url";
 
 export interface ExportedStep {
   stepNumber: number;
@@ -120,7 +121,7 @@ export async function exportWinBackToSkillPack(engagementId: string): Promise<Sk
     exitCondition: EXIT_CONDITION_NOTE,
   }));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://mcs-abra.vercel.app";
+  const appUrl = getAppUrl();
   const rescheduleMechanismNote =
     stack?.reschedule_mode === "fresh_link"
       ? "This cadence used per-prospect single-use reschedule links generated at enrollment time (Win-Back recovery gap 3, fresh_link mode). Recreating this natively requires either a merge field wired to your booking platform's per-invitee reschedule token, or a landing page you build that looks up each prospect's next available slots."
