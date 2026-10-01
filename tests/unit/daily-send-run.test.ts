@@ -49,6 +49,9 @@ function setup(rows: ReturnType<typeof lead>[], dead: string[], opts: { volume?:
   const pushLead = vi.fn().mockResolvedValue({ status: "pushed", detail: {} });
   vi.mocked(createEspAdapter).mockReturnValue({ pushLead } as any);
   const fake = fakeDb([]); // no leads handled before
+  // Each lead's claim wins (one run, nothing competing; overlapping runs
+  // are covered against a real database in tests/integration/daily-send-overlap.test.ts).
+  fake.returning = vi.fn(() => Promise.resolve([{ id: "lead-row" }]));
   Object.assign(db, fake);
   return { pushLead, fake };
 }
@@ -62,14 +65,15 @@ describe("runDailySend", () => {
     expect(pushLead.mock.calls.map((c) => c[0].email)).toEqual(["p3@co3.com", "p4@co4.com"]);
   });
 
-  it("records outcomes with an update for retryable rows, never a silent no-op", async () => {
-    const { fake } = setup([lead(1)], [], { volume: 1 });
+  it("claims a lead (taking over only retryable rows) before pushing, then records the outcome on that row", async () => {
+    const { fake, pushLead } = setup([lead(1)], [], { volume: 1 });
     await runDailySend({ engagementId: "e1" }, "run-1", undefined);
-    expect(fake.onConflictDoUpdate).toHaveBeenCalled();
     expect(fake.onConflictDoNothing).not.toHaveBeenCalled();
     const conflict = fake.onConflictDoUpdate.mock.calls[0][0];
-    expect(conflict.set.status).toBe("pushed");
+    expect(conflict.set.status).toBe("claiming");
     expect(conflict.setWhere).toBeDefined();
+    expect(fake.onConflictDoUpdate.mock.invocationCallOrder[0]).toBeLessThan(pushLead.mock.invocationCallOrder[0]);
+    expect(fake.set.mock.calls.some(([v]: [{ status?: string }]) => v.status === "pushed")).toBe(true);
   });
 
   it("pushes a person once even if they appear twice in the run", async () => {

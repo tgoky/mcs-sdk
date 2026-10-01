@@ -236,6 +236,60 @@ async function recordLead(
     });
 }
 
+/**
+ * Claims a lead for this run before it's pushed, in one statement: a new
+ * row is inserted as "claiming", or an existing row in a retryable status
+ * is moved to "claiming". Returns the row id when this run won the claim,
+ * null when another run (or the held-lead review) already has the lead or
+ * it's final. Selection alone can't stop two overlapping runs picking the
+ * same lead; this makes the push itself happen at most once.
+ *
+ * A claim whose run dies before recording the outcome stays "claiming"
+ * and is never retried automatically: whether the push reached the
+ * sending tool is unknown, and retrying could email the person twice.
+ */
+export async function claimLeadForPush(engagementId: string, runId: string, lead: LeadRow, campaignId: string): Promise<string | null> {
+  const claimedAt = new Date().toISOString();
+  const [row] = await db
+    .insert(coldOpenLeads)
+    .values({
+      engagementId, runId, email: lead.email, domain: lead.domain, companyName: lead.companyName,
+      firstName: lead.firstName || null, lastName: lead.lastName || null, title: lead.title || null,
+      icp: lead.icp, source: lead.source, campaignId, status: "claiming", statusDetail: { claimedAt },
+    })
+    .onConflictDoUpdate({
+      target: [coldOpenLeads.engagementId, coldOpenLeads.email, coldOpenLeads.campaignId],
+      set: {
+        runId,
+        status: "claiming",
+        statusDetail: sql`coalesce(${coldOpenLeads.statusDetail}, '{}'::jsonb) || jsonb_build_object('claimedAt', ${claimedAt}::text, 'claimedFrom', ${coldOpenLeads.status})`,
+      },
+      setWhere: inArray(coldOpenLeads.status, [...RETRYABLE_STATUSES]),
+    })
+    .returning({ id: coldOpenLeads.id });
+  return row?.id ?? null;
+}
+
+/** Records the outcome of a push this run claimed (see claimLeadForPush). */
+async function recordClaimedOutcome(
+  leadId: string,
+  status: ColdOpenLeadStatus,
+  detail: Record<string, unknown>,
+  pushedAt: Date | null
+): Promise<void> {
+  await db
+    .update(coldOpenLeads)
+    .set({
+      status,
+      pushedAt,
+      statusDetail:
+        status === "error"
+          ? sql`${JSON.stringify(detail)}::jsonb || jsonb_build_object('attempts', case when ${coldOpenLeads.statusDetail} ->> 'claimedFrom' = 'error' then coalesce((${coldOpenLeads.statusDetail} ->> 'attempts')::int, 1) + 1 else 1 end)`
+          : sql`${JSON.stringify(detail)}::jsonb`,
+    })
+    .where(and(eq(coldOpenLeads.id, leadId), eq(coldOpenLeads.status, "claiming")));
+}
+
 export async function runDailySend(tenant: any, runId: string, step: StepTools | undefined): Promise<void> {
   const summary = emptySummary();
   const engagementId: string = tenant.engagementId;
@@ -336,6 +390,13 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
         continue;
       }
 
+      const claimedId = await claimLeadForPush(engagementId, runId, lead, campaignId);
+      if (!claimedId) {
+        // Another run got to this lead first.
+        runSummary.duplicate++;
+        continue;
+      }
+
       try {
         const result = await adapter.pushLead(
           { email: lead.email, firstName: lead.firstName, lastName: lead.lastName, companyName: lead.companyName, title: lead.title, city: lead.city, state: lead.state, linkedinUrl: lead.linkedinUrl, icp: lead.icp },
@@ -344,11 +405,11 @@ export async function runDailySend(tenant: any, runId: string, step: StepTools |
           dryRun
         );
         if (result.status === "pushed") runSummary.pushed++;
-        await recordLead(engagementId, runId, lead, campaignId, result.status, result.detail, result.status === "pushed" ? new Date() : null);
+        await recordClaimedOutcome(claimedId, result.status, result.detail, result.status === "pushed" ? new Date() : null);
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         runSummary.errors.push(`push[${lead.email}]: ${detail}`);
-        await recordLead(engagementId, runId, lead, campaignId, "error", { error: detail });
+        await recordClaimedOutcome(claimedId, "error", { error: detail }, null);
       }
     }
     runSummary.kept = live.length;
