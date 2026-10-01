@@ -702,7 +702,9 @@ export const workspaces = pgTable("workspaces", {
   // (listWorkspaces, getActiveWorkspace, getOwnedWorkspace) filters this
   // out; nothing else needs to know it exists.
   deletedAt: timestamp("deleted_at"),
-});
+}, (table) => [
+    index("workspaces_whop_user_idx").on(table.whopUserId),
+  ]);
 
 // Which skill packages (see copy.ts's WORKSPACE_PRODUCTS) are installed in
 // a given workspace — chosen from the library-kit step of workspace
@@ -1077,7 +1079,10 @@ voiceScrapeArtifacts: jsonb("voice_scrape_artifacts").$type<{
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("engagements_whop_user_workspace_idx").on(table.whopUserId, table.workspaceId),
+    index("engagements_workspace_idx").on(table.workspaceId),
+  ]);
 // Server-side backup of the "new engagement" wizard's in-progress state.
 // The wizard's primary draft copy lives in the browser's sessionStorage
 // (fast, no round trip, survives a same-tab refresh). sessionStorage is
@@ -1131,7 +1136,11 @@ export const skillRuns = pgTable("skill_runs", {
   costInCents: integer("cost_in_cents"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
-});
+}, (table) => [
+    index("skill_runs_engagement_started_idx").on(table.engagementId, table.startedAt),
+    index("skill_runs_engagement_skill_status_idx").on(table.engagementId, table.skillName, table.status, table.completedAt),
+    index("skill_runs_running_idx").on(table.engagementId, table.startedAt).where(sql`${table.status} = 'running'`),
+  ]);
 
 // ── Briefed Calls Log ─────────────────────────────────────────────────────
 // ── Booking Roster ──────────────────────────────────────────────────────
@@ -1373,7 +1382,9 @@ export const auditRunsLog = pgTable("audit_runs_log", {
   // what the Executive Report Reader on the run-detail page renders.
   reportMarkdown: text("report_markdown"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("audit_runs_log_engagement_created_idx").on(table.engagementId, table.createdAt),
+  ]);
 
 // ── Active Alerts ─────────────────────────────────────────────────────────
 export const activeAlerts = pgTable("active_alerts", {
@@ -1390,7 +1401,9 @@ export const activeAlerts = pgTable("active_alerts", {
   // last_fired_at for cooldown — cleaner than abusing skillRuns
   lastFiredAt: timestamp("last_fired_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("active_alerts_engagement_source_idx").on(table.engagementId, table.source),
+  ]);
 
 // ── Credential Vault (whopUserId-scoped, reusable across engagements) ────
 // Solves the "I manage 5 clients on the same GoHighLevel sub-account and
@@ -1431,7 +1444,9 @@ export const credentialVault = pgTable("credential_vault", {
   lastCheckError: text("last_check_error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("credential_vault_workspace_idx").on(table.workspaceId),
+  ]);
 
 // ── Composio Connect Attempts (OAuth callback CSRF binding) ──────────────
 // Security fix (found by this session's own adversarial review): the
@@ -1517,7 +1532,9 @@ export const credentialsRefs = pgTable("credentials_refs", {
   lastCheckError: text("last_check_error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("credentials_refs_engagement_provider_idx").on(table.engagementId, table.provider),
+  ]);
 
 
 // ── Notifications (multi-channel fan-out log + in-app inbox) ─────────────
@@ -1538,7 +1555,10 @@ export const notifications = pgTable("notifications", {
   body: text("body").notNull(),
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("notifications_user_created_idx").on(table.whopUserId, table.createdAt),
+    index("notifications_engagement_idx").on(table.engagementId),
+  ]);
 
 // ── Artifacts ─────────────────────────────────────────────────────────────
 export const artifacts = pgTable("artifacts", {
@@ -1557,7 +1577,9 @@ export const artifacts = pgTable("artifacts", {
   // does, without a schema change blocking that later feature.
   owner: text("owner").notNull().default("mudd_ventures"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("artifacts_engagement_type_idx").on(table.engagementId, table.artifactType),
+  ]);
 
 // ── Win-Back Send Log (hybrid personalization outcomes) ───────────────────
 // Win-Back recovery gap 5 — "same recipe as Pile-On gap 3, applied to
@@ -1584,7 +1606,9 @@ export const winBackSendLog = pgTable("win_back_send_log", {
   latencyMs: integer("latency_ms"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("win_back_send_log_enrollment_created_idx").on(table.enrollmentId, table.createdAt),
+  ]);
 
 // ── Webhook Events (idempotency) ──────────────────────────────────────────
 // Pin-Down recovery gap 8 / AI Architect Review's #1 webhook fix. Every
@@ -1720,7 +1744,10 @@ export const pileOnSendLog = pgTable("pile_on_send_log", {
   latencyMs: integer("latency_ms"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("pile_on_send_log_engagement_created_idx").on(table.engagementId, table.createdAt),
+    index("pile_on_send_log_run_idx").on(table.runId),
+  ]);
 
 // Every message past the first in a Win-Back or Pile-On cadence sends from
 // a separate durable Inngest function (win-back-sms.ts, win-back-email-
@@ -1979,7 +2006,9 @@ export const humanBlockers = pgTable("human_blockers", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),
   resolvedBy: text("resolved_by"),
-});
+}, (table) => [
+    index("human_blockers_engagement_status_idx").on(table.engagementId, table.status),
+  ]);
 
 // ── Pending Actions (cross-cutting recovery gap 22) ────────────────────────
 // The generic approval-gate queue. See src/lib/approval-gate.ts. A row
@@ -2009,7 +2038,9 @@ export const pendingActions = pgTable("pending_actions", {
   decidedAt: timestamp("decided_at"),
   decidedBy: text("decided_by"),
   executionError: text("execution_error"), // set only if status is execution_failed
-});
+}, (table) => [
+    index("pending_actions_engagement_status_created_idx").on(table.engagementId, table.status, table.createdAt),
+  ]);
 
 
 //look back a step back older commit this is just my own reference dont mind it
@@ -2049,7 +2080,9 @@ export const projects = pgTable("projects", {
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("projects_whop_user_idx").on(table.whopUserId),
+  ]);
 
 export const projectEngagements = pgTable(
   "project_engagements",
@@ -2140,7 +2173,9 @@ export const showRateFeatures = pgTable("show_rate_features", {
   actualOutcome: text("actual_outcome"),
   outcomeRecordedAt: timestamp("outcome_recorded_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("show_rate_features_engagement_booking_idx").on(table.engagementId, table.bookingId),
+  ]);
 
 // ── Brief Outcome Log (Slack interactive brief buttons, Tier 4 #27) ───────
 // One row per rep tap on a brief's Show/No-show/Rescheduled buttons. Feeds
@@ -2166,7 +2201,10 @@ export const briefOutcomeLog = pgTable("brief_outcome_log", {
   // involved at all.
   source: text("source"),
   loggedAt: timestamp("logged_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("brief_outcome_log_engagement_booking_idx").on(table.engagementId, table.bookingId),
+    index("brief_outcome_log_engagement_logged_idx").on(table.engagementId, table.loggedAt),
+  ]);
 
 // ── Client Report Notes (report feature) ────────────────────────────────
 // One row per (engagement, period type, period start) — caches the
@@ -2251,7 +2289,9 @@ export const accountReviews = pgTable("account_reviews", {
   // model saw, instead of trusting the prose alone.
   blocksSnapshot: jsonb("blocks_snapshot").notNull(),
   generatedAt: timestamp("generated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("account_reviews_engagement_generated_idx").on(table.engagementId, table.generatedAt),
+  ]);
 
 // Same "kept as real history, not overwritten" convention as
 // accountReviews above, for the Library's "Compare" flyout — one row
@@ -2324,7 +2364,10 @@ export const conversationIntelligenceSessions = pgTable("conversation_intelligen
   extractionSummary: text("extraction_summary"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
-});
+}, (table) => [
+    index("ci_sessions_engagement_created_idx").on(table.engagementId, table.createdAt),
+    index("ci_sessions_recall_bot_idx").on(table.recallBotId),
+  ]);
 
 // ── Canary Runs (Tier 4 #28: synthetic canary tenant) ──────────────────────
 // A dedicated, non-buyer-facing synthetic engagement (see
@@ -2899,7 +2942,9 @@ export const repIncidents = pgTable("rep_incidents", {
   declaredAt: timestamp("declared_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),
   resolvedBy: text("resolved_by"),
-});
+}, (table) => [
+    index("rep_incidents_engagement_declared_idx").on(table.engagementId, table.declaredAt),
+  ]);
 
 // ── Reputation Manager: Audit log ────────────────────────────────────────
 // Ported from mcs/cms's audit-log-schema.md (Section 3.7 of the reputation
@@ -3013,7 +3058,9 @@ export const repPitchTargets = pgTable("rep_pitch_targets", {
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("rep_pitch_targets_engagement_idx").on(table.engagementId),
+  ]);
 
 // Move C: one row per engagement (a ramp is a single 90-day plan, not a
 // repeatable log entity) — confirmed handle, ramp start date, the tiered
@@ -3037,7 +3084,9 @@ export const repRedditRamp = pgTable(
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  }
+  }, (table) => [
+    index("rep_reddit_ramp_engagement_idx").on(table.engagementId),
+  ]
 );
 
 // ── Chat threads (2026-08-30) ───────────────────────────────────────────
@@ -3442,7 +3491,9 @@ export const whopAgentConnections = pgTable("whop_agent_connections", {
   dryRunClearedSkills: jsonb("dry_run_cleared_skills").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("whop_agent_connections_engagement_idx").on(table.engagementId),
+  ]);
 
 // ── Whop Agent: Webhook Registry (Section 2.5/2.6/7.2/7.4) ─────────────────
 // One row per Whop-side webhook subscription the agent knows about, whether

@@ -1,0 +1,29 @@
+CREATE INDEX IF NOT EXISTS "account_reviews_engagement_generated_idx" ON "account_reviews" USING btree ("engagement_id","generated_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "active_alerts_engagement_source_idx" ON "active_alerts" USING btree ("engagement_id","source");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "artifacts_engagement_type_idx" ON "artifacts" USING btree ("engagement_id","artifact_type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "audit_runs_log_engagement_created_idx" ON "audit_runs_log" USING btree ("engagement_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "brief_outcome_log_engagement_booking_idx" ON "brief_outcome_log" USING btree ("engagement_id","booking_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "brief_outcome_log_engagement_logged_idx" ON "brief_outcome_log" USING btree ("engagement_id","logged_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ci_sessions_engagement_created_idx" ON "conversation_intelligence_sessions" USING btree ("engagement_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ci_sessions_recall_bot_idx" ON "conversation_intelligence_sessions" USING btree ("recall_bot_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "credential_vault_workspace_idx" ON "credential_vault" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "credentials_refs_engagement_provider_idx" ON "credentials_refs" USING btree ("engagement_id","provider");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "engagements_whop_user_workspace_idx" ON "engagements" USING btree ("whop_user_id","workspace_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "engagements_workspace_idx" ON "engagements" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "human_blockers_engagement_status_idx" ON "human_blockers" USING btree ("engagement_id","status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "notifications_user_created_idx" ON "notifications" USING btree ("whop_user_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "notifications_engagement_idx" ON "notifications" USING btree ("engagement_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "pending_actions_engagement_status_created_idx" ON "pending_actions" USING btree ("engagement_id","status","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "pile_on_send_log_engagement_created_idx" ON "pile_on_send_log" USING btree ("engagement_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "pile_on_send_log_run_idx" ON "pile_on_send_log" USING btree ("run_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "projects_whop_user_idx" ON "projects" USING btree ("whop_user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "rep_incidents_engagement_declared_idx" ON "rep_incidents" USING btree ("engagement_id","declared_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "rep_pitch_targets_engagement_idx" ON "rep_pitch_targets" USING btree ("engagement_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "rep_reddit_ramp_engagement_idx" ON "rep_reddit_ramp" USING btree ("engagement_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "show_rate_features_engagement_booking_idx" ON "show_rate_features" USING btree ("engagement_id","booking_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "skill_runs_engagement_started_idx" ON "skill_runs" USING btree ("engagement_id","started_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "skill_runs_engagement_skill_status_idx" ON "skill_runs" USING btree ("engagement_id","skill_name","status","completed_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "skill_runs_running_idx" ON "skill_runs" USING btree ("engagement_id","started_at") WHERE "skill_runs"."status" = 'running';--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "whop_agent_connections_engagement_idx" ON "whop_agent_connections" USING btree ("engagement_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "win_back_send_log_enrollment_created_idx" ON "win_back_send_log" USING btree ("enrollment_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "workspaces_whop_user_idx" ON "workspaces" USING btree ("whop_user_id");
