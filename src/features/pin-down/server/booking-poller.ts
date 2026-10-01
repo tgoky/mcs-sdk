@@ -88,6 +88,19 @@ export async function findEngagementsDueForPoll(): Promise<string[]> {
  * src/inngest/crons.ts) so one tenant's slow/failing booking API can't
  * block or retry-storm every other tenant's poll cycle.
  */
+/**
+ * The run id for one polled booking event, the same on every invocation.
+ * Inngest re-runs this function from the top after a step fails or the
+ * request runs out of time; a fresh random id would give every step of the
+ * booking's handling a new name, so none of its finished steps would be
+ * reused.
+ */
+export function pollRunId(engagementId: string, idempotencyKey: string): string {
+  const h = crypto.createHash("sha256").update(`booking-poll-run:${engagementId}:${idempotencyKey}`).digest("hex");
+  // Shaped as a version-5 UUID, which skill_runs.id requires.
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 export async function pollBookingsForEngagement(engagementId: string, step?: StepTools): Promise<{
   polled: number;
   newBookings: number;
@@ -153,6 +166,9 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
 
   let newBookings = 0;
   let duplicates = 0;
+  const once = step
+    ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) as Promise<T>
+    : <T,>(_id: string, fn: () => Promise<T>) => fn();
 
   for (const call of calls) {
     const eventKind = call.eventKind ?? "created";
@@ -206,14 +222,24 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     // Final fallback
     idempotencyKey ??= `poll:${stack.booking_platform}:${call.id}:${eventKind}`;
 
-    try {
-      await db.insert(webhookEvents).values({
-        engagementId,
-        eventSource: stack.booking_platform, // same source key as the live webhook path — a booking seen by both collides correctly
-        idempotencyKey,
-        eventKind,
-      });
-    } catch {
+    // The claim is a step, so when Inngest re-runs this function it gets
+    // its first answer back instead of finding its own row and dropping
+    // the booking halfway through its handling.
+    const eventKey = idempotencyKey;
+    const claimed = await once(`claim-polled-booking-${eventKey}`, async () => {
+      try {
+        await db.insert(webhookEvents).values({
+          engagementId,
+          eventSource: stack.booking_platform, // same source key as the live webhook path — a booking seen by both collides correctly
+          idempotencyKey: eventKey,
+          eventKind,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!claimed) {
       duplicates++;
       continue; // already processed, either by a prior poll or a live webhook
     }
@@ -236,19 +262,21 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       continue;
     }
 
-    const runId = crypto.randomUUID();
+    const runId = pollRunId(engagementId, eventKey);
     try {
-      await startRun({
-        id: runId,
-        engagementId,
-        skillName: skillId,
-        phase: "webhook_received",
-        label: `${call.name} <${call.email}>`,
-      });
-      await logStep(runId, {
-        phase: "booking_roster",
-        status: rosterResult.wrote ? "success" : "skipped",
-        detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
+      await once(`start-polled-run-${runId}`, async () => {
+        await startRun({
+          id: runId,
+          engagementId,
+          skillName: skillId,
+          phase: "webhook_received",
+          label: `${call.name} <${call.email}>`,
+        });
+        await logStep(runId, {
+          phase: "booking_roster",
+          status: rosterResult.wrote ? "success" : "skipped",
+          detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
+        });
       });
 
       const classified = classifyBookingEvent(syntheticPayload);
