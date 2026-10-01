@@ -13,6 +13,7 @@ type StepTools = GetStepTools<Inngest.Any>;
 /** Extra per-invocation params a skill's executor might need beyond (tenant, runId, step). */
 export interface SkillRunContext {
   auditType?: "weekly" | "monthly";
+  briefTrigger?: "nightly" | "dynamic_webhook";
   // Not read by any Showtime-5 skill today — declared here only so the
   // object literal skill.ts builds once and passes uniformly across all
   // three catalogs' execute calls type-checks without excess-property
@@ -53,8 +54,8 @@ export const SKILL_REGISTRY: Record<SkillId, SkillDefinition> = {
   },
   "pre-call-read": {
     ...SKILL_MANIFEST["pre-call-read"],
-    execute: async (tenant, runId, step) => {
-      await executeNightlyBriefingCycle(tenant, runId, step);
+    execute: async (tenant, runId, step, ctx) => {
+      await executeNightlyBriefingCycle(tenant, runId, step, ctx?.briefTrigger ?? "nightly");
     },
   },
   "win-back": {

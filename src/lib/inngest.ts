@@ -24,6 +24,9 @@ export type SkillRunExecuteData = {
   // directly.
   skillName: string;
   auditType?: "weekly" | "monthly";
+  // pre-call-read only: which roster window to brief. The dynamic-brief
+  // cron sends "dynamic_webhook"; everything else leaves it unset (nightly).
+  briefTrigger?: "nightly" | "dynamic_webhook";
   manualOverride?: boolean;
   // Added for Teammates chat's pin-down-voice sub-skill (chat-skill-
   // registry.ts) — a public website URL, not secret state, so this is
@@ -280,12 +283,6 @@ export const winBackSequenceStop = eventType("win-back/sequence.stop", {
 // then dispatches one of these per engagement so a single tenant's
 // booking-platform API call can't block the others. See
 // src/features/pre-call-read/server/brief-service.ts's triggerMode param.
-export type DynamicBriefEngagementData = {
-  engagementId: string;
-};
-export const dynamicBriefEngagement = eventType("pre-call-read/dynamic-brief-engagement", {
-  schema: staticSchema<DynamicBriefEngagementData>(),
-});
 
 // Win-Back no-show gap fix — the "we can't rely on a human to click a
 // button" safety net. Same fan-out shape as the two above: a scheduler

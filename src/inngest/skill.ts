@@ -66,6 +66,7 @@ export const executeSkillRun = inngest.createFunction(
       engagementId,
       skillName,
       auditType,
+      briefTrigger,
       manualOverride,
       voiceExtractionDomain,
       pageAuditUrl,
@@ -164,6 +165,7 @@ export const executeSkillRun = inngest.createFunction(
 
       await definition.execute(tenant, runId, step, {
         auditType,
+        briefTrigger,
         voiceExtractionDomain,
         pageAuditUrl,
         engineCheckSubject,

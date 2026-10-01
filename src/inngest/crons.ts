@@ -26,12 +26,12 @@
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
 import crypto from "crypto";
-import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, dynamicBriefEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
+import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
 import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChanged } from "@/features/reports/server/account-advisor";
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
-import { startRun, closeStaleRun, notifyRunOutcome, failRun } from "@/lib/run-log";
+import { startRun, closeStaleRun, notifyRunOutcome } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -39,7 +39,6 @@ import { findEngagementsForWeeklyReadout, processWeeklyMetricsForEngagement } fr
 import { findEngagementsForWeeklySnapshot, processWeeklySnapshotForEngagement } from "@/features/reports/server/weekly-snapshot";
 import { findEngagementsDueForPoll, pollBookingsForEngagement } from "@/features/pin-down/server/booking-poller";
 import { validateAllPlatformDocsLinks } from "@/features/pin-down/server/docs-link-validator";
-import { executeNightlyBriefingCycle } from "@/features/pre-call-read/server/brief-service";
 import { matchesWeeklySchedule, matchesMonthlySchedule, matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { hasSlackConnection, postToClientSlack } from "@/lib/slack-delivery";
@@ -47,12 +46,13 @@ import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/plat
 import { and, eq, lt, gte, isNull, isNotNull, notInArray } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
-import { isSkillEnabledForEngagement, getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
+import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { resolveCallOutcome } from "@/features/pre-call-read/server/outcome-resolution";
 import { hasPostCallCrmActivity, describeCrmCheck } from "@/features/pre-call-read/server/crm-activity-check";
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
 import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
 import { getAppUrl } from "@/lib/app-url";
+import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -656,71 +656,47 @@ export const docsLinksValidatorCron = inngest.createFunction(
 export const dynamicBriefCron = inngest.createFunction(
   { id: "dynamic-brief-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
-    const engagementIds = await step.run("find-dynamic-brief-engagements", async () => {
+    // Goes through the same dispatcher (src/inngest/skill.ts) as nightly
+    // and manual pre-call-read runs, so all three share one lock per
+    // client: this used to call executeNightlyBriefingCycle directly and
+    // could overlap a manual run or itself, briefing a call twice and
+    // sending two notetaker bots into one meeting.
+    const prepared = await step.run("prepare-dynamic-briefs", async () => {
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above.
       const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
-      return all
-        .filter((t) => {
-          const stack = t.stack as EngagementStack;
-          return (
-            !isEngagementPaused(t) &&
-            stack?.brief_trigger_type === "dynamic_webhook" &&
-            stack?.booking_platform &&
-            stack?.booking_platform_credentials_ref
-          );
-        })
-        .map((t) => t.engagementId);
+      const disabled = await getDisabledEngagementIdsForSkill("pre-call-read");
+      const candidates = all.filter((t) => {
+        const stack = t.stack as EngagementStack;
+        return (
+          !isEngagementPaused(t) &&
+          !disabled.has(t.engagementId) &&
+          stack?.brief_trigger_type === "dynamic_webhook" &&
+          stack?.booking_platform &&
+          stack?.booking_platform_credentials_ref
+        );
+      });
+
+      const out: { runId: string; engagementId: string }[] = [];
+      for (const tenant of candidates) {
+        // The dispatcher fails a run whose required setup is missing, and
+        // a failed run notifies the client. Every 30 minutes that would be
+        // 48 notices a day, so an incomplete client is skipped here.
+        if ((await getMissingRequiredFields("pre-call-read", tenant.engagementId)).length > 0) continue;
+        const runId = crypto.randomUUID();
+        await startRun({ id: runId, engagementId: tenant.engagementId, skillName: "pre-call-read", phase: "roster_fetch", label: "Brief triggered by call activity" });
+        out.push({ runId, engagementId: tenant.engagementId });
+      }
+      return out;
     });
 
-    if (engagementIds.length > 0) {
+    if (prepared.length > 0) {
       await step.sendEvent(
         "dispatch-dynamic-briefs",
-        engagementIds.map((engagementId) => dynamicBriefEngagement.create({ engagementId }))
+        prepared.map((r) => skillRunExecute.create({ runId: r.runId, engagementId: r.engagementId, skillName: "pre-call-read", briefTrigger: "dynamic_webhook" }))
       );
     }
 
-    return { dispatched: engagementIds.length };
-  }
-);
-
-/** Fanned-out handler: one engagement's dynamic-window brief pass. */
-export const processDynamicBriefEngagementCron = inngest.createFunction(
-  { id: "process-dynamic-brief-engagement", triggers: [dynamicBriefEngagement], retries: 2 },
-  async ({ event, step }) => {
-    const { engagementId } = event.data;
-
-    const tenantRaw = await step.run("load-tenant", async () => {
-      const [row] = await db.select().from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
-      return row ?? null;
-    });
-    if (!tenantRaw) return { briefed: 0, reason: "engagement not found" };
-    if (isEngagementPaused(tenantRaw)) return { briefed: 0, reason: "engagement paused" };
-
-    // This function calls executeNightlyBriefingCycle directly rather than
-    // going through executeSkillRun (src/inngest/skill.ts), so it needs its
-    // own copy of the enablement check that dispatcher already applies to
-    // every other pre-call-read trigger (nightly cron, manual "Run Now").
-    const enabled = await isSkillEnabledForEngagement(engagementId, "pre-call-read");
-    if (!enabled) return { briefed: 0, reason: "skill disabled for this engagement" };
-
-    const tenant = { ...tenantRaw, createdAt: new Date(tenantRaw.createdAt), updatedAt: new Date(tenantRaw.updatedAt) };
-
-    const runId = crypto.randomUUID();
-    await startRun({
-      id: runId,
-      engagementId,
-      skillName: "pre-call-read",
-      phase: "roster_fetch",
-      label: "Brief triggered by call activity",
-    });
-
-    try {
-      const briefed = await executeNightlyBriefingCycle(tenant, runId, step, "dynamic_webhook");
-      return { briefed };
-    } catch (err: unknown) {
-      await failRun(runId, err).catch(() => {});
-      throw err;
-    }
+    return { dispatched: prepared.length };
   }
 );
 

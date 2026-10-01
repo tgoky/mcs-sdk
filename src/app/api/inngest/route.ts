@@ -52,7 +52,6 @@ import {
   docsLinksValidatorCron,
   rateLimitCleanupCron,
   dynamicBriefCron,
-  processDynamicBriefEngagementCron,
   assumedNoShowSweepCron,
   processAssumedNoShowSweepEngagementCron,
   pendingActionDigestCron,
@@ -141,7 +140,6 @@ export const { GET, POST, PUT } = serve({
     // Dynamic (tight-poll) brief trigger, an alternative to the nightly
     // batch — see brief-service.ts's triggerMode (Pre-Call Read recovery gap 1).
     dynamicBriefCron,
-    processDynamicBriefEngagementCron,
     // Win-Back no-show gap fix — the zero-human-required safety net.
     // See the module comment on assumedNoShowSweepCron in crons.ts.
     assumedNoShowSweepCron,
