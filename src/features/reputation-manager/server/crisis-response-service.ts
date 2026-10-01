@@ -95,20 +95,21 @@ async function crisisCheckedThroughFor(engagementId: string): Promise<string | n
   return row?.at ? new Date(row.at).toISOString() : null;
 }
 
-/** Moves the window forward and releases this run's claim. The window
- * only ever moves forward, so a slow run that lost its claim can't undo a
- * newer run's progress; the claim is cleared only if this run holds it. */
+/** Moves the window forward and releases this run's claim, only while
+ * this run holds the claim (a run that lost it to a newer one, which may
+ * not have seen everything this one would skip, mustn't move it), and
+ * never backwards. Called right after an incident is declared, while the
+ * claim was just confirmed. */
 export async function markCheckedThrough(engagementId: string, upTo: Date, runId: string): Promise<void> {
   const upToParam = sql.param(upTo, repIdentityGraphs.crisisCheckedThrough);
-  const ours = sql`${repIdentityGraphs.crisisClaimRunId} = ${runId}`;
   await db
     .update(repIdentityGraphs)
     .set({
       crisisCheckedThrough: sql`greatest(coalesce(${repIdentityGraphs.crisisCheckedThrough}, ${upToParam}), ${upToParam})`,
-      crisisClaimRunId: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimRunId} end`,
-      crisisClaimedAt: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimedAt} end`,
+      crisisClaimRunId: null,
+      crisisClaimedAt: null,
     })
-    .where(eq(repIdentityGraphs.engagementId, engagementId));
+    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)));
 }
 
 /** Confirms this run still holds the claim and restarts its clock, right

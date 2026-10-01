@@ -58,6 +58,10 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
 
   const [outcome] = await db.select({ id: briefOutcomeLog.id }).from(briefOutcomeLog).where(and(eq(briefOutcomeLog.engagementId, engagementId), eq(briefOutcomeLog.bookingId, bookingId))).limit(1);
   if (outcome) return { sent: false, reason: "An outcome is already in." };
+  const alreadySent = (client: Pick<typeof db, "select"> = db) =>
+    client.select({ id: sequenceMessageLog.id }).from(sequenceMessageLog).where(and(eq(sequenceMessageLog.engagementId, engagementId), eq(sequenceMessageLog.bookingId, bookingId), eq(sequenceMessageLog.sequenceType, AT_RISK_SEQUENCE))).limit(1).then((r) => r.length > 0);
+  // Checked first without the lock (the common repeat), and again under it.
+  if (await alreadySent()) return { sent: false, reason: "Already sent." };
   if (await isOptedOut(engagementId, booking.phone)) return { sent: false, reason: "They texted STOP." };
   if (await isHeldOut(engagementId, bookingId)) return { sent: false, reason: "Held out of reminders (holdout proof)." };
 
@@ -69,8 +73,7 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
   // retry after a send whose log update failed finds it too.
   const claim = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`at-risk:${engagementId}:${bookingId}`}))`);
-    const [already] = await tx.select({ id: sequenceMessageLog.id }).from(sequenceMessageLog).where(and(eq(sequenceMessageLog.engagementId, engagementId), eq(sequenceMessageLog.bookingId, bookingId), eq(sequenceMessageLog.sequenceType, AT_RISK_SEQUENCE))).limit(1);
-    if (already) return null;
+    if (await alreadySent(tx)) return null;
     const [row] = await tx.insert(sequenceMessageLog).values({ ...base, status: "sending" }).returning({ id: sequenceMessageLog.id });
     return row;
   });
