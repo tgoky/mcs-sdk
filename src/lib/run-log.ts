@@ -450,11 +450,20 @@ export async function markRunExecuting(runId: string, notBefore?: string): Promi
     .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
 }
 
+/** Closes queued runs whose dispatch never reached the queue, so they
+ * don't sit "running" (and count as queued) until the reaper's ceiling. */
+export async function failUndispatchedRuns(runIds: string[], reason: string): Promise<void> {
+  if (runIds.length === 0) return;
+  await db
+    .update(skillRuns)
+    .set({ status: "failed", completedAt: new Date(), errorMessage: reason })
+    .where(and(inArray(skillRuns.id, runIds), eq(skillRuns.status, "running"), isNull(skillRuns.executionStartedAt)));
+}
+
 /** Of these clients, the ones with a run of this skill still waiting in
  * the queue (created with `queued`, not yet picked up by the dispatcher)
- * that was created within `withinMs`. The limit keeps a run whose event
- * never reached Inngest, which waits for the reaper, from counting all day. */
-export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[], withinMs = STALE_RUN_CEILING_MS): Promise<Set<string>> {
+ * that was created within `withinMs`. */
+export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[], withinMs = QUEUED_RUN_CEILING_MS): Promise<Set<string>> {
   if (engagementIds.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ engagementId: skillRuns.engagementId })

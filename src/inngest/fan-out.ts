@@ -8,7 +8,7 @@
 // a stable start offset inside the cron's window.
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
-import { startRuns } from "@/lib/run-log";
+import { failUndispatchedRuns, startRuns } from "@/lib/run-log";
 import { skillRunEvent, type SkillRunExecuteData } from "@/lib/inngest";
 
 type StepTools = GetStepTools<Inngest.Any>;
@@ -96,7 +96,7 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
       });
 
     if (result.runs.length > 0) {
-      await sendEventsInBatches(
+      const send = sendEventsInBatches(
         step,
         `${opts.id}-dispatch-${page}`,
         result.runs.map((r) =>
@@ -110,6 +110,16 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
           })
         )
       );
+      try {
+        await send;
+      } catch (err) {
+        // The runs exist but their events never reached the queue: close
+        // them now rather than leaving them "running" until the reaper.
+        await step.run(`${opts.id}-dispatch-${page}-failed`, () =>
+          failUndispatchedRuns(result.runs.map((r) => r.runId), "Couldn't hand this scheduled run to the queue.")
+        );
+        throw err;
+      }
       dispatched += result.runs.length;
     }
     if (!result.full || !result.lastId) break;
