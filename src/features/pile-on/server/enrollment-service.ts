@@ -472,8 +472,12 @@ export async function handleInboundBookingEvent(
     // bails out exactly like the old "already enrolled" branch did.
     // Also one active cadence per person (src/lib/win-back-enrollment.ts):
     // someone already mid-cadence from another booking isn't enrolled twice.
-    const enrollment = await enrollInWinBackOnce({
-      id: crypto.randomUUID(),
+    // Its own step: when Inngest replays this function, the claim returns
+    // its first result instead of finding its own row and stopping the run
+    // before the messages below go out.
+    const enrollmentId = crypto.randomUUID();
+    const enrollment = await run("claim-win-back-enrollment", () => enrollInWinBackOnce({
+      id: enrollmentId,
       engagementId: tenant.engagementId,
       prospectEmail,
       prospectName,
@@ -482,7 +486,7 @@ export async function handleInboundBookingEvent(
       status: "active",
       freshRescheduleLink,
       sourceBookingId: bookingId,
-    });
+    }));
 
     if (enrollment.status === "already_active") {
       summary.openItems.push(`${prospectName} (${prospectEmail}) is already in an active recovery cadence (enrollment ${enrollment.existingId}). Skipped a second one.`);
