@@ -1,0 +1,1 @@
+ALTER TABLE "skill_runs" ADD COLUMN "queue_wait_ms" integer;

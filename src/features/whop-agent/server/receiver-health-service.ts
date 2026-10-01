@@ -6,7 +6,7 @@
 // webhook-driven skill depends on it.
 import { db } from "@/lib/db";
 import { engagements, whopWebhookRegistry, whopAgentConnections, activeAlerts, type EngagementStack } from "@/models/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, asc, gt } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { queuePendingAction } from "@/lib/approval-gate";
 import { auditWebhookFleet } from "./webhook-audit-service";
@@ -274,6 +274,23 @@ export async function executeWebhookReenable(engagementId: string, whopWebhookId
  * independent of which skills are enabled. A tripped circuit breaker means
  * every call in the sweep would fail anyway, and credential-health.ts's
  * own cron already owns alerting on that case. */
+/** listConnectedEngagementIds a page at a time, ordered by engagementId,
+ * for the paged scheduled fan-outs (src/inngest/fan-out.ts). */
+export async function listConnectedEngagementPage(afterEngagementId: string | null, limit: number): Promise<{ engagementId: string }[]> {
+  return db
+    .select({ engagementId: whopAgentConnections.engagementId })
+    .from(whopAgentConnections)
+    .where(
+      and(
+        isNull(whopAgentConnections.disconnectedAt),
+        eq(whopAgentConnections.circuitBreakerState, "closed"),
+        afterEngagementId ? gt(whopAgentConnections.engagementId, afterEngagementId) : undefined
+      )
+    )
+    .orderBy(asc(whopAgentConnections.engagementId))
+    .limit(limit);
+}
+
 export async function listConnectedEngagementIds(): Promise<string[]> {
   const rows = await db
     .select({ engagementId: whopAgentConnections.engagementId })

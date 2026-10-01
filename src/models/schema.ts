@@ -1141,6 +1141,10 @@ export const skillRuns = pgTable("skill_runs", {
   // waiting. The stale-run reaper times running work from here, and
   // executionStartedAt - startedAt is how long the run waited in the queue.
   executionStartedAt: timestamp("execution_started_at"),
+  // How long the run waited for a slot (ms), not counting a scheduled
+  // run's deliberate start offset. Null for runs that don't go through the
+  // dispatcher. See getQueueMetrics in src/lib/queue-metrics.ts.
+  queueWaitMs: integer("queue_wait_ms"),
   completedAt: timestamp("completed_at"),
 }, (table) => [
     index("skill_runs_engagement_started_idx").on(table.engagementId, table.startedAt),

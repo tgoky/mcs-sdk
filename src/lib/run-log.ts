@@ -122,6 +122,29 @@ export interface StartRunOptions {
  * other two (pin-down, the booking webhook) did not. This marker design
  * removes the bug at the root instead of patching each call site.
  */
+/**
+ * startRun for many runs at once: one INSERT per 500 runs instead of one
+ * per run. Scheduled fan-outs create a run for every due client; doing that
+ * one round trip at a time inside a single step grew with the client count.
+ */
+export async function startRuns(runs: StartRunOptions[]): Promise<void> {
+  const nowIso = new Date().toISOString();
+  for (let i = 0; i < runs.length; i += 500) {
+    const chunk = runs.slice(i, i + 500);
+    await db.insert(skillRuns).values(
+      chunk.map((opts) => ({
+        id: opts.id,
+        engagementId: opts.engagementId,
+        skillName: opts.skillName,
+        phase: opts.phase,
+        status: "running",
+        steps: [{ phase: "run_started", label: opts.label, status: "success" as const, startedAt: nowIso, completedAt: nowIso }],
+        startedAt: new Date(nowIso),
+      }))
+    );
+  }
+}
+
 export async function startRun(opts: StartRunOptions): Promise<void> {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -421,11 +444,21 @@ export const STALE_RUN_CEILING_MS = Number(process.env.STALE_RUN_CEILING_MINUTES
 export const QUEUED_RUN_CEILING_MINUTES = Number(process.env.QUEUED_RUN_CEILING_MINUTES ?? 24 * 60);
 const QUEUED_RUN_CEILING_MS = QUEUED_RUN_CEILING_MINUTES * 60 * 1000;
 
-/** Records that the dispatcher has begun this run (first time only). */
-export async function markRunExecuting(runId: string): Promise<void> {
+/**
+ * Records that the dispatcher has begun this run (first time only), and how
+ * long it waited for a slot: from when it was created, or from its
+ * scheduled start (`notBefore`) when that was later.
+ */
+export async function markRunExecuting(runId: string, notBefore?: string): Promise<void> {
+  const now = new Date();
+  const scheduled = notBefore ? new Date(notBefore) : null;
+  const readyFrom = scheduled && !Number.isNaN(scheduled.getTime()) ? sql`greatest(${skillRuns.startedAt}, ${scheduled.toISOString()}::timestamp)` : sql`${skillRuns.startedAt}`;
   await db
     .update(skillRuns)
-    .set({ executionStartedAt: new Date() })
+    .set({
+      executionStartedAt: now,
+      queueWaitMs: sql`greatest(0, (extract(epoch from (${now.toISOString()}::timestamp - ${readyFrom})) * 1000)::int)`,
+    })
     .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
 }
 

@@ -1,13 +1,12 @@
-import crypto from "crypto";
-import { inngest, skillRunEvent } from "@/lib/inngest";
+import { inngest } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
-import { startRun } from "@/lib/run-log";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { repIdentityIsComplete } from "@/lib/rep-engagements";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { dispatchScheduledSkillRuns } from "@/inngest/fan-out";
 
 // Every rep-* cron below used to be a literal fixed-UTC Inngest trigger
 // (e.g. "TZ=UTC 0 7 * * *"), which meant an operator's per-engagement
@@ -33,398 +32,69 @@ const REP_GOOGLE_REVIEWS_WATCH_LOCAL_HOUR = 8;
 const REP_NEWS_WATCH_LOCAL_HOUR = 9;
 const REP_SEARCH_WATCH_LOCAL_HOUR = 10;
 
+/** Each client's run starts at a stable point in the first 45 minutes of
+ * its local hour instead of every client at :00 (src/inngest/fan-out.ts). */
+const REP_SPREAD_MINUTES = 45;
+
 /**
- * Dispatches rep-engine-panel once daily, at 07:00 in each engagement's own
- * configured timezone. Deliberately once daily, not the OG skill pack's
- * twice-daily default — this is the scoped-down tripwire-only v1 (see
- * engine-panel-service.ts), and starting at a lower cadence is easier to
- * raise later once there's real cost data than the reverse.
+ * An hourly cron that starts `skillName` for every client with a complete
+ * identity setup whose local hour is `localHour`, skipping paused, deleted
+ * and switched-off clients. One shape for all nine Reputation Manager
+ * skills; Inngest function ids stay `${skillName}-cron`.
  *
- * Same prepare-then-batch-send shape as nightlyBriefsCron/
- * leakMapScheduleCron in crons.ts: one step.run does the DB read + per-
- * engagement startRun bookkeeping, one step.sendEvent carries the whole
- * batch — not a dispatchSkillRun call per engagement, which would send
- * each event separately instead of one batched request. Runs hourly and
- * checks each engagement's local hour, same as those two, instead of a
- * fixed cron expression — see this file's header comment for why.
+ * Pages through clients 500 at a time and creates each page's runs in one
+ * INSERT (it used to load every client and insert one run at a time in a
+ * single step), then sends them to the skill dispatcher spread across the
+ * hour.
  */
-export const repEnginePanelCron = inngest.createFunction(
-  { id: "rep-engine-panel-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 07:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-engine-panel-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-engine-panel");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_ENGINE_PANEL_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-engine-panel",
-          phase: "engine_panel",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-engine-panel-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-engine-panel" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-/**
- * A daily watch dispatcher: hourly cron that starts a run for every
- * engagement whose local hour matches, skipping paused, deleted and
- * switched-off engagements. Same body as the Trustpilot cron below, kept
- * in one place for the three Outscraper watches.
- */
-function dailyRepWatchCron(skillName: string, phase: string, localHour: number) {
+function dailyRepCron(skillName: string, phase: string, localHour: number) {
   return inngest.createFunction(
     { id: `${skillName}-cron`, triggers: [{ cron: "0 * * * *" }], retries: 1 },
     async ({ step }) => {
-      const now = new Date();
-      const prepared = await step.run(`prepare-${skillName}-runs`, async () => {
-        const rows = await db
-          .select({
-            engagementId: engagements.engagementId,
-            buyer: engagements.buyer,
-            pausedAt: engagements.pausedAt,
-            deletedAt: engagements.deletedAt,
-            stack: engagements.stack,
-          })
-          .from(repIdentityGraphs)
-          .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-          .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-        const disabled = await getDisabledEngagementIdsForSkill(skillName);
-        const out: { runId: string; engagementId: string }[] = [];
-        for (const row of rows) {
-          if (isEngagementPaused(row)) continue;
-          if (disabled.has(row.engagementId)) continue;
-          if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, localHour, now)) continue;
-          const runId = crypto.randomUUID();
-          await startRun({ id: runId, engagementId: row.engagementId, skillName, phase, label: row.buyer });
-          out.push({ runId, engagementId: row.engagementId });
-        }
-        return out;
+      const dispatched = await dispatchScheduledSkillRuns(step, {
+        id: `prepare-${skillName}-runs`,
+        skillName,
+        phase,
+        spreadMinutes: REP_SPREAD_MINUTES,
+        loadPage: (after, limit) =>
+          db
+            .select({
+              engagementId: engagements.engagementId,
+              buyer: engagements.buyer,
+              pausedAt: engagements.pausedAt,
+              deletedAt: engagements.deletedAt,
+              stack: engagements.stack,
+            })
+            .from(repIdentityGraphs)
+            .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
+            .where(and(isNull(engagements.deletedAt), repIdentityIsComplete, after ? gt(engagements.engagementId, after) : undefined))
+            .orderBy(asc(engagements.engagementId))
+            .limit(limit),
+        select: async (rows, now) => {
+          const disabled = await getDisabledEngagementIdsForSkill(skillName);
+          return rows
+            .filter((row) => !isEngagementPaused(row) && !disabled.has(row.engagementId))
+            .filter((row) => matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, localHour, now))
+            .map((row) => ({ engagementId: row.engagementId, label: row.buyer }));
+        },
       });
-      if (prepared.length > 0) {
-        await step.sendEvent(
-          `dispatch-${skillName}-runs`,
-          prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName }))
-        );
-      }
-      return { dispatched: prepared.length };
+      return { dispatched };
     }
   );
 }
 
-export const repGoogleReviewsWatchCron = dailyRepWatchCron("rep-google-reviews-watch", "google_reviews_watch", REP_GOOGLE_REVIEWS_WATCH_LOCAL_HOUR);
-export const repNewsWatchCron = dailyRepWatchCron("rep-news-watch", "news_watch", REP_NEWS_WATCH_LOCAL_HOUR);
-export const repSearchWatchCron = dailyRepWatchCron("rep-search-watch", "search_watch", REP_SEARCH_WATCH_LOCAL_HOUR);
-
-/**
- * Dispatches rep-trustpilot-watch once daily, at 08:00 in each engagement's
- * own timezone. Same shape as repEnginePanelCron above — see that one's
- * comment for the general pattern reasoning. Staggered to a different
- * local hour purely to spread load, not for any functional reason.
- */
-export const repTrustpilotWatchCron = inngest.createFunction(
-  { id: "rep-trustpilot-watch-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 08:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-trustpilot-watch-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-trustpilot-watch");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_TRUSTPILOT_WATCH_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-trustpilot-watch",
-          phase: "trustpilot_watch",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-trustpilot-watch-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-trustpilot-watch" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-/**
- * Dispatches rep-reddit-watch once daily, at 09:00 in each engagement's own
- * timezone. Same shape again.
- */
-export const repRedditWatchCron = inngest.createFunction(
-  { id: "rep-reddit-watch-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 09:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-reddit-watch-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-reddit-watch");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_REDDIT_WATCH_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-reddit-watch",
-          phase: "reddit_watch",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-reddit-watch-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-reddit-watch" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-/**
- * Dispatches rep-twitter-watch once daily, at 10:00 in each engagement's
- * own timezone. Same shape again.
- */
-export const repTwitterWatchCron = inngest.createFunction(
-  { id: "rep-twitter-watch-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 10:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-twitter-watch-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-twitter-watch");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_TWITTER_WATCH_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-twitter-watch",
-          phase: "twitter_watch",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-twitter-watch-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-twitter-watch" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-/**
- * Dispatches rep-crisis-response once daily, at 11:00 in each engagement's
- * own timezone — after the four watch skills above have had a chance to
- * run at that same engagement's local 07:00-10:00. Because every rep-*
- * cron now keys off the SAME engagement's own timezone (not a shared UTC
- * clock), this ordering holds per-client regardless of which timezone that
- * client is in. Same eligibility gate as the others (has a real identity
- * graph); no separate "has anything actually been flagged" pre-filter here
- * — the service's own early-return (loadFlaggedFindingsSince returning
- * empty) already handles that case cheaply, without wasting an LLM call,
- * so pre-filtering at the cron level would just be the same check done
- * twice.
- */
-export const repCrisisResponseCron = inngest.createFunction(
-  { id: "rep-crisis-response-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 11:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-crisis-response-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-crisis-response");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_CRISIS_RESPONSE_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-crisis-response",
-          phase: "crisis_response",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-crisis-response-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-crisis-response" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
-
-/**
- * Dispatches rep-digest once daily, at 18:00 in each engagement's own
- * timezone — the end of that client's day, well past crisis-response's
- * local 11:00, so a full day's detections are in before the rollup runs.
- * Once-daily, not the OG spec's twice-daily per-timezone cadence — see
- * digest.ts's own header for why once-daily matches this product's
- * existing rep-* cron shape rather than inventing a new mechanism for one
- * skill. Same eligibility gate as every other rep-* cron (has a real
- * identity graph).
- */
-export const repDigestCron = inngest.createFunction(
-  { id: "rep-digest-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 18:00
-  async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-digest-runs", async () => {
-      const rows = await db
-        .select({
-          engagementId: engagements.engagementId,
-          buyer: engagements.buyer,
-          pausedAt: engagements.pausedAt,
-          deletedAt: engagements.deletedAt,
-          stack: engagements.stack,
-        })
-        .from(repIdentityGraphs)
-        .innerJoin(engagements, eq(repIdentityGraphs.engagementId, engagements.engagementId))
-        .where(and(isNull(engagements.deletedAt), repIdentityIsComplete));
-
-      const disabled = await getDisabledEngagementIdsForSkill("rep-digest");
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of rows) {
-        if (isEngagementPaused(row)) continue;
-        if (disabled.has(row.engagementId)) continue;
-        if (!matchesDailyLocalHour((row.stack as EngagementStack | null)?.timezone, REP_DIGEST_LOCAL_HOUR, now)) continue;
-
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: row.engagementId,
-          skillName: "rep-digest",
-          phase: "rep_digest",
-          label: row.buyer,
-        });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-rep-digest-runs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "rep-digest" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
-  }
-);
+/** Once daily at 07:00 local. Deliberately once daily, not the OG skill
+ * pack's twice-daily default: this is the scoped-down tripwire-only v1 (see
+ * engine-panel-service.ts), and a lower cadence is easier to raise later
+ * once there's real cost data than the reverse. */
+export const repEnginePanelCron = dailyRepCron("rep-engine-panel", "engine_panel", REP_ENGINE_PANEL_LOCAL_HOUR);
+// The watches are staggered to different local hours purely to spread load.
+export const repTrustpilotWatchCron = dailyRepCron("rep-trustpilot-watch", "trustpilot_watch", REP_TRUSTPILOT_WATCH_LOCAL_HOUR);
+export const repRedditWatchCron = dailyRepCron("rep-reddit-watch", "reddit_watch", REP_REDDIT_WATCH_LOCAL_HOUR);
+export const repTwitterWatchCron = dailyRepCron("rep-twitter-watch", "twitter_watch", REP_TWITTER_WATCH_LOCAL_HOUR);
+export const repGoogleReviewsWatchCron = dailyRepCron("rep-google-reviews-watch", "google_reviews_watch", REP_GOOGLE_REVIEWS_WATCH_LOCAL_HOUR);
+export const repNewsWatchCron = dailyRepCron("rep-news-watch", "news_watch", REP_NEWS_WATCH_LOCAL_HOUR);
+export const repSearchWatchCron = dailyRepCron("rep-search-watch", "search_watch", REP_SEARCH_WATCH_LOCAL_HOUR);
+/** After the day's watches, so it assesses what they found. */
+export const repCrisisResponseCron = dailyRepCron("rep-crisis-response", "crisis_response", REP_CRISIS_RESPONSE_LOCAL_HOUR);
+export const repDigestCron = dailyRepCron("rep-digest", "rep_digest", REP_DIGEST_LOCAL_HOUR);

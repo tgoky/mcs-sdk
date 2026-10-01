@@ -31,6 +31,10 @@ export type SkillRunExecuteData = {
   // takes (see SKILL_RUN_LANES) and whether a person is waiting on it.
   lane?: string;
   interactive?: boolean;
+  // Scheduled runs only: don't start before this time (ISO). Spreads a
+  // cron's runs across its window instead of all at the same instant; the
+  // dispatcher sleeps until then without holding a concurrency slot.
+  notBefore?: string;
   manualOverride?: boolean;
   // Added for Teammates chat's pin-down-voice sub-skill (chat-skill-
   // registry.ts) — a public website URL, not secret state, so this is
@@ -141,6 +145,9 @@ export const skillRunCancel = eventType("skill/run.cancel", {
 
 export type CredentialHealthCheckSingleData = {
   credentialId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const credentialHealthCheckSingle = eventType("credential-health/check-single", {
   schema: staticSchema<CredentialHealthCheckSingleData>(),
@@ -149,6 +156,9 @@ export const credentialHealthCheckSingle = eventType("credential-health/check-si
 export type LostDealSweepEngagementData = {
   engagementId: string;
   enrollmentIds: string[];
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const lostDealSweepEngagement = eventType("win-back/lost-deal-sweep-engagement", {
   schema: staticSchema<LostDealSweepEngagementData>(),
@@ -182,6 +192,9 @@ export const prospectBriefDispatch = eventType("pre-call-read/prospect-brief.dis
 
 export type WeeklyMetricsEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagement", {
   schema: staticSchema<WeeklyMetricsEngagementData>(),
@@ -191,6 +204,9 @@ export const weeklyMetricsEngagement = eventType("pile-on/weekly-metrics-engagem
 // shape as weeklyMetricsEngagement above, one event per engagement.
 export type WeeklySnapshotEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const weeklySnapshotEngagement = eventType("reports/weekly-snapshot-engagement", {
   schema: staticSchema<WeeklySnapshotEngagementData>(),
@@ -203,6 +219,9 @@ export const weeklySnapshotEngagement = eventType("reports/weekly-snapshot-engag
 // above, one event per engagement.
 export type AccountReviewSweepEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const accountReviewSweepEngagement = eventType("reports/account-review-sweep-engagement", {
   schema: staticSchema<AccountReviewSweepEngagementData>(),
@@ -216,6 +235,9 @@ export const accountReviewSweepEngagement = eventType("reports/account-review-sw
 // src/features/pin-down/server/booking-poller.ts.
 export type BookingPollEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement", {
   schema: staticSchema<BookingPollEngagementData>(),
@@ -228,6 +250,9 @@ export const bookingPollEngagement = eventType("pin-down/booking-poll-engagement
 // platform rather than a fabricated webhook route.
 export type HubspotDeliveryPollEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const hubspotDeliveryPollEngagement = eventType("win-back/hubspot-delivery-poll-engagement", {
   schema: staticSchema<HubspotDeliveryPollEngagementData>(),
@@ -325,6 +350,9 @@ export const winBackSequenceStop = eventType("win-back/sequence.stop", {
 // See assumedNoShowSweepEngagement's handler in crons.ts.
 export type AssumedNoShowSweepEngagementData = {
   engagementId: string;
+  // Set by the scheduling cron: start no earlier than this (ISO), so a
+  // fan-out spreads across its window (src/inngest/fan-out.ts).
+  notBefore?: string;
 };
 export const assumedNoShowSweepEngagement = eventType("pre-call-read/assumed-no-show-sweep-engagement", {
   schema: staticSchema<AssumedNoShowSweepEngagementData>(),
@@ -485,14 +513,14 @@ export const whopWebhookProcess = eventType("whop-agent/webhook-process", {
 
 // Section 7.4's health sweep fan-out — same cheap-prep-then-fan-out shape
 // as credentialHealthCron/checkSingleCredentialHealthCron in crons.ts.
-export type WhopReceiverHealthSweepSingleData = { engagementId: string };
+export type WhopReceiverHealthSweepSingleData = { engagementId: string; notBefore?: string };
 export const whopReceiverHealthSweepSingle = eventType("whop-agent/receiver-health-sweep-single", {
   schema: staticSchema<WhopReceiverHealthSweepSingleData>(),
 });
 
 // Section 5.7's reconciliation fan-out — same shape as the receiver health
 // sweep above.
-export type WhopVelocityReconciliationSingleData = { engagementId: string };
+export type WhopVelocityReconciliationSingleData = { engagementId: string; notBefore?: string };
 export const whopVelocityReconciliationSingle = eventType("whop-agent/velocity-reconciliation-single", {
   schema: staticSchema<WhopVelocityReconciliationSingleData>(),
 });

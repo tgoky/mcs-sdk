@@ -3,11 +3,11 @@
 // Async half of Whop Agent's inbound webhook handling — see the module
 // comment on whopWebhookProcess in src/lib/inngest.ts for why this is
 // split from the route's synchronous ack path.
-import crypto from "crypto";
-import { inngest, whopWebhookProcess, whopReceiverHealthSweepSingle, whopVelocityReconciliationSingle, whopBridgeDeliver, whopAdsDraftProcess, whopBulkPromoCodesProcess, skillRunEvent } from "@/lib/inngest";
+import { inngest, whopWebhookProcess, whopReceiverHealthSweepSingle, whopVelocityReconciliationSingle, whopBridgeDeliver, whopAdsDraftProcess, whopBulkPromoCodesProcess } from "@/lib/inngest";
 import { markWebhookDeliveryReceived } from "@/features/whop-agent/server/webhook-subscription-service";
 import { recordWhopChangeLedgerEntry, isUpdatedShapedEvent } from "@/features/whop-agent/server/webhook-envelope-service";
-import { sweepReceiverHealth, listConnectedEngagementIds } from "@/features/whop-agent/server/receiver-health-service";
+import { sweepReceiverHealth, listConnectedEngagementIds, listConnectedEngagementPage } from "@/features/whop-agent/server/receiver-health-service";
+import { dispatchScheduledSkillRuns, scheduledNow, sendEventsInBatches, staggeredNotBefore, waitForStagger } from "@/inngest/fan-out";
 import { handleCancellationIntentEvent } from "@/features/whop-agent/server/cancellation-save-offer-service";
 import { reconcileRefundDisputeVelocity } from "@/features/whop-agent/server/refund-dispute-velocity-service";
 import { sendDailyDigest, listEngagementsForDailyDigest } from "@/features/whop-agent/server/daily-change-digest-service";
@@ -21,7 +21,6 @@ import { db } from "@/lib/db";
 import { engagements, whopPayments, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { scheduleReviewRequest } from "@/features/reputation-manager/server/review-requests";
-import { startRun } from "@/lib/run-log";
 import { PAYMENT_EVENT_TYPES, recordWhopPaymentEvent } from "@/lib/whop-payments";
 import { handlePaymentFailed } from "@/features/whop-agent/server/payment-recovery-service";
 
@@ -130,14 +129,12 @@ export const whopReceiverHealthSweepCron = inngest.createFunction(
   { id: "whop-agent-receiver-health-sweep", triggers: [{ cron: "0 */4 * * *" }], retries: 1 },
   async ({ step }) => {
     const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
-
-    if (engagementIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-receiver-health-sweeps",
-        engagementIds.map((engagementId) => whopReceiverHealthSweepSingle.create({ engagementId }))
-      );
-    }
-
+    const nowIso = await scheduledNow(step, "receiver-health");
+    await sendEventsInBatches(
+      step,
+      "dispatch-receiver-health-sweeps",
+      engagementIds.map((engagementId) => whopReceiverHealthSweepSingle.create({ engagementId, notBefore: staggeredNotBefore(`receiver-health:${engagementId}`, 60, nowIso) }))
+    );
     return { dispatched: engagementIds.length };
   }
 );
@@ -146,8 +143,9 @@ export const whopReceiverHealthSweepCron = inngest.createFunction(
  * invocation, isolated so one connection's failure can't block the rest. */
 export const whopReceiverHealthSweepSingleCron = inngest.createFunction(
   { id: "whop-agent-receiver-health-sweep-single", triggers: [whopReceiverHealthSweepSingle], retries: 1 },
-  async ({ event }) => {
-    await sweepReceiverHealth(event.data.engagementId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    await step.run("sweep", () => sweepReceiverHealth(event.data.engagementId));
   }
 );
 
@@ -168,44 +166,33 @@ export const whopReceiverHealthSweepSingleCron = inngest.createFunction(
 export const whopWeeklyOpsReportCron = inngest.createFunction(
   { id: "whop-agent-weekly-ops-report-cron", triggers: [{ cron: "TZ=UTC 0 14 * * 1" }], retries: 1 },
   async ({ step }) => {
-    const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
-
-    // Ghost-run fix: filter out explicit disables BEFORE startRun, same as
-    // every other cron (see getDisabledEngagementIdsForSkill's comment) —
-    // a switched-off report should never appear in live executions.
-    const [opsDisabled, attributionDisabled] = await step.run("load-disabled", async () => [
-      [...(await getDisabledEngagementIdsForSkill("whop-weekly-ops-report"))],
-      [...(await getDisabledEngagementIdsForSkill("whop-attribution-report"))],
-    ]);
-
-    const opsReportRuns = await step.run("start-ops-report-runs", () =>
-      Promise.all(
-        engagementIds.filter((id) => !opsDisabled.includes(id)).map(async (engagementId) => {
-          const runId = crypto.randomUUID();
-          await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report" });
-          return { runId, engagementId };
-        })
-      )
-    );
-
-    const attributionRuns = await step.run("start-attribution-report-runs", () =>
-      Promise.all(
-        engagementIds.filter((id) => !attributionDisabled.includes(id)).map(async (engagementId) => {
-          const runId = crypto.randomUUID();
-          await startRun({ id: runId, engagementId, skillName: "whop-attribution-report", phase: "v2_memberships_paginate", label: "Attribution & Affiliate Report" });
-          return { runId, engagementId };
-        })
-      )
-    );
-
-    const events = [
-      ...opsReportRuns.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-weekly-ops-report" })),
-      ...attributionRuns.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-attribution-report" })),
-    ];
-    if (events.length > 0) {
-      await step.sendEvent("dispatch-weekly-ops-and-attribution-reports", events);
-    }
-    return { dispatched: events.length };
+    // Ghost-run fix: switched-off reports are filtered out before a run is
+    // created, same as every other cron (see getDisabledEngagementIdsForSkill).
+    const ops = await dispatchScheduledSkillRuns(step, {
+      id: "start-ops-report-runs",
+      skillName: "whop-weekly-ops-report",
+      phase: "metric_netRevenue",
+      label: "Weekly Ops Report",
+      spreadMinutes: 45,
+      loadPage: listConnectedEngagementPage,
+      select: async (rows) => {
+        const disabled = await getDisabledEngagementIdsForSkill("whop-weekly-ops-report");
+        return rows.filter((r) => !disabled.has(r.engagementId));
+      },
+    });
+    const attribution = await dispatchScheduledSkillRuns(step, {
+      id: "start-attribution-report-runs",
+      skillName: "whop-attribution-report",
+      phase: "v2_memberships_paginate",
+      label: "Attribution & Affiliate Report",
+      spreadMinutes: 45,
+      loadPage: listConnectedEngagementPage,
+      select: async (rows) => {
+        const disabled = await getDisabledEngagementIdsForSkill("whop-attribution-report");
+        return rows.filter((r) => !disabled.has(r.engagementId));
+      },
+    });
+    return { dispatched: ops + attribution };
   }
 );
 
@@ -219,44 +206,40 @@ export const whopVelocityReconciliationCron = inngest.createFunction(
   { id: "whop-agent-velocity-reconciliation-cron", triggers: [{ cron: "0 */4 * * *" }], retries: 1 },
   async ({ step }) => {
     const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
-    if (engagementIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-velocity-reconciliations",
-        engagementIds.map((engagementId) => whopVelocityReconciliationSingle.create({ engagementId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "velocity-reconciliation");
+    await sendEventsInBatches(
+      step,
+      "dispatch-velocity-reconciliations",
+      engagementIds.map((engagementId) => whopVelocityReconciliationSingle.create({ engagementId, notBefore: staggeredNotBefore(`velocity:${engagementId}`, 60, nowIso) }))
+    );
     return { dispatched: engagementIds.length };
   }
 );
 
 export const whopVelocityReconciliationSingleCron = inngest.createFunction(
   { id: "whop-agent-velocity-reconciliation-single", triggers: [whopVelocityReconciliationSingle], retries: 1 },
-  async ({ event }) => {
-    await reconcileRefundDisputeVelocity(event.data.engagementId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    await step.run("reconcile", () => reconcileRefundDisputeVelocity(event.data.engagementId));
   }
 );
 
 export const whopPortfolioRollupCron = inngest.createFunction(
   { id: "whop-agent-portfolio-rollup-cron", triggers: [{ cron: "TZ=UTC 0 14 * * 3" }], retries: 1 },
   async ({ step }) => {
-    const engagementIds = await step.run("list-connected-engagements", () => listConnectedEngagementIds());
-    const disabled = await step.run("load-disabled", async () => [...(await getDisabledEngagementIdsForSkill("whop-portfolio-rollup"))]);
-    const runIds = await step.run("start-runs", () =>
-      Promise.all(
-        engagementIds.filter((id) => !disabled.includes(id)).map(async (engagementId) => {
-          const runId = crypto.randomUUID();
-          await startRun({ id: runId, engagementId, skillName: "whop-portfolio-rollup", phase: "fan_out", label: "Portfolio Rollup Report" });
-          return { runId, engagementId };
-        })
-      )
-    );
-    if (runIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-portfolio-rollups",
-        runIds.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup" }))
-      );
-    }
-    return { dispatched: runIds.length };
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "start-runs",
+      skillName: "whop-portfolio-rollup",
+      phase: "fan_out",
+      label: "Portfolio Rollup Report",
+      spreadMinutes: 45,
+      loadPage: listConnectedEngagementPage,
+      select: async (rows) => {
+        const disabled = await getDisabledEngagementIdsForSkill("whop-portfolio-rollup");
+        return rows.filter((r) => !disabled.has(r.engagementId));
+      },
+    });
+    return { dispatched };
   }
 );
 

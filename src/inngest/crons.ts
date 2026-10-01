@@ -25,13 +25,12 @@
 // monitoring), but nothing schedules them anymore — vercel.json's `crons`
 // block has been removed. These four functions are now the only thing
 // that fires this work on a schedule.
-import crypto from "crypto";
-import { inngest, skillRunEvent, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
+import { inngest, skillRunCancel, credentialHealthCheckSingle, lostDealSweepEngagement, weeklyMetricsEngagement, weeklySnapshotEngagement, staleRunNotify, bookingPollEngagement, canaryCheckSingle, assumedNoShowSweepEngagement, hubspotDeliveryPollEngagement, accountReviewSweepEngagement } from "@/lib/inngest";
 import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChanged } from "@/features/reports/server/account-advisor";
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
-import { startRun, closeStaleRun, notifyRunOutcome, findStaleRunIds } from "@/lib/run-log";
+import { closeStaleRun, notifyRunOutcome, findStaleRunIds } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -43,7 +42,7 @@ import { matchesWeeklySchedule, matchesMonthlySchedule, matchesDailyLocalHour } 
 import { computeAndPersistBenchmarks } from "@/features/leak-map/server/leak-map-benchmarks";
 import { hasSlackConnection, postToClientSlack } from "@/lib/slack-delivery";
 import { CANARY_CHECKS, runCanaryCheck, getCanaryEngagementId } from "@/lib/platforms/canary";
-import { and, eq, lt, gte, isNull, isNotNull, notInArray } from "drizzle-orm";
+import { and, eq, lt, gte, isNull, isNotNull, notInArray, asc, gt } from "drizzle-orm";
 import type { EngagementStack } from "@/models/schema";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
@@ -52,18 +51,17 @@ import { hasPostCallCrmActivity, describeCrmCheck } from "@/features/pre-call-re
 import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/server/call-duration-estimator";
 import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
 import { getAppUrl } from "@/lib/app-url";
+import { dispatchScheduledSkillRuns, scheduledNow, sendEventsInBatches, staggeredNotBefore, waitForStagger } from "@/inngest/fan-out";
 import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
 import { isDispatchedSkill } from "@/inngest/skill";
 
-// Each function does its DB read + per-tenant startRun bookkeeping inside
-// ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
-// whole batch. Putting step.run() inside the tenant loop instead (one step
-// per tenant) is the anti-pattern Inngest's own docs warn about — it burns
-// toward the 1000-steps-per-function ceiling as the tenant base grows, for
-// no benefit here since none of these calls need independent retry
-// boundaries. The actual per-tenant work still gets full retry isolation,
-// just one level down, in executeSkillRun (src/inngest/skill.ts) — that's
-// what each fanned-out event triggers.
+// Scheduled skill crons page through clients 500 at a time, create each
+// page's runs in one INSERT, and send them in batches, each run carrying a
+// stable start offset inside the cron's window so work doesn't all land at
+// :00 (dispatchScheduledSkillRuns in src/inngest/fan-out.ts). The
+// maintenance fan-outs below send their per-client events the same way.
+// One step per page, not per tenant, keeps a large client base well under
+// Inngest's 1000-steps-per-function ceiling.
 
 // Verified-defect fix (2026-08-08 handoff, defect #2) — the target local
 // hour nightly briefs fire at. Was a literal "TZ=UTC 0 20 * * *" cron
@@ -75,66 +73,47 @@ const NIGHTLY_BRIEF_LOCAL_HOUR = 20; // 20:00 in the engagement's own timezone (
 export const nightlyBriefsCron = inngest.createFunction(
   { id: "nightly-briefs-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their local 20:00
   async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-nightly-runs", async () => {
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "prepare-nightly-runs",
+      skillName: "pre-call-read",
+      phase: "roster_fetch",
+      label: "Nightly briefing run",
+      // Briefs land between 20:00 and 20:45 local.
+      spreadMinutes: 45,
       // isNull(deletedAt) — an offboarded/soft-deleted engagement should
       // never get picked up here. isEngagementPaused() (checked below)
       // only covers pausedAt, not deletedAt, so this has to be filtered
       // separately at the query level.
-      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
-
-      // Ghost-run fix: this used to be checked downstream in skill.ts,
-      // AFTER startRun already created a visible run for a disabled
-      // skill — the run would appear live, then reveal itself as
-      // "turned off for this engagement, nothing ran" when opened.
-      // Filtering here means a disabled engagement never gets a run
-      // created for it in the first place.
-      const disabledForPreCallRead = await getDisabledEngagementIdsForSkill("pre-call-read");
-
-      // Only engagements that finished Pin-Down (booking platform wired
-      // up) have anything to brief tonight.
-    const eligible = all.filter((t) => {
-  const stack = t.stack as EngagementStack;
-  return (
-    !isEngagementPaused(t) &&
-    !disabledForPreCallRead.has(t.engagementId) &&
-    stack?.booking_platform &&
-    stack?.booking_platform_credentials_ref &&
-    // ✅ Exclude dynamic polling clients so they don't get double-processed at night
-    stack?.brief_trigger_type !== "dynamic_webhook" &&
-    matchesDailyLocalHour(stack?.timezone, NIGHTLY_BRIEF_LOCAL_HOUR, now)
-  );
-});
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const tenant of eligible) {
-        const runId = crypto.randomUUID();
-        await startRun({
-          id: runId,
-          engagementId: tenant.engagementId,
-          skillName: "pre-call-read",
-          phase: "roster_fetch",
-          label: "Nightly briefing run",
-        });
-        out.push({ runId, engagementId: tenant.engagementId });
-      }
-      return out;
-    });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-nightly-briefs",
-        prepared.map((r) =>
-          skillRunEvent({
-            runId: r.runId,
-            engagementId: r.engagementId,
-            skillName: "pre-call-read",
+      loadPage: (after, limit) =>
+        db
+          .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt, stack: engagements.stack })
+          .from(engagements)
+          .where(and(isNull(engagements.deletedAt), after ? gt(engagements.engagementId, after) : undefined))
+          .orderBy(asc(engagements.engagementId))
+          .limit(limit),
+      select: async (rows, now) => {
+        // Ghost-run fix: enablement is checked before a run is created, so a
+        // disabled engagement never shows a run that then does nothing.
+        const disabledForPreCallRead = await getDisabledEngagementIdsForSkill("pre-call-read");
+        return rows
+          .filter((t) => {
+            const stack = t.stack as EngagementStack;
+            return (
+              !isEngagementPaused(t) &&
+              !disabledForPreCallRead.has(t.engagementId) &&
+              // Only engagements that finished Pin-Down (booking platform
+              // wired up) have anything to brief tonight.
+              Boolean(stack?.booking_platform) &&
+              Boolean(stack?.booking_platform_credentials_ref) &&
+              // Dynamic clients are briefed by dynamicBriefCron instead.
+              stack?.brief_trigger_type !== "dynamic_webhook" &&
+              matchesDailyLocalHour(stack?.timezone, NIGHTLY_BRIEF_LOCAL_HOUR, now)
+            );
           })
-        )
-      );
-    }
-
-    return { dispatched: prepared.length };
+          .map((t) => ({ engagementId: t.engagementId }));
+      },
+    });
+    return { dispatched };
   }
 );
 
@@ -150,72 +129,38 @@ export const nightlyBriefsCron = inngest.createFunction(
 export const leakMapScheduleCron = inngest.createFunction(
   { id: "leak-map-schedule-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // every hour, on the hour
   async ({ step }) => {
-    const now = new Date();
-
-    const prepared = await step.run("prepare-scheduled-audits", async () => {
-      // isNull(deletedAt) — see the same note on nightlyBriefsCron above;
-      // isEngagementPaused() below only covers pausedAt.
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "prepare-scheduled-audits",
+      skillName: "leak-map",
+      phase: "stage_1_data_pull",
+      spreadMinutes: 45,
       // Only clients that actually finished Showtime onboarding (pin-down
       // wrote confirmationPageUrl — isProductOnboarded("showtime")'s own
       // signal). The weekly/monthly schedules have defaults, so without
       // this every client — Reputation Manager-, Cold Open- or Whop-only
       // included — got a Leak Map audit every Monday and 1st of the month.
-      const targets = await db
-        .select()
-        .from(engagements)
-        .where(and(isNull(engagements.deletedAt), isNotNull(engagements.confirmationPageUrl)));
-      // Ghost-run fix — same as nightlyBriefsCron above: check enablement
-      // before startRun, not after.
-      const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map");
-      const out: { runId: string; engagementId: string; auditType: "weekly" | "monthly" }[] = [];
-
-      for (const tenant of targets) {
-        if (isEngagementPaused(tenant)) continue;
-        if (disabledForLeakMap.has(tenant.engagementId)) continue;
-
-        const stack = tenant.stack as EngagementStack | null;
-
-        // A tenant whose weekly and monthly schedule happen to collide on
-        // the same hour (e.g. both configured for Monday-the-1st at 9am)
-        // gets both — matchesWeeklySchedule and matchesMonthlySchedule
-        // are independent checks, not mutually exclusive, same as the OG
-        // SKILL.md running two genuinely separate scheduled tasks.
-        const isWeeklyDue = matchesWeeklySchedule(stack?.weekly_summary_schedule, now);
-        const isMonthlyDue = matchesMonthlySchedule(stack?.monthly_deep_dive_schedule, now);
-
-        for (const auditType of [
-          ...(isWeeklyDue ? (["weekly"] as const) : []),
-          ...(isMonthlyDue ? (["monthly"] as const) : []),
-        ]) {
-          const runId = crypto.randomUUID();
-          await startRun({
-            id: runId,
-            engagementId: tenant.engagementId,
-            skillName: "leak-map",
-            phase: "stage_1_data_pull",
-            label: `${auditType === "weekly" ? "Weekly" : "Monthly"} audit`,
-          });
-          out.push({ runId, engagementId: tenant.engagementId, auditType });
+      loadPage: (after, limit) =>
+        db
+          .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt, stack: engagements.stack })
+          .from(engagements)
+          .where(and(isNull(engagements.deletedAt), isNotNull(engagements.confirmationPageUrl), after ? gt(engagements.engagementId, after) : undefined))
+          .orderBy(asc(engagements.engagementId))
+          .limit(limit),
+      select: async (rows, now) => {
+        const disabledForLeakMap = await getDisabledEngagementIdsForSkill("leak-map");
+        const out: { engagementId: string; label: string; extra: { auditType: "weekly" | "monthly" } }[] = [];
+        for (const tenant of rows) {
+          if (isEngagementPaused(tenant) || disabledForLeakMap.has(tenant.engagementId)) continue;
+          const stack = tenant.stack as EngagementStack | null;
+          // A tenant whose weekly and monthly schedules land on the same hour
+          // gets both: they're independent checks, as in the OG SKILL.md.
+          if (matchesWeeklySchedule(stack?.weekly_summary_schedule, now)) out.push({ engagementId: tenant.engagementId, label: "Weekly audit", extra: { auditType: "weekly" } });
+          if (matchesMonthlySchedule(stack?.monthly_deep_dive_schedule, now)) out.push({ engagementId: tenant.engagementId, label: "Monthly audit", extra: { auditType: "monthly" } });
         }
-      }
-      return out;
+        return out;
+      },
     });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-scheduled-audits",
-        prepared.map((r) =>
-          skillRunEvent({
-            runId: r.runId,
-            engagementId: r.engagementId,
-            skillName: "leak-map",
-            auditType: r.auditType,
-          })
-        )
-      );
-    }
-
-    return { dispatched: prepared.length };
+    return { dispatched };
   }
 );
 
@@ -285,11 +230,9 @@ export const staleRunReaperCron = inngest.createFunction(
     // checkpoint gap. The DB row is already closed regardless of whether
     // this lands — same reasoning as the cancel route not waiting on it.
     if (reaped.length > 0) {
-      await step.sendEvent(
-        "cancel-stale-runs",
-        reaped.map((r) => skillRunCancel.create({ runId: r.runId }))
-      );
-      await step.sendEvent(
+      await sendEventsInBatches(step, "cancel-stale-runs", reaped.map((r) => skillRunCancel.create({ runId: r.runId })));
+      await sendEventsInBatches(
+        step,
         "notify-stale-runs",
         reaped.map((r) => staleRunNotify.create({ runId: r.runId, engagementId: r.engagementId, skillName: r.skillName }))
       );
@@ -340,12 +283,12 @@ export const credentialHealthCron = inngest.createFunction(
   async ({ step }) => {
     const ids = await step.run("find-credentials-needing-check", () => findCredentialsNeedingCheck());
 
-    if (ids.length > 0) {
-      await step.sendEvent(
-        "dispatch-credential-checks",
-        ids.map((credentialId) => credentialHealthCheckSingle.create({ credentialId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "credential-health");
+    await sendEventsInBatches(
+      step,
+      "dispatch-credential-checks",
+      ids.map((credentialId) => credentialHealthCheckSingle.create({ credentialId, notBefore: staggeredNotBefore(`credential:${credentialId}`, 45, nowIso) }))
+    );
 
     return { dispatched: ids.length };
   }
@@ -354,8 +297,9 @@ export const credentialHealthCron = inngest.createFunction(
 /** Fanned-out handler: the one real network call per invocation. */
 export const checkSingleCredentialHealthCron = inngest.createFunction(
   { id: "check-single-credential-health", triggers: [credentialHealthCheckSingle], retries: 2 },
-  async ({ event }) => {
-    return checkSingleCredential(event.data.credentialId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    return step.run("check", () => checkSingleCredential(event.data.credentialId));
   }
 );
 
@@ -384,14 +328,14 @@ export const lostDealSweepCron = inngest.createFunction(
       markElapsedEnrollmentsLost()
     );
 
-    if (byEngagement.length > 0) {
-      await step.sendEvent(
-        "dispatch-lost-deal-processing",
-        byEngagement.map(({ engagementId, enrollmentIds }) =>
-          lostDealSweepEngagement.create({ engagementId, enrollmentIds })
-        )
-      );
-    }
+    const nowIso = await scheduledNow(step, "lost-deal");
+    await sendEventsInBatches(
+      step,
+      "dispatch-lost-deal-processing",
+      byEngagement.map(({ engagementId, enrollmentIds }) =>
+        lostDealSweepEngagement.create({ engagementId, enrollmentIds, notBefore: staggeredNotBefore(`lost-deal:${engagementId}`, 45, nowIso) })
+      )
+    );
 
     return { markedLost, engagementsDispatched: byEngagement.length };
   }
@@ -401,6 +345,7 @@ export const lostDealSweepCron = inngest.createFunction(
 export const processLostDealEngagementCron = inngest.createFunction(
   { id: "process-lost-deal-engagement", triggers: [lostDealSweepEngagement], retries: 2 },
   async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
     return processLostDealsForEngagement(event.data.engagementId, event.data.enrollmentIds, step);
   }
 );
@@ -428,12 +373,12 @@ export const weeklyMetricsCron = inngest.createFunction(
       findEngagementsForWeeklyReadout()
     );
 
-    if (eligible.length > 0) {
-      await step.sendEvent(
-        "dispatch-weekly-metrics",
-        eligible.map((engagementId) => weeklyMetricsEngagement.create({ engagementId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "weekly-metrics");
+    await sendEventsInBatches(
+      step,
+      "dispatch-weekly-metrics",
+      eligible.map((engagementId) => weeklyMetricsEngagement.create({ engagementId, notBefore: staggeredNotBefore(`weekly-metrics:${engagementId}`, 45, nowIso) }))
+    );
 
     return { dispatched: eligible.length };
   }
@@ -442,8 +387,9 @@ export const weeklyMetricsCron = inngest.createFunction(
 /** Fanned-out handler: Klaviyo list-size lookups + notification, one engagement at a time. */
 export const processWeeklyMetricsEngagementCron = inngest.createFunction(
   { id: "process-weekly-metrics-engagement", triggers: [weeklyMetricsEngagement], retries: 2 },
-  async ({ event }) => {
-    return processWeeklyMetricsForEngagement(event.data.engagementId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    return step.run("readout", () => processWeeklyMetricsForEngagement(event.data.engagementId));
   }
 );
 
@@ -462,12 +408,15 @@ export const weeklySnapshotCron = inngest.createFunction(
   async ({ step }) => {
     const engagementIds = await step.run("find-engagements-for-weekly-snapshot", () => findEngagementsForWeeklySnapshot());
 
-    if (engagementIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-weekly-snapshots",
-        engagementIds.map((engagementId) => weeklySnapshotEngagement.create({ engagementId }))
-      );
-    }
+    // Same offset per client as accountReviewSweepCron (same key, same
+    // window), so each client's review still runs 10 minutes after its
+    // snapshot is written.
+    const nowIso = await scheduledNow(step, "weekly-snapshot");
+    await sendEventsInBatches(
+      step,
+      "dispatch-weekly-snapshots",
+      engagementIds.map((engagementId) => weeklySnapshotEngagement.create({ engagementId, notBefore: staggeredNotBefore(`weekly:${engagementId}`, 45, nowIso) }))
+    );
 
     return { dispatched: engagementIds.length };
   }
@@ -476,8 +425,9 @@ export const weeklySnapshotCron = inngest.createFunction(
 /** Fanned-out handler: one engagement's own snapshot write. */
 export const processWeeklySnapshotEngagementCron = inngest.createFunction(
   { id: "process-weekly-snapshot-engagement", triggers: [weeklySnapshotEngagement], retries: 2 },
-  async ({ event }) => {
-    return processWeeklySnapshotForEngagement(event.data.engagementId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    return step.run("snapshot", () => processWeeklySnapshotForEngagement(event.data.engagementId));
   }
 );
 
@@ -500,12 +450,12 @@ export const accountReviewSweepCron = inngest.createFunction(
   async ({ step }) => {
     const engagementIds = await step.run("find-engagements-for-account-review-sweep", () => findEngagementsForAccountReviewSweep());
 
-    if (engagementIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-account-review-sweep",
-        engagementIds.map((engagementId) => accountReviewSweepEngagement.create({ engagementId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "account-review");
+    await sendEventsInBatches(
+      step,
+      "dispatch-account-review-sweep",
+      engagementIds.map((engagementId) => accountReviewSweepEngagement.create({ engagementId, notBefore: staggeredNotBefore(`weekly:${engagementId}`, 45, nowIso) }))
+    );
 
     return { dispatched: engagementIds.length };
   }
@@ -514,9 +464,10 @@ export const accountReviewSweepCron = inngest.createFunction(
 /** Fanned-out handler: one engagement's own auto-refresh check + (maybe) generation. */
 export const processAccountReviewSweepEngagementCron = inngest.createFunction(
   { id: "process-account-review-sweep-engagement", triggers: [accountReviewSweepEngagement], retries: 1 },
-  async ({ event }) => {
-    const review = await autoGenerateAccountReviewIfChanged(event.data.engagementId);
-    return { generated: review !== null };
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    const generated = await step.run("review", async () => (await autoGenerateAccountReviewIfChanged(event.data.engagementId)) !== null);
+    return { generated };
   }
 );
 
@@ -544,12 +495,12 @@ export const bookingPollCron = inngest.createFunction(
   async ({ step }) => {
     const due = await step.run("find-engagements-due-for-poll", () => findEngagementsDueForPoll());
 
-    if (due.length > 0) {
-      await step.sendEvent(
-        "dispatch-booking-polls",
-        due.map((engagementId) => bookingPollEngagement.create({ engagementId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "booking-poll");
+    await sendEventsInBatches(
+      step,
+      "dispatch-booking-polls",
+      due.map((engagementId) => bookingPollEngagement.create({ engagementId, notBefore: staggeredNotBefore(`booking-poll:${engagementId}`, 4, nowIso) }))
+    );
 
     return { dispatched: due.length };
   }
@@ -559,6 +510,7 @@ export const bookingPollCron = inngest.createFunction(
 export const processBookingPollEngagementCron = inngest.createFunction(
   { id: "process-booking-poll-engagement", triggers: [bookingPollEngagement], retries: 1 },
   async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
     return pollBookingsForEngagement(event.data.engagementId, step);
   }
 );
@@ -574,20 +526,21 @@ export const hubspotDeliveryPollCron = inngest.createFunction(
   { id: "hubspot-delivery-poll-cron", triggers: [{ cron: "*/15 * * * *" }], retries: 1 },
   async ({ step }) => {
     const due = await step.run("find-engagements-due-for-hubspot-delivery-poll", () => findEngagementsDueForHubspotDeliveryPoll());
-    if (due.length > 0) {
-      await step.sendEvent(
-        "dispatch-hubspot-delivery-polls",
-        due.map((engagementId) => hubspotDeliveryPollEngagement.create({ engagementId }))
-      );
-    }
+    const nowIso = await scheduledNow(step, "hubspot-delivery-poll");
+    await sendEventsInBatches(
+      step,
+      "dispatch-hubspot-delivery-polls",
+      due.map((engagementId) => hubspotDeliveryPollEngagement.create({ engagementId, notBefore: staggeredNotBefore(`hubspot-poll:${engagementId}`, 12, nowIso) }))
+    );
     return { dispatched: due.length };
   }
 );
 
 export const processHubspotDeliveryPollEngagementCron = inngest.createFunction(
   { id: "process-hubspot-delivery-poll-engagement", triggers: [hubspotDeliveryPollEngagement], retries: 1 },
-  async ({ event }) => {
-    return pollHubspotDeliveryForEngagement(event.data.engagementId);
+  async ({ event, step }) => {
+    await waitForStagger(step, event.data.notBefore);
+    return step.run("poll", () => pollHubspotDeliveryForEngagement(event.data.engagementId));
   }
 );
 
@@ -653,42 +606,45 @@ export const dynamicBriefCron = inngest.createFunction(
     // client: this used to call executeNightlyBriefingCycle directly and
     // could overlap a manual run or itself, briefing a call twice and
     // sending two notetaker bots into one meeting.
-    const prepared = await step.run("prepare-dynamic-briefs", async () => {
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "prepare-dynamic-briefs",
+      skillName: "pre-call-read",
+      phase: "roster_fetch",
+      label: "Brief triggered by call activity",
+      // Inside the 30-minute cadence, so a pass ends before the next starts.
+      spreadMinutes: 20,
       // isNull(deletedAt) — see the same note on nightlyBriefsCron above.
-      const all = await db.select().from(engagements).where(isNull(engagements.deletedAt));
-      const disabled = await getDisabledEngagementIdsForSkill("pre-call-read");
-      const candidates = all.filter((t) => {
-        const stack = t.stack as EngagementStack;
-        return (
-          !isEngagementPaused(t) &&
-          !disabled.has(t.engagementId) &&
-          stack?.brief_trigger_type === "dynamic_webhook" &&
-          stack?.booking_platform &&
-          stack?.booking_platform_credentials_ref
-        );
-      });
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const tenant of candidates) {
-        // The dispatcher fails a run whose required setup is missing, and
-        // a failed run notifies the client. Every 30 minutes that would be
-        // 48 notices a day, so an incomplete client is skipped here.
-        if ((await getMissingRequiredFields("pre-call-read", tenant.engagementId)).length > 0) continue;
-        const runId = crypto.randomUUID();
-        await startRun({ id: runId, engagementId: tenant.engagementId, skillName: "pre-call-read", phase: "roster_fetch", label: "Brief triggered by call activity" });
-        out.push({ runId, engagementId: tenant.engagementId });
-      }
-      return out;
+      loadPage: (after, limit) =>
+        db
+          .select({ engagementId: engagements.engagementId, pausedAt: engagements.pausedAt, stack: engagements.stack })
+          .from(engagements)
+          .where(and(isNull(engagements.deletedAt), after ? gt(engagements.engagementId, after) : undefined))
+          .orderBy(asc(engagements.engagementId))
+          .limit(limit),
+      select: async (rows) => {
+        const disabled = await getDisabledEngagementIdsForSkill("pre-call-read");
+        const candidates = rows.filter((t) => {
+          const stack = t.stack as EngagementStack;
+          return (
+            !isEngagementPaused(t) &&
+            !disabled.has(t.engagementId) &&
+            stack?.brief_trigger_type === "dynamic_webhook" &&
+            Boolean(stack?.booking_platform) &&
+            Boolean(stack?.booking_platform_credentials_ref)
+          );
+        });
+        const out: { engagementId: string; extra: { briefTrigger: "dynamic_webhook" } }[] = [];
+        for (const tenant of candidates) {
+          // The dispatcher fails a run whose required setup is missing, and
+          // a failed run notifies the client. Every 30 minutes that would be
+          // 48 notices a day, so an incomplete client is skipped here.
+          if ((await getMissingRequiredFields("pre-call-read", tenant.engagementId)).length > 0) continue;
+          out.push({ engagementId: tenant.engagementId, extra: { briefTrigger: "dynamic_webhook" } });
+        }
+        return out;
+      },
     });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-dynamic-briefs",
-        prepared.map((r) => skillRunEvent({ runId: r.runId, engagementId: r.engagementId, skillName: "pre-call-read", briefTrigger: "dynamic_webhook" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
+    return { dispatched };
   }
 );
 
@@ -862,12 +818,12 @@ export const assumedNoShowSweepCron = inngest.createFunction(
       );
     });
 
-    if (engagementIds.length > 0) {
-      await step.sendEvent(
-        "dispatch-no-show-sweeps",
-        engagementIds.map((engagementId) => assumedNoShowSweepEngagement.create({ engagementId }))
-      );
-    }
+    const noShowNowIso = await scheduledNow(step, "no-show-sweep");
+    await sendEventsInBatches(
+      step,
+      "dispatch-no-show-sweeps",
+      engagementIds.map((engagementId) => assumedNoShowSweepEngagement.create({ engagementId, notBefore: staggeredNotBefore(`no-show:${engagementId}`, 12, noShowNowIso) }))
+    );
 
     return { dispatched: engagementIds.length };
   }
@@ -920,6 +876,7 @@ export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
   { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement], retries: 2 },
   async ({ event, step }) => {
     const { engagementId } = event.data;
+    await waitForStagger(step, event.data.notBefore);
 
     const eligible = await step.run("find-eligible-calls", async () => {
       const now = new Date();

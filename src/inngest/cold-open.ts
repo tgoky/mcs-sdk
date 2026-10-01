@@ -7,55 +7,52 @@
 // app: the enablement check runs BEFORE startRun, in the prepare step,
 // so a disabled engagement never gets a visible run created for it.
 
-import crypto from "crypto";
-import { inngest, skillRunEvent } from "@/lib/inngest";
+import { inngest } from "@/lib/inngest";
+import { dispatchScheduledSkillRuns } from "@/inngest/fan-out";
 import { db } from "@/lib/db";
 import { engagements, coldOpenConfig } from "@/models/schema";
-import { eq, isNull } from "drizzle-orm";
-import { startRun } from "@/lib/run-log";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import { isEngagementPaused } from "@/lib/engagement-status";
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
 import { matchesDailyLocalHour } from "@/features/leak-map/server/schedule-matcher";
 
+// Cold Open's clients come from coldOpenConfig joined to engagements; both
+// crons page through them by engagementId (src/inngest/fan-out.ts).
+const coldOpenPage = (after: string | null, limit: number) =>
+  db
+    .select({ engagementId: engagements.engagementId, deletedAt: engagements.deletedAt, pausedAt: engagements.pausedAt, pausedReason: engagements.pausedReason, config: coldOpenConfig })
+    .from(coldOpenConfig)
+    .innerJoin(engagements, eq(engagements.engagementId, coldOpenConfig.engagementId))
+    .where(and(isNull(engagements.deletedAt), after ? gt(engagements.engagementId, after) : undefined))
+    .orderBy(asc(engagements.engagementId))
+    .limit(limit);
+
 export const coldOpenDailySendCron = inngest.createFunction(
   { id: "cold-open-daily-send-cron", triggers: [{ cron: "0 * * * *" }], retries: 1 }, // hourly; fires per-engagement at their configured local hour
   async ({ step }) => {
-    const now = new Date();
-    const prepared = await step.run("prepare-cold-open-daily-send-runs", async () => {
-      const disabled = await getDisabledEngagementIdsForSkill("daily-send");
-
-      const rows = await db
-        .select({ engagementId: engagements.engagementId, deletedAt: engagements.deletedAt, pausedAt: engagements.pausedAt, pausedReason: engagements.pausedReason, config: coldOpenConfig })
-        .from(coldOpenConfig)
-        .innerJoin(engagements, eq(engagements.engagementId, coldOpenConfig.engagementId))
-        .where(isNull(engagements.deletedAt));
-
-      const eligible = rows.filter((r) => {
-        if (disabled.has(r.engagementId)) return false;
-        if (isEngagementPaused({ pausedAt: r.pausedAt })) return false;
-        const settings = r.config.dailySendSettings;
-        if (!settings) return false;
-        if (r.config.phaseState.send_connect !== "complete" || r.config.phaseState.source_connect !== "complete") return false;
-        return matchesDailyLocalHour(settings.timezone, settings.localHour, now);
-      });
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of eligible) {
-        const runId = crypto.randomUUID();
-        await startRun({ id: runId, engagementId: row.engagementId, skillName: "daily-send", phase: "fetch", label: "Cold Open daily send" });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "prepare-cold-open-daily-send-runs",
+      skillName: "daily-send",
+      phase: "fetch",
+      label: "Cold Open daily send",
+      // Sends land within the first 45 minutes of the client's chosen hour.
+      spreadMinutes: 45,
+      loadPage: coldOpenPage,
+      select: async (rows, now) => {
+        const disabled = await getDisabledEngagementIdsForSkill("daily-send");
+        return rows
+          .filter((r) => {
+            if (disabled.has(r.engagementId)) return false;
+            if (isEngagementPaused({ pausedAt: r.pausedAt })) return false;
+            const settings = r.config.dailySendSettings;
+            if (!settings) return false;
+            if (r.config.phaseState.send_connect !== "complete" || r.config.phaseState.source_connect !== "complete") return false;
+            return matchesDailyLocalHour(settings.timezone, settings.localHour, now);
+          })
+          .map((r) => ({ engagementId: r.engagementId }));
+      },
     });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-cold-open-daily-send",
-        prepared.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "daily-send" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
+    return { dispatched };
   }
 );
 
@@ -66,37 +63,20 @@ export const coldOpenDailySendCron = inngest.createFunction(
 export const coldOpenReplySortCron = inngest.createFunction(
   { id: "cold-open-reply-sort-cron", triggers: [{ cron: "0 */4 * * *" }], retries: 1 },
   async ({ step }) => {
-    const prepared = await step.run("prepare-cold-open-reply-sort-runs", async () => {
-      const disabled = await getDisabledEngagementIdsForSkill("reply-sort");
-
-      const rows = await db
-        .select({ engagementId: engagements.engagementId, deletedAt: engagements.deletedAt, pausedAt: engagements.pausedAt, pausedReason: engagements.pausedReason, config: coldOpenConfig })
-        .from(coldOpenConfig)
-        .innerJoin(engagements, eq(engagements.engagementId, coldOpenConfig.engagementId))
-        .where(isNull(engagements.deletedAt));
-
-      const eligible = rows.filter((r) => {
-        if (disabled.has(r.engagementId)) return false;
-        if (isEngagementPaused({ pausedAt: r.pausedAt })) return false;
-        return r.config.phaseState.send_connect === "complete";
-      });
-
-      const out: { runId: string; engagementId: string }[] = [];
-      for (const row of eligible) {
-        const runId = crypto.randomUUID();
-        await startRun({ id: runId, engagementId: row.engagementId, skillName: "reply-sort", phase: "reply_fetch", label: "Cold Open reply sort" });
-        out.push({ runId, engagementId: row.engagementId });
-      }
-      return out;
+    const dispatched = await dispatchScheduledSkillRuns(step, {
+      id: "prepare-cold-open-reply-sort-runs",
+      skillName: "reply-sort",
+      phase: "reply_fetch",
+      label: "Cold Open reply sort",
+      spreadMinutes: 60,
+      loadPage: coldOpenPage,
+      select: async (rows) => {
+        const disabled = await getDisabledEngagementIdsForSkill("reply-sort");
+        return rows
+          .filter((r) => !disabled.has(r.engagementId) && !isEngagementPaused({ pausedAt: r.pausedAt }) && r.config.phaseState.send_connect === "complete")
+          .map((r) => ({ engagementId: r.engagementId }));
+      },
     });
-
-    if (prepared.length > 0) {
-      await step.sendEvent(
-        "dispatch-cold-open-reply-sort",
-        prepared.map(({ runId, engagementId }) => skillRunEvent({ runId, engagementId, skillName: "reply-sort" }))
-      );
-    }
-
-    return { dispatched: prepared.length };
+    return { dispatched };
   }
 );

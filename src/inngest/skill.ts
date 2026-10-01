@@ -1,4 +1,5 @@
 import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
+import { waitForStagger } from "@/inngest/fan-out";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
@@ -108,7 +109,9 @@ export const executeSkillRun = inngest.createFunction(
       heroVideoUrl,
     } = event.data;
 
-    await step.run("mark-executing", () => markRunExecuting(runId));
+    // A scheduled run waits for its slot in the cron's window first.
+    await waitForStagger(step, event.data.notBefore);
+    await step.run("mark-executing", () => markRunExecuting(runId, event.data.notBefore));
 
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db
