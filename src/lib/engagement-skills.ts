@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import { engagements, engagementSkills, repIdentityGraphs, coldOpenConfig, whopAgentConnections, type EngagementStack } from "@/models/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -179,6 +180,13 @@ export const coldOpenIcpLockComplete = sql`${coldOpenConfig.phaseState}->>'icp_l
  * client look like it already has all 11 workers turned on.
  */
 export async function getEnabledWorkerIdsForEngagement(engagementId: string): Promise<WorkerId[]> {
+  // A copy, so no caller can change another's cached result.
+  return [...(await readEnabledWorkerIds(engagementId))];
+}
+
+// Once per request inside a page render (the layout, the Work sidebar and
+// the page all ask); anywhere else, React's cache() just calls through.
+const readEnabledWorkerIds = cache(async (engagementId: string): Promise<WorkerId[]> => {
   const [rows, [engagement], repGraph, coldOpenRow, whopConnectionRow] = await Promise.all([
     db.select({ skillId: engagementSkills.skillId, enabled: engagementSkills.enabled, enabledAt: engagementSkills.enabledAt })
       .from(engagementSkills)
@@ -205,7 +213,7 @@ export async function getEnabledWorkerIdsForEngagement(engagementId: string): Pr
     if ((WHOP_AGENT_SKILL_IDS as string[]).includes(id)) return hasWhopAgentEvidence;
     return hasRepEvidence;
   });
-}
+});
 
 /**
  * getEnabledWorkerIdsForEngagement for many engagements in five queries

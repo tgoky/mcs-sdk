@@ -238,7 +238,21 @@ export async function getInstalledPackagesByWorkspace(
   workspaceIds: string[]
 ): Promise<Map<string, string[]>> {
   if (workspaceIds.length === 0) return new Map();
+  // The dashboard layout, the Work sidebar and the page each ask for the
+  // active workspace alone; that read happens once per request. Copies go
+  // out so no caller can change another's result.
+  if (workspaceIds.length === 1) {
+    const packageIds = await installedPackagesForWorkspace(workspaceIds[0]);
+    return new Map(packageIds.length > 0 ? [[workspaceIds[0], [...packageIds]]] : []);
+  }
+  return readInstalledPackages(workspaceIds);
+}
 
+const installedPackagesForWorkspace = cache(async (workspaceId: string): Promise<string[]> => {
+  return (await readInstalledPackages([workspaceId])).get(workspaceId) ?? [];
+});
+
+async function readInstalledPackages(workspaceIds: string[]): Promise<Map<string, string[]>> {
   const rows = await db
     .select({ workspaceId: workspacePackages.workspaceId, packageId: workspacePackages.packageId })
     .from(workspacePackages)
@@ -267,7 +281,8 @@ export async function getInstalledPackagesByWorkspace(
  * make today's multi-engagement-workspace confusion worse, and it's
  * already correct for every workspace the migration has been applied to.
  */
-export async function getPrimaryEngagementIdForWorkspace(workspaceId: string): Promise<string | null> {
+// Once per request: the layout, the Work sidebar and most pages all ask.
+export const getPrimaryEngagementIdForWorkspace = cache(async (workspaceId: string): Promise<string | null> => {
   const [row] = await db
     .select({ engagementId: engagements.engagementId })
     .from(engagements)
@@ -276,7 +291,7 @@ export async function getPrimaryEngagementIdForWorkspace(workspaceId: string): P
     .limit(1);
 
   return row?.engagementId ?? null;
-}
+});
 
 /** Same rule as getPrimaryEngagementIdForWorkspace (oldest live engagement
  * wins), batched across every workspace at once — one query instead of N,
