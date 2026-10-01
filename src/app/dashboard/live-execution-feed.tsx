@@ -33,6 +33,7 @@ import { groupBySignature, normalizeForSignature } from "@/lib/list-grouping";
 import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 interface SkillRun {
   id: string;
@@ -482,9 +483,9 @@ export function LiveExecutionFeed({ initialRuns, apiUrl, title, lockedSkill, sto
       return () => controller.abort();
     }
 
-    const id = setInterval(() => refresh(controller.signal), 5000);
+    const stopPolling = setVisibleInterval(() => refresh(controller.signal), 5000);
     return () => {
-      clearInterval(id);
+      stopPolling();
       controller.abort();
     };
   }, [polling, refresh]);

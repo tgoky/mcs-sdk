@@ -46,6 +46,7 @@ import { GroupCountToggle } from "@/components/group-toggle";
 import { VerboseTime } from "@/components/relative-time";
 import { cn } from "@/lib/utils";
 import { QueueFixDrawer } from "@/components/queue-fix-drawer";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 export interface QueueItemDTO {
   id: string;
@@ -1084,9 +1085,9 @@ export function QueuePanel({
 
   useEffect(() => {
     const controller = new AbortController();
-    const interval = setInterval(() => load(controller.signal), POLL_MS);
+    const stopPolling = setVisibleInterval(() => load(controller.signal), POLL_MS);
     return () => {
-      clearInterval(interval);
+      stopPolling();
       controller.abort();
     };
   }, [load]);

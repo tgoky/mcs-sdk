@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 /**
  * Matches LiveExecutionFeed's own poll cadence (see the `polling` effect in
  * live-execution-feed.tsx) so the sidebar count and the feed content it's
  * summarizing never drift more than a few seconds apart from each other.
  */
-const POLL_MS = 5_000;
+const POLL_MS = 10_000;
 
 /**
  * The count-badge half of "Executions" nav item, split out of
@@ -66,9 +67,9 @@ export function LiveCountBadge({
 
   useEffect(() => {
     const controller = new AbortController();
-    const interval = setInterval(() => load(controller.signal), POLL_MS);
+    const stopPolling = setVisibleInterval(() => load(controller.signal), POLL_MS);
     return () => {
-      clearInterval(interval);
+      stopPolling();
       controller.abort();
     };
   }, [load]);

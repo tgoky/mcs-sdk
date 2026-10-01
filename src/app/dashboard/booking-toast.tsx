@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck2, X, RotateCcw } from "lucide-react";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 interface RecentRun {
   id: string;
@@ -24,7 +25,7 @@ interface ToastItem {
   createdAt: number;
 }
 
-const POLL_MS = 5000;
+const POLL_MS = 15_000;
 const TOAST_LIFETIME_MS = 8000;
 
 export function BookingToast() {
@@ -88,9 +89,9 @@ export function BookingToast() {
     (async () => {
       await poll(controller.signal);
     })();
-    const interval = setInterval(() => poll(controller.signal), POLL_MS);
+    const stopPolling = setVisibleInterval(() => poll(controller.signal), POLL_MS);
     return () => {
-      clearInterval(interval);
+      stopPolling();
       controller.abort();
     };
   }, [poll]);

@@ -56,17 +56,31 @@ export function RunHistoryDetail({ runId, onClose }: { runId: string; onClose: (
         if (!res.ok) throw new Error(data.error ?? "Couldn't load this run.");
         setRun(data.run);
         // Keep a live run's steps moving, same 3s cadence as the run page.
-        if (LIVE_STATUSES.has(String(data.run.status).toLowerCase())) timer = setTimeout(load, POLL_MS);
+        if (LIVE_STATUSES.has(String(data.run.status).toLowerCase())) timer = setTimeout(loadWhenVisible, POLL_MS);
       } catch (cause) {
         if (controller.signal.aborted) return;
         setError(cause instanceof Error ? cause.message : "Couldn't load this run.");
       }
     }
+    // A hidden tab waits for the user to come back instead of polling.
+    let waitingForVisible = false;
+    function loadWhenVisible() {
+      if (document.visibilityState === "visible") return load();
+      waitingForVisible = true;
+    }
+    function onVisibilityChange() {
+      if (waitingForVisible && document.visibilityState === "visible") {
+        waitingForVisible = false;
+        load();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
     load();
 
     return () => {
       controller.abort();
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [runId]);
 

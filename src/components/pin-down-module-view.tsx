@@ -29,6 +29,7 @@ import { GroupCountToggle } from "@/components/group-toggle";
 import { phaseLabel } from "@/lib/copy";
 import { SquishySkillBadge } from "@/components/squishy-skill-badge";
 import { formatVerboseDate } from "@/components/relative-time";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 export interface SkillRun {
   id: string;
@@ -209,9 +210,9 @@ export function PinDownModuleView({
   useEffect(() => {
     if (!polling) return;
     const controller = new AbortController();
-    const interval = setInterval(() => refresh(controller.signal), 5000);
+    const stopPolling = setVisibleInterval(() => refresh(controller.signal), 10_000);
     return () => {
-      clearInterval(interval);
+      stopPolling();
       controller.abort();
     };
   }, [polling, refresh]);

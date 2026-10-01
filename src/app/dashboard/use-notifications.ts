@@ -5,6 +5,7 @@
 // share one poller instead of two independent /api/notifications intervals.
 
 import { useCallback, useEffect, useState } from "react";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 export interface NotificationRow {
   id: string;
@@ -44,9 +45,9 @@ export function useNotifications() {
     (async () => {
       await load(controller.signal);
     })();
-    const interval = setInterval(() => load(controller.signal), POLL_MS);
+    const stopPolling = setVisibleInterval(() => load(controller.signal), POLL_MS);
     return () => {
-      clearInterval(interval);
+      stopPolling();
       controller.abort();
     };
   }, [load]);

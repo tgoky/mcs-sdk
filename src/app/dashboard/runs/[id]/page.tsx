@@ -42,6 +42,7 @@ import { classifyRunError } from "@/lib/error-classification";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import type { RunStep, RunSummary } from "@/models/schema";
 import type { RunDetailPayload, RepRedditWatchDetail, RepTwitterWatchDetail } from "./_shared/types";
+import { setVisibleInterval } from "@/lib/visible-interval";
 
 interface RunDetail {
   id: string;
@@ -377,9 +378,9 @@ export default function RunDetailPage() {
   useEffect(() => {
     if (!isRunning) return;
     const controller = new AbortController();
-    const intervalId = window.setInterval(() => fetchRun(controller.signal), 3000);
+    const stopPolling = setVisibleInterval(() => fetchRun(controller.signal), 3000);
     return () => {
-      window.clearInterval(intervalId);
+      stopPolling();
       controller.abort();
     };
   }, [fetchRun, isRunning]);

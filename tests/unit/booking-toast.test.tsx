@@ -57,7 +57,7 @@ describe("BookingToast", () => {
     expect(screen.queryByText("New booking just landed")).not.toBeInTheDocument();
 
     await act(async () => {
-      vi.advanceTimersByTime(5000); // second poll picks up the new run
+      vi.advanceTimersByTime(15_000); // second poll picks up the new run
       await Promise.resolve();
     });
 
@@ -81,7 +81,7 @@ describe("BookingToast", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(15_000);
       await Promise.resolve();
     });
 
@@ -95,7 +95,7 @@ describe("BookingToast", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(15_000);
       await Promise.resolve();
     });
 
@@ -112,7 +112,7 @@ describe("BookingToast", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(15_000);
       await Promise.resolve();
     });
     expect(screen.getByText("New booking just landed")).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("BookingToast", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(15_000);
       await Promise.resolve();
     });
 
