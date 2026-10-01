@@ -104,7 +104,9 @@ async function askedRecently(row: RequestRow, client: DbOrTx = db): Promise<bool
       and(
         eq(reviewRequests.engagementId, row.engagementId),
         ne(reviewRequests.id, row.id),
-        or(and(eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, since)), eq(reviewRequests.status, "sending")),
+        // A request stuck in "sending" (a crash mid-send) may have gone
+        // out, so it counts as asking, for the same window as a sent one.
+        or(and(eq(reviewRequests.status, "sent"), gte(reviewRequests.sentAt, since)), and(eq(reviewRequests.status, "sending"), gte(reviewRequests.updatedAt, since))),
         or(...who)
       )
     )
@@ -114,19 +116,21 @@ async function askedRecently(row: RequestRow, client: DbOrTx = db): Promise<bool
 
 /**
  * Claims this request for sending ("scheduled" -> "sending"), under a lock
- * on the person so two requests to them (a show and a payment due at the
- * same moment) can't both pass the "asked recently?" check. Returns false
- * when it was already claimed, or the person was just asked. A request left
- * "sending" by a crash is never retried: it may have gone out.
+ * on the client so two requests to one person (a show and a payment due at
+ * the same moment) can't both pass the "asked recently?" check. The lock is
+ * per client, not per person, because a person is matched by email or
+ * phone and two requests can carry different ones; it's held only for the
+ * check and the claim. A request left "sending" by a crash is never
+ * retried: it may have gone out.
  */
 async function claimForSending(row: RequestRow): Promise<"claimed" | "taken" | "asked"> {
-  const person = `${row.engagementId}:${row.email ?? ""}:${row.phone ?? ""}`;
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${person}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`review-request:${row.engagementId}`}))`);
     if (await askedRecently(row, tx)) return "asked";
     const [claimed] = await tx
       .update(reviewRequests)
-      .set({ status: "sending", updatedAt: new Date() })
+      // Keeps a phone or name found on the booking, so later checks match on it.
+      .set({ status: "sending", phone: row.phone, personName: row.personName, updatedAt: new Date() })
       .where(and(eq(reviewRequests.id, row.id), eq(reviewRequests.status, "scheduled")))
       .returning({ id: reviewRequests.id });
     return claimed ? "claimed" : "taken";
@@ -145,6 +149,13 @@ export async function sendReviewRequest(engagementId: string, requestId: string)
   const stack = tenant.stack as EngagementStack | null;
   const link = stack?.rep_review_link?.trim();
   if (!link) return finish(row, { status: "skipped", detail: "No review link is set." });
+  // A booking may have gained a phone or name since it was scheduled.
+  // Filled in before the claim, so "asked recently?" matches on it too.
+  if (row.trigger === "showed" && (!row.phone || !row.personName)) {
+    const [b] = await db.select({ phone: bookingRoster.prospectPhone, name: bookingRoster.prospectName }).from(bookingRoster).where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.externalCallId, row.refId))).limit(1);
+    row.phone ??= b?.phone ?? null;
+    row.personName ??= b?.name ?? null;
+  }
   const claim = await claimForSending(row);
   if (claim === "asked") return finish(row, { status: "skipped", detail: `Already asked in the last ${ASK_AGAIN_AFTER_DAYS} days.` });
   if (claim === "taken") return { status: "sending", detail: "Another attempt is already sending this request." };
@@ -155,13 +166,6 @@ export async function sendReviewRequest(engagementId: string, requestId: string)
   let smsPlatform: "twilio" | "ghl_sms" | null;
   let channel: ReturnType<typeof pickReviewChannel>;
   try {
-    // A booking may have gained a phone or name since it was scheduled.
-    if (row.trigger === "showed" && (!row.phone || !row.personName)) {
-      const [b] = await db.select({ phone: bookingRoster.prospectPhone, name: bookingRoster.prospectName }).from(bookingRoster).where(and(eq(bookingRoster.engagementId, engagementId), eq(bookingRoster.externalCallId, row.refId))).limit(1);
-      row.phone ??= b?.phone ?? null;
-      row.personName ??= b?.name ?? null;
-    }
-
     emailCredential = row.email ? await resolveCredential(engagementId, "smtp").catch(() => null) : null;
     smsPlatform = stack?.sms_platform === "twilio" || stack?.sms_platform === "ghl_sms" ? stack.sms_platform : null;
     const smsOk = Boolean(row.phone && smsPlatform && !(await isOptedOut(engagementId, row.phone)));

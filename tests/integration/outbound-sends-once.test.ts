@@ -70,6 +70,34 @@ d("outbound sends happen once", () => {
     expect(emails).toEqual(["pat@example.com"]);
   });
 
+  it("review requests: one message for a person whose two requests carry different contact details", async () => {
+    const { db } = await import("@/lib/db");
+    const { reviewRequests } = await import("@/models/schema");
+    const { sendReviewRequest } = await import("@/features/reputation-manager/server/review-requests");
+    const due = new Date();
+    for (let i = 0; i < 5; i++) {
+      const email = `sam${i}@example.com`;
+      const [a] = await db.insert(reviewRequests).values({ engagementId, trigger: "showed", refId: `call_sam_${i}`, email, sendAt: due }).returning({ id: reviewRequests.id });
+      const [b] = await db.insert(reviewRequests).values({ engagementId, trigger: "paid", refId: `pay_sam_${i}`, email, phone: `+1555000${i}`, sendAt: due }).returning({ id: reviewRequests.id });
+      await Promise.all([sendReviewRequest(engagementId, a.id), sendReviewRequest(engagementId, b.id)]);
+      expect(emails.filter((e) => e === email)).toHaveLength(1);
+    }
+  });
+
+  it("review requests: one stuck in sending long ago doesn't block the person forever", async () => {
+    const { db } = await import("@/lib/db");
+    const { reviewRequests } = await import("@/models/schema");
+    const { sendReviewRequest } = await import("@/features/reputation-manager/server/review-requests");
+    const longAgo = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
+    await db.insert(reviewRequests).values({ engagementId, trigger: "showed", refId: "call_old", email: "lee@example.com", sendAt: longAgo, status: "sending", updatedAt: longAgo });
+    await db.insert(reviewRequests).values({ engagementId, trigger: "showed", refId: "call_recent", email: "kim@example.com", sendAt: recent, status: "sending", updatedAt: recent });
+    const [lee] = await db.insert(reviewRequests).values({ engagementId, trigger: "paid", refId: "pay_lee", email: "lee@example.com", sendAt: new Date() }).returning({ id: reviewRequests.id });
+    const [kim] = await db.insert(reviewRequests).values({ engagementId, trigger: "paid", refId: "pay_kim", email: "kim@example.com", sendAt: new Date() }).returning({ id: reviewRequests.id });
+    expect((await sendReviewRequest(engagementId, lee.id)).status).toBe("sent");
+    expect((await sendReviewRequest(engagementId, kim.id)).status).toBe("skipped");
+  });
+
   it("at-risk check-in: a repeat attempt after a send doesn't text again", async () => {
     const { db } = await import("@/lib/db");
     const { bookingRoster } = await import("@/models/schema");
