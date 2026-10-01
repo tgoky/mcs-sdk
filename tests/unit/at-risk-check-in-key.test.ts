@@ -1,6 +1,8 @@
 // One check-in run per booking and call time: repeats of one schedule
 // collapse, a rescheduled call gets its own.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/lib/db", () => ({ db: {} }));
 import { inngestOptions } from "../helpers/inngest-fn";
 import { sendAtRiskCheckIn } from "@/inngest/at-risk-check-in";
 
