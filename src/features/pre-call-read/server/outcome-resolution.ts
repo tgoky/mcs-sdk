@@ -30,7 +30,7 @@
 // the identical approval gate, the identical skill-enabled check.
 import crypto from "crypto";
 import { cancelReviewRequest, scheduleReviewRequest } from "@/features/reputation-manager/server/review-requests";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   briefedCallsLog,
@@ -200,6 +200,26 @@ async function triggerNoShowWinBack(
   if (existing) return "skipped_duplicate";
 
   if (!(await isSkillEnabledForEngagement(engagementId, "win-back"))) return "skipped_disabled";
+
+  // The sweep runs every 15 minutes and, by design, records no outcome until
+  // a person approves, so the same call came up again each time and queued
+  // another approval item (and digest line) until someone acted. One item
+  // per call: an earlier one, pending or decided, settles it. A rejection
+  // is a person saying it wasn't a no-show, so it isn't asked again.
+  if (source === "auto_sweep") {
+    const [queued] = await db
+      .select({ id: pendingActions.id })
+      .from(pendingActions)
+      .where(
+        and(
+          eq(pendingActions.engagementId, engagementId),
+          eq(pendingActions.actionType, "webhook_enrollment"),
+          sql`${pendingActions.payload} -> 'bookingPayload' ->> '_bookingId' = ${bookingId}`
+        )
+      )
+      .limit(1);
+    if (queued) return "pending_review";
+  }
 
   const payload = {
     event: "booking.no-showed",

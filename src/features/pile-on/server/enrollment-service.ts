@@ -18,6 +18,7 @@ import { deriveProspectName } from "@/lib/prospect-identity";
 import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 import type { GetStepTools, Inngest } from "inngest";
 import { getAppUrl } from "@/lib/app-url";
+import { enrollInWinBackOnce } from "@/lib/win-back-enrollment";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -469,21 +470,27 @@ export async function handleInboundBookingEvent(
     // proceed to the ESP/SMS/hybrid-personalization side effects below;
     // the loser's onConflictDoNothing insert returns nothing and this
     // bails out exactly like the old "already enrolled" branch did.
-    const [enrollmentRow] = await db
-      .insert(winBackEnrollments)
-      .values({
-        id: crypto.randomUUID(),
-        engagementId: tenant.engagementId,
-        prospectEmail,
-        prospectName,
-        runId,
-        recoveryWindowDays: stack.recovery_window_days ?? 30,
-        status: "active",
-        freshRescheduleLink,
-        sourceBookingId: bookingId,
-      })
-      .onConflictDoNothing({ target: [winBackEnrollments.engagementId, winBackEnrollments.sourceBookingId] })
-      .returning({ id: winBackEnrollments.id });
+    // Also one active cadence per person (src/lib/win-back-enrollment.ts):
+    // someone already mid-cadence from another booking isn't enrolled twice.
+    const enrollment = await enrollInWinBackOnce({
+      id: crypto.randomUUID(),
+      engagementId: tenant.engagementId,
+      prospectEmail,
+      prospectName,
+      runId,
+      recoveryWindowDays: stack.recovery_window_days ?? 30,
+      status: "active",
+      freshRescheduleLink,
+      sourceBookingId: bookingId,
+    });
+
+    if (enrollment.status === "already_active") {
+      summary.openItems.push(`${prospectName} (${prospectEmail}) is already in an active recovery cadence (enrollment ${enrollment.existingId}). Skipped a second one.`);
+      await logStep(runId, { phase: "recovery_enrollment", status: "success", detail: "Skipped. Already in an active recovery cadence." });
+      await finishRun(runId, { summary });
+      return;
+    }
+    const enrollmentRow = enrollment.status === "enrolled" ? { id: enrollment.id } : null;
 
     if (!enrollmentRow) {
       const [existing] = await db

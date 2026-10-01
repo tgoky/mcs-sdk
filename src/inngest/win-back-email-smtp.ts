@@ -28,6 +28,8 @@ export const processWinBackEmailSmtpSequence = inngest.createFunction(
   {
     id: "process-win-back-email-smtp-sequence",
     triggers: [winBackEmailSmtpSequenceStart],
+    // One sequence per enrollment.
+    idempotency: "event.data.enrollmentId",
     cancelOn: [{ event: winBackSequenceStop, match: "data.enrollmentId" }],
   },
   async ({ event, step }) => {

@@ -26,6 +26,8 @@ import { isEngagementPaused } from "@/lib/engagement-status";
 export const processWinBackSmsSequence = inngest.createFunction(
   {
     id: "process-win-back-sms-sequence",
+    // One sequence per enrollment.
+    idempotency: "event.data.enrollmentId",
     triggers: [winBackSmsSequenceStart],
     cancelOn: [{ event: winBackSequenceStop, match: "data.enrollmentId" }],
   },

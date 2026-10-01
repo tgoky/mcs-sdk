@@ -873,7 +873,15 @@ export const assumedNoShowSweepCron = inngest.createFunction(
  * the cracks once could age out and never get resolved at all.
  */
 export const processAssumedNoShowSweepEngagementCron = inngest.createFunction(
-  { id: "process-assumed-no-show-sweep-engagement", triggers: [assumedNoShowSweepEngagement], retries: 2 },
+  {
+    id: "process-assumed-no-show-sweep-engagement",
+    triggers: [assumedNoShowSweepEngagement],
+    retries: 2,
+    // Two sweeps for one client (a slow one and the next) run their steps
+    // one at a time, so a call's "already queued for review?" check and the
+    // queueing can't interleave.
+    concurrency: { key: "event.data.engagementId", limit: 1 },
+  },
   async ({ event, step }) => {
     const { engagementId } = event.data;
     await waitForStagger(step, event.data.notBefore);

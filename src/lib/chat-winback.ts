@@ -31,6 +31,7 @@ import { missingWinBackMetaFor } from "@/lib/win-back-platform-readiness";
 import { getBlockingReasons } from "@/lib/worker-blocking-conditions";
 import type { EngagementStack } from "@/models/schema";
 import crypto from "crypto";
+import { enrollInWinBackOnce } from "@/lib/win-back-enrollment";
 
 type EnrollResult = { ok: true; enrollmentId: string } | { ok: false; error: string };
 type PreviewResult = { ok: true; actions: string[] } | { ok: false; error: string };
@@ -120,18 +121,7 @@ export async function enrollProspectInWinBack(opts: {
     if (metaError) return { ok: false, error: metaError };
   }
 
-  const [existingActive] = await db
-    .select({ id: winBackEnrollments.id })
-    .from(winBackEnrollments)
-    .where(
-      and(
-        eq(winBackEnrollments.engagementId, opts.engagementId),
-        eq(winBackEnrollments.prospectEmail, opts.prospectEmail),
-        eq(winBackEnrollments.status, "active")
-      )
-    )
-    .limit(1);
-  if (existingActive) return { ok: false, error: `${opts.prospectEmail} is already in an active recovery cadence.` };
+  const alreadyActive = { ok: false as const, error: `${opts.prospectEmail} is already in an active recovery cadence.` };
 
   // Phase 6 — bounce/complaint-rate auto-pause (esp-delivery-monitor.ts).
   // Same gate the real cancellation-webhook path checks
@@ -154,15 +144,10 @@ export async function enrollProspectInWinBack(opts: {
     // id — mirrored here with startRun/finishRun instead of skipping it,
     // which is what left this platform unable to enroll manually at all.
     const runId = crypto.randomUUID();
-    await startRun({
-      id: runId,
-      engagementId: opts.engagementId,
-      skillName: "win-back",
-      phase: "manual_enrollment",
-      label: `Win-Back manually enrolled for ${prospectName} (direct-send)`,
-    });
-
-    await db.insert(winBackEnrollments).values({
+    // Enrolled (one active cadence per person, src/lib/win-back-enrollment.ts)
+    // before anything is started, so two requests at once can't both start
+    // a sequence.
+    const enrolled = await enrollInWinBackOnce({
       id: enrollmentId,
       engagementId: opts.engagementId,
       prospectEmail: opts.prospectEmail,
@@ -171,6 +156,15 @@ export async function enrollProspectInWinBack(opts: {
       sourceBookingId: null,
       recoveryWindowDays: stack.recovery_window_days ?? 30,
       status: "active",
+    });
+    if (enrolled.status !== "enrolled") return alreadyActive;
+
+    await startRun({
+      id: runId,
+      engagementId: opts.engagementId,
+      skillName: "win-back",
+      phase: "manual_enrollment",
+      label: `Win-Back manually enrolled for ${prospectName} (direct-send)`,
     });
 
     await inngest.send(
@@ -190,16 +184,9 @@ export async function enrollProspectInWinBack(opts: {
     return { ok: true, enrollmentId };
   }
 
-  const apiKey = await resolveCredential(opts.engagementId, stack.email_platform);
-
-  await enrollInWinBackSequence(stack.email_platform, apiKey, opts.prospectEmail, prospectName, {
-    recovery_list_id: stack.recovery_list_id,
-    location_id: stack.booking_platform_meta?.location_id,
-    recovery_workflow_id: stack.recovery_workflow_id,
-    activecampaign_base_url: stack.activecampaign_base_url,
-  });
-
-  await db.insert(winBackEnrollments).values({
+  // Recorded before the email tool is asked to enroll them, so two requests
+  // at once can't both enroll the person there; undone if that call fails.
+  const enrolled = await enrollInWinBackOnce({
     id: enrollmentId,
     engagementId: opts.engagementId,
     prospectEmail: opts.prospectEmail,
@@ -209,6 +196,20 @@ export async function enrollProspectInWinBack(opts: {
     recoveryWindowDays: stack.recovery_window_days ?? 30,
     status: "active",
   });
+  if (enrolled.status !== "enrolled") return alreadyActive;
+
+  try {
+    const apiKey = await resolveCredential(opts.engagementId, stack.email_platform);
+    await enrollInWinBackSequence(stack.email_platform, apiKey, opts.prospectEmail, prospectName, {
+      recovery_list_id: stack.recovery_list_id,
+      location_id: stack.booking_platform_meta?.location_id,
+      recovery_workflow_id: stack.recovery_workflow_id,
+      activecampaign_base_url: stack.activecampaign_base_url,
+    });
+  } catch (err) {
+    await db.delete(winBackEnrollments).where(eq(winBackEnrollments.id, enrollmentId));
+    throw err;
+  }
 
   return { ok: true, enrollmentId };
 }

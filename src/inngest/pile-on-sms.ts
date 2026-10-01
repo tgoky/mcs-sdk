@@ -23,7 +23,15 @@ import { isEngagementPaused } from "@/lib/engagement-status";
 const SEND_LATE_GRACE_MS = 30 * 60 * 1000;
 
 export const processPileOnSmsSequence = inngest.createFunction(
-  { id: "process-pile-on-sms-sequence", triggers: [pileOnSmsSequenceStart] },
+  {
+    id: "process-pile-on-sms-sequence",
+    triggers: [pileOnSmsSequenceStart],
+    // One sequence per booking and call time. A booking that reaches us by
+    // both the webhook and the poller can carry different delivery keys, so
+    // the upstream dedupe alone could start two sequences; a reschedule
+    // (new call time) still starts a fresh one.
+    idempotency: 'event.data.engagementId + ":" + event.data.bookingId + ":" + event.data.callTime',
+  },
   async ({ event, step }) => {
     const { 
       engagementId, 
