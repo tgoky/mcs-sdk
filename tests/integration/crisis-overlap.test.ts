@@ -111,4 +111,22 @@ d("Crisis Response: overlapping runs", () => {
     expect(row.at?.getTime()).toBe(declaredUpTo.getTime());
     expect(await renewCrisisClaim(engagementId, fourth)).toBe(true);
   });
+
+  it("a run whose window was moved by another run since it read it stands down", async () => {
+    const { db } = await import("@/lib/db");
+    const { repIdentityGraphs } = await import("@/models/schema");
+    const { eq } = await import("drizzle-orm");
+    const { claimCrisisWindow, renewCrisisClaim, markCheckedThrough } = await import("@/features/reputation-manager/server/crisis-response-service");
+    const [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
+    const readStart = row.at ? row.at.toISOString() : null;
+    const [b, a] = [crypto.randomUUID(), crypto.randomUUID()];
+
+    // B claims and reads the window; A (slow, claim gone stale) declares
+    // and moves the window before B gets to declare.
+    await db.update(repIdentityGraphs).set({ crisisClaimRunId: null, crisisClaimedAt: null }).where(eq(repIdentityGraphs.engagementId, engagementId));
+    expect(await claimCrisisWindow(engagementId, b)).toBe(true);
+    expect(await renewCrisisClaim(engagementId, b, readStart)).toBe(true);
+    await markCheckedThrough(engagementId, new Date(Date.now() + 60_000), a, { declared: true });
+    expect(await renewCrisisClaim(engagementId, b, readStart)).toBe(false);
+  });
 });

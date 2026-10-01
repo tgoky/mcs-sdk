@@ -146,7 +146,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       // Only what the handling below reads: step results are stored, and a
       // long outage can make this window large.
       const calls = listed.map((c) => ({ id: c.id, email: c.email, name: c.name, phone: c.phone, eventKind: c.eventKind, callTime: c.callTime.toISOString() }));
-      return { ok: true as const, nowIso: now.toISOString(), calls };
+      return { ok: true as const, nowIso: now.toISOString(), sinceISO, calls };
     } catch (e: unknown) {
       return { ok: false as const, nowIso: now.toISOString(), message: e instanceof Error ? e.message : "Unknown error" };
     }
@@ -292,22 +292,30 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
           phase: "webhook_received",
           label: `${call.name} <${call.email}>`,
         });
+        // A log line only: it mustn't fail the step after the run exists.
         await logStep(runId, {
           phase: "booking_roster",
           status: rosterResult.wrote ? "success" : "skipped",
           detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
-        });
+        }).catch(() => {});
         return { enabled: true };
       });
     } catch (e: unknown) {
-      // Nothing for this booking has run yet: give the claim back so the
+      // Its run wasn't created (that's the step's last fallible write), so
+      // nothing for this booking has gone out: give the claim back so the
       // next poll picks it up, instead of leaving it claimed and unhandled.
       console.error(`[booking-poller] Couldn't start polled booking ${call.id}:`, e);
-      await once(`release-polled-booking-${runId}`, async () => {
-        await db.delete(webhookEvents).where(and(eq(webhookEvents.eventSource, platform), eq(webhookEvents.idempotencyKey, idempotencyKey)));
-      });
       errors++;
-      released++;
+      try {
+        await once(`release-polled-booking-${runId}`, async () => {
+          await db.delete(webhookEvents).where(and(eq(webhookEvents.eventSource, platform), eq(webhookEvents.idempotencyKey, idempotencyKey)));
+        });
+        released++;
+      } catch (releaseErr: unknown) {
+        // Still claimed: the next poll will skip it. Keep going with the
+        // rest of this poll's bookings rather than abandoning them too.
+        console.error(`[booking-poller] Couldn't give back polled booking ${call.id}:`, releaseErr);
+      }
       continue;
     }
     if (!prepared.enabled) continue;
@@ -327,12 +335,20 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   }
 
   // A booking given back above is only picked up again if the next poll
-  // lists it, so the window stays where it was; the bookings already
-  // handled come back as duplicates.
-  if (released > 0) {
+  // lists it, so the window starts where this one did (the bookings
+  // already handled come back as duplicates). Not past a day, though: a
+  // booking that can never be started would otherwise hold it forever.
+  const heldSince = Date.parse(fetched.sinceISO);
+  if (released > 0 && now.getTime() - heldSince < 24 * 60 * 60_000) {
     await db
       .update(engagements)
-      .set({ stack: stackPatchSql({ webhook_last_error: `Poll at ${now.toISOString()}: ${released} booking(s) couldn't be started and will be retried on the next poll.` }), updatedAt: now })
+      .set({
+        stack: stackPatchSql({
+          webhook_receiver_last_polled_at: fetched.sinceISO,
+          webhook_last_error: `Poll at ${now.toISOString()}: ${released} booking(s) couldn't be started and will be retried on the next poll.`,
+        }),
+        updatedAt: now,
+      })
       .where(eq(engagements.engagementId, engagementId));
     return { polled: calls.length, newBookings, duplicates, errors };
   }
@@ -346,7 +362,10 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   await db
     .update(engagements)
     .set({
-      stack: stackPatchSql({ webhook_receiver_last_polled_at: now.toISOString(), webhook_last_error: undefined }),
+      stack: stackPatchSql({
+        webhook_receiver_last_polled_at: now.toISOString(),
+        webhook_last_error: released > 0 ? `Poll at ${now.toISOString()}: gave up on ${released} booking(s) that couldn't be started for a day.` : undefined,
+      }),
       updatedAt: now,
     })
     .where(eq(engagements.engagementId, engagementId));

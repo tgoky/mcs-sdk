@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repWebFindings, repIncidents, skillRuns } from "@/models/schema";
-import { and, eq, gt, gte, lte, desc, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNull, lte, desc, sql } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { notifyUser } from "@/lib/notify";
@@ -116,14 +116,28 @@ export async function markCheckedThrough(engagementId: string, upTo: Date, runId
     .where(opts.declared ? eq(repIdentityGraphs.engagementId, engagementId) : and(eq(repIdentityGraphs.engagementId, engagementId), ours));
 }
 
-/** Confirms this run still holds the claim and restarts its clock, right
- * before an incident is declared. False when a newer run took it over
- * after this one went quiet for too long. */
-export async function renewCrisisClaim(engagementId: string, runId: string): Promise<boolean> {
+/** Confirms this run still holds the claim, and that the window still
+ * starts where this run read it (`windowStart`, ISO or null), then
+ * restarts the claim's clock, right before anything goes to the operator.
+ * False when a newer run took the claim over after this one went quiet,
+ * or another run already moved the window past these findings (it
+ * declared or assessed them while this one was slow). */
+export async function renewCrisisClaim(engagementId: string, runId: string, windowStart?: string | null): Promise<boolean> {
+  const start = windowStart === undefined ? undefined : windowStart === null ? null : new Date(windowStart);
   const [row] = await db
     .update(repIdentityGraphs)
     .set({ crisisClaimedAt: new Date() })
-    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)))
+    .where(
+      and(
+        eq(repIdentityGraphs.engagementId, engagementId),
+        eq(repIdentityGraphs.crisisClaimRunId, runId),
+        start === undefined
+          ? undefined
+          : start === null
+            ? isNull(repIdentityGraphs.crisisCheckedThrough)
+            : eq(repIdentityGraphs.crisisCheckedThrough, start)
+      )
+    )
     .returning({ id: repIdentityGraphs.id });
   return Boolean(row);
 }
@@ -409,7 +423,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     // Before anything goes to the operator: a run that went quiet past the
     // stale limit may have lost the client to a newer run assessing the
     // same findings, and both would alert.
-    const confirmClaim = () => (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId)) : renewCrisisClaim(engagementId, runId));
+    const confirmClaim = () => (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId, checkedThrough)) : renewCrisisClaim(engagementId, runId, checkedThrough));
     const standDown = async () => {
       await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "A newer Crisis Response run took over this client's assessment." });
       summary.openItems.push("Skipped: a newer run took over this client's assessment.");

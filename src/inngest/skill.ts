@@ -106,8 +106,7 @@ export const executeSkillRun = inngest.createFunction(
 
     // A scheduled run waits for its slot in the cron's window first.
     await waitForStagger(step, event.data.notBefore);
-    const stillOpen = await step.run("mark-executing", () => markRunExecuting(runId, event.data.notBefore));
-    if (!stillOpen) return { skipped: "The run was closed before it started." };
+    await step.run("mark-executing", () => markRunExecuting(runId, event.data.notBefore));
 
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db

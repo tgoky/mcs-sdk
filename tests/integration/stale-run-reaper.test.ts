@@ -72,11 +72,18 @@ d("stale-run reaper rules", () => {
     const started = Object.fromEntries(rows.map((r) => [r.id, r.at !== null]));
     expect(started).toEqual({ [inline]: true, [queued]: false, [bulkQueued]: false });
 
-    // A queued run closed before the dispatcher reached it (its dispatch
-    // was reported failed) tells the dispatcher not to run it.
+    // A queued run closed because its dispatch looked failed is reopened if
+    // its event arrives after all; other closed runs stay closed.
     const { failUndispatchedRuns } = await import("@/lib/run-log");
-    await failUndispatchedRuns([bulkQueued], "test");
-    expect(await markRunExecuting(bulkQueued)).toBe(false);
-    expect(await markRunExecuting(queued)).toBe(true);
+    await failUndispatchedRuns([bulkQueued]);
+    let [closed] = await db.select({ status: skillRuns.status }).from(skillRuns).where(eq(skillRuns.id, bulkQueued));
+    expect(closed.status).toBe("failed");
+    await markRunExecuting(bulkQueued);
+    [closed] = await db.select({ status: skillRuns.status, error: skillRuns.errorMessage }).from(skillRuns).where(eq(skillRuns.id, bulkQueued));
+    expect(closed).toEqual({ status: "running", error: null });
+    await db.update(skillRuns).set({ status: "failed", errorMessage: "real failure" }).where(eq(skillRuns.id, queued));
+    await markRunExecuting(queued);
+    [closed] = await db.select({ status: skillRuns.status }).from(skillRuns).where(eq(skillRuns.id, queued));
+    expect(closed.status).toBe("failed");
   });
 });

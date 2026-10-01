@@ -163,7 +163,10 @@ d("booking poller across an Inngest re-run", () => {
     const first = await pollBookingsForEngagement(engagementId, memoStep() as never);
     expect(first).toMatchObject({ newBookings: 0, errors: 1 });
     const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId));
-    expect((row.stack as { webhook_receiver_last_polled_at?: string }).webhook_receiver_last_polled_at).toBeUndefined();
+    // The window is held at this poll's own start (25 minutes back on a
+    // first poll), not left unset, so the next poll lists the booking again.
+    const heldAt = Date.parse((row.stack as { webhook_receiver_last_polled_at: string }).webhook_receiver_last_polled_at);
+    expect(Date.now() - heldAt).toBeGreaterThan(24 * 60_000);
 
     const next = await pollBookingsForEngagement(engagementId, memoStep() as never);
     expect(next).toMatchObject({ newBookings: 1, duplicates: 0, errors: 0 });

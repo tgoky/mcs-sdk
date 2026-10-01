@@ -96,29 +96,29 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
       });
 
     if (result.runs.length > 0) {
-      try {
-        await sendEventsInBatches(
-          step,
-          `${opts.id}-dispatch-${page}`,
-          result.runs.map((r) =>
-            skillRunEvent({
-              ...r.extra,
-              runId: r.runId,
-              engagementId: r.engagementId,
-              skillName: opts.skillName,
-              notBefore: staggeredNotBefore(`${opts.skillName}:${r.engagementId}`, opts.spreadMinutes, nowIso),
-              interactive: false,
-            })
-          )
-        );
-      } catch (err) {
-        // The runs exist but their events never reached the queue: close
-        // them now rather than leaving them "running" until the reaper. If
-        // that fails too, the send error is still the one reported.
-        await step
-          .run(`${opts.id}-dispatch-${page}-failed`, () => failUndispatchedRuns(result.runs.map((r) => r.runId), "Couldn't hand this scheduled run to the queue."))
-          .catch(() => {});
-        throw err;
+      const events = result.runs.map((r) =>
+        skillRunEvent({
+          ...r.extra,
+          runId: r.runId,
+          engagementId: r.engagementId,
+          skillName: opts.skillName,
+          notBefore: staggeredNotBefore(`${opts.skillName}:${r.engagementId}`, opts.spreadMinutes, nowIso),
+          interactive: false,
+        })
+      );
+      for (let i = 0; i < events.length; i += EVENT_BATCH_SIZE) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await step.sendEvent(`${opts.id}-dispatch-${page}-${i / EVENT_BATCH_SIZE}`, events.slice(i, i + EVENT_BATCH_SIZE) as any);
+        } catch (err) {
+          // This batch and the ones after it never reached the queue: close
+          // their runs now rather than leaving them "running" until the
+          // reaper. Batches already sent are left alone. If closing fails
+          // too, the send error is still the one reported.
+          const unsent = result.runs.slice(i).map((r) => r.runId);
+          await step.run(`${opts.id}-dispatch-${page}-failed`, () => failUndispatchedRuns(unsent)).catch(() => {});
+          throw err;
+        }
       }
       dispatched += result.runs.length;
     }

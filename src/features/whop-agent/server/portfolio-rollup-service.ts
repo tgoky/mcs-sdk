@@ -7,13 +7,12 @@
 // inside one workspace (there's only ever one). Section 5.5's own
 // rationale still holds exactly: "no cross-account endpoint... joined at
 // the aggregation layer."
-import crypto from "crypto";
 import { db } from "@/lib/db";
 import { whopAgentConnections } from "@/models/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { listWorkspaces, getPrimaryEngagementIdForWorkspace } from "@/lib/workspace";
 import { startOfWeek } from "@/lib/dashboard-stats";
-import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
+import { logStep, finishRun, failRun } from "@/lib/run-log";
 import { recordWeeklySnapshot, getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
@@ -167,14 +166,6 @@ export async function runPortfolioRollup(tenant: any, runId: string, step: StepT
 }
 
 export async function dispatchPortfolioRollupRun(engagementId: string): Promise<string> {
-  const { inngest, skillRunEvent } = await import("@/lib/inngest");
-  const runId = crypto.randomUUID();
-  await startRun({ id: runId, engagementId, skillName: "whop-portfolio-rollup", phase: "fan_out", label: "Portfolio Rollup Report", queued: true });
-  try {
-    await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup", interactive: true }));
-  } catch (err) {
-    await failRun(runId, err).catch(() => {});
-    throw err;
-  }
-  return runId;
+  const { dispatchSkillRun } = await import("@/lib/skill-dispatch");
+  return dispatchSkillRun(engagementId, "whop-portfolio-rollup", "Portfolio Rollup Report", { phase: "fan_out" });
 }

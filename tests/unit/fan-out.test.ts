@@ -97,4 +97,24 @@ describe("a page whose events can't be sent", () => {
     const [ids] = failUndispatchedRuns.mock.calls[0] as unknown as [string[]];
     expect(ids).toHaveLength(2);
   });
+
+  it("closes only the runs of batches that weren't sent", async () => {
+    failUndispatchedRuns.mockClear();
+    const step = fakeStep();
+    step.sendEvent.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Inngest unavailable"));
+    const ids = Array.from({ length: 700 }, (_, i) => ({ engagementId: `e${String(i).padStart(4, "0")}` }));
+    await expect(
+      dispatchScheduledSkillRuns(step as never, {
+        id: "t2",
+        skillName: "leak-map",
+        phase: "p",
+        spreadMinutes: 10,
+        pageSize: 1000,
+        loadPage: async (after) => (after ? [] : ids),
+        select: (rows) => rows.map((r) => ({ engagementId: r.engagementId })),
+      })
+    ).rejects.toThrow("Inngest unavailable");
+    const [closed] = failUndispatchedRuns.mock.calls[0] as unknown as [string[]];
+    expect(closed).toHaveLength(200);
+  });
 });

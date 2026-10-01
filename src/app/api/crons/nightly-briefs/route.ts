@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { startRun, failRun } from "@/lib/run-log";
+import { startRun, failUndispatchedRuns } from "@/lib/run-log";
 import { inngest, skillRunEvent } from "@/lib/inngest";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       errors.push(`${tenant.engagementId}: ${err.message}`);
       // A run left "running" with no event behind it would wait for the
       // reaper and keep this client's later briefs from queuing.
-      await failRun(runId, err).catch(() => {});
+      await failUndispatchedRuns([runId]);
     }
   }
 

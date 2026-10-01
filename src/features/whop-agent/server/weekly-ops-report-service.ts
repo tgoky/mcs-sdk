@@ -7,9 +7,8 @@
 // parallel snapshot mechanism — that table's `blocks: WorkerReportBlock[]`
 // shape already fits "one row per worker per metric, diffable week over
 // week," which is exactly what Section 9.7 asks for.
-import crypto from "crypto";
 import { startOfWeek } from "@/lib/dashboard-stats";
-import { startRun, logStep, finishRun, failRun } from "@/lib/run-log";
+import { logStep, finishRun, failRun } from "@/lib/run-log";
 import { recordWeeklySnapshot, getPriorSnapshot } from "@/lib/client-metric-snapshots";
 import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 import { WhopAgentClient } from "@/lib/whop-agent/client";
@@ -111,14 +110,6 @@ export async function runWeeklyOpsReport(tenant: any, runId: string, step: StepT
  * src/inngest/whop-agent.ts once the cron cadence/staggering (Section
  * 9.8) is wired for the whole Whop Agent product together, not per-skill. */
 export async function dispatchWeeklyOpsReportRun(engagementId: string): Promise<string> {
-  const { inngest, skillRunEvent } = await import("@/lib/inngest");
-  const runId = crypto.randomUUID();
-  await startRun({ id: runId, engagementId, skillName: "whop-weekly-ops-report", phase: "metric_netRevenue", label: "Weekly Ops Report", queued: true });
-  try {
-    await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-weekly-ops-report", interactive: true }));
-  } catch (err) {
-    await failRun(runId, err).catch(() => {});
-    throw err;
-  }
-  return runId;
+  const { dispatchSkillRun } = await import("@/lib/skill-dispatch");
+  return dispatchSkillRun(engagementId, "whop-weekly-ops-report", "Weekly Ops Report", { phase: "metric_netRevenue" });
 }
