@@ -78,6 +78,7 @@ export async function GET(request: Request) {
           runId,
           engagementId: tenant.engagementId,
           skillName: "pre-call-read",
+          interactive: false,
         })
       );
 

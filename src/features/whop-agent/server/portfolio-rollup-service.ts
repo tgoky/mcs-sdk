@@ -170,6 +170,6 @@ export async function dispatchPortfolioRollupRun(engagementId: string): Promise<
   const { inngest, skillRunEvent } = await import("@/lib/inngest");
   const runId = crypto.randomUUID();
   await startRun({ id: runId, engagementId, skillName: "whop-portfolio-rollup", phase: "fan_out", label: "Portfolio Rollup Report", queued: true });
-  await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup" }));
+  await inngest.send(skillRunEvent({ runId, engagementId, skillName: "whop-portfolio-rollup", interactive: true }));
   return runId;
 }

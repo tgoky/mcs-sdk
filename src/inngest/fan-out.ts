@@ -106,6 +106,7 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
             engagementId: r.engagementId,
             skillName: opts.skillName,
             notBefore: staggeredNotBefore(`${opts.skillName}:${r.engagementId}`, opts.spreadMinutes, nowIso),
+            interactive: false,
           })
         )
       );

@@ -116,8 +116,8 @@ export function skillRunLane(skillName: string): string {
  * waiting (interactive runs are taken ahead of scheduled ones), which the
  * dispatcher's concurrency and priority read (src/inngest/skill.ts).
  */
-export function skillRunEvent(data: Omit<SkillRunExecuteData, "lane">) {
-  return skillRunExecute.create({ ...data, lane: skillRunLane(data.skillName), interactive: data.interactive ?? false });
+export function skillRunEvent(data: Omit<SkillRunExecuteData, "lane" | "interactive"> & { interactive: boolean }) {
+  return skillRunExecute.create({ ...data, lane: skillRunLane(data.skillName) });
 }
 
 // Sent from the "Cancel run" button on the run-detail page. Only carries the

@@ -33,7 +33,7 @@ describe("skill run lock", () => {
 
   it("stamps every run event with its lane and whether someone is waiting", () => {
     expect(skillRunEvent({ runId: "r", engagementId: "e", skillName: "pin-down-scripts", interactive: true }).data).toMatchObject({ lane: "pin-down", interactive: true });
-    expect(skillRunEvent({ runId: "r", engagementId: "e", skillName: "reply-sort" }).data).toMatchObject({ lane: "reply-sort", interactive: false });
+    expect(skillRunEvent({ runId: "r", engagementId: "e", skillName: "reply-sort", interactive: false }).data).toMatchObject({ lane: "reply-sort", interactive: false });
   });
 
   it("lets each client brief calls in parallel under an app-wide cap, instead of five slots for everyone", () => {

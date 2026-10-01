@@ -66,6 +66,7 @@ export async function GET(request: Request) {
           engagementId: tenant.engagementId,
           skillName: "leak-map",
           auditType: type, // <--- PRESERVED: Still uses dynamic type
+          interactive: false,
         })
       );
 
