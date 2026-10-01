@@ -498,6 +498,13 @@
       "when": 1790853794075,
       "tag": "0070_hot_table_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790854628174,
+      "tag": "0071_crisis_checked_through",
+      "breakpoints": true
     }
   ]
 }

@@ -2557,6 +2557,11 @@ export const repIdentityGraphs = pgTable(
     // doesn't re-trigger it on every edit — matches the source skill's
     // "push once" failure-mode guidance, not "push on every save."
     collisionCheckRunAt: timestamp("collision_check_run_at"),
+    // Crisis Response reads flagged findings in the window
+    // (crisisCheckedThrough, now] and only moves this forward once a run
+    // succeeds, so a finding saved while a run is in progress lands in the
+    // next window instead of being skipped.
+    crisisCheckedThrough: timestamp("crisis_checked_through"),
 
     // The client's own Google Maps listing, found at setup (matched by its
     // website to the client's domain) and confirmed by a person. Read by

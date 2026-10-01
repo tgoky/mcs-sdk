@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { repIdentityGraphs, repEngineFindings, repTrustpilotReviews, repRedditMentions, repTwitterMentions, repWebFindings, repIncidents, skillRuns } from "@/models/schema";
-import { and, eq, gt, gte, desc } from "drizzle-orm";
+import { and, eq, gt, gte, lte, desc, sql } from "drizzle-orm";
 import { callClaude } from "@/lib/llm";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import { notifyUser } from "@/lib/notify";
@@ -31,47 +31,47 @@ type ScoredFinding = ContributingFinding & {
   signalClass: SignalClass | null;
 };
 
-async function loadFlaggedFindingsSince(engagementId: string, since: Date | null): Promise<ContributingFinding[]> {
+async function loadFlaggedFindingsSince(engagementId: string, since: Date | null, upTo: Date): Promise<ContributingFinding[]> {
   const [engineFindings, trustpilotReviews, redditMentions, twitterMentions, webFindings] = await Promise.all([
     db
       .select({ promptText: repEngineFindings.promptText, responseText: repEngineFindings.responseText, flagReason: repEngineFindings.flagReason })
       .from(repEngineFindings)
       .where(
         since
-          ? and(eq(repEngineFindings.engagementId, engagementId), eq(repEngineFindings.flagged, true), gt(repEngineFindings.runAt, since))
-          : and(eq(repEngineFindings.engagementId, engagementId), eq(repEngineFindings.flagged, true))
+          ? and(eq(repEngineFindings.engagementId, engagementId), eq(repEngineFindings.flagged, true), gt(repEngineFindings.runAt, since), lte(repEngineFindings.runAt, upTo))
+          : and(eq(repEngineFindings.engagementId, engagementId), eq(repEngineFindings.flagged, true), lte(repEngineFindings.runAt, upTo))
       ),
     db
       .select({ reviewText: repTrustpilotReviews.reviewText, rating: repTrustpilotReviews.rating, flagReason: repTrustpilotReviews.flagReason })
       .from(repTrustpilotReviews)
       .where(
         since
-          ? and(eq(repTrustpilotReviews.engagementId, engagementId), eq(repTrustpilotReviews.flagged, true), gt(repTrustpilotReviews.createdAt, since))
-          : and(eq(repTrustpilotReviews.engagementId, engagementId), eq(repTrustpilotReviews.flagged, true))
+          ? and(eq(repTrustpilotReviews.engagementId, engagementId), eq(repTrustpilotReviews.flagged, true), gt(repTrustpilotReviews.createdAt, since), lte(repTrustpilotReviews.createdAt, upTo))
+          : and(eq(repTrustpilotReviews.engagementId, engagementId), eq(repTrustpilotReviews.flagged, true), lte(repTrustpilotReviews.createdAt, upTo))
       ),
     db
       .select({ mentionText: repRedditMentions.mentionText, permalink: repRedditMentions.permalink, flagReason: repRedditMentions.flagReason })
       .from(repRedditMentions)
       .where(
         since
-          ? and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true), gt(repRedditMentions.createdAt, since))
-          : and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true))
+          ? and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true), gt(repRedditMentions.createdAt, since), lte(repRedditMentions.createdAt, upTo))
+          : and(eq(repRedditMentions.engagementId, engagementId), eq(repRedditMentions.flagged, true), lte(repRedditMentions.createdAt, upTo))
       ),
     db
       .select({ mentionText: repTwitterMentions.mentionText, permalink: repTwitterMentions.permalink, flagReason: repTwitterMentions.flagReason })
       .from(repTwitterMentions)
       .where(
         since
-          ? and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true), gt(repTwitterMentions.createdAt, since))
-          : and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true))
+          ? and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true), gt(repTwitterMentions.createdAt, since), lte(repTwitterMentions.createdAt, upTo))
+          : and(eq(repTwitterMentions.engagementId, engagementId), eq(repTwitterMentions.flagged, true), lte(repTwitterMentions.createdAt, upTo))
       ),
     db
       .select({ source: repWebFindings.source, title: repWebFindings.title, text: repWebFindings.text, rating: repWebFindings.rating, flagReason: repWebFindings.flagReason })
       .from(repWebFindings)
       .where(
         since
-          ? and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true), gt(repWebFindings.createdAt, since))
-          : and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true))
+          ? and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true), gt(repWebFindings.createdAt, since), lte(repWebFindings.createdAt, upTo))
+          : and(eq(repWebFindings.engagementId, engagementId), eq(repWebFindings.flagged, true), lte(repWebFindings.createdAt, upTo))
       ),
   ]);
 
@@ -84,6 +84,18 @@ async function loadFlaggedFindingsSince(engagementId: string, since: Date | null
   ];
 }
 
+async function databaseNow(): Promise<string> {
+  const rows = await db.execute<{ now: string | Date }>(sql`select now() as now`);
+  const value = (rows as unknown as { now: string | Date }[])[0]?.now;
+  return new Date(value ?? Date.now()).toISOString();
+}
+
+async function markCheckedThrough(engagementId: string, upTo: Date): Promise<void> {
+  await db.update(repIdentityGraphs).set({ crisisCheckedThrough: upTo }).where(eq(repIdentityGraphs.engagementId, engagementId));
+}
+
+/** Only used until a client's first run under the window above records
+ * crisisCheckedThrough; older runs left nothing better to start from. */
 async function lastSuccessfulRunAt(engagementId: string): Promise<Date | null> {
   const [row] = await db
     .select({ completedAt: skillRuns.completedAt })
@@ -307,16 +319,24 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       ? step.run("suppress-recent-anomalies", () => suppressRecentlyDeclaredAnomalies(engagementId, rawAnomalies, now))
       : suppressRecentlyDeclaredAnomalies(engagementId, rawAnomalies, now));
 
-    const sinceRaw = await (step ? step.run("find-last-run", () => lastSuccessfulRunAt(engagementId)) : lastSuccessfulRunAt(engagementId));
+    // The window this run covers: (since, upTo]. upTo comes from the
+    // database clock, the same clock the findings' timestamps use.
+    const sinceRaw = graph.crisisCheckedThrough
+      ? graph.crisisCheckedThrough
+      : await (step ? step.run("find-last-run", () => lastSuccessfulRunAt(engagementId)) : lastSuccessfulRunAt(engagementId));
     const since = sinceRaw ? new Date(sinceRaw) : null;
+    const upToRaw = await (step ? step.run("window-end", () => databaseNow()) : databaseNow());
+    const upTo = new Date(upToRaw);
+    const advanceWindow = () => (step ? step.run("advance-window", () => markCheckedThrough(engagementId, upTo)) : markCheckedThrough(engagementId, upTo));
 
     const findings = await (step
-      ? step.run("load-flagged-findings", () => loadFlaggedFindingsSince(engagementId, since))
-      : loadFlaggedFindingsSince(engagementId, since));
+      ? step.run("load-flagged-findings", () => loadFlaggedFindingsSince(engagementId, since, upTo))
+      : loadFlaggedFindingsSince(engagementId, since, upTo));
 
     if (findings.length === 0 && anomalies.length === 0) {
       await logStep(runId, { phase: "crisis_response", status: "success", detail: "Nothing flagged and no anomalies detected since last check." });
       summary.whatWorked.push("Checked for new flagged findings and anomalies. None since last check.");
+      await advanceWindow();
       await finishRun(runId, { summary });
       return;
     }
@@ -385,6 +405,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
         detail: `Severity ${severityScore}/100, below this engagement's threshold of ${floor}. No incident declared.`,
       });
       summary.whatWorked.push(`Assessed ${findings.length} flagged finding(s): severity ${severityScore}/100, below threshold.`);
+      await advanceWindow();
       await finishRun(runId, { summary });
       return;
     }
@@ -499,6 +520,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
       `Incident ${incidentId} created from ${allFindings.length} contributing item(s)${forceTriggered ? ` (force-triggered: ${declaredSignalClass})` : ""}.`
     );
 
+    await advanceWindow();
     await finishRun(runId, { summary });
   } catch (err) {
     await failRun(runId, err, { summary }).catch(() => {});

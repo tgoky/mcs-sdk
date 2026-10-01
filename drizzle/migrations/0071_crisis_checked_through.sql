@@ -1,0 +1,1 @@
+ALTER TABLE "rep_identity_graphs" ADD COLUMN "crisis_checked_through" timestamp;
