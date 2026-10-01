@@ -37,6 +37,8 @@ export async function processWeeklySnapshotForEngagement(engagementId: string): 
   const weekStart = startOfWeek(new Date());
   const enabledWorkerIds = await getEnabledWorkerIdsForEngagement(engagementId);
   const blocks = await getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: weekStart });
-  await recordWeeklySnapshot(engagementId, weekStart, blocks);
+  // Owns every enabled worker's blocks, so a worker with nothing to report
+  // this week doesn't keep a stale block from an earlier write.
+  await recordWeeklySnapshot(engagementId, weekStart, blocks, enabledWorkerIds);
   return { blocksRecorded: blocks.length };
 }

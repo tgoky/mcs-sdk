@@ -8,16 +8,38 @@
 
 import { db } from "@/lib/db";
 import { clientMetricSnapshots } from "@/models/schema";
-import { and, eq, gte, lt, desc } from "drizzle-orm";
+import { and, eq, gte, lt, desc, sql } from "drizzle-orm";
 import type { WorkerReportBlock } from "@/lib/worker-report-blocks";
 
-export async function recordWeeklySnapshot(engagementId: string, weekStart: Date, blocks: WorkerReportBlock[]): Promise<void> {
+/**
+ * Saves this week's blocks for the workers the caller reports on. Several
+ * writers share one row per client per week (the Monday snapshot for every
+ * enabled worker, then Whop Agent's own reports later in the week), so a
+ * writer replaces only blocks belonging to `ownedWorkerIds` (by default,
+ * the workers its own blocks are for) and keeps everyone else's. This used
+ * to replace the whole row, so the Whop reports wiped the Monday snapshot.
+ * The merge happens inside the upsert, so two writers can't lose each
+ * other's blocks either.
+ */
+export async function recordWeeklySnapshot(
+  engagementId: string,
+  weekStart: Date,
+  blocks: WorkerReportBlock[],
+  ownedWorkerIds: string[] = Array.from(new Set(blocks.map((b) => b.workerId)))
+): Promise<void> {
+  const owned = JSON.stringify(ownedWorkerIds);
   await db
     .insert(clientMetricSnapshots)
     .values({ engagementId, weekStart, blocks })
     .onConflictDoUpdate({
       target: [clientMetricSnapshots.engagementId, clientMetricSnapshots.weekStart],
-      set: { blocks },
+      set: {
+        blocks: sql`(
+          select coalesce(jsonb_agg(kept.block), '[]'::jsonb)
+          from jsonb_array_elements(coalesce(${clientMetricSnapshots.blocks}, '[]'::jsonb)) as kept(block)
+          where not (${owned}::jsonb ? (kept.block ->> 'workerId'))
+        ) || excluded.blocks`,
+      },
     });
 }
 
