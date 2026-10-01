@@ -128,26 +128,7 @@ export interface StartRunOptions {
  * removes the bug at the root instead of patching each call site.
  */
 export async function startRun(opts: StartRunOptions): Promise<void> {
-  const now = new Date();
-  const nowIso = now.toISOString();
-  const startMarker: RunStep = {
-    phase: "run_started",
-    label: opts.label,
-    status: "success",
-    startedAt: nowIso,
-    completedAt: nowIso,
-  };
-
-  await db.insert(skillRuns).values({
-    id: opts.id,
-    engagementId: opts.engagementId,
-    skillName: opts.skillName,
-    phase: opts.phase,
-    status: "running",
-    steps: [startMarker],
-    startedAt: now,
-    executionStartedAt: opts.queued ? null : now,
-  });
+  await startRuns([opts]);
 }
 
 /**
@@ -470,13 +451,23 @@ export async function markRunExecuting(runId: string, notBefore?: string): Promi
 }
 
 /** Of these clients, the ones with a run of this skill still waiting in
- * the queue (created with `queued`, not yet picked up by the dispatcher). */
-export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[]): Promise<Set<string>> {
+ * the queue (created with `queued`, not yet picked up by the dispatcher)
+ * that was created within `withinMs`. The limit keeps a run whose event
+ * never reached Inngest, which waits for the reaper, from counting all day. */
+export async function engagementsWithQueuedRun(skillName: string, engagementIds: string[], withinMs = STALE_RUN_CEILING_MS): Promise<Set<string>> {
   if (engagementIds.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ engagementId: skillRuns.engagementId })
     .from(skillRuns)
-    .where(and(eq(skillRuns.skillName, skillName), eq(skillRuns.status, "running"), isNull(skillRuns.executionStartedAt), inArray(skillRuns.engagementId, engagementIds)));
+    .where(
+      and(
+        eq(skillRuns.skillName, skillName),
+        eq(skillRuns.status, "running"),
+        isNull(skillRuns.executionStartedAt),
+        gt(skillRuns.startedAt, new Date(Date.now() - withinMs)),
+        inArray(skillRuns.engagementId, engagementIds)
+      )
+    );
   return new Set(rows.map((r) => r.engagementId));
 }
 

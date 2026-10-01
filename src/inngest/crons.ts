@@ -640,7 +640,12 @@ export const dynamicBriefCron = inngest.createFunction(
         // The dispatcher fails a run whose required setup is missing, and
         // a failed run notifies the client. Every 30 minutes that would be
         // 48 notices a day, so an incomplete client is skipped here.
-        const missing = await Promise.all(due.map((t) => getMissingRequiredFields("pre-call-read", t.engagementId)));
+        // Ten at a time: a page can hold hundreds of clients, and each
+        // check reads the database.
+        const missing: Awaited<ReturnType<typeof getMissingRequiredFields>>[] = [];
+        for (let i = 0; i < due.length; i += 10) {
+          missing.push(...(await Promise.all(due.slice(i, i + 10).map((t) => getMissingRequiredFields("pre-call-read", t.engagementId)))));
+        }
         return due
           .filter((_, i) => missing[i].length === 0)
           .map((t) => ({ engagementId: t.engagementId, extra: { briefTrigger: "dynamic_webhook" as const } }));
