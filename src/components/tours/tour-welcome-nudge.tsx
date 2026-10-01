@@ -7,14 +7,11 @@
 // workspace creation always redirects to /dashboard, and a brand-new
 // engagement has no tour progress yet). A real modal (not an inline
 // banner) so it reads as a deliberate "you're new here, pick a path"
-// moment instead of something to scroll past — sized and paced like a
-// first-impression screen (icon badge, one visually dominant default
-// path, one clearly secondary one) rather than reusing
-// components/modal.tsx's compact settings-form chrome, which is
-// deliberately small because everything else that uses it is a dense
-// form, not a welcome moment.
+// moment. Laid out like a product-announcement card: the UTP logo and a
+// one-line caption on one background, then a title, a short paragraph and
+// two buttons. Only the app's own surface, border and ink-button tokens.
 //
-// The second path is state-aware rather than a blind "set up your first
+// The second button is state-aware rather than a blind "set up your first
 // worker": workspace creation (/home/new) already makes the caller pick
 // at least one product before the workspace exists at all, so by the time
 // this shows, "set up your first worker" is frequently already false —
@@ -23,21 +20,112 @@
 // actually installed and enabled so this can say the true next step:
 // nothing installed -> go install one; installed but nothing enabled yet
 // -> finish configuring what's already there; already running something
-// -> there's no "first worker" step left, so that path disappears
-// entirely rather than showing a stale one.
+// -> there's no "first worker" step left, so that button disappears and
+// the walkthrough stands alone.
 //
-// Dismissing it (any remaining path below, Escape, the backdrop, or the
-// X) is remembered the same way real tour progress is — see tour-
-// provider.tsx's dismissWelcome — so it never nags twice. The breadcrumb
-// launcher (tour-launcher.tsx) stays there permanently either way, for
-// anyone who skips this and wants a tour later.
+// Dismissing it (either button, Escape, the backdrop, or the X) is
+// remembered the same way real tour progress is — see tour-provider.tsx's
+// dismissWelcome — so it never nags twice. The breadcrumb launcher
+// (tour-launcher.tsx) stays there permanently either way, for anyone who
+// skips this and wants a tour later.
+//
+// It's a proper dialog: labelled, focus moves to the main action when it
+// opens, Tab stays inside it, and Escape closes it.
 
-import { useEffect } from "react";
+import { useEffect, useRef, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Compass, PlayCircle, ListChecks, X, ArrowUpRight } from "lucide-react";
+import { X } from "lucide-react";
 import { useTour } from "./tour-provider";
 import { WORKSPACE_PRODUCTS } from "@/lib/copy";
+
+export interface WelcomeSetupAction {
+  label: string;
+  href: string;
+}
+
+/** The dialog itself, without the portal or any app state, so it can be
+ * rendered on its own. */
+export function WelcomeDialog({
+  setupAction,
+  onStart,
+  onSetup,
+  onDismiss,
+  dialogRef,
+  primaryRef,
+}: {
+  setupAction: WelcomeSetupAction | null;
+  onStart: () => void;
+  onSetup: () => void;
+  onDismiss: () => void;
+  dialogRef?: Ref<HTMLDivElement>;
+  primaryRef?: Ref<HTMLButtonElement>;
+}) {
+  const buttonBase =
+    "inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-lg px-6 text-[15px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer sm:w-auto";
+
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="welcome-title"
+      aria-describedby="welcome-desc"
+      className="relative my-8 w-full max-w-[480px] overflow-hidden rounded-2xl border border-border bg-background font-sans antialiased text-foreground shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200 dark:bg-zinc-900"
+    >
+      {/* Logo and caption share one background. The logo is a near-white
+          wordmark, so it's inverted to ink on the light theme. */}
+      <div className="relative bg-zinc-100 dark:bg-zinc-950">
+        <div className="flex h-[228px] items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/logo.png"
+            alt="United Tools Platform"
+            className="h-40 w-auto select-none object-contain invert dark:invert-0"
+            draggable={false}
+          />
+        </div>
+        <p className="flex h-[42px] items-center justify-center text-[14px] text-zinc-600 dark:text-zinc-300">Your workspace is ready.</p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Close"
+          className="absolute right-6 top-6 flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900/60 text-white transition-colors hover:bg-zinc-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-white/15 dark:hover:bg-white/25 cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="relative px-8 pb-[23px] pt-6 text-center">
+        {/* The dashboard's micro dot grid. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-dot-grid" />
+        <h2 id="welcome-title" className="relative text-[20px] font-medium leading-[29px]">
+          Welcome to United Tools Platform
+        </h2>
+        <p id="welcome-desc" className="relative mt-1.5 text-[14px] leading-[22px]">
+          Take a quick walkthrough of the dashboard, the Library and every worker, or go straight to setting up. You can start the tour again
+          anytime from the icon next to the breadcrumbs.
+        </p>
+
+        <div className="relative mt-8 flex flex-col-reverse items-center justify-center gap-3 sm:flex-row">
+          {setupAction && (
+            <button type="button" onClick={onSetup} className={`${buttonBase} border border-border bg-background hover:bg-zinc-100 dark:bg-transparent dark:hover:bg-zinc-800`}>
+              {setupAction.label}
+            </button>
+          )}
+          <button
+            ref={primaryRef}
+            type="button"
+            onClick={onStart}
+            className={`${buttonBase} bg-primary text-primary-foreground hover:bg-[var(--ink-hover)]`}
+          >
+            Take the tour
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function TourWelcomeNudge({
   installedProductIds,
@@ -54,19 +142,38 @@ export function TourWelcomeNudge({
 }) {
   const router = useRouter();
   const { tours, hasSeenWelcome, start, dismissWelcome } = useTour();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
   const fullWalkthrough = tours.find((t) => t.id === "full-walkthrough");
   const show = !hasSeenWelcome && Boolean(fullWalkthrough);
 
   const installedProducts = WORKSPACE_PRODUCTS.filter((p) => installedProductIds.includes(p.id));
 
-  // Same escape/scroll-lock contract as components/modal.tsx, kept local
-  // rather than shared since this is the only consumer that needs the
-  // larger chrome below. The hook still runs every render regardless of
-  // `show` so hook order never changes across renders.
+  // Escape closes, Tab stays inside the dialog, the page behind doesn't
+  // scroll, and the main action gets focus. Same contract as
+  // components/modal.tsx, kept local since this is the only consumer that
+  // needs the larger chrome below. The hook still runs every render
+  // regardless of `show` so hook order never changes across renders.
   useEffect(() => {
     if (!show) return;
+    primaryRef.current?.focus();
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") dismissWelcome();
+      if (e.key === "Escape") {
+        dismissWelcome();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>("button, a[href], [tabindex]:not([tabindex='-1'])");
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -82,26 +189,17 @@ export function TourWelcomeNudge({
   // Three real states, not one generic "set up your first worker" line:
   //  - nothing enabled yet, exactly one product installed -> name it and
   //    send them straight to that product's own Library page.
-  //  - nothing enabled yet, multiple (or somehow zero) installed -> send
-  //    them to the Library index instead of guessing which one to name.
+  //  - nothing enabled yet, several installed -> the Library index; none
+  //    installed -> the Library index too, worded as installing one.
   //  - something's already enabled -> there's no setup step left to
-  //    offer, so this path is omitted entirely rather than shown stale.
-  const setupAction = hasEnabledAnyWorker
+  //    offer, so that button is omitted entirely rather than shown stale.
+  const setupAction: WelcomeSetupAction | null = hasEnabledAnyWorker
     ? null
     : installedProducts.length === 1
-      ? {
-          label: `Finish setting up ${installedProducts[0].name}`,
-          body: "You already picked it. Enable a worker to start running it for real.",
-          href: `/dashboard/library/${installedProducts[0].id}`,
-        }
-      : {
-          label: "Finish setting up your workers",
-          body:
-            installedProducts.length > 1
-              ? `Enable a worker in any of your ${installedProducts.length} installed products.`
-              : "Head to the Library and install your first product.",
-          href: "/dashboard/library",
-        };
+      ? { label: `Set up ${installedProducts[0].name}`, href: `/dashboard/library/${installedProducts[0].id}` }
+      : installedProducts.length > 1
+        ? { label: "Set up your workers", href: "/dashboard/library" }
+        : { label: "Install a product", href: "/dashboard/library" };
 
   function goToSetupAction() {
     dismissWelcome();
@@ -110,86 +208,19 @@ export function TourWelcomeNudge({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 overflow-y-auto motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] dark:bg-black/60 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) dismissWelcome();
       }}
     >
-      <div className="relative w-full max-w-md my-8 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-background shadow-2xl motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200">
-        <button
-          type="button"
-          onClick={dismissWelcome}
-          aria-label="Close"
-          className="absolute right-4 top-4 rounded-full p-1.5 text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="px-7 pt-8 pb-2 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-elevation-2">
-            <Compass className="w-7 h-7 text-white" strokeWidth={2} />
-          </div>
-          <h2 className="mt-4 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Welcome to UTP
-          </h2>
-          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            New workspace, real client. Take a quick, real walkthrough of the dashboard, the Library, and
-            every worker, or jump straight to what&apos;s next.
-          </p>
-        </div>
-
-        <div className="p-6 pt-4 space-y-2.5">
-          <button
-            type="button"
-            onClick={() => start(fullWalkthrough!.id)}
-            className="group w-full flex items-center gap-3.5 rounded-xl bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-100 px-4 py-3.5 text-left transition-colors cursor-pointer shadow-elevation-1"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 dark:bg-zinc-900/10">
-              <PlayCircle size={18} className="text-white dark:text-zinc-900" />
-            </div>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-white dark:text-zinc-900">Run the full walkthrough</span>
-              <span className="block text-xs text-zinc-300 dark:text-zinc-600 leading-snug mt-0.5">
-                Dashboard, Library, and every worker. A few minutes, start to finish.
-              </span>
-            </span>
-            <ArrowUpRight
-              size={16}
-              className="shrink-0 text-zinc-400 dark:text-zinc-500 transition-transform group-hover:translate-x-0.5"
-            />
-          </button>
-
-          {setupAction && (
-            <button
-              type="button"
-              onClick={goToSetupAction}
-              className="group w-full flex items-center gap-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900 px-4 py-3.5 text-left transition-colors cursor-pointer"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                <ListChecks size={18} className="text-zinc-600 dark:text-zinc-300" />
-              </div>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-zinc-900 dark:text-white">{setupAction.label}</span>
-                <span className="block text-xs text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5">
-                  {setupAction.body}
-                </span>
-              </span>
-              <ArrowUpRight
-                size={16}
-                className="shrink-0 text-zinc-300 dark:text-zinc-700 transition-transform group-hover:translate-x-0.5"
-              />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={dismissWelcome}
-            className="w-full text-center text-xs font-medium text-zinc-400 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-300 py-2 transition-colors cursor-pointer"
-          >
-            I&apos;ll explore on my own
-          </button>
-        </div>
-      </div>
+      <WelcomeDialog
+        setupAction={setupAction}
+        onStart={() => start(fullWalkthrough!.id)}
+        onSetup={goToSetupAction}
+        onDismiss={dismissWelcome}
+        dialogRef={dialogRef}
+        primaryRef={primaryRef}
+      />
     </div>,
     document.body
   );

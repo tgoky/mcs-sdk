@@ -27,12 +27,12 @@ import { aggregateShowRateByTemplate, type TemplateShowRateStat } from "@/lib/sh
 export type { TemplateShowRateStat };
 export { LOW_SAMPLE_THRESHOLD } from "@/lib/show-rate-by-template";
 
-export async function getShowRateByTemplate(whopUserId: string): Promise<TemplateShowRateStat[]> {
+export async function getShowRateByTemplate(whopUserId: string, workspaceId?: string): Promise<TemplateShowRateStat[]> {
   const rows = await db
     .select({ template: engagements.confirmationPageTemplate, outcome: briefOutcomeLog.outcome })
     .from(briefOutcomeLog)
     .innerJoin(engagements, eq(briefOutcomeLog.engagementId, engagements.engagementId))
-    .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
+    .where(and(eq(engagements.whopUserId, whopUserId), workspaceId ? eq(engagements.workspaceId, workspaceId) : undefined, isNull(engagements.deletedAt)));
 
   return aggregateShowRateByTemplate(rows);
 }

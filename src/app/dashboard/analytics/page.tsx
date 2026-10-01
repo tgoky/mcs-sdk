@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { engagements, skillRuns, pendingActions, humanBlockers, auditRunsLog } from "@/models/schema";
 import { and, eq, gte, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/session";
+import { getActiveWorkspace } from "@/lib/workspace";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { WORKER_IDS, WORKER_REGISTRY, type WorkerId } from "@/lib/worker-registry";
 import { getPortfolioOutcomes } from "@/features/reports/server/portfolio-outcomes";
 import { addCounts, emptyCounts, getClientResults, portfolioShowRate, productResults, RESULTS_WINDOW_DAYS } from "@/features/reports/server/client-results";
-import { ClientResultsTable, ProductResultsGrid, ShowRateThenNowCard, type ClientRow } from "@/components/analytics/client-results-section";
+import { ProductResultsGrid, ShowRateThenNowCard } from "@/components/analytics/client-results-section";
 import { getShowRateByTemplate } from "@/features/reports/server/show-rate-by-template";
 import { ShowRateByTemplateSection } from "@/components/analytics/show-rate-by-template-section";
 import { getCategorySignals, type CategoryFlaggedItem } from "@/features/reports/server/category-signals";
@@ -192,6 +193,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const session = await getSession();
   if (!session.whopUserId) redirect("/api/auth/login");
   const whopUserId = session.whopUserId;
+  // One workspace is one client: everything below is that workspace's, not
+  // every workspace the account owns.
+  const { workspaceId } = await getActiveWorkspace(whopUserId);
 
   const since30 = daysAgo(TREND_DAYS);
   const since90 = daysAgo(LOOKBACK_DAYS);
@@ -202,7 +206,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const engagementRows = await db
     .select({ engagementId: engagements.engagementId, buyer: engagements.buyer, offerDetails: engagements.offerDetails })
     .from(engagements)
-    .where(and(eq(engagements.whopUserId, whopUserId), isNull(engagements.deletedAt)));
+    .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), isNull(engagements.deletedAt)));
 
   // Portfolio outcomes — independent of the operational query set below,
   // computed straight from the same engagement roster. See
@@ -213,7 +217,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   // Pin-Down only, but reads whopUserId-wide same as everything else on
   // this page — an operator with only Reputation Manager/Cold Open
   // clients just sees the section's own empty state, no separate gate.
-  const showRateByTemplate = await getShowRateByTemplate(whopUserId);
+  const showRateByTemplate = await getShowRateByTemplate(whopUserId, workspaceId);
 
   // What each client got, last 30 days against the 30 before. The offer
   // price is only there to put a labelled estimate on extra shows.
@@ -232,19 +236,19 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       .select({ skillName: skillRuns.skillName, status: skillRuns.status, costInCents: skillRuns.costInCents, startedAt: skillRuns.startedAt, completedAt: skillRuns.completedAt })
       .from(skillRuns)
       .innerJoin(engagements, eq(skillRuns.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(skillRuns.startedAt, since30), isNull(engagements.deletedAt))),
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), gte(skillRuns.startedAt, since30), isNull(engagements.deletedAt))),
 
     db
       .select({ actionType: pendingActions.actionType, status: pendingActions.status, createdAt: pendingActions.createdAt, decidedAt: pendingActions.decidedAt })
       .from(pendingActions)
       .innerJoin(engagements, eq(pendingActions.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(pendingActions.createdAt, since90), isNull(engagements.deletedAt))),
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), gte(pendingActions.createdAt, since90), isNull(engagements.deletedAt))),
 
     db
       .select({ blockerType: humanBlockers.blockerType, status: humanBlockers.status, createdAt: humanBlockers.createdAt, resolvedAt: humanBlockers.resolvedAt })
       .from(humanBlockers)
       .innerJoin(engagements, eq(humanBlockers.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(humanBlockers.createdAt, since90), isNull(engagements.deletedAt))),
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), gte(humanBlockers.createdAt, since90), isNull(engagements.deletedAt))),
 
     // Still fetched — Funnel Audit's own resolver never produces a
     // trend-able block (worker-report-blocks.ts), so its "By category"
@@ -253,7 +257,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       .select({ engagementId: auditRunsLog.engagementId, topIssues: auditRunsLog.topIssues, createdAt: auditRunsLog.createdAt })
       .from(auditRunsLog)
       .innerJoin(engagements, eq(auditRunsLog.engagementId, engagements.engagementId))
-      .where(and(eq(engagements.whopUserId, whopUserId), gte(auditRunsLog.createdAt, since90), isNull(engagements.deletedAt))),
+      .where(and(eq(engagements.whopUserId, whopUserId), eq(engagements.workspaceId, workspaceId), gte(auditRunsLog.createdAt, since90), isNull(engagements.deletedAt))),
   ]);
 
   // ── Skill comparison + top-line run stats (TREND_DAYS window) ─────────
@@ -388,15 +392,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const totals = clientResults.reduce((acc, r) => ({ cur: addCounts(acc.cur, r.current), prev: addCounts(acc.prev, r.previous) }), { cur: emptyCounts(), prev: emptyCounts() });
   const portfolioProducts = productResults(totals.cur, totals.prev);
   const portfolioShow = portfolioShowRate(clientResults);
-  const accountById = new Map(portfolioAccounts.map((a) => [a.engagementId, a]));
-  const clientRows: ClientRow[] = clientResults
-    .map((results) => {
-      const account = accountById.get(results.engagementId);
-      const flags = [...(account?.correlationFlags.map((f) => f.message) ?? []), ...(account?.atRiskBlocks.map((b) => `${b.label}: ${b.displayValue}`) ?? [])];
-      return { results, flags };
-    })
-    // Clients that need a look first, then the busiest.
-    .sort((a, b) => b.flags.length - a.flags.length || b.results.products.length - a.results.products.length || a.results.buyer.localeCompare(b.results.buyer));
 
   const tabLink = (key: "results" | "system", label: string) => (
     <Link
@@ -425,7 +420,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               Analytics
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {tab === "results" ? "What your clients got this month, and which ones need a look." : "Whether the automation running your clients is healthy."}
+              {tab === "results" ? "What this client got this month, and what needs a look." : "Whether the automation running this client is healthy."}
             </p>
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5">
@@ -436,7 +431,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         {tab === "results" ? (
           <>
-            <Section title="Results" caption={`Every client combined, last ${RESULTS_WINDOW_DAYS} days against the ${RESULTS_WINDOW_DAYS} before`}>
+            <Section title="Results" caption={`Last ${RESULTS_WINDOW_DAYS} days against the ${RESULTS_WINDOW_DAYS} before`}>
               {portfolioProducts.length === 0 ? (
                 <Card>
                   <EmptyState>Nothing to show yet. Results appear here once a skill books a call, contacts a lead, catches a review or saves a member.</EmptyState>
@@ -449,16 +444,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               )}
             </Section>
 
-            <Section title="Clients" caption={`Each client's main number per product, last ${RESULTS_WINDOW_DAYS} days`}>
-              {clientRows.length === 0 ? (
-                <Card>
-                  <EmptyState>No clients yet.</EmptyState>
-                </Card>
-              ) : (
-                <ClientResultsTable rows={clientRows} />
-              )}
-            </Section>
-
             {/* Cross-skill comparison — the user picks which two skills to
                 compare side by side. */}
             <Section title="Skill comparison" caption={`Last ${TREND_DAYS} days. Pick two skills to compare side by side`}>
@@ -467,7 +452,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
             {/* Pin-Down's own rollup, all time: template choice is a slow,
                 low-volume signal that a window would only thin out. */}
-            <Section title="Show rate by confirmation page template" caption="All-time, across every Pin-Down client on this account">
+            <Section title="Show rate by confirmation page template" caption="All-time, for this client">
               <Card>
                 <ShowRateByTemplateSection stats={showRateByTemplate} />
               </Card>
