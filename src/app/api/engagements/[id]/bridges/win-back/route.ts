@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { webhookUrl } from "@/lib/webhook-url-token";
+import { stackChanges } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -135,7 +136,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await db
       .update(engagements)
-      .set({ stack: mergedStack, updatedAt: new Date() })
+      .set({ stack: stackChanges(row.stack, mergedStack), updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
 
     return NextResponse.json({ ok: true });

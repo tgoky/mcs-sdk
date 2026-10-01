@@ -4,6 +4,7 @@ import { engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -91,18 +92,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Engagement not found or access denied" }, { status: 404 });
   }
 
-  const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
   await db
     .update(engagements)
     .set({
-      stack: {
-        ...stack,
+      stack: stackPatchSql({
         whop_save_offer_discount_percentage: discountPercentage,
         whop_save_offer_duration_months: durationMonths,
         whop_save_offer_message: message,
         whop_save_offer_min_tenure_days: minTenureDays,
         whop_save_offer_cooldown_days: cooldownDays,
-      },
+      }),
       updatedAt: new Date(),
     })
     .where(eq(engagements.engagementId, id));

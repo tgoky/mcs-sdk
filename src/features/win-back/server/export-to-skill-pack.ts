@@ -37,6 +37,7 @@ import { db } from "@/lib/db";
 import { engagements, type EngagementStack } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { getAppUrl } from "@/lib/app-url";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 export interface ExportedStep {
   stepNumber: number;
@@ -155,12 +156,11 @@ export async function markWinBackExported(engagementId: string, platform: string
   await db
     .update(engagements)
     .set({
-      stack: {
-        ...stack,
+      stack: stackPatchSql({
         runtime_ownership_model: "buyer_exported",
         runtime_ownership_exported_at: new Date().toISOString(),
         runtime_export_result: { method: "paste_ready_bundle", platform },
-      },
+      }),
     })
     .where(eq(engagements.engagementId, engagementId));
 }

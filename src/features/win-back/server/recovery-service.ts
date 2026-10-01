@@ -12,6 +12,7 @@ import {
 import type { GetStepTools, Inngest } from "inngest";
 import { webhookUrl } from "@/lib/webhook-url-token";
 import { getAppUrl } from "@/lib/app-url";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -120,7 +121,7 @@ export async function generateRecoveryCadence(
         if (result.supported) {
           await db
             .update(engagements)
-            .set({ stack: { ...stack, inbound_reply_webhook_subscription_id: result.subscriptionId } })
+            .set({ stack: stackPatchSql({ inbound_reply_webhook_subscription_id: result.subscriptionId }) })
             .where(eq(engagements.engagementId, tenant.engagementId));
           await logStep(runId, { phase: "reply_detection_setup", status: "success", detail: `Native subscription ${result.subscriptionId} created` });
         } else {
@@ -133,7 +134,7 @@ export async function generateRecoveryCadence(
       const catcherUrl = webhookUrl(appUrl, "inbound-reply", tenant.engagementId);
       await db
         .update(engagements)
-        .set({ stack: { ...stack, inbound_reply_catcher_address: catcherUrl } })
+        .set({ stack: stackPatchSql({ inbound_reply_catcher_address: catcherUrl }) })
         .where(eq(engagements.engagementId, tenant.engagementId));
       await logStep(runId, { phase: "reply_detection_setup", status: "success", detail: `Forwarding catcher URL: ${catcherUrl}` });
     }

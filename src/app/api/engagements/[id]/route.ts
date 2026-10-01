@@ -12,6 +12,7 @@ import { OPT_IN_GATED_ACTION_TYPES, type PendingActionType } from "@/lib/approva
 import { activeCampaignApiBase, ACTIVECAMPAIGN_URL_HINT, slackWebhookUrl } from "@/lib/outbound-urls";
 import { afterResponse } from "@/lib/after-response";
 import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
+import { stackChanges } from "@/lib/engagement-stack";
 
 // Only the actions an operator can opt into reviewing; the rest are always
 // reviewed (see OPT_IN_GATED_ACTIONS).
@@ -492,7 +493,7 @@ export async function PATCH(
 
     await db
       .update(engagements)
-      .set({ stack: await withRecallSecretInVault(id, nextStack, typedRecallSecret), updatedAt: new Date() })
+      .set({ stack: stackChanges(currentStack, await withRecallSecretInVault(id, nextStack, typedRecallSecret)), updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
 
     // A key saved before its platform was picked is marked connected now

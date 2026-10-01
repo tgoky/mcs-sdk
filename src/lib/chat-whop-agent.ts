@@ -45,7 +45,7 @@ import { formatMetricValue } from "@/lib/whop-agent/stats";
 import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
 import { patchEngagementStack } from "@/lib/engagement-stack";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { isAuthorizedForEngagement } from "@/lib/whop-access";
 import { startRun, failRun } from "@/lib/run-log";
@@ -62,6 +62,7 @@ import { dispatchPortfolioRollupRun } from "@/features/whop-agent/server/portfol
 import { dispatchWeeklyOpsReportRun } from "@/features/whop-agent/server/weekly-ops-report-service";
 import { dispatchAttributionReportRun } from "@/features/whop-agent/server/attribution-report-service";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 type Session = { whopUserId?: string; email: string };
 type ActionResult = { ok: true; message: string; runId?: string } | { ok: false; error: string };
@@ -372,18 +373,16 @@ export async function configureCancellationSaveOfferForEngagement(
   }
   const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId)).limit(1);
   if (!row) return { ok: false, error: "Client not found." };
-  const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
   await db
     .update(engagements)
     .set({
-      stack: {
-        ...stack,
+      stack: stackPatchSql({
         whop_save_offer_discount_percentage: config.discountPercentage,
         whop_save_offer_duration_months: config.durationMonths,
         whop_save_offer_message: config.message.trim(),
         whop_save_offer_min_tenure_days: config.minTenureDays,
         whop_save_offer_cooldown_days: config.cooldownDays,
-      },
+      }),
       updatedAt: new Date(),
     })
     .where(eq(engagements.engagementId, engagementId));

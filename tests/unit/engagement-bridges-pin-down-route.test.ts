@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/engagement-stack", () => import("../helpers/readable-stack-writes"));
 vi.mock("@/lib/workspace", () => ({
   getActiveWorkspace: vi.fn(),
   isPackageInstalledInWorkspace: vi.fn(),

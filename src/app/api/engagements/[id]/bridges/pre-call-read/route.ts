@@ -7,6 +7,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { hasCredential, storeCredential } from "@/lib/credentials";
 import { getClientFact } from "@/lib/client-facts";
 import { showtimeConnectionSuggestions } from "@/lib/derived-suggestions";
+import { stackChanges } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -158,7 +159,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await db
       .update(engagements)
-      .set({ stack: mergedStack, updatedAt: new Date() })
+      .set({ stack: stackChanges(row.stack, mergedStack), updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
 
     // Leaving a credential field blank on a revisit keeps whatever's

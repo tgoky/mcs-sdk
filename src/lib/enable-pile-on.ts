@@ -27,6 +27,7 @@ import { getActiveWorkspace, installPackageInWorkspace } from "@/lib/workspace";
 import { setSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import { isProductOnboarded } from "@/lib/product-onboarding";
 import { PRODUCT_ONBOARDING_WORKER_ID, WORKER_REGISTRY } from "@/lib/worker-registry";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 export type EnablePileOnResult =
   | { ok: true }
@@ -95,12 +96,11 @@ export async function enablePileOnForEngagement(
     await db
       .update(engagements)
       .set({
-        stack: {
-          ...currentStack,
+        stack: stackPatchSql({
           ...(opts?.smsPlatform !== undefined ? { sms_platform: opts.smsPlatform as EngagementStack["sms_platform"] } : {}),
           ...(opts?.adDataPlatform !== undefined ? { ad_data_platform: opts.adDataPlatform as EngagementStack["ad_data_platform"] } : {}),
           ...(Object.keys(metaPatch).length > 0 ? { sms_platform_meta: { ...(currentStack.sms_platform_meta ?? {}), ...metaPatch } } : {}),
-        },
+        }),
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, engagementId));

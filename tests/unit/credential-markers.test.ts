@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/engagement-stack", () => import("../helpers/readable-stack-writes"));
 // Plain-value conditions so the fake below can see which provider a query asks about.
 vi.mock("drizzle-orm", async () => {
   const actual = await vi.importActual<typeof import("drizzle-orm")>("drizzle-orm");

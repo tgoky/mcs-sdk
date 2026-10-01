@@ -11,6 +11,7 @@ import {
   activateNotificationPackAlert,
   deactivateNotificationPackAlert,
 } from "@/features/leak-map/server/notification-pack";
+import { stackChanges } from "@/lib/engagement-stack";
 
 const EDITABLE_TRAFFIC_TEMPERATURES = ["cold", "warm", "hot"] as const;
 const EDITABLE_CASTING_CHOICES = ["founder_on_camera", "coach_on_camera", "animation", "other"] as const;
@@ -261,7 +262,7 @@ export async function PATCH(
           ? { confirmationPageAnimationsEnabled: incoming.confirmationPageAnimationsEnabled as boolean }
           : {}),
         ...(incoming.queuePinWindowHours !== undefined ? { queuePinWindowHours: incoming.queuePinWindowHours as number } : {}),
-        ...(nextStack !== existing.stack ? { stack: nextStack } : {}),
+        ...(nextStack !== existing.stack && nextStack ? { stack: stackChanges(existing.stack as EngagementStack | null, nextStack) } : {}),
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, id));

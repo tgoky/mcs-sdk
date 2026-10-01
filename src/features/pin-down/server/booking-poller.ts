@@ -10,6 +10,7 @@ import { isEngagementPaused } from "@/lib/engagement-status";
 import { isSkillEnabledForEngagement } from "@/lib/engagement-skills";
 import crypto from "crypto";
 import type { GetStepTools, Inngest } from "inngest";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -138,10 +139,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     await db
       .update(engagements)
       .set({
-        stack: {
-          ...stack,
-          webhook_last_error: `Poll failed at ${now.toISOString()}: ${message}`,
-        },
+        stack: stackPatchSql({ webhook_last_error: `Poll failed at ${now.toISOString()}: ${message}` }),
         updatedAt: now,
       })
       .where(eq(engagements.engagementId, engagementId))
@@ -273,7 +271,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   await db
     .update(engagements)
     .set({
-      stack: { ...stack, webhook_receiver_last_polled_at: now.toISOString(), webhook_last_error: undefined },
+      stack: stackPatchSql({ webhook_receiver_last_polled_at: now.toISOString(), webhook_last_error: undefined }),
       updatedAt: now,
     })
     .where(eq(engagements.engagementId, engagementId));

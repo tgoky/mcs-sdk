@@ -6,6 +6,7 @@ vi.mock("@/lib/workspace", () => ({
   isPackageInstalledInWorkspace: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/engagement-stack", () => import("../helpers/readable-stack-writes"));
 
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";

@@ -18,6 +18,7 @@ import { PICK_FACT_PREFIX, PICK_SLOT_META, type PickSlot } from "@/lib/showtime-
 import { SKILL_IDS, type SkillId } from "@/lib/skill-manifest";
 import { recordSalesCallChoice } from "@/lib/account-intel/decisions";
 import { afterResponse } from "@/lib/after-response";
+import { stackChanges } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -313,7 +314,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await db
       .update(engagements)
       .set({
-        stack: updatedStack as EngagementStack,
+        stack: stackChanges(currentStack, updatedStack),
         offerDetails,
         castingChoice,
         // The confirmation page is built from this column, not the stack's

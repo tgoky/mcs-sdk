@@ -17,6 +17,7 @@ import { scrapeVoiceCorpus } from "./voice-scraper";
 import { extractVoiceProfile } from "./onboarding-service";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -43,10 +44,15 @@ export async function runVoiceExtractionOnly(
 
     await run("persist", async () => {
       const existingStack = (tenant.stack as Partial<EngagementStack> | null) ?? {};
-      const nextStack: Partial<EngagementStack> = existingStack.buyer_domain ? existingStack : { ...existingStack, buyer_domain: domain };
+      // Only fills buyer_domain when it's missing; nothing else in the
+      // stack is written back from this run's copy.
       await db
         .update(engagements)
-        .set({ brandVoiceProfile: voiceProfile, stack: nextStack as EngagementStack, updatedAt: new Date() })
+        .set({
+          brandVoiceProfile: voiceProfile,
+          ...(existingStack.buyer_domain ? {} : { stack: stackPatchSql({ buyer_domain: domain }) }),
+          updatedAt: new Date(),
+        })
         .where(eq(engagements.engagementId, tenant.engagementId));
     });
 

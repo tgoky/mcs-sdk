@@ -26,6 +26,7 @@ import { buildConfirmationPageHtml } from "./templates";
 import { scrapeDesignSignal } from "./design-scraper";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -134,7 +135,7 @@ export async function runConfirmationPageOnly(
         await db
           .update(engagements)
           .set({
-            stack: { ...stack, hosting_platform_meta: updatedMeta },
+            stack: stackPatchSql({ hosting_platform_meta: updatedMeta }),
             confirmationPageUrl: deployResult.url,
             confirmationPageDeployment: { mode: "live", deployedVia: deployResult.deployedVia, lastAttemptedAt: new Date().toISOString() },
             pasteReadyHtml: null,

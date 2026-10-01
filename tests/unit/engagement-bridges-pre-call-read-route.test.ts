@@ -6,6 +6,7 @@ vi.mock("@/lib/workspace", () => ({
   isPackageInstalledInWorkspace: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/engagement-stack", () => import("../helpers/readable-stack-writes"));
 vi.mock("@/lib/credentials", () => ({ storeCredential: vi.fn(), hasCredential: vi.fn().mockResolvedValue(false) }));
 vi.mock("@/lib/client-facts", () => ({ getClientFact: vi.fn().mockResolvedValue(null) }));
 vi.mock("@/lib/derived-suggestions", () => ({ showtimeConnectionSuggestions: vi.fn().mockResolvedValue({}) }));

@@ -11,11 +11,12 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements } from "@/models/schema";
 import { getSession } from "@/lib/session";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { isProductId } from "@/lib/product-catalog";
 import { and, eq } from "drizzle-orm";
+import { setEngagementStackEntry } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -50,16 +51,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Engagement not found or access denied." }, { status: 404 });
     }
 
-    const stack = (row.stack as EngagementStack | null) ?? ({} as EngagementStack);
-    const nextStack: EngagementStack = {
-      ...stack,
-      product_onboarding_skip_dismissed_at: {
-        ...stack.product_onboarding_skip_dismissed_at,
-        [productId]: new Date().toISOString(),
-      },
-    };
-
-    await db.update(engagements).set({ stack: nextStack, updatedAt: new Date() }).where(eq(engagements.engagementId, id));
+    await setEngagementStackEntry(id, "product_onboarding_skip_dismissed_at", productId, new Date().toISOString());
 
     return NextResponse.json({ ok: true });
   } catch (err) {

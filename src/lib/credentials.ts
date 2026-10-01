@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { credentialsRefs, credentialVault, engagements, type EngagementStack } from "@/models/schema";
 import { and, eq } from "drizzle-orm";
 import { connectedAccountIdFromRefKey, composioVaultRefKey, deleteComposioConnection, getComposioCredentialValue } from "@/lib/composio";
+import { stackPatchSql } from "@/lib/engagement-stack";
 
 // Either the module-level pooled db, or the `tx` handle inside a
 // db.transaction() callback — both expose the same select/insert/update
@@ -655,10 +656,9 @@ export async function syncStackCredentialMarkers(
   }
   if (!changed) return;
 
-  const mergedStack = { ...stack, ...patch };
   await dbClient
     .update(engagements)
-    .set({ stack: mergedStack as EngagementStack, updatedAt: new Date() })
+    .set({ stack: stackPatchSql(patch as Partial<EngagementStack>), updatedAt: new Date() })
     .where(eq(engagements.engagementId, engagementId));
 }
 

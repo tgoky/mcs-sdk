@@ -37,6 +37,7 @@ import { isEngagementPaused } from "@/lib/engagement-status";
 import { REP_THRESHOLD_DEFAULTS } from "@/features/reputation-manager/rep-thresholds";
 import { OPT_IN_GATED_ACTION_TYPES } from "@/lib/approval-actions";
 import { getAppUrl } from "@/lib/app-url";
+import { stackChanges } from "@/lib/engagement-stack";
 
 export type PendingActionType =
   | "webhook_enrollment"
@@ -367,7 +368,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
       await db
         .update(engagements)
         .set({
-          stack: updatedStack,
+          stack: stackChanges(stack, updatedStack),
           confirmationPageUrl: deployResult.url,
           confirmationPageDeployment: { mode: "live", deployedVia: deployResult.deployedVia, lastAttemptedAt: nowIso },
           pasteReadyHtml: null,

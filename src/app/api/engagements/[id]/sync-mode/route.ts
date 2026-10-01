@@ -6,6 +6,7 @@ import { getActiveWorkspace } from "@/lib/workspace";
 import { and, eq } from "drizzle-orm";
 import { buildWebhookReceiverUrl } from "@/lib/booking-sync-status";
 import { bookingSyncPatch } from "@/lib/booking-sync-mode";
+import { stackChanges } from "@/lib/engagement-stack";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -108,7 +109,7 @@ export async function PATCH(
 
     await db
       .update(engagements)
-      .set({ stack: nextStack, updatedAt: new Date() })
+      .set({ stack: stackChanges(stack, nextStack), updatedAt: new Date() })
       .where(eq(engagements.engagementId, id));
 
     return NextResponse.json({

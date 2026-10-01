@@ -23,6 +23,7 @@ import type { GetStepTools, Inngest } from "inngest";
 import crypto from "crypto";
 import { getSigningSecret, setSigningSecret } from "@/lib/signing-secrets";
 import { getAppUrl } from "@/lib/app-url";
+import { stackChanges } from "@/lib/engagement-stack";
 
 type StepTools = GetStepTools<Inngest.Any>;
 
@@ -830,7 +831,8 @@ export async function runPinDownOnboarding(
       await db
         .update(engagements)
         .set({
-          stack: finalStack,
+          // Only what onboarding changed: a setting saved while it ran stays.
+          stack: stackChanges(tenant.stack, finalStack),
           brandVoiceProfile: voiceProfile,
           confirmationPageUrl,
           confirmationPageDeployment,
@@ -874,12 +876,12 @@ export async function runPinDownOnboarding(
             await db
               .update(engagements)
               .set({
-                stack: {
+                stack: stackChanges(finalStack, {
                   ...stackWithoutSecret,
                   webhook_subscription_id: subId as string,
                   ...(signingKey ? { webhook_signing_secret_set: true } : {}),
                   webhook_receiver_mode: "webhook",
-                },
+                }),
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
@@ -903,13 +905,13 @@ export async function runPinDownOnboarding(
             await db
               .update(engagements)
               .set({
-                stack: {
+                stack: stackChanges(finalStack, {
                   ...stackWithoutSecret,
                   webhook_receiver_mode: "polling",
                   webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 25,
                   webhook_receiver_last_polled_at: new Date().toISOString(),
                   webhook_signing_secret_set: true,
-                },
+                }),
                 updatedAt: new Date(),
               })
               .where(eq(engagements.engagementId, engagementId));
@@ -923,13 +925,13 @@ export async function runPinDownOnboarding(
           await db
             .update(engagements)
             .set({
-              stack: {
+              stack: stackChanges(finalStack, {
                 ...stackWithoutSecret,
                 webhook_receiver_mode: "polling",
                 webhook_poll_interval_minutes: finalStack.webhook_poll_interval_minutes ?? 25,
                 webhook_receiver_last_polled_at: new Date().toISOString(),
                 webhook_signing_secret_set: true,
-              },
+              }),
               updatedAt: new Date(),
             })
             .where(eq(engagements.engagementId, engagementId));

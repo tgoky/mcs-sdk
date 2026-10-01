@@ -28,6 +28,7 @@ import { engagements, credentialsRefs, type EngagementStack } from "@/models/sch
 import { and, eq } from "drizzle-orm";
 import { linkEngagementToVault, listVaultCredentials } from "@/lib/credentials";
 import { isComposioManagedProvider, startComposioConnect } from "@/lib/composio";
+import { stackChanges } from "@/lib/engagement-stack";
 
 type StackField = "booking" | "email";
 
@@ -115,7 +116,7 @@ export async function linkReusableCredential(opts: {
 
     await tx
       .update(engagements)
-      .set({ stack: mergedStack as EngagementStack, updatedAt: new Date() })
+      .set({ stack: stackChanges(engagement.stack as Partial<EngagementStack> | null, mergedStack), updatedAt: new Date() })
       .where(eq(engagements.engagementId, opts.engagementId));
   });
 
