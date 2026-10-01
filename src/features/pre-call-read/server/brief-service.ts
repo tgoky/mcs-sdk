@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { maybeScheduleCheckIn } from "@/features/pile-on/server/at-risk-check-in";
 import { briefedCallsLog, engagements, conversationIntelligenceSessions } from "@/models/schema";
-import { and, eq, gte, isNotNull } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { evaluatePersonMatch } from "../person-match";
 import { researchProspect } from "./prospect-research";
 import { runConfiguredEnrichment } from "./apollo-adapter";
@@ -176,6 +176,50 @@ type CallOutcome =
   | { status: "brief_ready_undelivered"; callLabel: string; detail: string; destination: string }
   | { status: "failed"; callLabel: string; detail: string };
 
+/** A claim older than this is assumed to belong to a run that died. */
+const BRIEF_CLAIM_STALE_MINUTES = 30;
+
+/**
+ * Claims this call for this run before anything is researched, sent or
+ * delivered. Wins when the call hasn't been briefed in the last 24 hours
+ * and no other run holds a fresh claim (this run's own earlier attempt, an
+ * Inngest retry, may re-claim). One statement, so two runs reaching the
+ * same call at once can't both win: the old check ("delivered in the last
+ * 24h?") and the final write were separate, and two overlapping runs both
+ * passed the check, sending two briefs and two notetaker bots.
+ */
+export async function claimCallForBrief(
+  engagementId: string,
+  runId: string,
+  call: { id: string; callTime: Date; callEndTime?: Date | null; name?: string; email?: string; phone?: string | null }
+): Promise<boolean> {
+  const [row] = await db
+    .insert(briefedCallsLog)
+    .values({
+      id: crypto.randomUUID(),
+      engagementId,
+      callId: call.id,
+      runId,
+      callTime: call.callTime,
+      callEndTime: call.callEndTime ?? null,
+      prospectName: call.name ?? null,
+      prospectEmail: call.email || null,
+      prospectPhone: call.phone ?? null,
+      claimRunId: runId,
+      claimedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: briefedCallsLog.callId,
+      set: { claimRunId: runId, claimedAt: new Date() },
+      setWhere: sql`(${briefedCallsLog.briefDeliveredAt} is null or ${briefedCallsLog.briefDeliveredAt} < now() - interval '24 hours')
+        and (${briefedCallsLog.claimedAt} is null
+          or ${briefedCallsLog.claimRunId} = ${runId}
+          or ${briefedCallsLog.claimedAt} < now() - make_interval(mins => ${BRIEF_CLAIM_STALE_MINUTES}))`,
+    })
+    .returning({ id: briefedCallsLog.id });
+  return Boolean(row);
+}
+
 /**
  * The actual per-prospect pipeline: dup-check, rule14-gate,
  * research+enrichment, engagement-context, synthesis, delivery — same six
@@ -211,24 +255,10 @@ async function processSingleBriefCall(
     // writes a row too) must stay eligible for retry within the same 24h
     // window — otherwise the first failure would permanently block every
     // later retry of that same call for a full day.
-    const dup = await run(`dup-check-${call.id}`, async () => {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const existing = await db
-        .select({ id: briefedCallsLog.id })
-        .from(briefedCallsLog)
-        .where(
-          and(
-            eq(briefedCallsLog.callId, call.id),
-            gte(briefedCallsLog.createdAt, oneDayAgo),
-            isNotNull(briefedCallsLog.briefDeliveredAt)
-          )
-        )
-        .limit(1);
-      return { alreadyBriefed: existing.length > 0 };
-    });
+    const claimed = await run(`claim-${call.id}`, () => claimCallForBrief(tenant.engagementId, runId, call));
 
-    if (dup.alreadyBriefed) {
-      await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h (skipped)" });
+    if (!claimed) {
+      await logStep(runId, { phase: "duplicate_check", status: "skipped", label: callLabel, detail: "Already briefed in the last 24h, or another run is briefing it now (skipped)" });
       return { status: "duplicate_skipped", callLabel };
     }
 
@@ -511,6 +541,8 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
           briefText: llmResult.text,
           researchStatus,
           aiSynthesisStatus: "completed",
+          claimRunId: null,
+          claimedAt: null,
         },
       });
 
@@ -597,6 +629,9 @@ Identity confidence: ${matchResult.passed ? "confirmed enough to research" : "no
             callEndTime: call.callEndTime ?? null,
             researchStatus,
             aiSynthesisStatus: "failed",
+            // Released so the next run can retry this call straight away.
+            claimRunId: null,
+            claimedAt: null,
           },
         });
     } catch (logErr: any) {

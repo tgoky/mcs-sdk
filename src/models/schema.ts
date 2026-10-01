@@ -1273,6 +1273,12 @@ export const briefedCallsLog = pgTable(
   // gate didn't pass, not that research was attempted and failed.
   researchStatus: text("research_status"), // "completed" | "skipped_low_confidence" | "failed"
   aiSynthesisStatus: text("ai_synthesis_status"), // "completed" | "failed"
+  // Which run is briefing this call right now, and since when. A run
+  // claims the row before researching, sending a notetaker bot or
+  // delivering, so two runs can't brief the same call at once; a failed
+  // attempt releases it (see claimCallForBrief in brief-service.ts).
+  claimRunId: uuid("claim_run_id"),
+  claimedAt: timestamp("claimed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
