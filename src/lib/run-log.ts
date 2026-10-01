@@ -506,12 +506,13 @@ export async function findStaleRunIds(now = Date.now()): Promise<string[]> {
 
 export async function closeStaleRun(
   runId: string
-): Promise<{ engagementId: string; skillName: string } | null> {
+): Promise<{ engagementId: string; skillName: string; neverStarted: boolean } | null> {
   const [row] = await db
     .select({
       engagementId: skillRuns.engagementId,
       skillName: skillRuns.skillName,
       status: skillRuns.status,
+      executionStartedAt: skillRuns.executionStartedAt,
     })
     .from(skillRuns)
     .where(eq(skillRuns.id, runId))
@@ -549,7 +550,14 @@ export async function closeStaleRun(
     return null;
   }
 
-  return row.engagementId ? { engagementId: row.engagementId, skillName: row.skillName } : null;
+  return row.engagementId ? { engagementId: row.engagementId, skillName: row.skillName, neverStarted: row.executionStartedAt === null } : null;
+}
+
+/** What the client is told about a run the reaper closed. */
+export function staleRunMessage(neverStarted: boolean | undefined): string {
+  return neverStarted
+    ? "This run waited in the queue for its full allowance without starting, so it was closed automatically. Usually it never reached the queue (a brief outage while it was being scheduled); the next scheduled run goes ahead as normal."
+    : "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging. Check the run's step timeline for where it stalled.";
 }
 
 /**
@@ -564,13 +572,7 @@ export async function timeoutRun(runId: string): Promise<boolean> {
   const closed = await closeStaleRun(runId);
   if (!closed) return false;
 
-  await notifyRunOutcome(
-    closed.engagementId,
-    runId,
-    closed.skillName,
-    "run_timed_out",
-    "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging. Check the run's step timeline for where it stalled."
-  );
+  await notifyRunOutcome(closed.engagementId, runId, closed.skillName, "run_timed_out", staleRunMessage(closed.neverStarted));
 
   return true;
 }

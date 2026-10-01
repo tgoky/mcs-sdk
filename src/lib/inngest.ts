@@ -362,6 +362,8 @@ export type StaleRunNotifyData = {
   runId: string;
   engagementId: string;
   skillName: string;
+  /** The run never started (it waited in the queue the whole time). */
+  neverStarted?: boolean;
 };
 export const staleRunNotify = eventType("skill/run.notify-timeout", {
   schema: staticSchema<StaleRunNotifyData>(),

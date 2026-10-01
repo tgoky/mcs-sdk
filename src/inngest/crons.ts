@@ -30,7 +30,7 @@ import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChange
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
 import { engagements, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
-import { closeStaleRun, notifyRunOutcome, findStaleRunIds, engagementsWithQueuedRun } from "@/lib/run-log";
+import { closeStaleRun, notifyRunOutcome, findStaleRunIds, engagementsWithQueuedRun, staleRunMessage } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -215,7 +215,7 @@ export const staleRunReaperCron = inngest.createFunction(
       // Only ones it actually closed get cancelled/notified below —
       // otherwise a run that just succeeded could get an incorrect cancel
       // event or timeout notification fired at it a few hundred ms later.
-      const out: { runId: string; engagementId: string; skillName: string }[] = [];
+      const out: { runId: string; engagementId: string; skillName: string; neverStarted: boolean }[] = [];
       for (const run of stuck) {
         const closed = await closeStaleRun(run.id);
         if (closed) out.push({ runId: run.id, ...closed });
@@ -233,7 +233,7 @@ export const staleRunReaperCron = inngest.createFunction(
       await sendEventsInBatches(
         step,
         "notify-stale-runs",
-        reaped.map((r) => staleRunNotify.create({ runId: r.runId, engagementId: r.engagementId, skillName: r.skillName }))
+        reaped.map((r) => staleRunNotify.create({ runId: r.runId, engagementId: r.engagementId, skillName: r.skillName, neverStarted: r.neverStarted }))
       );
     }
 
@@ -250,7 +250,7 @@ export const notifyStaleRunCron = inngest.createFunction(
       event.data.runId,
       event.data.skillName,
       "run_timed_out",
-      "This run sat in \"running\" longer than its allowed ceiling and was closed automatically. If this keeps happening for the same module, it usually means an upstream API call is hanging. Check the run's step timeline for where it stalled."
+      staleRunMessage(event.data.neverStarted)
     );
     return { notified: true };
   }

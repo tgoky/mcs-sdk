@@ -51,6 +51,13 @@ d("stale-run reaper rules", () => {
     expect(stale.has(queuedForever)).toBe(true);
     expect(stale.has(inlineWinBackLong)).toBe(true);
 
+    // A run that never left the queue is reported as such, not as a hang.
+    const { closeStaleRun, staleRunMessage } = await import("@/lib/run-log");
+    expect((await closeStaleRun(queuedForever))?.neverStarted).toBe(true);
+    expect((await closeStaleRun(executingLong))?.neverStarted).toBe(false);
+    expect(staleRunMessage(true)).toMatch(/without starting/);
+    expect(staleRunMessage(false)).toMatch(/upstream API call is hanging/);
+
     // The dispatcher's mark only records the first start.
     const fresh = await run("leak-map", hours(0), null);
     await markRunExecuting(fresh);
