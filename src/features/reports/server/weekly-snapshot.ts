@@ -19,7 +19,7 @@ import { engagements } from "@/models/schema";
 import { isNull } from "drizzle-orm";
 import { startOfWeek } from "@/lib/dashboard-stats";
 import { getEnabledWorkerIdsForEngagement } from "@/lib/engagement-skills";
-import { getReportBlocksForEngagement } from "@/lib/worker-report-blocks";
+import { getReportBlocksForEngagement, WORKER_REPORT_RESOLVERS } from "@/lib/worker-report-blocks";
 import { recordWeeklySnapshot } from "@/lib/client-metric-snapshots";
 
 /** Every non-deleted engagement — a paused one still gets a (likely
@@ -37,8 +37,11 @@ export async function processWeeklySnapshotForEngagement(engagementId: string): 
   const weekStart = startOfWeek(new Date());
   const enabledWorkerIds = await getEnabledWorkerIdsForEngagement(engagementId);
   const blocks = await getReportBlocksForEngagement(engagementId, enabledWorkerIds, { start: weekStart });
-  // Owns every enabled worker's blocks, so a worker with nothing to report
-  // this week doesn't keep a stale block from an earlier write.
-  await recordWeeklySnapshot(engagementId, weekStart, blocks, enabledWorkerIds);
+  // Owns the blocks of every enabled worker it reports on, so one with
+  // nothing to report this week doesn't keep a stale block from an earlier
+  // write. Workers it has no resolver for (the Whop reports, which write
+  // their own blocks) are left alone.
+  const owned = enabledWorkerIds.filter((id) => WORKER_REPORT_RESOLVERS[id]);
+  await recordWeeklySnapshot(engagementId, weekStart, blocks, owned);
   return { blocksRecorded: blocks.length };
 }
