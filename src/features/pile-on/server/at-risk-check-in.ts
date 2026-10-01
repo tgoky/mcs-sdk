@@ -9,7 +9,7 @@
 
 import { db } from "@/lib/db";
 import { bookingRoster, briefOutcomeLog, engagements, sequenceMessageLog, type EngagementStack } from "@/models/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { inngest, atRiskCheckInScheduled } from "@/lib/inngest";
 import { checkInSendAt, DEFAULT_CHECK_IN_MESSAGE, isAtRisk, renderCheckIn } from "@/lib/at-risk";
 import { isEngagementPaused } from "@/lib/engagement-status";
@@ -58,16 +58,23 @@ export async function sendCheckIn(engagementId: string, bookingId: string, now =
 
   const [outcome] = await db.select({ id: briefOutcomeLog.id }).from(briefOutcomeLog).where(and(eq(briefOutcomeLog.engagementId, engagementId), eq(briefOutcomeLog.bookingId, bookingId))).limit(1);
   if (outcome) return { sent: false, reason: "An outcome is already in." };
-  const [already] = await db.select({ id: sequenceMessageLog.id }).from(sequenceMessageLog).where(and(eq(sequenceMessageLog.engagementId, engagementId), eq(sequenceMessageLog.bookingId, bookingId), eq(sequenceMessageLog.sequenceType, AT_RISK_SEQUENCE))).limit(1);
-  if (already) return { sent: false, reason: "Already sent." };
   if (await isOptedOut(engagementId, booking.phone)) return { sent: false, reason: "They texted STOP." };
   if (await isHeldOut(engagementId, bookingId)) return { sent: false, reason: "Held out of reminders (holdout proof)." };
 
   const body = renderCheckIn(stack.at_risk_check_in_message?.trim() || DEFAULT_CHECK_IN_MESSAGE, booking.name, booking.callTime, stack.timezone);
   const base = { engagementId, sequenceType: AT_RISK_SEQUENCE, bookingId, messageId: "at_risk_check_in", channel: "sms", prospectEmail: booking.email, prospectPhone: booking.phone };
-  // Logged before the text goes out, so a retry after a send whose log
-  // write failed finds this row ("Already sent") instead of texting again.
-  const [claim] = await db.insert(sequenceMessageLog).values({ ...base, status: "sending" }).returning({ id: sequenceMessageLog.id });
+  // One check-in per booking. The "already sent?" check and the log row
+  // are one step under a lock on the booking, so two runs waking together
+  // can't both pass it. The row is written before the text goes out, so a
+  // retry after a send whose log update failed finds it too.
+  const claim = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`at-risk:${engagementId}:${bookingId}`}))`);
+    const [already] = await tx.select({ id: sequenceMessageLog.id }).from(sequenceMessageLog).where(and(eq(sequenceMessageLog.engagementId, engagementId), eq(sequenceMessageLog.bookingId, bookingId), eq(sequenceMessageLog.sequenceType, AT_RISK_SEQUENCE))).limit(1);
+    if (already) return null;
+    const [row] = await tx.insert(sequenceMessageLog).values({ ...base, status: "sending" }).returning({ id: sequenceMessageLog.id });
+    return row;
+  });
+  if (!claim) return { sent: false, reason: "Already sent." };
   try {
     const receipt = await sendSmsForTenant(
       platform,

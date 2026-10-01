@@ -11,8 +11,9 @@ vi.mock("@/lib/db", () => {
     const chain = { where: () => chain, limit: async () => rows() };
     return chain;
   };
-  return {
-    db: {
+  const db: Record<string, unknown> = {
+      execute: async () => [],
+      transaction: async (fn: (tx: unknown) => unknown) => fn(db),
       select: () => ({ from: (t: unknown) => read(t) }),
       insert: (t: unknown) => ({
         values: (v: Record<string, unknown>) => {
@@ -29,8 +30,8 @@ vi.mock("@/lib/db", () => {
           },
         }),
       }),
-    },
   };
+  return { db };
 });
 const send = vi.fn();
 vi.mock("@/lib/inngest", () => ({ inngest: { send: (...a: unknown[]) => send(...a) }, atRiskCheckInScheduled: { create: (d: unknown) => d } }));

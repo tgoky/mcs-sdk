@@ -124,4 +124,14 @@ d("outbound sends happen once", () => {
     const sameCall = new Date(callTime.getTime() + 1000);
     expect((await sendCheckIn(engagementId, "call_3", new Date(), sameCall)).sent).toBe(true);
   });
+
+  it("at-risk check-in: two runs waking together text once", async () => {
+    const { db } = await import("@/lib/db");
+    const { bookingRoster } = await import("@/models/schema");
+    const { sendCheckIn } = await import("@/features/pile-on/server/at-risk-check-in");
+    await db.insert(bookingRoster).values({ engagementId, externalCallId: "call_4", callTime: new Date(Date.now() + 4 * 3600_000), prospectEmail: "ana@example.com", prospectPhone: "+15550004444" } as never);
+    const results = await Promise.all([sendCheckIn(engagementId, "call_4"), sendCheckIn(engagementId, "call_4"), sendCheckIn(engagementId, "call_4")]);
+    expect(results.filter((r) => r.sent)).toHaveLength(1);
+    expect(texts.filter((t) => t === "+15550004444")).toHaveLength(1);
+  });
 });
