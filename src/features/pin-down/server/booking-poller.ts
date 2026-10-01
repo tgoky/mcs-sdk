@@ -122,24 +122,36 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     return { polled: 0, newBookings: 0, duplicates: 0, errors: 0 };
   }
 
-  const now = new Date();
-  // First poll for a tenant that just switched into polling mode: look
-  // back one interval rather than from epoch zero, so it doesn't try to
-  // ingest the buyer's entire historical booking log on the first cycle.
-  const sinceISO =
-    stack.webhook_receiver_last_polled_at ??
-    new Date(now.getTime() - (stack.webhook_poll_interval_minutes ?? 25) * 60_000).toISOString();
+  // Inngest re-runs this function from the top whenever a step fails or
+  // the request hits its time limit. Everything that must give the same
+  // answer on a re-run (the poll time, the bookings fetched, which of them
+  // this run claimed, each booking's run) is a step, so a re-run resumes
+  // where it stopped instead of seeing its own claims as duplicates.
+  const once = step
+    ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) as Promise<T>
+    : <T,>(_id: string, fn: () => Promise<T>) => fn();
 
-  let calls: Awaited<ReturnType<typeof listBookingsSinceForTenant>> = [];
-  let errors = 0;
+  const fetched = await once("list-polled-bookings", async () => {
+    const now = new Date();
+    // First poll for a tenant that just switched into polling mode: look
+    // back one interval rather than from epoch zero, so it doesn't try to
+    // ingest the buyer's entire historical booking log on the first cycle.
+    const sinceISO =
+      stack.webhook_receiver_last_polled_at ??
+      new Date(now.getTime() - (stack.webhook_poll_interval_minutes ?? 25) * 60_000).toISOString();
+    try {
+      const apiKey = await resolveCredential(engagementId, stack.booking_platform!);
+      const listed = await listBookingsSinceForTenant(stack.booking_platform!, apiKey, stack.booking_platform_meta, sinceISO);
+      return { ok: true as const, nowIso: now.toISOString(), calls: listed.map((c) => ({ ...c, callTime: c.callTime.toISOString() })) };
+    } catch (e: unknown) {
+      return { ok: false as const, nowIso: now.toISOString(), message: e instanceof Error ? e.message : "Unknown error" };
+    }
+  });
+  const now = new Date(fetched.nowIso);
 
-  try {
-    const apiKey = await resolveCredential(engagementId, stack.booking_platform);
-    calls = await listBookingsSinceForTenant(stack.booking_platform, apiKey, stack.booking_platform_meta, sinceISO);
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Unknown error";
+  if (!fetched.ok) {
+    const message = fetched.message;
     console.error(`[booking-poller] Poll failed for engagement ${engagementId}: ${message}`);
-    errors = 1;
     // Bug fix (2026-08-20): this used to only console.error, which nobody
     // running the app ever sees. webhook_last_error is the exact field
     // computeBookingSyncStatus() already reads to render the Booking Sync
@@ -161,16 +173,11 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       });
     // Don't advance the watermark on a failed poll — the next cycle will
     // retry the same window rather than silently skipping it.
-    return { polled: 0, newBookings: 0, duplicates: 0, errors };
+    return { polled: 0, newBookings: 0, duplicates: 0, errors: 1 };
   }
 
-  let newBookings = 0;
-  let duplicates = 0;
-  const once = step
-    ? <T,>(id: string, fn: () => Promise<T>) => step.run(id, fn) as Promise<T>
-    : <T,>(_id: string, fn: () => Promise<T>) => fn();
-
-  for (const call of calls) {
+  const calls = fetched.calls.map((c) => ({ ...c, callTime: new Date(c.callTime) }));
+  const events = calls.map((call) => {
     const eventKind = call.eventKind ?? "created";
     // Synthetic payload shaped so classifyBookingEvent() and
     // handleInboundBookingEvent()'s field-normalization fallbacks
@@ -203,7 +210,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       idempotencyKey = `poll:calendly:${call.id}:${eventKind}`;
     } else {
       // Cal.com, GHL, and OnceHub use IDs that perfectly match their live webhook paths
-      idempotencyKey = deriveWebhookIdempotencyKey(stack.booking_platform, {
+      idempotencyKey = deriveWebhookIdempotencyKey(stack.booking_platform!, {
         id: call.id,
         payload: {
           uid: call.id,
@@ -221,71 +228,76 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
 
     // Final fallback
     idempotencyKey ??= `poll:${stack.booking_platform}:${call.id}:${eventKind}`;
+    return { call, eventKind, syntheticPayload, idempotencyKey };
+  });
 
-    // The claim is a step, so when Inngest re-runs this function it gets
-    // its first answer back instead of finding its own row and dropping
-    // the booking halfway through its handling.
-    const eventKey = idempotencyKey;
-    const claimed = await once(`claim-polled-booking-${eventKey}`, async () => {
-      try {
-        await db.insert(webhookEvents).values({
-          engagementId,
-          eventSource: stack.booking_platform, // same source key as the live webhook path — a booking seen by both collides correctly
-          idempotencyKey: eventKey,
-          eventKind,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    });
-    if (!claimed) {
-      duplicates++;
-      continue; // already processed, either by a prior poll or a live webhook
-    }
+  // One claim for the whole poll. A booking already claimed, by an earlier
+  // poll or by the live webhook (same source key, so a booking seen by
+  // both collides correctly), comes back unclaimed. A database error
+  // fails the step, so it's retried instead of read as "duplicate".
+  const claimedKeys = new Set(
+    await once("claim-polled-bookings", async () => {
+      if (events.length === 0) return [] as string[];
+      const rows = await db
+        .insert(webhookEvents)
+        .values(events.map((e) => ({ engagementId, eventSource: stack.booking_platform!, idempotencyKey: e.idempotencyKey, eventKind: e.eventKind })))
+        .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
+        .returning({ idempotencyKey: webhookEvents.idempotencyKey });
+      return rows.map((r) => r.idempotencyKey);
+    })
+  );
+
+  let newBookings = 0;
+  let errors = 0;
+  const duplicates = events.filter((e) => !claimedKeys.has(e.idempotencyKey)).length;
+
+  for (const { call, eventKind, syntheticPayload, idempotencyKey } of events) {
+    if (!claimedKeys.has(idempotencyKey)) continue; // already processed, either by a prior poll or a live webhook
 
     const skillId = eventKind === "cancelled" ? "win-back" : "pile-on";
+    const runId = pollRunId(engagementId, idempotencyKey);
 
-    // Roster write — unconditional, ahead of the skill-enabled check below,
-    // fail-soft. "A booking happened" is ground truth for the calendar
-    // regardless of which automation reacts to it, and it no longer needs
-    // a run to attach its log line to (see the ghost-run fix below).
-    const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform).catch(
-      (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
-    );
+    const prepared = await once(`prepare-polled-booking-${runId}`, async () => {
+      // Roster write — unconditional, ahead of the skill-enabled check below,
+      // fail-soft. "A booking happened" is ground truth for the calendar
+      // regardless of which automation reacts to it, and it no longer needs
+      // a run to attach its log line to (see the ghost-run fix below).
+      const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform!).catch(
+        (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
+      );
 
-    // Ghost-run fix: this check used to happen AFTER startRun, so a
-    // disabled skill still got a visible run created for it that then
-    // revealed itself as skipped when opened — hide-and-seek. Checking
-    // first means a disabled skill never creates a run at all.
-    if (!(await isSkillEnabledForEngagement(engagementId, skillId))) {
-      continue;
-    }
+      // Ghost-run fix: this check used to happen AFTER startRun, so a
+      // disabled skill still got a visible run created for it that then
+      // revealed itself as skipped when opened — hide-and-seek. Checking
+      // first means a disabled skill never creates a run at all.
+      if (!(await isSkillEnabledForEngagement(engagementId, skillId))) return { enabled: false };
 
-    const runId = pollRunId(engagementId, eventKey);
-    try {
-      await once(`start-polled-run-${runId}`, async () => {
-        await startRun({
-          id: runId,
-          engagementId,
-          skillName: skillId,
-          phase: "webhook_received",
-          label: `${call.name} <${call.email}>`,
-        });
-        await logStep(runId, {
-          phase: "booking_roster",
-          status: rosterResult.wrote ? "success" : "skipped",
-          detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
-        });
+      await startRun({
+        id: runId,
+        engagementId,
+        skillName: skillId,
+        phase: "webhook_received",
+        label: `${call.name} <${call.email}>`,
       });
+      await logStep(runId, {
+        phase: "booking_roster",
+        status: rosterResult.wrote ? "success" : "skipped",
+        detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
+      });
+      return { enabled: true };
+    });
+    if (!prepared.enabled) continue;
 
+    try {
       const classified = classifyBookingEvent(syntheticPayload);
       await handleInboundBookingEvent(syntheticPayload, tenant, runId, classified === "unknown" ? eventKind : classified, step);
       newBookings++;
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";
       console.error(`[booking-poller] Enrollment failed for polled booking ${call.id}: ${message}`);
-      await failRun(runId, e).catch(() => {});
+      // Once: a failed step comes back on every later re-run, and each
+      // failRun alerts the client.
+      await once(`fail-polled-run-${runId}`, () => failRun(runId, e).catch(() => {}));
       errors++;
     }
   }
