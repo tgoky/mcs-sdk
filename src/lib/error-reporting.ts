@@ -102,6 +102,25 @@ export function shouldAlert(fp: string, now = Date.now()): boolean {
   return true;
 }
 
+/**
+ * shouldAlert, shared across every running copy of the app. The map above
+ * only knows about this copy, so with several copies (or after a restart)
+ * the same error alerted once per copy. The shared count lives in Postgres
+ * (rate_limit_buckets); it's loaded lazily so code that only reports
+ * errors never pulls in the database driver, and if the database can't be
+ * reached the per-copy check above still applies.
+ */
+export async function shouldAlertAcrossCopies(fp: string): Promise<boolean> {
+  if (!shouldAlert(fp)) return false;
+  try {
+    const { hitRateLimit } = await import("@/lib/rate-limit");
+    const result = await hitRateLimit({ name: "error-alert", limit: 1, windowSeconds: SLACK_QUIET_MS / 1000 }, fp);
+    return result.allowed;
+  } catch {
+    return true;
+  }
+}
+
 async function post(url: string, init: RequestInit): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3000);
@@ -117,6 +136,11 @@ export async function reportError(error: unknown, ctx: ErrorContext): Promise<vo
   const fp = fingerprint(e, ctx);
   console.error(`[error:${ctx.kind}] ${ctx.where}${ctx.engagementId ? ` (${ctx.engagementId})` : ""}: ${e.name}: ${e.message}`);
 
+  const slack = process.env.ERROR_ALERT_SLACK_WEBHOOK_URL;
+  // Decided before any request starts, so a failed send never sits
+  // unhandled while this awaits.
+  const alertSlack = Boolean(slack) && (await shouldAlertAcrossCopies(fp));
+
   const tasks: Promise<void>[] = [];
   const sentry = parseSentryDsn(process.env.SENTRY_DSN);
   if (sentry) {
@@ -128,8 +152,7 @@ export async function reportError(error: unknown, ctx: ErrorContext): Promise<vo
       })
     );
   }
-  const slack = process.env.ERROR_ALERT_SLACK_WEBHOOK_URL;
-  if (slack && shouldAlert(fp)) {
+  if (slack && alertSlack) {
     const lines = [`*${ctx.kind === "job" ? "Background job failed" : ctx.kind === "client" ? "A page crashed" : "Server error"}* in \`${ctx.where}\``, `${e.name}: ${e.message}`.slice(0, 500)];
     if (ctx.engagementId) lines.push(`Client: ${ctx.engagementId}`);
     if (ctx.runId) lines.push(`Run: ${ctx.runId}`);

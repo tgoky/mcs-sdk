@@ -10,7 +10,7 @@
 // through: a limiter must never be the thing that takes the app down.
 
 import { NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
+import { lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { rateLimitBuckets } from "@/models/schema";
 
@@ -35,7 +35,11 @@ export function clientIp(req: Request): string {
 
 export async function hitRateLimit(rule: RateLimitRule, subject: string, now = new Date()): Promise<RateLimitResult> {
   const key = `${rule.name}:${subject}`;
-  const windowFloor = new Date(now.getTime() - rule.windowSeconds * 1000);
+  // Bound through the column so postgres-js gets the encoded timestamp; a
+  // raw Date inside sql`` fails to serialize, and the limiter failed open on
+  // every repeat hit.
+  const nowParam = sql.param(now, rateLimitBuckets.windowStart);
+  const windowFloor = sql.param(new Date(now.getTime() - rule.windowSeconds * 1000), rateLimitBuckets.windowStart);
   try {
     // One atomic statement: start a new window if the old one has ended,
     // otherwise count this request in it.
@@ -46,7 +50,7 @@ export async function hitRateLimit(rule: RateLimitRule, subject: string, now = n
         target: rateLimitBuckets.key,
         set: {
           count: sql`case when ${rateLimitBuckets.windowStart} <= ${windowFloor} then 1 else ${rateLimitBuckets.count} + 1 end`,
-          windowStart: sql`case when ${rateLimitBuckets.windowStart} <= ${windowFloor} then ${now} else ${rateLimitBuckets.windowStart} end`,
+          windowStart: sql`case when ${rateLimitBuckets.windowStart} <= ${windowFloor} then ${nowParam} else ${rateLimitBuckets.windowStart} end`,
         },
       })
       .returning({ count: rateLimitBuckets.count, windowStart: rateLimitBuckets.windowStart });
@@ -70,7 +74,7 @@ export async function rateLimitResponse(rule: RateLimitRule, subject: string, me
 /** Old windows, for the daily clean-up. */
 export async function deleteExpiredRateLimitBuckets(olderThanSeconds = 24 * 60 * 60, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - olderThanSeconds * 1000);
-  const deleted = await db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.windowStart} < ${cutoff}`).returning({ key: rateLimitBuckets.key });
+  const deleted = await db.delete(rateLimitBuckets).where(lt(rateLimitBuckets.windowStart, cutoff)).returning({ key: rateLimitBuckets.key });
   return deleted.length;
 }
 
