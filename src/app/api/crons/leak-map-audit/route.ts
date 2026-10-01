@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { and, eq, isNotNull, isNull } from "drizzle-orm"; // <--- Added isNull
 import { getDisabledEngagementIdsForSkill } from "@/lib/engagement-skills";
-import { startRun } from "@/lib/run-log";
+import { startRun, failRun } from "@/lib/run-log";
 import { inngest, skillRunEvent } from "@/lib/inngest";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 import crypto from "crypto";
@@ -49,8 +49,8 @@ export async function GET(request: Request) {
   const errors: string[] = [];
 
   for (const tenant of targets) {
+    const runId = crypto.randomUUID();
     try {
-      const runId = crypto.randomUUID();
       await startRun({
         id: runId,
         engagementId: tenant.engagementId,
@@ -73,6 +73,9 @@ export async function GET(request: Request) {
       dispatched.push(tenant.engagementId);
     } catch (err: any) {
       errors.push(`${tenant.engagementId}: ${err.message}`); // <--- PRESERVED: Error handling
+      // A run left "running" with no event behind it would wait for the
+      // reaper and keep this client's later briefs from queuing.
+      await failRun(runId, err).catch(() => {});
     }
   }
 

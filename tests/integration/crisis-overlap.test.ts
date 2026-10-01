@@ -100,5 +100,15 @@ d("Crisis Response: overlapping runs", () => {
     await markCheckedThrough(engagementId, latest, third);
     [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
     expect(row.at?.getTime()).toBe(latest.getTime());
+
+    // A run that declared an incident moves the window even if its claim
+    // went stale while declaring, and leaves the newer run's claim alone.
+    const fourth = crypto.randomUUID();
+    expect(await claimCrisisWindow(engagementId, fourth)).toBe(true);
+    const declaredUpTo = new Date(Date.now() + 20_000);
+    await markCheckedThrough(engagementId, declaredUpTo, slow, { declared: true });
+    [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
+    expect(row.at?.getTime()).toBe(declaredUpTo.getTime());
+    expect(await renewCrisisClaim(engagementId, fourth)).toBe(true);
   });
 });

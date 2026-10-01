@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
-import { startRun } from "@/lib/run-log";
+import { startRun, failRun } from "@/lib/run-log";
 import { inngest, skillRunEvent } from "@/lib/inngest";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
@@ -62,8 +62,8 @@ export async function GET(request: Request) {
 
   // 3. Safe Inngest dispatch (fast, no Vercel timeout risk)
   for (const tenant of eligible) {
+    const runId = crypto.randomUUID();
     try {
-      const runId = crypto.randomUUID();
       await startRun({
         id: runId,
         engagementId: tenant.engagementId,
@@ -85,6 +85,9 @@ export async function GET(request: Request) {
       dispatched.push(tenant.engagementId);
     } catch (err: any) {
       errors.push(`${tenant.engagementId}: ${err.message}`);
+      // A run left "running" with no event behind it would wait for the
+      // reaper and keep this client's later briefs from queuing.
+      await failRun(runId, err).catch(() => {});
     }
   }
 

@@ -121,6 +121,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
   if (!stack?.booking_platform || stack.webhook_receiver_mode !== "polling") {
     return { polled: 0, newBookings: 0, duplicates: 0, errors: 0 };
   }
+  const platform = stack.booking_platform;
 
   // Inngest re-runs this function from the top whenever a step fails or
   // the request hits its time limit. Everything that must give the same
@@ -140,9 +141,12 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       stack.webhook_receiver_last_polled_at ??
       new Date(now.getTime() - (stack.webhook_poll_interval_minutes ?? 25) * 60_000).toISOString();
     try {
-      const apiKey = await resolveCredential(engagementId, stack.booking_platform!);
-      const listed = await listBookingsSinceForTenant(stack.booking_platform!, apiKey, stack.booking_platform_meta, sinceISO);
-      return { ok: true as const, nowIso: now.toISOString(), calls: listed.map((c) => ({ ...c, callTime: c.callTime.toISOString() })) };
+      const apiKey = await resolveCredential(engagementId, platform);
+      const listed = await listBookingsSinceForTenant(platform, apiKey, stack.booking_platform_meta, sinceISO);
+      // Only what the handling below reads: step results are stored, and a
+      // long outage can make this window large.
+      const calls = listed.map((c) => ({ id: c.id, email: c.email, name: c.name, phone: c.phone, eventKind: c.eventKind, callTime: c.callTime.toISOString() }));
+      return { ok: true as const, nowIso: now.toISOString(), calls };
     } catch (e: unknown) {
       return { ok: false as const, nowIso: now.toISOString(), message: e instanceof Error ? e.message : "Unknown error" };
     }
@@ -176,7 +180,8 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     return { polled: 0, newBookings: 0, duplicates: 0, errors: 1 };
   }
 
-  const calls = fetched.calls.map((c) => ({ ...c, callTime: new Date(c.callTime) }));
+  const calls = fetched.calls;
+  const seenKeys = new Set<string>();
   const events = calls.map((call) => {
     const eventKind = call.eventKind ?? "created";
     // Synthetic payload shaped so classifyBookingEvent() and
@@ -195,7 +200,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       // under the same `call_time` key the live webhook path's synthetic
       // extraction looks for, so polling-mode engagements get the same
       // roster write as webhook-mode ones instead of a silent gap.
-      call_time: call.callTime.toISOString(),
+      call_time: call.callTime,
       phone: call.phone,
       _source: "poll",
       _bookingId: call.id,
@@ -210,7 +215,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       idempotencyKey = `poll:calendly:${call.id}:${eventKind}`;
     } else {
       // Cal.com, GHL, and OnceHub use IDs that perfectly match their live webhook paths
-      idempotencyKey = deriveWebhookIdempotencyKey(stack.booking_platform!, {
+      idempotencyKey = deriveWebhookIdempotencyKey(platform, {
         id: call.id,
         payload: {
           uid: call.id,
@@ -229,6 +234,11 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     // Final fallback
     idempotencyKey ??= `poll:${stack.booking_platform}:${call.id}:${eventKind}`;
     return { call, eventKind, syntheticPayload, idempotencyKey };
+  }).filter((e) => {
+    // A listing can return one booking twice (overlapping pages); handle it once.
+    if (seenKeys.has(e.idempotencyKey)) return false;
+    seenKeys.add(e.idempotencyKey);
+    return true;
   });
 
   // One claim for the whole poll. A booking already claimed, by an earlier
@@ -240,7 +250,7 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       if (events.length === 0) return [] as string[];
       const rows = await db
         .insert(webhookEvents)
-        .values(events.map((e) => ({ engagementId, eventSource: stack.booking_platform!, idempotencyKey: e.idempotencyKey, eventKind: e.eventKind })))
+        .values(events.map((e) => ({ engagementId, eventSource: platform, idempotencyKey: e.idempotencyKey, eventKind: e.eventKind })))
         .onConflictDoNothing({ target: [webhookEvents.eventSource, webhookEvents.idempotencyKey] })
         .returning({ idempotencyKey: webhookEvents.idempotencyKey });
       return rows.map((r) => r.idempotencyKey);
@@ -249,7 +259,8 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
 
   let newBookings = 0;
   let errors = 0;
-  const duplicates = events.filter((e) => !claimedKeys.has(e.idempotencyKey)).length;
+  let released = 0;
+  const duplicates = calls.length - events.filter((e) => claimedKeys.has(e.idempotencyKey)).length;
 
   for (const { call, eventKind, syntheticPayload, idempotencyKey } of events) {
     if (!claimedKeys.has(idempotencyKey)) continue; // already processed, either by a prior poll or a live webhook
@@ -257,35 +268,48 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
     const skillId = eventKind === "cancelled" ? "win-back" : "pile-on";
     const runId = pollRunId(engagementId, idempotencyKey);
 
-    const prepared = await once(`prepare-polled-booking-${runId}`, async () => {
-      // Roster write — unconditional, ahead of the skill-enabled check below,
-      // fail-soft. "A booking happened" is ground truth for the calendar
-      // regardless of which automation reacts to it, and it no longer needs
-      // a run to attach its log line to (see the ghost-run fix below).
-      const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, stack.booking_platform!).catch(
-        (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
-      );
+    let prepared: { enabled: boolean };
+    try {
+      prepared = await once(`prepare-polled-booking-${runId}`, async () => {
+        // Roster write — unconditional, ahead of the skill-enabled check below,
+        // fail-soft. "A booking happened" is ground truth for the calendar
+        // regardless of which automation reacts to it, and it no longer needs
+        // a run to attach its log line to (see the ghost-run fix below).
+        const rosterResult = await upsertBookingRoster(syntheticPayload, engagementId, eventKind, platform).catch(
+          (e: unknown) => ({ wrote: false, reason: e instanceof Error ? e.message : String(e) })
+        );
 
-      // Ghost-run fix: this check used to happen AFTER startRun, so a
-      // disabled skill still got a visible run created for it that then
-      // revealed itself as skipped when opened — hide-and-seek. Checking
-      // first means a disabled skill never creates a run at all.
-      if (!(await isSkillEnabledForEngagement(engagementId, skillId))) return { enabled: false };
+        // Ghost-run fix: this check used to happen AFTER startRun, so a
+        // disabled skill still got a visible run created for it that then
+        // revealed itself as skipped when opened — hide-and-seek. Checking
+        // first means a disabled skill never creates a run at all.
+        if (!(await isSkillEnabledForEngagement(engagementId, skillId))) return { enabled: false };
 
-      await startRun({
-        id: runId,
-        engagementId,
-        skillName: skillId,
-        phase: "webhook_received",
-        label: `${call.name} <${call.email}>`,
+        await startRun({
+          id: runId,
+          engagementId,
+          skillName: skillId,
+          phase: "webhook_received",
+          label: `${call.name} <${call.email}>`,
+        });
+        await logStep(runId, {
+          phase: "booking_roster",
+          status: rosterResult.wrote ? "success" : "skipped",
+          detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
+        });
+        return { enabled: true };
       });
-      await logStep(runId, {
-        phase: "booking_roster",
-        status: rosterResult.wrote ? "success" : "skipped",
-        detail: rosterResult.wrote ? "Roster updated" : (rosterResult.reason ?? "Not written"),
+    } catch (e: unknown) {
+      // Nothing for this booking has run yet: give the claim back so the
+      // next poll picks it up, instead of leaving it claimed and unhandled.
+      console.error(`[booking-poller] Couldn't start polled booking ${call.id}:`, e);
+      await once(`release-polled-booking-${runId}`, async () => {
+        await db.delete(webhookEvents).where(and(eq(webhookEvents.eventSource, platform), eq(webhookEvents.idempotencyKey, idempotencyKey)));
       });
-      return { enabled: true };
-    });
+      errors++;
+      released++;
+      continue;
+    }
     if (!prepared.enabled) continue;
 
     try {
@@ -297,9 +321,20 @@ export async function pollBookingsForEngagement(engagementId: string, step?: Ste
       console.error(`[booking-poller] Enrollment failed for polled booking ${call.id}: ${message}`);
       // Once: a failed step comes back on every later re-run, and each
       // failRun alerts the client.
-      await once(`fail-polled-run-${runId}`, () => failRun(runId, e).catch(() => {}));
+      await once(`fail-polled-run-${runId}`, () => failRun(runId, e));
       errors++;
     }
+  }
+
+  // A booking given back above is only picked up again if the next poll
+  // lists it, so the window stays where it was; the bookings already
+  // handled come back as duplicates.
+  if (released > 0) {
+    await db
+      .update(engagements)
+      .set({ stack: stackPatchSql({ webhook_last_error: `Poll at ${now.toISOString()}: ${released} booking(s) couldn't be started and will be retried on the next poll.` }), updatedAt: now })
+      .where(eq(engagements.engagementId, engagementId));
+    return { polled: calls.length, newBookings, duplicates, errors };
   }
 
   // Advance the watermark even when calls is empty — the whole point is

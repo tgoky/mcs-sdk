@@ -151,7 +151,9 @@ export async function startRuns(runs: StartRunOptions[]): Promise<void> {
         startedAt: new Date(nowIso),
         executionStartedAt: opts.queued ? null : new Date(nowIso),
       }))
-    );
+    // A retried step can create the same run again (the booking poller's
+    // ids are fixed per booking); the first row stands.
+    ).onConflictDoNothing({ target: skillRuns.id });
   }
 }
 
@@ -435,9 +437,11 @@ const QUEUED_RUN_CEILING_MS = QUEUED_RUN_CEILING_MINUTES * 60 * 1000;
 /**
  * Records that the dispatcher has begun this run (first time only), and how
  * long it waited for a slot: from when it was created, or from its
- * scheduled start (`notBefore`) when that was later.
+ * scheduled start (`notBefore`) when that was later. Returns false when the
+ * run was already closed (its dispatch was reported failed, or the reaper
+ * gave up on it), so the dispatcher doesn't run work nobody expects.
  */
-export async function markRunExecuting(runId: string, notBefore?: string): Promise<void> {
+export async function markRunExecuting(runId: string, notBefore?: string): Promise<boolean> {
   const now = new Date();
   const scheduled = notBefore ? new Date(notBefore) : null;
   const readyFrom = scheduled && !Number.isNaN(scheduled.getTime()) ? sql`greatest(${skillRuns.startedAt}, ${scheduled.toISOString()}::timestamp)` : sql`${skillRuns.startedAt}`;
@@ -448,6 +452,9 @@ export async function markRunExecuting(runId: string, notBefore?: string): Promi
       queueWaitMs: sql`greatest(0, (extract(epoch from (${now.toISOString()}::timestamp - ${readyFrom})) * 1000)::int)`,
     })
     .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
+  const [row] = await db.select({ status: skillRuns.status }).from(skillRuns).where(eq(skillRuns.id, runId)).limit(1);
+  // No row: an older caller that never created one. Run it, as before.
+  return !row || row.status === "running";
 }
 
 /** Closes queued runs whose dispatch never reached the queue, so they

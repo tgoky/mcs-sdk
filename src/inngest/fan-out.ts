@@ -96,28 +96,28 @@ export async function dispatchScheduledSkillRuns<Row extends { engagementId: str
       });
 
     if (result.runs.length > 0) {
-      const send = sendEventsInBatches(
-        step,
-        `${opts.id}-dispatch-${page}`,
-        result.runs.map((r) =>
-          skillRunEvent({
-            ...r.extra,
-            runId: r.runId,
-            engagementId: r.engagementId,
-            skillName: opts.skillName,
-            notBefore: staggeredNotBefore(`${opts.skillName}:${r.engagementId}`, opts.spreadMinutes, nowIso),
-            interactive: false,
-          })
-        )
-      );
       try {
-        await send;
+        await sendEventsInBatches(
+          step,
+          `${opts.id}-dispatch-${page}`,
+          result.runs.map((r) =>
+            skillRunEvent({
+              ...r.extra,
+              runId: r.runId,
+              engagementId: r.engagementId,
+              skillName: opts.skillName,
+              notBefore: staggeredNotBefore(`${opts.skillName}:${r.engagementId}`, opts.spreadMinutes, nowIso),
+              interactive: false,
+            })
+          )
+        );
       } catch (err) {
         // The runs exist but their events never reached the queue: close
-        // them now rather than leaving them "running" until the reaper.
-        await step.run(`${opts.id}-dispatch-${page}-failed`, () =>
-          failUndispatchedRuns(result.runs.map((r) => r.runId), "Couldn't hand this scheduled run to the queue.")
-        );
+        // them now rather than leaving them "running" until the reaper. If
+        // that fails too, the send error is still the one reported.
+        await step
+          .run(`${opts.id}-dispatch-${page}-failed`, () => failUndispatchedRuns(result.runs.map((r) => r.runId), "Couldn't hand this scheduled run to the queue."))
+          .catch(() => {});
         throw err;
       }
       dispatched += result.runs.length;

@@ -71,5 +71,12 @@ d("stale-run reaper rules", () => {
     const rows = await db.select({ id: skillRuns.id, at: skillRuns.executionStartedAt }).from(skillRuns).where(inArray(skillRuns.id, [inline, queued, bulkQueued]));
     const started = Object.fromEntries(rows.map((r) => [r.id, r.at !== null]));
     expect(started).toEqual({ [inline]: true, [queued]: false, [bulkQueued]: false });
+
+    // A queued run closed before the dispatcher reached it (its dispatch
+    // was reported failed) tells the dispatcher not to run it.
+    const { failUndispatchedRuns } = await import("@/lib/run-log");
+    await failUndispatchedRuns([bulkQueued], "test");
+    expect(await markRunExecuting(bulkQueued)).toBe(false);
+    expect(await markRunExecuting(queued)).toBe(true);
   });
 });

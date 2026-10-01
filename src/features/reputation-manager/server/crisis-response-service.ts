@@ -100,16 +100,20 @@ async function crisisCheckedThroughFor(engagementId: string): Promise<string | n
  * not have seen everything this one would skip, mustn't move it), and
  * never backwards. Called right after an incident is declared, while the
  * claim was just confirmed. */
-export async function markCheckedThrough(engagementId: string, upTo: Date, runId: string): Promise<void> {
+export async function markCheckedThrough(engagementId: string, upTo: Date, runId: string, opts: { declared?: boolean } = {}): Promise<void> {
   const upToParam = sql.param(upTo, repIdentityGraphs.crisisCheckedThrough);
+  const ours = sql`${repIdentityGraphs.crisisClaimRunId} = ${runId}`;
   await db
     .update(repIdentityGraphs)
     .set({
       crisisCheckedThrough: sql`greatest(coalesce(${repIdentityGraphs.crisisCheckedThrough}, ${upToParam}), ${upToParam})`,
-      crisisClaimRunId: null,
-      crisisClaimedAt: null,
+      crisisClaimRunId: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimRunId} end`,
+      crisisClaimedAt: sql`case when ${ours} then null else ${repIdentityGraphs.crisisClaimedAt} end`,
     })
-    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)));
+    // Once an incident is declared it covers these findings, so the window
+    // moves even if the claim went stale while declaring; otherwise a newer
+    // run would find them again and declare a second incident.
+    .where(opts.declared ? eq(repIdentityGraphs.engagementId, engagementId) : and(eq(repIdentityGraphs.engagementId, engagementId), ours));
 }
 
 /** Confirms this run still holds the claim and restarts its clock, right
@@ -539,7 +543,9 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     // The incident now covers these findings: move the window at once, so a
     // run that takes over while this one is still routing them (slow
     // drafting) doesn't find them again and declare a second incident.
-    await advanceWindow();
+    await (step
+      ? step.run("advance-window", () => markCheckedThrough(engagementId, upTo, runId, { declared: true }))
+      : markCheckedThrough(engagementId, upTo, runId, { declared: true }));
 
     // Cold email shouldn't keep going out under the client's name mid-crisis:
     // propose pausing Cold Open (approval first). Nothing when it isn't sending.

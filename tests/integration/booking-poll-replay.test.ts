@@ -14,24 +14,34 @@ const { handled, listCalls, failRun, behavior } = vi.hoisted(() => ({
   handled: [] as string[],
   listCalls: { n: 0 },
   failRun: vi.fn(async () => {}),
-  behavior: { mode: "hang-then-finish" as "hang-then-finish" | "always-fail" },
+  behavior: { mode: "hang-then-finish" as "hang-then-finish" | "always-fail" | "finish", twice: false, enabledFailures: 0 },
 }));
 vi.mock("@/lib/credentials", () => ({ resolveCredential: async () => "key" }));
 vi.mock("@/lib/platforms/booking", () => ({
   listBookingsSinceForTenant: async () => {
     listCalls.n++;
-    return [{ id: "bk_1", email: "pat@example.com", name: "Pat", callTime: new Date(Date.now() + 86_400_000), eventKind: "created" }];
+    const call = { id: "bk_1", email: "pat@example.com", name: "Pat", callTime: new Date(Date.now() + 86_400_000), eventKind: "created" };
+    return behavior.twice ? [call, { ...call }] : [call];
   },
   deriveWebhookIdempotencyKey: () => null,
 }));
 vi.mock("@/lib/booking-roster", () => ({ upsertBookingRoster: async () => ({ wrote: true }) }));
-vi.mock("@/lib/engagement-skills", () => ({ isSkillEnabledForEngagement: async () => true }));
+vi.mock("@/lib/engagement-skills", () => ({
+  isSkillEnabledForEngagement: async () => {
+    if (behavior.enabledFailures > 0) {
+      behavior.enabledFailures--;
+      throw new Error("db timeout");
+    }
+    return true;
+  },
+}));
 vi.mock("@/lib/run-log", async (orig) => ({ ...(await orig<typeof import("@/lib/run-log")>()), failRun }));
 vi.mock("@/features/pile-on/server/enrollment-service", () => ({
   classifyBookingEvent: () => "created",
   handleInboundBookingEvent: (_p: unknown, _t: unknown, runId: string) => {
     handled.push(runId);
     if (behavior.mode === "always-fail") return Promise.reject(new Error("ESP down"));
+    if (behavior.mode === "finish") return Promise.resolve();
     // First pass: the request is cut off mid-handling (Inngest abandons it
     // and invokes the function again). Second pass: it finishes.
     return handled.length === 1 ? new Promise(() => {}) : Promise.resolve();
@@ -77,6 +87,8 @@ d("booking poller across an Inngest re-run", () => {
     handled.length = 0;
     listCalls.n = 0;
     failRun.mockClear();
+    behavior.twice = false;
+    behavior.enabledFailures = 0;
   };
 
   afterEach(async () => {
@@ -136,6 +148,35 @@ d("booking poller across an Inngest re-run", () => {
     spy.mockRestore();
     const retry = await pollBookingsForEngagement(engagementId, memoStep() as never);
     expect(retry).toMatchObject({ duplicates: 0 });
+    expect(handled).toHaveLength(1);
+  });
+
+  it("a booking that couldn't be started is given back and handled by the next poll", async () => {
+    await setup();
+    behavior.mode = "finish";
+    behavior.enabledFailures = 1;
+    const { db } = await import("@/lib/db");
+    const { engagements } = await import("@/models/schema");
+    const { eq } = await import("drizzle-orm");
+    const { pollBookingsForEngagement } = await import("@/features/pin-down/server/booking-poller");
+
+    const first = await pollBookingsForEngagement(engagementId, memoStep() as never);
+    expect(first).toMatchObject({ newBookings: 0, errors: 1 });
+    const [row] = await db.select({ stack: engagements.stack }).from(engagements).where(eq(engagements.engagementId, engagementId));
+    expect((row.stack as { webhook_receiver_last_polled_at?: string }).webhook_receiver_last_polled_at).toBeUndefined();
+
+    const next = await pollBookingsForEngagement(engagementId, memoStep() as never);
+    expect(next).toMatchObject({ newBookings: 1, duplicates: 0, errors: 0 });
+    expect(handled).toHaveLength(1);
+  });
+
+  it("a booking listed twice in one poll is handled once", async () => {
+    await setup();
+    behavior.mode = "finish";
+    behavior.twice = true;
+    const { pollBookingsForEngagement } = await import("@/features/pin-down/server/booking-poller");
+    const result = await pollBookingsForEngagement(engagementId, memoStep() as never);
+    expect(result).toMatchObject({ polled: 2, newBookings: 1, duplicates: 1 });
     expect(handled).toHaveLength(1);
   });
 });
