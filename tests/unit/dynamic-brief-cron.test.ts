@@ -11,7 +11,7 @@ vi.mock("@/lib/worker-config-completeness", () => ({
   getMissingRequiredFields: async (_skill: string, id: string) => (id === "incomplete" ? [{ label: "Brief destination", reason: "not set" }] : []),
 }));
 const startRun = vi.fn(async () => undefined);
-vi.mock("@/lib/run-log", () => ({ startRun: (...a: unknown[]) => startRun(...(a as [])), closeStaleRun: vi.fn(), notifyRunOutcome: vi.fn(), failRun: vi.fn() }));
+vi.mock("@/lib/run-log", () => ({ startRun: (...a: unknown[]) => startRun(...(a as [])), closeStaleRun: vi.fn(), notifyRunOutcome: vi.fn(), failRun: vi.fn(), findStaleRunIds: vi.fn(), markRunExecuting: vi.fn(), logStep: vi.fn(), finishRun: vi.fn(), QUEUED_RUN_CEILING_MINUTES: 1440 }));
 
 import { dynamicBriefCron } from "@/inngest/crons";
 import { fakeStep, runInngestHandler } from "../helpers/inngest-fn";

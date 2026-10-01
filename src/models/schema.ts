@@ -1135,6 +1135,12 @@ export const skillRuns = pgTable("skill_runs", {
   }>(),
   costInCents: integer("cost_in_cents"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
+  // startedAt is when the run was created, which for a run sent through
+  // the skill dispatcher (src/inngest/skill.ts) is when it was queued. This
+  // is when the dispatcher actually began it; null while it's still
+  // waiting. The stale-run reaper times running work from here, and
+  // executionStartedAt - startedAt is how long the run waited in the queue.
+  executionStartedAt: timestamp("execution_started_at"),
   completedAt: timestamp("completed_at"),
 }, (table) => [
     index("skill_runs_engagement_started_idx").on(table.engagementId, table.startedAt),

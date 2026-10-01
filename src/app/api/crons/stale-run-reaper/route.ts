@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { skillRuns } from "@/models/schema";
-import { and, eq, lt } from "drizzle-orm";
-import { timeoutRun } from "@/lib/run-log";
+import { timeoutRun, findStaleRunIds } from "@/lib/run-log";
+import { isDispatchedSkill } from "@/inngest/skill";
 import { requireCronOrAdmin } from "@/lib/cron-auth";
 
 /**
@@ -18,19 +16,13 @@ import { requireCronOrAdmin } from "@/lib/cron-auth";
  * tenant's stuck runs, so it's gated to CRON_SECRET or an admin session
  * only (see src/lib/cron-auth.ts) — not any logged-in customer.
  */
-const STALE_RUN_CEILING_MS =
-  Number(process.env.STALE_RUN_CEILING_MINUTES ?? 120) * 60 * 1000;
-
 export async function GET(request: Request) {
   const auth = await requireCronOrAdmin(request);
   if (!auth.ok) return auth.response;
 
   try {
-    const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
-    const stuck = await db
-      .select({ id: skillRuns.id })
-      .from(skillRuns)
-      .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, cutoff)));
+    // Same rules as the scheduled reaper (src/inngest/crons.ts).
+    const stuck = (await findStaleRunIds(isDispatchedSkill)).map((id) => ({ id }));
 
     let reaped = 0;
     for (const run of stuck) {

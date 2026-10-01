@@ -30,8 +30,8 @@ import { inngest, skillRunExecute, skillRunCancel, credentialHealthCheckSingle, 
 import { findEngagementsForAccountReviewSweep, autoGenerateAccountReviewIfChanged } from "@/features/reports/server/account-advisor";
 import { findEngagementsDueForHubspotDeliveryPoll, pollHubspotDeliveryForEngagement } from "@/features/win-back/server/esp-delivery-poll";
 import { db } from "@/lib/db";
-import { engagements, skillRuns, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
-import { startRun, closeStaleRun, notifyRunOutcome } from "@/lib/run-log";
+import { engagements, canaryRuns, briefedCallsLog, briefOutcomeLog, conversationIntelligenceSessions, pendingActions } from "@/models/schema";
+import { startRun, closeStaleRun, notifyRunOutcome, findStaleRunIds } from "@/lib/run-log";
 import { evaluateActiveAlertMonitor } from "@/features/leak-map/server/alert-monitor";
 import { findCredentialsNeedingCheck, checkSingleCredential } from "@/features/notifications/server/credential-health";
 import { markElapsedEnrollmentsLost, processLostDealsForEngagement } from "@/features/win-back/server/lost-deal-sweep";
@@ -53,6 +53,7 @@ import { estimateEngagementCallDurationMinutes } from "@/features/pre-call-read/
 import { deleteExpiredRateLimitBuckets } from "@/lib/rate-limit";
 import { getAppUrl } from "@/lib/app-url";
 import { getMissingRequiredFields } from "@/lib/worker-config-completeness";
+import { isDispatchedSkill } from "@/inngest/skill";
 
 // Each function does its DB read + per-tenant startRun bookkeeping inside
 // ONE step.run(), then fans out via a SINGLE step.sendEvent() carrying the
@@ -230,20 +231,15 @@ export const alertMonitorCron = inngest.createFunction(
   }
 );
 
-// How long a run is allowed to sit at status="running" before the reaper
-// treats it as stuck rather than legitimately long-running. Deliberately
-// generous relative to the 45s per-request checkpoint window in
-// src/lib/inngest.ts, since a single run can checkpoint-resume many times
-// over its real lifetime (e.g. pre-call-read looping a full roster).
-// Override per-deployment via env if a given skill genuinely needs more.
-const STALE_RUN_CEILING_MS =
-  Number(process.env.STALE_RUN_CEILING_MINUTES ?? 120) * 60 * 1000;
+// The reaper's ceilings (running vs. still queued) live with
+// findStaleRunIds in src/lib/run-log.ts, shared with the HTTP reaper.
 
 /**
  * Stale-run reaper.
  *
- * Closes any skillRuns row that's been stuck at status="running" past
- * STALE_RUN_CEILING_MS — the janitor for the case where a serverless
+ * Closes any skillRuns row that's been stuck at status="running" past its
+ * ceiling (see findStaleRunIds in src/lib/run-log.ts: running work is timed
+ * from when it actually started, queued work gets a longer ceiling) — the janitor for the case where a serverless
  * function died mid-run (or someone killed `pnpm dev` at exactly the wrong
  * moment locally) and left a row that will never update on its own. Before
  * this existed, the run-detail page's 3s poll would spin on that row
@@ -267,11 +263,7 @@ export const staleRunReaperCron = inngest.createFunction(
   { id: "stale-run-reaper-cron", triggers: [{ cron: "*/30 * * * *" }], retries: 1 },
   async ({ step }) => {
     const reaped = await step.run("reap-stale-runs", async () => {
-      const cutoff = new Date(Date.now() - STALE_RUN_CEILING_MS);
-      const stuck = await db
-        .select({ id: skillRuns.id })
-        .from(skillRuns)
-        .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, cutoff)));
+      const stuck = (await findStaleRunIds(isDispatchedSkill)).map((id) => ({ id }));
 
       // closeStaleRun() re-checks status="running" at write time and
       // returns null if the run resolved on its own between this scan and

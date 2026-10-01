@@ -2,7 +2,7 @@ import { inngest, skillRunExecute, skillRunCancel } from "@/lib/inngest";
 import { db } from "@/lib/db";
 import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
-import { failRun, logStep, finishRun } from "@/lib/run-log";
+import { failRun, logStep, finishRun, markRunExecuting, QUEUED_RUN_CEILING_MINUTES } from "@/lib/run-log";
 import { SKILL_REGISTRY, isSkillId, type SkillDefinition } from "@/lib/skill-registry";
 import { REP_SKILL_REGISTRY, isRepSkillId, type RepSkillDefinition } from "@/lib/rep-skill-registry";
 import { CHAT_SKILL_REGISTRY, isChatSkillId, type ChatSkillDefinition } from "@/lib/chat-skill-registry";
@@ -38,6 +38,11 @@ const SKILL_CATALOGS: { isId: (v: string) => boolean; registry: Record<string, S
   { isId: isWhopAgentSkillId, registry: WHOP_AGENT_SKILL_REGISTRY },
 ];
 
+/** True for a skill this dispatcher runs (so its runs can sit queued). */
+export function isDispatchedSkill(skillName: string): boolean {
+  return Boolean(resolveSkillDefinition(skillName)?.execute);
+}
+
 function resolveSkillDefinition(skillName: string): SkillDefinition | RepSkillDefinition | ChatSkillDefinition | ColdOpenSkillDefinition | WhopAgentSkillDefinition | null {
   for (const { isId, registry } of SKILL_CATALOGS) {
     if (isId(skillName)) return registry[skillName];
@@ -55,6 +60,9 @@ export const executeSkillRun = inngest.createFunction(
     retries: 1,
     triggers: [skillRunExecute],
     cancelOn: [{ event: skillRunCancel, match: "data.runId" }],
+    // A run that waited this long in the queue is abandoned; the stale-run
+    // reaper closes its row on the same ceiling (src/lib/run-log.ts).
+    timeouts: { start: `${QUEUED_RUN_CEILING_MINUTES}m` },
     concurrency: {
       key: "event.data.engagementId",
       limit: 1,
@@ -82,6 +90,8 @@ export const executeSkillRun = inngest.createFunction(
       competitorPageUrl,
       heroVideoUrl,
     } = event.data;
+
+    await step.run("mark-executing", () => markRunExecuting(runId));
 
     const tenantRaw = await step.run("load-tenant", async () => {
       const [row] = await db

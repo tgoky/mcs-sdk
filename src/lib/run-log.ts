@@ -34,7 +34,7 @@
 
 import { db } from "@/lib/db";
 import { skillRuns, engagements, users, type EngagementStack } from "@/models/schema";
-import { and, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, ne, sql, isNull, lt } from "drizzle-orm";
 import { notifyUser } from "@/lib/notify";
 import { skillName as skillDisplayName } from "@/lib/copy";
 
@@ -414,6 +414,46 @@ export async function cancelRun(runId: string): Promise<void> {
  * becomes a serverless-timeout risk specifically once real network calls
  * enter the loop.
  */
+/** How long a run may run once it has actually started. */
+export const STALE_RUN_CEILING_MS = Number(process.env.STALE_RUN_CEILING_MINUTES ?? 120) * 60 * 1000;
+/** How long a dispatched run may wait in the queue before it starts. Also
+ * the dispatcher's Inngest `timeouts.start`, so both give up together. */
+export const QUEUED_RUN_CEILING_MINUTES = Number(process.env.QUEUED_RUN_CEILING_MINUTES ?? 24 * 60);
+const QUEUED_RUN_CEILING_MS = QUEUED_RUN_CEILING_MINUTES * 60 * 1000;
+
+/** Records that the dispatcher has begun this run (first time only). */
+export async function markRunExecuting(runId: string): Promise<void> {
+  await db
+    .update(skillRuns)
+    .set({ executionStartedAt: new Date() })
+    .where(and(eq(skillRuns.id, runId), isNull(skillRuns.executionStartedAt)));
+}
+
+/**
+ * Runs the reaper should close. Running work is timed from when it
+ * actually began, not from when it was queued: under load a dispatched run
+ * can wait in line for a while, and the reaper used to close those before
+ * they ever started. A dispatched run still waiting gets the much longer
+ * queue ceiling; a run created by code that executes it immediately (not
+ * through the dispatcher) never gets executionStartedAt, so it's timed
+ * from creation exactly as before.
+ */
+export async function findStaleRunIds(isDispatchedSkill: (skillName: string) => boolean, now = Date.now()): Promise<string[]> {
+  const runningCutoff = new Date(now - STALE_RUN_CEILING_MS);
+  const queuedCutoff = new Date(now - QUEUED_RUN_CEILING_MS);
+  const rows = await db
+    .select({ id: skillRuns.id, skillName: skillRuns.skillName, startedAt: skillRuns.startedAt, executionStartedAt: skillRuns.executionStartedAt })
+    .from(skillRuns)
+    .where(and(eq(skillRuns.status, "running"), lt(skillRuns.startedAt, runningCutoff)));
+  return rows
+    .filter((r) =>
+      r.executionStartedAt
+        ? r.executionStartedAt < runningCutoff
+        : !isDispatchedSkill(r.skillName) || r.startedAt < queuedCutoff
+    )
+    .map((r) => r.id);
+}
+
 export async function closeStaleRun(
   runId: string
 ): Promise<{ engagementId: string; skillName: string } | null> {

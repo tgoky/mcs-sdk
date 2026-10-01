@@ -1,0 +1,1 @@
+ALTER TABLE "skill_runs" ADD COLUMN "execution_started_at" timestamp;
