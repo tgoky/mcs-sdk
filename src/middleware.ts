@@ -11,7 +11,7 @@ const ACTIVE_STATUSES = new Set(["active", "trialing", "canceling", "admin"]);
 
 // API routes machines call, each checking its own signature, secret or
 // token; everything else under /api needs a signed-in, paid member.
-const PUBLIC_API_PREFIXES = ["/api/auth", "/api/webhooks", "/api/crons", "/api/inngest", "/api/slack/interactions", "/api/recall"];
+const PUBLIC_API_PREFIXES = ["/api/health", "/api/auth", "/api/webhooks", "/api/crons", "/api/inngest", "/api/slack/interactions", "/api/recall"];
 
 const COOKIE_OPTIONS = {
   secure: true,

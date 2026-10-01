@@ -23,6 +23,11 @@ describe("middleware on /api", () => {
     membership.mockClear();
   });
 
+  it("lets the hosting platform's health check through without a session", async () => {
+    const res = await request("/api/health");
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("answers 401 in JSON when signed out, rather than redirecting", async () => {
     const res = await request("/api/engagements/eng_1");
     expect(res.status).toBe(401);

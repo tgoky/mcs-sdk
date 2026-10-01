@@ -29,7 +29,20 @@ function createClient() {
     );
   }
   // `prepare: false` is required for Supabase's transaction-mode pooler.
-  return postgres(url, { prepare: false });
+  //
+  // Connections per copy of the app. Every copy opens up to this many, so
+  // (copies running at once) x DATABASE_POOL_MAX must stay under the
+  // Supabase pooler's own connection limit for your plan. 10 is
+  // postgres-js's own default, kept so nothing changes until it's set.
+  const max = Number(process.env.DATABASE_POOL_MAX) || 10;
+  return postgres(url, {
+    prepare: false,
+    max,
+    // Hand idle connections back so short-lived copies (serverless) don't
+    // hold pooler slots they aren't using.
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
 }
 
 // Reuse the connection across hot reloads in dev / across invocations on
