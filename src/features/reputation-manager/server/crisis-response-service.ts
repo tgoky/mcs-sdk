@@ -95,12 +95,31 @@ async function crisisCheckedThroughFor(engagementId: string): Promise<string | n
   return row?.at ? new Date(row.at).toISOString() : null;
 }
 
-/** Moves the window forward and releases this run's claim. */
-async function markCheckedThrough(engagementId: string, upTo: Date): Promise<void> {
+/** Moves the window forward and releases this run's claim. Only while
+ * this run still holds the claim, and never backwards: a run that went
+ * slow and lost its claim to a newer run mustn't undo that run's window. */
+export async function markCheckedThrough(engagementId: string, upTo: Date, runId: string): Promise<void> {
+  const upToParam = sql.param(upTo, repIdentityGraphs.crisisCheckedThrough);
   await db
     .update(repIdentityGraphs)
-    .set({ crisisCheckedThrough: upTo, crisisClaimRunId: null, crisisClaimedAt: null })
-    .where(eq(repIdentityGraphs.engagementId, engagementId));
+    .set({
+      crisisCheckedThrough: sql`greatest(coalesce(${repIdentityGraphs.crisisCheckedThrough}, ${upToParam}), ${upToParam})`,
+      crisisClaimRunId: null,
+      crisisClaimedAt: null,
+    })
+    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)));
+}
+
+/** Confirms this run still holds the claim and restarts its clock, right
+ * before an incident is declared. False when a newer run took it over
+ * after this one went quiet for too long. */
+export async function renewCrisisClaim(engagementId: string, runId: string): Promise<boolean> {
+  const [row] = await db
+    .update(repIdentityGraphs)
+    .set({ crisisClaimedAt: new Date() })
+    .where(and(eq(repIdentityGraphs.engagementId, engagementId), eq(repIdentityGraphs.crisisClaimRunId, runId)))
+    .returning({ id: repIdentityGraphs.id });
+  return Boolean(row);
 }
 
 /** A claim older than this is assumed to belong to a run that died. */
@@ -380,7 +399,7 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     const since = sinceRaw ? new Date(sinceRaw) : null;
     const upToRaw = await (step ? step.run("window-end", () => databaseNow()) : databaseNow());
     const upTo = new Date(upToRaw);
-    const advanceWindow = () => (step ? step.run("advance-window", () => markCheckedThrough(engagementId, upTo)) : markCheckedThrough(engagementId, upTo));
+    const advanceWindow = () => (step ? step.run("advance-window", () => markCheckedThrough(engagementId, upTo, runId)) : markCheckedThrough(engagementId, upTo, runId));
 
     const findings = await (step
       ? step.run("load-flagged-findings", () => loadFlaggedFindingsSince(engagementId, since, upTo))
@@ -496,6 +515,13 @@ export async function runRepCrisisResponse(tenant: any, runId: string, step: Ste
     // One step: insert the incident and notify — see declareIncident's
     // own comment for why both needed to move behind a single step.run
     // rather than running directly here.
+    const stillOurs = await (step ? step.run("confirm-claim", () => renewCrisisClaim(engagementId, runId)) : renewCrisisClaim(engagementId, runId));
+    if (!stillOurs) {
+      await logStep(runId, { phase: "crisis_response", status: "skipped", detail: "A newer Crisis Response run took over this client's assessment." });
+      summary.openItems.push("Skipped: a newer run took over before an incident was declared.");
+      await finishRun(runId, { summary, status: "skipped" });
+      return;
+    }
     const { incidentId } = await (step
       ? step.run("declare-incident", () => declareIncident(declareParams))
       : declareIncident(declareParams));

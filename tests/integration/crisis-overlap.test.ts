@@ -66,4 +66,24 @@ d("Crisis Response: overlapping runs", () => {
     const [graph] = await db.select({ claim: repIdentityGraphs.crisisClaimRunId }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
     expect(graph.claim).toBeNull();
   });
+
+  it("a run that lost its claim to a newer one can't declare or move the window back", async () => {
+    const { db } = await import("@/lib/db");
+    const { repIdentityGraphs } = await import("@/models/schema");
+    const { eq } = await import("drizzle-orm");
+    const { claimCrisisWindow, renewCrisisClaim, markCheckedThrough } = await import("@/features/reputation-manager/server/crisis-response-service");
+    const [slow, newer] = [crypto.randomUUID(), crypto.randomUUID()];
+
+    expect(await claimCrisisWindow(engagementId, slow)).toBe(true);
+    // The slow run goes quiet past the stale limit; a newer run takes over.
+    await db.update(repIdentityGraphs).set({ crisisClaimedAt: new Date(Date.now() - 60 * 60_000) }).where(eq(repIdentityGraphs.engagementId, engagementId));
+    expect(await claimCrisisWindow(engagementId, newer)).toBe(true);
+    const later = new Date(Date.now() + 1000);
+    await markCheckedThrough(engagementId, later, newer);
+
+    expect(await renewCrisisClaim(engagementId, slow)).toBe(false);
+    await markCheckedThrough(engagementId, new Date(Date.now() - 10 * 60_000), slow);
+    const [row] = await db.select({ at: repIdentityGraphs.crisisCheckedThrough }).from(repIdentityGraphs).where(eq(repIdentityGraphs.engagementId, engagementId));
+    expect(row.at?.getTime()).toBe(later.getTime());
+  });
 });
