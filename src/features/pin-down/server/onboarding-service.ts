@@ -3,7 +3,8 @@ import { engagements } from "@/models/schema";
 import { eq } from "drizzle-orm";
 import { resolveCredential } from "@/lib/credentials";
 import { registerWebhookForTenant, CalendlyClient, CalComClient } from "@/lib/platforms/booking";
-import { publishConfirmationPage } from "@/lib/platforms/hosting";
+import { publishConfirmationPage, type ConfirmationPageContent } from "@/lib/platforms/hosting";
+import { clearedPageColumns } from "./confirmation-page-store";
 import { gateOrExecute } from "@/lib/approval-gate";
 import { buildConfirmationPageHtml } from "./templates";
 import { buildAdCreativeBriefs } from "@/features/pile-on/server/ad-creative-briefs";
@@ -673,7 +674,7 @@ export async function runPinDownOnboarding(
     const appUrl = getAppUrl();
     const internalFallbackUrl = `${appUrl}/confirm/${engagementId}`;
 
-    const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions, remoteResourceId } = await run(
+    const { confirmationPageUrl, confirmationPageDeployment, pasteReadyHtml, pasteReadyInstructions, remoteResourceId, clearedPage } = await run(
       "confirmation-deploy",
       async () => {
         // Buyer opted to keep their existing page (see the existing-page
@@ -696,6 +697,7 @@ export async function runPinDownOnboarding(
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
             remoteResourceId: null as string | number | null,
+            clearedPage: null as ConfirmationPageContent | null,
           };
         }
 
@@ -747,6 +749,8 @@ export async function runPinDownOnboarding(
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
             remoteResourceId: null as string | number | null,
+            // Not cleared yet: the hosted page keeps the last approved build.
+            clearedPage: null as ConfirmationPageContent | null,
           };
         }
 
@@ -768,6 +772,7 @@ export async function runPinDownOnboarding(
             pasteReadyHtml: null as string | null,
             pasteReadyInstructions: null as string | null,
             remoteResourceId: deployResult.resourceId ?? (null as string | number | null),
+            clearedPage: pageContent as ConfirmationPageContent | null,
           };
         }
 
@@ -786,6 +791,7 @@ export async function runPinDownOnboarding(
           pasteReadyHtml: deployResult.html,
           pasteReadyInstructions: deployResult.instructions,
           remoteResourceId: null as string | number | null,
+          clearedPage: pageContent as ConfirmationPageContent | null,
         };
       }
     );
@@ -838,6 +844,7 @@ export async function runPinDownOnboarding(
           confirmationPageDeployment,
           pasteReadyHtml,
           pasteReadyInstructions,
+          ...clearedPageColumns(clearedPage),
           updatedAt: new Date(),
         })
         .where(eq(engagements.engagementId, engagementId));

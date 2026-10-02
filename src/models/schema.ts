@@ -861,6 +861,15 @@ export const engagements = pgTable("engagements", {
   // and fetch it after the fact (see GET /api/engagements/[id]).
   pasteReadyHtml: text("paste_ready_html"),
   pasteReadyInstructions: text("paste_ready_instructions"),
+  // The full confirmation page document as last built AND cleared to go
+  // out (published, handed over to paste, or approved from the queue),
+  // whatever the hosting platform. This is what /confirm/[id] serves.
+  // pasteReadyHtml above can't stand in for it: it's only set in
+  // paste_ready mode, and for Webflow/WordPress/HighLevel it's an iframe
+  // snippet, not the page. A rebuild still waiting on approval leaves this
+  // untouched, so the public page never shows unapproved content.
+  confirmationPageHtml: text("confirmation_page_html"),
+  confirmationPageBuiltAt: timestamp("confirmation_page_built_at"),
   // Ships the proof block on the confirmation page only when at least one
   // entry has name, role, and quote populated (OG SKILL.md Phase 2 rule).
   existingProof: jsonb("existing_proof").$type<{

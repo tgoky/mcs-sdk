@@ -533,6 +533,13 @@
       "when": 1790858251190,
       "tag": "0075_skill_run_queue_wait",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790981227151,
+      "tag": "0076_confirmation_page_html",
+      "breakpoints": true
     }
   ]
 }

@@ -325,6 +325,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
   // anything that sat in pending_actions between queue and approval.
   confirmation_page_deploy: async (engagementId, payload) => {
     const { publishConfirmationPage } = await import("@/lib/platforms/hosting");
+    const { clearedPageColumns } = await import("@/features/pin-down/server/confirmation-page-store");
     const { resolveCredential } = await import("@/lib/credentials");
     const { logStep } = await import("@/lib/run-log");
 
@@ -373,6 +374,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
           confirmationPageDeployment: { mode: "live", deployedVia: deployResult.deployedVia, lastAttemptedAt: nowIso },
           pasteReadyHtml: null,
           pasteReadyInstructions: null,
+          ...clearedPageColumns(payload.pageContent),
           updatedAt: new Date(),
         })
         .where(eq(engagements.engagementId, engagementId));
@@ -393,6 +395,7 @@ export const ACTION_EXECUTORS: Record<PendingActionType, (engagementId: string, 
         confirmationPageDeployment: { mode: "paste_ready", reason: deployResult.reason, lastAttemptedAt: nowIso },
         pasteReadyHtml: deployResult.html,
         pasteReadyInstructions: deployResult.instructions,
+        ...clearedPageColumns(payload.pageContent),
         updatedAt: new Date(),
       })
       .where(eq(engagements.engagementId, engagementId));

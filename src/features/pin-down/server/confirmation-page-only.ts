@@ -23,6 +23,7 @@ import { resolveCredential } from "@/lib/credentials";
 import { publishConfirmationPage } from "@/lib/platforms/hosting";
 import { gateOrExecute } from "@/lib/approval-gate";
 import { buildConfirmationPageHtml } from "./templates";
+import { clearedPageColumns } from "./confirmation-page-store";
 import { scrapeDesignSignal } from "./design-scraper";
 import { logStep, finishRun, failRun, emptySummary } from "@/lib/run-log";
 import type { GetStepTools, Inngest } from "inngest";
@@ -140,6 +141,7 @@ export async function runConfirmationPageOnly(
             confirmationPageDeployment: { mode: "live", deployedVia: deployResult.deployedVia, lastAttemptedAt: new Date().toISOString() },
             pasteReadyHtml: null,
             pasteReadyInstructions: null,
+            ...clearedPageColumns(pageContent),
             updatedAt: new Date(),
           })
           .where(eq(engagements.engagementId, engagementId));
@@ -156,6 +158,7 @@ export async function runConfirmationPageOnly(
             confirmationPageDeployment: { mode: "paste_ready", reason: deployResult.reason, lastAttemptedAt: new Date().toISOString() },
             pasteReadyHtml: deployResult.html,
             pasteReadyInstructions: deployResult.instructions,
+            ...clearedPageColumns(pageContent),
             updatedAt: new Date(),
           })
           .where(eq(engagements.engagementId, engagementId));
