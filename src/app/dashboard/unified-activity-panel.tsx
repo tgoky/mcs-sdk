@@ -42,6 +42,7 @@ import { getRepairAction } from "@/lib/queue-repair-action";
 import { triggerSkillRun, cancelSkillRun } from "@/lib/quick-actions";
 import { useQuickActions } from "@/components/action-panel";
 import { AnySkillBadge } from "@/components/any-skill-badge";
+import { RunHistoryDetail } from "@/app/dashboard/engagements/[id]/run-history-detail";
 import { VerboseTime } from "@/components/relative-time";
 import { anySkillDisplayName } from "@/lib/any-skill";
 import { PRODUCT_IDS, PRODUCT_SKILL_IDS, type ProductId } from "@/lib/product-catalog";
@@ -1148,63 +1149,49 @@ export function UnifiedActivityPanel({
                 className="absolute left-0 top-0 bottom-0 w-1.5 -ml-0.5 cursor-col-resize z-20 hover:bg-zinc-400/40 dark:hover:bg-zinc-600/40 transition-colors"
                 title="Drag to resize"
               />
-              <div className="flex items-center justify-between px-3 h-11 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
-                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Details</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
-                  aria-label="Close detail panel"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 text-sm">
-                {selectedItem.queueItem ? (
-                  <div className="space-y-4">
-                    <QueueItemPreview item={selectedItem.queueItem} />
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <QueueItemQuickActions
-                        item={selectedItem.queueItem}
-                        repair={selectedItem.queueItem ? getRepairAction(selectedItem.queueItem) : null}
-                        isBusy={busyIds.has(selectedItem.queueItem.id)}
-                        isTriggering={triggeringId === selectedItem.queueItem.id}
-                        triggered={triggeredIds.has(selectedItem.queueItem.id)}
-                        triggerErrorId={triggerErrorId}
-                        errorText={errors.get(selectedItem.queueItem.id) ?? null}
-                        decide={decide}
-                        resolveSweepNoShow={resolveSweepNoShow}
-                        dismissSyncSetup={dismissSyncSetup}
-                        dismissRunFailure={dismissRunFailure}
-                        onRunRepairTrigger={runRepairTrigger}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      {selectedItem.skillName && <AnySkillBadge skill={selectedItem.skillName} size={26} />}
-                      <div className="min-w-0">
-                        <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 truncate">{selectedItem.title}</p>
-                        {selectedItem.buyer && <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate">{selectedItem.buyer}</p>}
+              {/* A run opens the same full detail as the run history in a client's
+                  page (status, started, took, phase, step timeline); a queue item
+                  keeps its own preview and action buttons. */}
+              {!selectedItem.queueItem && selectedItem.runId ? (
+                <RunHistoryDetail runId={selectedItem.runId} onClose={() => setSelectedId(null)} />
+              ) : (
+                <>
+                <div className="flex items-center justify-between px-3 h-11 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
+                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Details</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                    aria-label="Close detail panel"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 text-sm">
+                  {selectedItem.queueItem && (
+                    <div className="space-y-4">
+                      <QueueItemPreview item={selectedItem.queueItem} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <QueueItemQuickActions
+                          item={selectedItem.queueItem}
+                          repair={selectedItem.queueItem ? getRepairAction(selectedItem.queueItem) : null}
+                          isBusy={busyIds.has(selectedItem.queueItem.id)}
+                          isTriggering={triggeringId === selectedItem.queueItem.id}
+                          triggered={triggeredIds.has(selectedItem.queueItem.id)}
+                          triggerErrorId={triggerErrorId}
+                          errorText={errors.get(selectedItem.queueItem.id) ?? null}
+                          decide={decide}
+                          resolveSweepNoShow={resolveSweepNoShow}
+                          dismissSyncSetup={dismissSyncSetup}
+                          dismissRunFailure={dismissRunFailure}
+                          onRunRepairTrigger={runRepairTrigger}
+                        />
                       </div>
                     </div>
-                    {selectedItem.run?.subjectLabel && (
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300 whitespace-pre-line">{selectedItem.run.subjectLabel}</p>
-                    )}
-                    {selectedItem.run?.errorMessage && (
-                      <p className="text-sm text-rose-600 dark:text-rose-400 font-mono whitespace-pre-line">{selectedItem.run.errorMessage}</p>
-                    )}
-                    <VerboseTime isoString={selectedItem.timestamp} className="text-sm font-medium text-zinc-500 dark:text-zinc-400" />
-                    <Link
-                      href={selectedItem.href}
-                      className="inline-flex items-center gap-1 text-sm font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                    >
-                      View full run <ArrowUpRight className="w-3 h-3" />
-                    </Link>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+                </>
+              )}
             </>
           )}
         </div>
