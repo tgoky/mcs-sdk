@@ -10,6 +10,7 @@ import { EngagementPauseControl } from "./pause-control";
 import { ReportPeriodProvider, PeriodTabs } from "./report-period-context";
 import { WorkersPanel } from "./workers-panel";
 import { RepAuditLogPanel } from "./rep-audit-log-panel";
+import { GrowReputationCard } from "./grow-reputation-card";
 import { MasterRosterCalendar } from "./master-roster-calendar";
 import { CallIntelligenceLog } from "./call-intelligence-log";
 import { EngagementActionsMenu } from "./engagement-actions-menu";
@@ -21,10 +22,8 @@ import { getInstalledPackagesByWorkspace } from "@/lib/workspace";
 import { REP_SKILL_IDS, type RepSkillId } from "@/lib/rep-skill-manifest";
 import type { WorkerId } from "@/lib/worker-registry";
 import {
-  ArrowUpRight,
   Server,
   ChevronLeft,
-  Megaphone
 } from "lucide-react";
 import { SetBreadcrumbLabel } from "@/components/breadcrumbs/breadcrumb-context";
 import { getActiveWorkspace } from "@/lib/workspace";
@@ -371,25 +370,7 @@ export default async function EngagementDetailPage({
         {repIdentityGraphRow && <RepAuditLogPanel events={repAuditEvents} />}
         </div>
 
-        {repIdentityGraphRow && (
-          <Link
-            href={`/dashboard/engagements/${engagement.engagementId}/offensive`}
-            className="group flex items-center justify-between gap-3 no-ambient-glow surface-glass-2 rounded-2xl p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                <Megaphone size={16} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                  Grow your reputation
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Three guided steps to improve what Google and AI assistants say about this client: their website, the press, and Reddit.</p>
-              </div>
-            </div>
-            <ArrowUpRight size={16} className="text-zinc-400 shrink-0" />
-          </Link>
-        )}
+        {repIdentityGraphRow && <GrowReputationCard engagementId={engagement.engagementId} />}
 
         {engagement.pausedAt && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs font-mono text-amber-800 dark:text-amber-400">

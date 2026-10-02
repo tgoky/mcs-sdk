@@ -18,7 +18,7 @@ import { TourProvider } from "@/components/tours/tour-provider";
 import { TourOverlay } from "@/components/tours/tour-overlay";
 import { ToastProvider } from "@/components/toast/toast-provider";
 import { db } from "@/lib/db";
-import { engagements, type EngagementStack } from "@/models/schema";
+import { engagements, repIdentityGraphs, type EngagementStack } from "@/models/schema";
 import { and, eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +76,22 @@ export default async function DashboardLayout({
     primaryEngagementId ? getEnabledWorkerIdsForEngagement(primaryEngagementId).catch(() => []) : Promise.resolve([]),
     getInstalledPackagesByWorkspace([activeWorkspace.workspaceId]).catch(() => new Map<string, string[]>()),
   ]);
+  // "Grow your reputation" needs Reputation Manager installed and its
+  // Identity Setup run for this client (the same rule as the client page's
+  // card). A failed read just leaves the shortcut out.
+  const canGrowReputation =
+    primaryEngagementId && (installed.get(activeWorkspace.workspaceId) ?? []).includes("reputation-manager")
+      ? await db
+          .select({ id: repIdentityGraphs.id })
+          .from(repIdentityGraphs)
+          .where(eq(repIdentityGraphs.engagementId, primaryEngagementId))
+          .limit(1)
+          .then((r) => r.length > 0)
+          .catch(() => false)
+      : false;
   const createMenu: CreateMenuContext = {
     engagementId: primaryEngagementId,
+    canGrowReputation,
     paused: Boolean(primaryRow?.pausedAt),
     skills: enabledIds.map((id) => ({ id, name: WORKER_REGISTRY[id].name, hasSettings: hasSkillSettings(id) })),
     products: (installed.get(activeWorkspace.workspaceId) ?? []).filter(isProductId).map((id) => ({

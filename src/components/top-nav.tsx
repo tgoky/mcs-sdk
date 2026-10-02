@@ -11,6 +11,7 @@ import {
   Play,
   Settings2,
   Wrench,
+  Megaphone,
   MessageSquareQuote,
   Link2,
   ChevronRight,
@@ -45,6 +46,8 @@ export interface CreateMenuContext {
   products: { id: string; name: string; setupSkillId: string }[];
   /** Whether everything for the client is paused. */
   paused?: boolean;
+  /** Whether the client has Reputation Manager set up, so "Grow your reputation" has something to work from. */
+  canGrowReputation?: boolean;
 }
 
 interface TopNavProps {
@@ -146,6 +149,14 @@ function CreateMenu({
 
   const needsClient = !engagementId;
 
+  // Opens beside the page like Teammates; on a phone it's the page.
+  function openGrowReputation() {
+    if (!engagementId) return;
+    close();
+    if (pane && desktop()) pane.open({ engagementId, skillId: "grow-reputation", panel: "grow" });
+    else router.push(`/dashboard/engagements/${enc}/offensive`);
+  }
+
   const subItems = (key: SubKey): ReactNode => {
     const empty = (text: string) => <p className="px-2.5 py-2 text-[12px] text-zinc-500">{text}</p>;
     const skillRow = (sk: CreateMenuContext["skills"][number], onPick: () => void) => (
@@ -207,6 +218,12 @@ function CreateMenu({
         {cascade("Run a skill now", <Play className={iconCls} />, "run")}
         {cascade("Change a skill's settings", <Settings2 className={iconCls} />, "settings")}
         {cascade("Open a product's setup", <Wrench className={iconCls} />, "setup")}
+        {ctx?.canGrowReputation && (
+          <button type="button" role="menuitem" disabled={needsClient} onClick={openGrowReputation} className={itemCls} {...leaf}>
+            <Megaphone className={iconCls} />
+            <span className="truncate">Grow your reputation</span>
+          </button>
+        )}
         <div className="my-1 border-t border-zinc-900/[0.07] dark:border-white/10" />
         <button
           type="button"

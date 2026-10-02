@@ -14,6 +14,8 @@ export interface PaneSkill {
   skillId: string;
   /** Only these settings (paths): opened from a setup page, the ones it doesn't ask. */
   only?: string[];
+  /** Another page of the app opened in this pane instead of a skill's settings. */
+  panel?: "grow";
 }
 
 interface SkillPaneState {
