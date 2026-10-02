@@ -92,7 +92,7 @@ export default async function ReportsPage() {
   const initialReviews = recentReviews.map((r) => ({ ...r, generatedAt: r.generatedAt.toISOString() }));
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto sm:px-4 py-2 sm:py-8 space-y-8">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Reports</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-2xl">
@@ -108,12 +108,12 @@ export default async function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{engagement.buyer}</p>
+          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 break-words">{engagement.buyer}</p>
 
           {!hasAnyWorkers ? (
             <div className="text-center py-8">
               <FileText className="w-6 h-6 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 break-words">
                 {engagement.buyer} doesn&apos;t have any enabled skills reporting data yet.
               </p>
             </div>

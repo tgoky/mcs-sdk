@@ -38,16 +38,16 @@ export default async function BookingSyncSettingsPage() {
   return (
     <div className="max-w-4xl space-y-6 font-sans">
       <div>
-        <h1 className="text-lg font-bold text-zinc-100 tracking-tight">
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
           Booking Sync
         </h1>
-        <p className="text-xs text-zinc-400 mt-1">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
           Monitor and manage webhook delivery and automated polling across your connected calendar platforms.
         </p>
       </div>
 
       {syncStatuses.length === 0 ? (
-        <div className="surface-glass-1 rounded-xl p-8 text-center text-xs text-zinc-400">
+        <div className="surface-glass-1 rounded-xl p-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
           No client engagements configured yet. Add a client to monitor booking sync health.
         </div>
       ) : (
@@ -55,39 +55,39 @@ export default async function BookingSyncSettingsPage() {
           {syncStatuses.map(({ engagementId, buyer, platformLabel, syncStatus }) => (
             <div
               key={engagementId}
-              className="surface-glass-1 rounded-xl p-5 space-y-4"
+              className="surface-glass-1 rounded-xl p-4 sm:p-5 space-y-4 min-w-0"
             >
               {/* Client Header */}
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-200">{buyer}</h2>
-                  <p className="text-xs text-zinc-400 font-mono mt-0.5">
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 break-words">{buyer}</h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
                     Platform: {platformLabel}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-zinc-950">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0">
                   {syncStatus.health === "healthy" && (
                     <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">{syncStatus.headline}</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-600 dark:text-emerald-400">{syncStatus.headline}</span>
                     </>
                   )}
                   {syncStatus.health === "warning" && (
                     <>
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-amber-400">{syncStatus.headline}</span>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span className="text-amber-600 dark:text-amber-400">{syncStatus.headline}</span>
                     </>
                   )}
                   {syncStatus.health === "error" && (
                     <>
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                      <span className="text-rose-400">{syncStatus.headline}</span>
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                      <span className="text-rose-600 dark:text-rose-400">{syncStatus.headline}</span>
                     </>
                   )}
                   {syncStatus.health === "unconfigured" && (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="text-zinc-400">{syncStatus.headline}</span>
+                      <span className="text-zinc-500 dark:text-zinc-400">{syncStatus.headline}</span>
                     </>
                   )}
                 </div>
@@ -99,14 +99,14 @@ export default async function BookingSyncSettingsPage() {
                   <span className="text-zinc-500 block text-[11px] font-mono uppercase tracking-wider">
                     Sync Mode &amp; Status
                   </span>
-                  <p className="text-zinc-300 mt-1 leading-relaxed">{syncStatus.detail}</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 mt-1 leading-relaxed">{syncStatus.detail}</p>
                 </div>
 
                 <div>
                   <span className="text-zinc-500 block text-[11px] font-mono uppercase tracking-wider">
                     Last Activity
                   </span>
-                  <p className="text-zinc-300 font-mono mt-1">
+                  <p className="text-zinc-700 dark:text-zinc-300 font-mono mt-1">
                     {syncStatus.lastActivityAt
                       ? new Date(syncStatus.lastActivityAt).toLocaleString()
                       : "No activity recorded"}
@@ -116,7 +116,7 @@ export default async function BookingSyncSettingsPage() {
 
               {/* Inbound Webhook Receiver URL */}
               {syncStatus.webhookUrl && (
-                <div className="pt-2 border-t border-zinc-800/80">
+                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/80">
                   <span className="text-zinc-500 block text-[11px] font-mono uppercase tracking-wider mb-1.5">
                     Inbound Webhook Receiver URL
                   </span>
@@ -125,7 +125,7 @@ export default async function BookingSyncSettingsPage() {
                       type="text"
                       readOnly
                       value={syncStatus.webhookUrl}
-                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-1.5 text-xs font-mono text-zinc-300 focus:outline-none"
+                      className="flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md px-3 py-1.5 text-xs font-mono text-zinc-700 dark:text-zinc-300 focus:outline-none"
                     />
                   </div>
                 </div>

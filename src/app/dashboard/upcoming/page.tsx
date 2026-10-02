@@ -12,14 +12,17 @@ export const revalidate = 0;
 
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: typeof PhoneCall; title: string; subtitle: string }) {
   return (
-    <div className="flex items-center gap-2 mb-2.5">
-      <Icon size={13} style={{ color: "var(--text-muted)" }} />
-      <h2 className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-        {title}
-      </h2>
-      <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-        · {subtitle}
-      </span>
+    <div className="flex items-start gap-2 mb-2.5">
+      <Icon size={13} className="shrink-0 mt-0.5" style={{ color: "var(--text-muted)" }} />
+      <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+        <h2 className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+          {title}
+        </h2>
+        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="hidden sm:inline">· </span>
+          {subtitle}
+        </span>
+      </div>
     </div>
   );
 }

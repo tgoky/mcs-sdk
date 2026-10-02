@@ -135,8 +135,9 @@ export function RightUtilityPanel({
 
   return (
     <div
-      className="hidden md:flex relative shrink-0 flex-col border-l h-full transition-[width,opacity] duration-150 ease-out overflow-hidden bg-white dark:bg-black border-zinc-200/80 dark:border-zinc-800/80"
-      style={{ width: isOpen ? width : 0, opacity: isOpen ? 1 : 0 }}
+      // Below lg there isn't room beside the sidebar, so it slides over the page.
+      className="hidden md:flex absolute inset-y-0 right-0 z-30 shadow-2xl lg:relative lg:inset-auto lg:z-auto lg:shadow-none shrink-0 flex-col border-l h-full transition-[width,opacity] duration-150 ease-out overflow-hidden bg-white dark:bg-black border-zinc-200/80 dark:border-zinc-800/80"
+      style={{ width: isOpen ? width : 0, maxWidth: "calc(100vw - 4rem)", opacity: isOpen ? 1 : 0 }}
       aria-hidden={!isOpen}
     >
       {meta && displayedPanel && (

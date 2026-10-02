@@ -316,7 +316,7 @@ export default async function EngagementDetailPage({
 
             {/* Right Column: Top Action Controls */}
             <div className="flex flex-col sm:items-end gap-2.5 shrink-0 self-start sm:self-auto">
-              <div className="flex items-center gap-2" data-tour="engagement-pause-control">
+              <div className="flex flex-wrap items-center gap-2" data-tour="engagement-pause-control">
                 <PeriodTabs />
                 <EngagementPauseControl
                   engagementId={engagement.engagementId}

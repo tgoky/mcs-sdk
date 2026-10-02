@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -231,7 +232,7 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
         </kbd>
       </button>
 
-      {open && (
+      {open && createPortal(
         // Fix v2: the first pass made this a bottom sheet (rounded top
         // corners, floating card, dimmed backdrop showing behind it) —
         // still a "card sitting over the page," just anchored to a
@@ -395,7 +396,10 @@ export function GlobalSearch({ triggerClassName }: { triggerClassName?: string }
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        // On <body>, above the header's stacking context and the phone's
+        // bottom pill, and shown even where the trigger is hidden.
+        document.body
       )}
     </>
   );

@@ -744,8 +744,8 @@ export function UnifiedActivityPanel({
               <span className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-violet-200/60 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400">
                 Setup
               </span>
-              <span className="font-bold truncate shrink-0">{bannerSlide.worker.name} isn&apos;t enabled</span>
-              <span className="font-normal text-zinc-500 dark:text-zinc-400 truncate">
+              <span className="font-bold truncate min-w-0 sm:shrink-0">{bannerSlide.worker.name} isn&apos;t enabled</span>
+              <span className="hidden sm:inline font-normal text-zinc-500 dark:text-zinc-400 truncate">
                 {bannerSlide.productLabel} · {bannerSlide.worker.description}
               </span>
               <span className="shrink-0 text-zinc-700 dark:text-zinc-200 font-bold">Enable</span>

@@ -42,8 +42,8 @@ export default async function SkillPage({
       <div className="relative z-10 space-y-4 font-sans antialiased">
         <SetBreadcrumbLabel label={`${engagement.buyer} · ${page.breadcrumb ?? page.title}`} />
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
             <Link
               href={back.href}
               className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/80 dark:bg-zinc-900/80 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors shrink-0"

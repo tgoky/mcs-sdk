@@ -80,12 +80,12 @@ export default async function WorkspaceHomePage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <ThemeToggle />
               <form action="/api/auth/logout" method="POST">
                 <button
                   type="submit"
-                  className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent border-none cursor-pointer"
+                  className="font-mono text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent border-none cursor-pointer whitespace-nowrap"
                 >
                   {HOME_COPY.signOut}
                 </button>

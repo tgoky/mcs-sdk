@@ -321,13 +321,13 @@ export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, active
   const closeCreate = () => setCreateOpen(false);
 
   return (
-    <header className="relative h-12 w-full bg-background border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-3 transition-colors duration-200">
+    <header className="relative h-12 w-full bg-background border-b border-zinc-200 dark:border-zinc-800/80 px-3 flex items-center justify-between shrink-0 select-none z-30 gap-2 sm:gap-3 transition-colors duration-200">
       {/* Left: Client switcher + Create button */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {/* The client switcher sits where the menu button was. */}
         {workspaces && activeWorkspaceId ? <ClientSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} /> : null}
 
-        <div className="relative flex items-center">
+        <div className="relative flex shrink-0 items-center">
           <button
             type="button"
             onClick={() => setCreateOpen((prev) => !prev)}
@@ -342,8 +342,8 @@ export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, active
           {createOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={closeCreate} />
-              {/* Mobile: opens below | Desktop: opens to the right */}
-              <div className="absolute left-0 top-full z-50 mt-1.5 md:left-full md:top-0 md:mt-0 md:ml-2">
+              {/* Mobile: centered below the header | Desktop: opens to the right */}
+              <div className="fixed left-1/2 top-[3.25rem] z-50 -translate-x-1/2 md:absolute md:left-full md:top-0 md:mt-0 md:ml-2 md:translate-x-0">
                 <CreateMenu ctx={createMenu} close={closeCreate} onSelectPanel={onSelectPanel} onEditDetails={() => setEditingDetails(true)} />
               </div>
             </>
@@ -385,8 +385,8 @@ export function TopNav({ onToggleSidebar, sidebarOpen = true, workspaces, active
           — see global-search.tsx's open-global-search listener) — the
           palette itself must NOT be nested inside any hidden ancestor,
           or it silently fails to render on mobile even when open. */}
-      <div className="hidden sm:flex flex-1 min-w-0 justify-center">
-        <GlobalSearch triggerClassName="flex" />
+      <div className="contents sm:flex flex-1 min-w-0 justify-center">
+        <GlobalSearch triggerClassName="hidden sm:flex" />
       </div>
 
       {/* Right: the 6-icon utility rail (Calendar / Teammates / Notifications /

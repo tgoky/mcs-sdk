@@ -487,7 +487,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
 
       {/* Toolbar & View Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 no-ambient-glow surface-glass-1 rounded-2xl p-2 font-sans">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 w-full sm:w-auto">
           {/* Universal Month Navigation */}
           <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 p-1">
             <button
@@ -516,7 +516,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
             </button>
           </div>
 
-          <div className="relative w-64">
+          <div className="relative order-last w-full sm:order-none sm:w-64">
             <Search size={13} className="absolute left-2.5 top-2.5 text-zinc-400 dark:text-zinc-500" />
             <input
               value={filterText}
@@ -537,7 +537,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
         </div>
 
         {/* View Switcher (Month, Day View, Master List) */}
-        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+        <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans max-w-full overflow-x-auto [scrollbar-width:none]">
           {([["month", CalendarIcon, "Month"], ["day", Clock, "Day View"], ["list", List, "Master List"]] as const).map(
             ([viewMode, Icon, label]) => (
               <button
@@ -545,7 +545,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 type="button"
                 onClick={() => setMode(viewMode)}
                 className={cn(
-                  "hover-lift press-settle flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
+                  "hover-lift press-settle flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer font-sans",
                   mode === viewMode ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                 )}
               >
@@ -1002,7 +1002,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                     ) : null}
                   </div>
 
-                  <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+                  <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans max-w-full overflow-x-auto [scrollbar-width:none]">
                     <button
                       type="button"
                       onClick={() => setActiveTab("journey")}
@@ -1626,7 +1626,7 @@ export function MasterRosterCalendar({ engagementId }: { engagementId: string })
                 </div>
 
                 {/* Skill Inspection Tabs */}
-                <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans">
+                <div className="flex items-center gap-1 rounded-xl bg-zinc-200/60 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 text-xs font-sans max-w-full overflow-x-auto [scrollbar-width:none]">
                   <button
                     type="button"
                     onClick={() => setActiveTab("journey")}

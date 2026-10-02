@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Menu, X, Check, Loader2, LogOut, Plus } from "lucide-react";
+import { RIGHT_PANEL_META } from "@/components/right-utility-panel";
 import { PRIMARY_NAV_SECTIONS, SETTINGS_NAV } from "@/lib/primary-nav";
 import type { Workspace } from "@/lib/workspace";
 
@@ -122,6 +123,25 @@ export function MobileNavPill({
                 >
                   <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
                   <span>{section.title}</span>
+                </Link>
+              );
+            })}
+
+            {/* The header's Upcoming and Plan icons don't fit on a phone. */}
+            {(["upcoming", "plan"] as const).map((key) => {
+              const { label, icon: Icon, expandHref } = RIGHT_PANEL_META[key];
+              return (
+                <Link
+                  key={key}
+                  href={expandHref}
+                  className={`flex sm:hidden items-center gap-3.5 px-5 py-4 text-base transition-colors ${
+                    pathname === expandHref
+                      ? "bg-zinc-100 dark:bg-zinc-900 font-semibold text-zinc-900 dark:text-white"
+                      : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:text-zinc-900 dark:hover:text-white font-medium"
+                  }`}
+                >
+                  <Icon className="w-5 h-5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                  <span>{label}</span>
                 </Link>
               );
             })}

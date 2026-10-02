@@ -152,7 +152,7 @@ export function ShellLayout({
       />
 
       {/* 2. Main Body 3-Region Split (+ the right utility panel, when open) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="relative flex-1 flex overflow-hidden">
         {/* Column 1: Primary Narrow Icon Rail */}
         <div className="hidden md:flex">
           <PrimaryRail
@@ -179,7 +179,7 @@ export function ShellLayout({
         {/* Column 3: Main Page Area — shrinks (doesn't get covered) when
             the right utility panel opens, since that panel is a flex
             sibling here, not an absolutely-positioned overlay. */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 w-full bg-background [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 pt-5 pb-28 sm:px-6 sm:pt-6 md:p-8 w-full bg-background [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {children}
         </main>
 

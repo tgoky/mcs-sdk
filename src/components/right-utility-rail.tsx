@@ -115,9 +115,12 @@ export function RightUtilityRail({
           to that panel's own real full-screen page instead — the exact
           same destination the desktop panel's own "Expand" button already
           uses (RIGHT_PANEL_META's expandHref), not a new surface. */}
-      <div className="flex md:hidden items-center gap-1 p-1 rounded-full bg-zinc-200/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
+      {/* On a phone the header only has room for three; Upcoming and Plan
+          are in the bottom pill's menu there instead. */}
+      <div className="flex md:hidden items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full bg-zinc-200/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
         {ICONS.map(({ key, icon: Icon, label, fillStyle }) => {
           const isBell = key === "notifications";
+          const phoneHidden = key === "upcoming" || key === "plan";
 
           return (
             <Link
@@ -125,7 +128,7 @@ export function RightUtilityRail({
               href={RIGHT_PANEL_META[key].expandHref}
               aria-label={label}
               title={label}
-              className="group relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 active:scale-95 backdrop-blur-md overflow-hidden border border-transparent bg-transparent opacity-85 active:opacity-100 active:bg-white/50 dark:active:bg-white/10"
+              className={`group relative ${phoneHidden ? "hidden sm:flex" : "flex"} items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-all duration-200 active:scale-95 backdrop-blur-md overflow-hidden border border-transparent bg-transparent opacity-85 active:opacity-100 active:bg-white/50 dark:active:bg-white/10`}
             >
               <Icon size={18} className={`stroke-[1.8px] transition-all ${fillStyle}`} />
 

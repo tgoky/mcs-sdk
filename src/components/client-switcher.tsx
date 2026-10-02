@@ -108,7 +108,7 @@ export function ClientSwitcher({ workspaces, activeWorkspaceId }: { workspaces: 
         aria-expanded={clientSwitcherOpen}
         aria-haspopup="menu"
         title="Switch client"
-        className={`flex min-w-0 max-w-[200px] items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 text-left transition-colors cursor-pointer ${
+        className={`flex min-w-0 max-w-[150px] sm:max-w-[200px] items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 text-left transition-colors cursor-pointer ${
           clientSwitcherOpen ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-100 dark:hover:bg-zinc-900"
         }`}
       >
@@ -120,7 +120,7 @@ export function ClientSwitcher({ workspaces, activeWorkspaceId }: { workspaces: 
       {clientSwitcherOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setClientSwitcherOpen(false)} />
-          <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-72 surface-frost rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
+          <div role="menu" className="absolute left-0 top-full z-50 mt-1.5 w-72 max-w-[calc(100vw-1.5rem)] surface-frost rounded-xl text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans antialiased motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
             <div className="p-3 space-y-2">
               <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 px-0.5">Clients</p>
               {workspaces.length > 6 && (

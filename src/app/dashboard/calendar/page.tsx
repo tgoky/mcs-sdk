@@ -42,15 +42,15 @@ export default async function CalendarPage({
 
   return (
     <div className="flex flex-col h-full w-full mx-auto tracking-tight antialiased font-sans px-1 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
-      <div className="shrink-0 flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
-        <div className="flex items-center gap-3">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span
             className="flex items-center justify-center w-8 h-8 rounded-full shrink-0"
             style={{ background: "var(--accent-dim)", color: "var(--text-secondary)" }}
           >
             <CalendarDays size={16} />
           </span>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 min-w-0">
             <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Calendar</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Every call, Win-Back touch, and Leak Map audit across all of {activeWorkspace.name}, for
@@ -58,7 +58,7 @@ export default async function CalendarPage({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 self-center sm:self-auto">
           <Link
             href={prevHref}
             className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"

@@ -46,7 +46,7 @@ export function PeriodTabs() {
           key={tab.key}
           type="button"
           onClick={() => setPeriod(tab.key)}
-          className={`px-3 py-1.5 text-sm font-mono rounded-md transition-colors cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-mono whitespace-nowrap rounded-md transition-colors cursor-pointer ${
             period === tab.key
               ? "surface-glass-3 no-ambient-glow text-zinc-900 dark:text-zinc-100 font-semibold"
               : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"

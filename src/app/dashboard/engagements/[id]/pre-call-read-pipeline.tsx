@@ -733,10 +733,10 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
           {/* LEFT 7 COLUMNS: SMART CHRONOLOGICAL FEED */}
           <div className="lg:col-span-7 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-[#f8f7fa] dark:bg-zinc-950 shadow-xl font-sans flex flex-col">
             {/* List Feed Scope Control Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/60 font-sans">
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={14} className="text-zinc-500" />
-                <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
+                <span className="text-sm font-bold text-zinc-900 dark:text-white font-sans whitespace-nowrap">
                   {listScope === "week" ? "Current Week Feed" : `${monthName} Feed`}
                 </span>
               </div>
@@ -775,7 +775,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     type="button"
                     onClick={() => setListScope("week")}
                     className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      "px-2 py-0.5 rounded-md font-semibold whitespace-nowrap transition-colors cursor-pointer font-sans",
                       listScope === "week" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
@@ -785,7 +785,7 @@ export function PreCallReadPipeline({ engagementId }: { engagementId: string }) 
                     type="button"
                     onClick={() => setListScope("month")}
                     className={cn(
-                      "px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer font-sans",
+                      "px-2 py-0.5 rounded-md font-semibold whitespace-nowrap transition-colors cursor-pointer font-sans",
                       listScope === "month" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                     )}
                   >
