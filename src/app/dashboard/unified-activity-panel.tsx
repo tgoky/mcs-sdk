@@ -1038,30 +1038,26 @@ export function UnifiedActivityPanel({
                           </div>
                           {item.subtitle && <p className="text-sm text-zinc-600 dark:text-zinc-300 truncate mt-0.5">{item.subtitle}</p>}
                         </div>
-                        {/* Single-action rows (View run / Cancel run) keep
-                            their one button on the title line — a whole
-                            second row for one small button was just empty
-                            space. Queue items can carry several actions
-                            plus an error line, so they still get a row. */}
-                        {item.status === "needs_action" && !item.queueItem && (
-                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Every plain run row (any status) links to its run
+                            page; running ones also get Cancel. Queue items
+                            carry their own multi-action row below instead. */}
+                        {item.kind === "run" && item.runId && (
+                          <div className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {item.status === "running" && (
+                              <button
+                                type="button"
+                                disabled={isCancelling}
+                                onClick={() =>
+                                  runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => router.refresh())
+                                }
+                                className={btnGhost}
+                              >
+                                {isCancelling ? <Loader2 size={11} className="animate-spin" /> : <Ban size={11} />} Cancel run
+                              </button>
+                            )}
                             <Link href={item.href} className={btnGhost}>
                               <ArrowUpRight size={11} /> View run
                             </Link>
-                          </div>
-                        )}
-                        {item.status === "running" && item.runId && (
-                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              disabled={isCancelling}
-                              onClick={() =>
-                                runQuickAction(`cancel-${item.runId}`, () => cancelSkillRun(item.runId as string), () => router.refresh())
-                              }
-                              className={btnGhost}
-                            >
-                              {isCancelling ? <Loader2 size={11} className="animate-spin" /> : <Ban size={11} />} Cancel run
-                            </button>
                           </div>
                         )}
                         <VerboseTime isoString={item.timestamp} showFreshIndicator={false} className="text-sm font-medium shrink-0 whitespace-nowrap text-zinc-500 dark:text-zinc-400" />
