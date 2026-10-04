@@ -163,11 +163,7 @@ export function ProductCard({
         </button>
         <Link
           href={`/dashboard/library/${productId}`}
-          className={
-            installed
-              ? "order-1 inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-900 transition-colors hover:bg-zinc-200 dark:border-white/10 dark:bg-white/[0.08] dark:text-zinc-100 dark:hover:bg-white/[0.14]"
-              : "inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
-          }
+          className={`inline-flex items-center gap-1 rounded-md text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors ${installed ? "order-1" : ""}`}
         >
           View skills <ArrowUpRight size={11} />
         </Link>

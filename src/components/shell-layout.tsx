@@ -12,6 +12,7 @@ import type { UserAvatarPrefs } from "@/lib/user-avatar";
 import { SkillPaneProvider, useSkillPane } from "@/components/skill-settings/skill-pane-context";
 import { SkillSettingsPane } from "@/components/skill-settings/skill-settings-pane";
 import type { CreateMenuContext } from "@/components/top-nav";
+import { InstalledSkillsProvider } from "@/components/installed-skills-context";
 
 const PANEL_WIDTH_KEY = "mcs-right-panel-width";
 const SIDEBAR_WIDTH_KEY = "mcs-sidebar-width";
@@ -135,6 +136,7 @@ export function ShellLayout({
   }, []);
 
   return (
+    <InstalledSkillsProvider value={createMenu}>
     <SkillPaneProvider>
     <PaneExclusion activePanel={activePanel} closePanel={() => setActivePanel(null)} />
     <div className="h-screen w-screen flex flex-col bg-background text-zinc-600 dark:text-zinc-400 font-sans antialiased overflow-hidden transition-colors duration-200">
@@ -197,5 +199,6 @@ export function ShellLayout({
       </div>
     </div>
     </SkillPaneProvider>
+    </InstalledSkillsProvider>
   );
 }

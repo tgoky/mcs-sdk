@@ -10,7 +10,6 @@ import {
   AtSign,
   Pencil,
   Check,
-  ChevronRight,
   ChevronLeft,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -19,7 +18,7 @@ import { AnySkillBadge } from "@/components/any-skill-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { generateAvatarDataUri, DEFAULT_AVATAR_STYLE, WORKER_AVATAR_SEED } from "@/lib/avatar";
 import type { UserAvatarPrefs } from "@/lib/user-avatar";
-import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
+import { useInstalledSkillsContext } from "@/components/installed-skills-context";
 import { allWorkers, type WorkerDefinition } from "@/lib/worker-registry";
 
 const NO_AVATAR: UserAvatarPrefs = { avatarType: null, avatarStyle: null, avatarSeed: null, avatarImageUrl: null };
@@ -181,13 +180,10 @@ export function TeammatesChat({
   );
   const [error, setError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  // Which product's own skill list is expanded in the @ picker while
-  // browsing (empty query) — same accordion shape worker-actions-menu.tsx
-  // uses for the Library's Compare flyout, since a flat 30-skill list is
-  // exactly the "long list, makes no sense" complaint that pattern was
-  // already built to fix once. Reset to null each time the picker closes
-  // so it doesn't reopen mid-way through on the next @.
-  const [mentionExpandedProduct, setMentionExpandedProduct] = useState<WorkerDefinition["productId"] | null>(null);
+  // The @ button's menu (typing "@" opens the same menu via mentionQuery).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const installed = useInstalledSkillsContext();
   const [threadId, setThreadId] = useState<string | null>(() =>
     initialThreadId !== undefined ? initialThreadId : readStoredThreadId()
   );
@@ -276,39 +272,54 @@ export function TeammatesChat({
     setInput(value);
     const match = value.match(/@(\w*)$/);
     const next = match ? match[1] : null;
-    // Fresh "@" with nothing typed yet — reset which product row is
-    // expanded so the browse view starts collapsed every time, not stuck
-    // on whatever was open the last time this popover was used.
-    if (next === "" && mentionQuery === null) setMentionExpandedProduct(null);
     setMentionQuery(next);
   }
 
-  const filteredMentions =
-    mentionQuery === null
-      ? []
-      : MENTIONABLE_SKILLS.filter((s) => s.token.toLowerCase().startsWith(mentionQuery.toLowerCase()));
+  // Only skills switched on for the client, under products that are
+  // actually installed (same rule as the Create menu). Outside the
+  // dashboard shell there's no such context, so fall back to the registry.
+  const availableSkills = useMemo(() => {
+    if (!installed) return MENTIONABLE_SKILLS;
+    const on = new Set(installed.skills.map((k) => k.id));
+    const products = new Set(installed.products.map((pr) => pr.id));
+    return MENTIONABLE_SKILLS.filter((sk) => on.has(sk.token) && products.has(sk.productId));
+  }, [installed]);
 
-  const showMentions = mentionQuery !== null && filteredMentions.length > 0;
-  // Group by product only while actively browsing (bare "@", nothing
-  // typed yet) — once there's real search text, a flat relevance list of
-  // whatever matched is more useful than making the user first find and
-  // expand the right product group.
+  const filteredMentions = useMemo(
+    () =>
+      mentionQuery === null
+        ? availableSkills
+        : availableSkills.filter((sk) => sk.token.toLowerCase().startsWith(mentionQuery.toLowerCase())),
+    [availableSkills, mentionQuery]
+  );
+
+  const showMentions = pickerOpen || mentionQuery === "" || (mentionQuery !== null && filteredMentions.length > 0);
   const groupedMentions = useMemo(() => {
-    if (mentionQuery !== "") return [];
     const groups = new Map<WorkerDefinition["productId"], typeof MENTIONABLE_SKILLS>();
-    for (const s of filteredMentions) {
-      const list = groups.get(s.productId) ?? [];
-      list.push(s);
-      groups.set(s.productId, list);
+    for (const sk of filteredMentions) {
+      const list = groups.get(sk.productId) ?? [];
+      list.push(sk);
+      groups.set(sk.productId, list);
     }
     return Array.from(groups.entries());
-  }, [mentionQuery, filteredMentions]);
+  }, [filteredMentions]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!pickerRef.current?.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
 
   function addSkillTag(token: string) {
     if (!taggedSkills.includes(token)) {
       setTaggedSkills((prev) => [...prev, token]);
     }
     setInput((prev) => prev.replace(/@(\w*)$/, ""));
+    setPickerOpen(false);
+    setMentionQuery(null);
     setMentionQuery(null);
     inputRef.current?.focus();
   }
@@ -375,11 +386,6 @@ export function TeammatesChat({
       setLoading(false);
     }
   }
-
-  const dropdownItems: DropdownItem[] = MENTIONABLE_SKILLS.map((s) => ({
-    key: s.token,
-    label: s.label,
-  }));
 
   const headerName = threadTitle ?? "Workers";
 
@@ -571,56 +577,33 @@ export function TeammatesChat({
           the same dark translucent fill in light mode too, which read as
           just wrong there instead of merely "a different theme." */}
       <div className={`relative shrink-0 ${composerPadding}`}>
-        <div className={composerColumn}>
+        <div ref={pickerRef} className={composerColumn}>
           {showMentions && (
-            <div className="absolute bottom-full left-2 mb-2 w-64 max-h-72 overflow-y-auto rounded-lg bg-[#f8f7fa] dark:bg-sidebar backdrop-blur-md border border-black/5 dark:border-white/10 shadow-lg overflow-hidden z-50">
-              {mentionQuery === "" ? (
-                // Browsing (bare "@") — grouped by product, collapsed by
-                // default, same shape as the Library's Compare flyout.
-                <div className="p-1">
-                  {groupedMentions.map(([productId, skills]) => {
-                    const isExpanded = mentionExpandedProduct === productId;
-                    return (
-                      <div key={productId}>
-                        <button
-                          type="button"
-                          onClick={() => setMentionExpandedProduct(isExpanded ? null : productId)}
-                          className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/[0.07] transition-colors cursor-pointer ${dropdownItemTextSize}`}
-                        >
-                          <span>{PRODUCT_GROUP_LABELS[productId]}</span>
-                          <ChevronRight size={12} className={`text-zinc-400 dark:text-zinc-600 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                        </button>
-                        {isExpanded && (
-                          <div className="pl-2 space-y-0.5 py-0.5">
-                            {skills.map((s) => (
-                              <button
-                                key={s.token}
-                                type="button"
-                                onClick={() => addSkillTag(s.token)}
-                                className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer ${dropdownItemTextSize}`}
-                              >
-                                <AnySkillBadge skill={s.token} size={16} />
-                                <span className="truncate">{s.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+            <div
+              role="menu"
+              className="absolute bottom-full left-2 mb-2 w-64 max-h-72 overflow-y-auto rounded-xl surface-frost p-1.5 text-zinc-900 dark:text-zinc-100 font-sans antialiased z-50 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-100"
+            >
+              {groupedMentions.length === 0 ? (
+                <p className="px-2.5 py-2 text-[12px] text-zinc-500">No skills installed yet.</p>
               ) : (
-                // Actively typing a search after "@" — flat relevance list.
-                filteredMentions.map((s) => (
-                  <button
-                    key={s.token}
-                    type="button"
-                    onClick={() => addSkillTag(s.token)}
-                    className={`flex items-center gap-2 w-full text-left px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/[0.07] text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer ${dropdownItemTextSize}`}
-                  >
-                    <AnySkillBadge skill={s.token} size={16} />
-                    <span>@{s.token}</span>
-                  </button>
+                groupedMentions.map(([productId, skills], i) => (
+                  <div key={productId} className={i > 0 ? "mt-1 pt-1 border-t border-zinc-900/[0.07] dark:border-white/10" : ""}>
+                    <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                      {PRODUCT_GROUP_LABELS[productId]}
+                    </p>
+                    {skills.map((sk) => (
+                      <button
+                        key={sk.token}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => addSkillTag(sk.token)}
+                        className={`group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left font-medium text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-900/[0.06] dark:hover:bg-white/[0.08] transition-colors cursor-pointer ${dropdownItemTextSize}`}
+                      >
+                        <AnySkillBadge skill={sk.token} size={18} />
+                        <span className="flex-1 truncate">{sk.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 ))
               )}
             </div>
@@ -670,16 +653,17 @@ export function TeammatesChat({
 
             {/* Integrated Action Row (No border-t divider line) */}
             <div className="flex items-center justify-between pt-1">
-              <Dropdown
-                variant="icon"
-                icon={AtSign}
-                triggerTitle="Tag skill"
-                align="left"
-                placement="top"
-                items={dropdownItems}
-                onSelect={(key) => addSkillTag(key)}
-                triggerClassName="text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"
-              />
+              <button
+                type="button"
+                title="Tag skill"
+                aria-label="Tag skill"
+                aria-haspopup="menu"
+                aria-expanded={pickerOpen}
+                onClick={() => setPickerOpen((o) => !o)}
+                className="p-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <AtSign size={15} />
+              </button>
               <button
                 type="button"
                 onClick={() => send()}

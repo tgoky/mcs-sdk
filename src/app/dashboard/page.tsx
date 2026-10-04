@@ -122,7 +122,7 @@ export default async function DashboardPage() {
       // below (mergeUnifiedActivity), not just an 8-row feed preview —
       // needs enough recent runs for its own status/product filters to
       // have something to filter.
-      .limit(50),
+      .limit(150),
 
     getQueueItems(whopUserId, workspaceId),
 

@@ -109,13 +109,6 @@ export interface UnifiedActivityCounts {
   byCategory: Record<WorkerCategory, number>;
 }
 
-const STATUS_PRIORITY: Record<UnifiedActivityStatus, number> = {
-  needs_action: 0,
-  running: 1,
-  completed: 2,
-  other: 3,
-};
-
 function statusForRun(status: string): UnifiedActivityStatus {
   const s = status.toLowerCase();
   if (s === "running" || s === "in_progress") return "running";
@@ -240,8 +233,12 @@ export function mergeUnifiedActivity(
   // that, the existing status-tier-then-recency order is unchanged.
   const items = [...queueAsItems, ...runAsItems].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    const priorityDelta = STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status];
-    if (priorityDelta !== 0) return priorityDelta;
+    // Only "running" outranks recency. Sorting by every status tier buried
+    // today's completed/skipped runs (e.g. a call brief with no calls)
+    // below pages of old timed-out runs. Needs-action items stay reachable
+    // via the banner, the tab and pinned queue items.
+    const aRunning = a.status === "running";
+    if (aRunning !== (b.status === "running")) return aRunning ? -1 : 1;
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   });
 
